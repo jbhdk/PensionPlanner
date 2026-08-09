@@ -297,7 +297,7 @@ Desuden uden for scope, uden nuværende plan om at tage det op:
 
 Hver etape er en fungerende applikation.
 
-1. **Skelet der regner.** Personer, indtægts- og udgiftsposter, frie midler pr. person med lagerbeskatning og udpeget buffer, overførsler mellem dem, fuld personskat for 2026, årstabel, formuegraf, forklar-året, localStorage med versionering, balanceinvariant og de første facitcaser. Ingen pension endnu.
+1. **[Skelet der regner](./etape-1-PRD.md).** Personer, indtægts- og udgiftsposter, frie midler pr. person med lagerbeskatning og udpeget buffer, overførsler mellem dem, fuld personskat for 2026, årstabel, formuegraf, forklar-året, localStorage med versionering, balanceinvariant og de første facitcaser. Ingen pension endnu.
 2. **Indbetalingsfasen.** Arbejdsgiver- og egne bidrag, fradragslofter, aldersopsparingens trappe, aktiesparekonto og kapitalindkomst.
 3. **Udbetalingsfasen.** Ratepension, aldersopsparing, livrente, PAL-skat, udbetalingsplaner med begge principper, ATP og folkepension med fuld aftrapning og husstandskobling.
 4. **Bolig.** Gæld, ejendomsskatter med rabatordning, køb og salg, nedsparingslån.
