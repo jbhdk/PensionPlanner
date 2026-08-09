@@ -57,9 +57,9 @@ Motoren er **plan-drevet**: brugeren bestemmer, hvornår hver ordning starter og
 
 ### Livrente
 
-25. Som planlægger vil jeg oprette en livrente med både depot og selskabets oplyste årlige ydelse, så modellen kan kalibreres mod virkeligheden.
-26. Som planlægger vil jeg have annuitetsdivisoren udledt af de to tal, så værktøjets første udbetalingsår rammer præcis det, mit selskab lover mig.
-27. Som planlægger vil jeg have divisoren skaleret med alderen, så ydelsen udvikler sig plausibelt gennem hele udbetalingsperioden.
+25. Som planlægger vil jeg oprette en livrente med selskabets oplyste depot og oplyste årlige ydelse ved udbetalingsstart, så omsætningsfaktoren kan udledes af tal, jeg kan slå op.
+26. Som planlægger vil jeg have livrentens depot fremskrevet med mine egne indbetalinger og afkast, så den livsvarige ydelse falder, når jeg stopper med at arbejde tidligere.
+27. Som planlægger vil jeg have ydelsen låst fast ved udbetalingsstart og kun reguleret med min bonusantagelse, fordi min livrente er en gennemsnitsrente med garanti.
 28. Som planlægger vil jeg se livrenten løbe livsvarigt, så den ikke fejlagtigt bliver tømt undervejs.
 
 ### Udbetalingsplaner
@@ -148,16 +148,17 @@ Motoren er **plan-drevet**: brugeren bestemmer, hvornår hver ordning starter og
 ### Tidsmodel og pengeenhed
 
 - Ét **Simuleringsår** svarer til ét kalenderår. Al skat opgøres årligt, hvilket matcher dansk skattelovgivning.
+- Hver pengestrøm bærer et **forfald** — jævnt fordelt eller en bestemt måned — der oversættes til en vægt på årets afkast. Motoren skridter ikke månedligt. Se [ADR-0006](./adr/0006-maaneden-er-en-afkastvaegt-ikke-et-tidsskridt.md).
 - Motoren regner i **løbende priser**; brugerfladen deflaterer til **dagens kroner** ved visning. Se [ADR-0001](./adr/0001-nominel-regning-real-visning.md).
 - Alle brugerindtastede beløb angives i dagens kroner og fremskrives af motoren.
 - Simuleringen starter i indeværende kalenderår og løber til den længstlevende persons horisont, som er et felt pr. person.
 
 ### Udbetalingsmodel
 
-- Motoren er **plan-drevet**, og frie midler er buffer, der må gå negativt. Se [ADR-0002](./adr/0002-plan-drevet-motor-med-frie-midler-som-buffer.md).
+- Motoren er **plan-drevet**, og en udpeget buffer må gå negativt. Se [ADR-0002](./adr/0002-plan-drevet-motor-med-frie-midler-som-buffer.md) og [ADR-0004](./adr/0004-frie-midler-pr-person-med-udpeget-buffer.md).
 - Hver beholdning bærer en udbetalingsstrategi, så en behøvsdrevet strategi med prioriteret dækningsrækkefølge kan tilføjes senere uden at ændre kontomodellen.
 - **Erhvervsophørsalder** er en navngiven størrelse pr. person, som poster og udbetalingsplaner kan forankres til.
-- Søgningen efter tidligste holdbare erhvervsophørsalder varierer én persons alder ad gangen med den andens holdt fast, og kører motoren for hver kandidatalder. Kriteriet er, at frie midler aldrig går negativt.
+- Søgningen efter tidligste holdbare erhvervsophørsalder varierer én persons alder ad gangen med den andens holdt fast, og kører motoren for hver kandidatalder. Kriteriet er, at **bufferen** aldrig går negativt — ikke husstandens samlede frie midler. Se [ADR-0008](./adr/0008-holdbarhed-maales-paa-bufferen-alene.md).
 
 ### Domænetyper
 
@@ -165,7 +166,11 @@ Tre grundtyper til pensionsposter, jf. `CONTEXT.md`:
 
 - **Beholdning** — saldo, bruttoafkast, ÅOP, oprettelsesdato, udbetalingsplan. Ratepension, aldersopsparing, frie midler, aktiesparekonto.
 - **Ydelse** — årlig strøm uden saldo, med startalder og reguleringssats. Folkepension og ATP.
-- **Livrente** — både depot og livsvarigt tilsagn.
+- **Livrente** — en beholdning, der omsættes til en garanteret livsvarig ydelse ved udbetalingsstart.
+
+**Indbetaling** er en bevægelse fra husstandens pengestrøm ind i en beholdning, med skattevirkning og loft. Den er en selvstændig figur, fordi lofterne hænger på bidraget og ikke på lønnen, og lønposter angives derfor brutto inklusive arbejdsgiverbidrag. Se [ADR-0007](./adr/0007-indbetalinger-er-bevaegelser-og-loennen-er-brutto.md).
+
+**Overførsel** er en dateret, skattefri flytning mellem to beholdninger inden for husstanden. Den er nødvendig, fordi frie midler ejes pr. person, jf. [ADR-0004](./adr/0004-frie-midler-pr-person-med-udpeget-buffer.md): en beholdning, der ikke er udpeget som buffer, kan ellers aldrig bruges. I v1 er den begrænset til frie midler → frie midler; en flytning ind i en pensionsordning er en indbetaling, ikke en overførsel.
 
 **Post** er én figur for både indtægter og udgifter: navn, ejer, beløb i dagens kroner, periode, **forankring** (alder eller kalenderår), **gentagelse** (årlig, engangs, hvert N. år) og reguleringssats. Indtægtsposter bærer desuden en skattebehandling.
 
@@ -181,10 +186,12 @@ Tre grundtyper til pensionsposter, jf. `CONTEXT.md`:
 - Raten **genberegnes ved hvert kalenderårs begyndelse** ud fra den faktiske saldo under begge principper. Brugeren vælger ikke det årlige beløb.
 - Valideringer: udbetalingsperioden er mindst 10 år, og sidste rate falder senest 30 år efter ordningens pensionsudbetalingsalder.
 
-### Livrentens annuisering
+### Livrentens omsætning
 
-- Brugeren indtaster depot og selskabets oplyste årlige ydelse. Motoren bagudregner den implicitte **annuitetsdivisor** ved udbetalingsstart og skalerer den derefter med alderen via en indbygget dødelighedsafledt profil.
-- Det sikrer, at værktøjets første udbetalingsår matcher selskabets tilsagn præcist, uden at modellen skal kende selskabets rentegrundlag, omkostninger og levetidsforudsætninger.
+- Modellen antager **gennemsnitsrente**: den årlige ydelse er garanteret og ændres kun ved bonustildeling. Markedsrente er udskudt, se [docs/udskudt.md](./udskudt.md).
+- Livrenten er en beholdning i opsparingsfasen — den modtager indbetalinger, forrentes og betaler PAL — og omsættes **én gang** ved udbetalingsstart med en **omsætningsfaktor**: selskabets oplyste årlige ydelse divideret med dets oplyste depot på samme tidspunkt, anvendt på det faktisk fremskrevne depot.
+- Derefter er ydelsen fast og reguleres kun med en bonusantagelse. Ingen aldersskalering, ingen levetidsmodel, ingen genberegning. Se [ADR-0009](./adr/0009-livrenten-omsaettes-en-gang-ved-udbetalingsstart.md).
+- Depotet må ikke fjernes fra opsparingsfasen: uden det ville livrenten ikke reagere på erhvervsophørsalderen, og scenariesammenligningen ville være forkert på planens længstløbende indkomststrøm.
 
 ### Skattemotor
 
@@ -204,13 +211,14 @@ Fuld regelmotor med AM-bidrag, personfradrag, bundskat, kommune- og kirkeskat, m
 
 ### Satser over tid
 
-- Ét komplet **satsår** pr. kendt kalenderår, holdt som data med kilde-URL pr. sæt.
+- Ét komplet **satsår** pr. kendt kalenderår, holdt som data med kilde-URL pr. sæt. Satser er delt referencedata: en plan pinner dem ikke, men `Årsresultat` stempler hvilket grundlag det er regnet på. Se [ADR-0005](./adr/0005-satser-er-referencedata-planen-pinner-ikke.md).
 - Simuleringsår efter det sidst kendte satsår fremskrives: procentsatser holdes konstante, mens beløbsgrænser løftes — skattelovgivningens grænser efter personskattelovens § 20 og de satsregulerede ydelser efter satsreguleringsprocenten, hver med sin justerbare antagelse.
 - Folkepensionsalder kommer fra en indbygget fødselsårstabel (67 i 2025, 68 fra 2030, 70 fra 2040) og kan overstyres pr. person.
 
 ### Afkast
 
 - Ét fast **bruttoafkast** og ét **ÅOP** pr. beholdning; nettoafkastet beregnes, så omkostningen er synlig. Se [ADR-0003](./adr/0003-fast-afkast-pr-beholdning.md).
+- Afkastet beregnes på den vægtede gennemsnitssaldo efter Modified Dietz: `nettoafkastsats × (primosaldo + Σ vægt × strøm)`.
 
 ### Bolig og gæld
 
@@ -222,7 +230,7 @@ Fuld regelmotor med AM-bidrag, personfradrag, bundskat, kommune- og kirkeskat, m
 
 ### Lagring
 
-- **Plan** er en komplet, selvstændig enhed. Scenarier er uafhængige kopier, ikke varianter af en delt kerne.
+- **Plan** er en komplet, selvstændig enhed — bortset fra satserne, der er delt referencedata. Scenarier er uafhængige kopier, ikke varianter af en delt kerne.
 - Gemte data bærer et **skemaversionsnummer**, og der vedligeholdes en migrationskæde, så en modelændring ikke korrupterer eksisterende planer.
 - Eksport og import af en plan som JSON-fil er en kernefunktion, ikke en ekstra — localStorage alene er ikke holdbar opbevaring for arbejde af denne størrelse.
 
@@ -282,7 +290,7 @@ Desuden uden for scope, uden nuværende plan om at tage det op:
 
 Hver etape er en fungerende applikation.
 
-1. **Skelet der regner.** Personer, indtægts- og udgiftsposter, frie midler med lagerbeskatning, fuld personskat for 2026, årstabel, formuegraf, forklar-året, localStorage med versionering, balanceinvariant og de første facitcaser. Ingen pension endnu.
+1. **Skelet der regner.** Personer, indtægts- og udgiftsposter, frie midler pr. person med lagerbeskatning og udpeget buffer, overførsler mellem dem, fuld personskat for 2026, årstabel, formuegraf, forklar-året, localStorage med versionering, balanceinvariant og de første facitcaser. Ingen pension endnu.
 2. **Indbetalingsfasen.** Arbejdsgiver- og egne bidrag, fradragslofter, aldersopsparingens trappe, aktiesparekonto og kapitalindkomst.
 3. **Udbetalingsfasen.** Ratepension, aldersopsparing, livrente, PAL-skat, udbetalingsplaner med begge principper, ATP og folkepension med fuld aftrapning og husstandskobling.
 4. **Bolig.** Gæld, ejendomsskatter med rabatordning, køb og salg, nedsparingslån.
@@ -298,7 +306,7 @@ Disse skal afklares undervejs, men blokerer ikke etape 1:
 2. **Aftrapningssatsen for pensionstillæg** er bekræftet til 32 % for gifte; satsen for enlige er ikke verificeret og bliver først relevant med efterladtescenariet.
 3. **Amortisationsrenten i annuitetsprincippet** er fastsat efter en metode angivet i loven og skal slås op præcist.
 4. **De nøjagtige 2026-beløbsgrænser** skal hentes fra Skatteministeriets officielle tabel. Reformtallene, der cirkulerer (mellemskat fra 568.900 kr., topskat fra 690.000 kr., top-topskat fra 2,3 mio. kr.), er angivet i 2024-niveau og reguleres opad.
-5. **Renten på en negativ saldo på frie midler.** Forslag: et inputfelt for kassekreditrente, så et underskud eskalerer realistisk frem for at stå stille.
+5. **Renten på en negativ saldo på frie midler.** Forslag: et inputfelt for kassekreditrente, så et underskud eskalerer realistisk frem for at stå stille. Påvirker ikke søgningen efter tidligste holdbare erhvervsophør, jf. [ADR-0008](./adr/0008-holdbarhed-maales-paa-bufferen-alene.md).
 6. **Hustruens folkepensionsalder** er ikke vedtaget for hendes fødselsår og indgår som et skøn, der kan overstyres.
 
 ### Kilder

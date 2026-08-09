@@ -7,3 +7,7 @@ Fristelsen er at regne alt i dagens kroner, så tallene er til at forholde sig t
 ## Konsekvenser
 
 Alle beløb, brugeren indtaster, angives i dagens kroner og fremskrives af motoren — brugeren skal aldrig selv regne i fremtidens kroner. Til gengæld skal enhver ny visning huske at deflatere, og et rå tal fra motoren er aldrig direkte fremvisningsegnet.
+
+## Se også
+
+[Diagram: Ét simuleringsår](../diagrams/02-simuleringsaaret.md) — hele rækkefølgen regnes i løbende priser; deflateringen ligger uden for motoren.

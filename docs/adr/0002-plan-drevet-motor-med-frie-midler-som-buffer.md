@@ -9,3 +9,8 @@ Valget er truffet for gennemskuelighed og testbarhed: en behøvsdrevet motor ska
 Negativ saldo på frie midler er ikke en fejl, men modellens måde at sige, at planen ikke holder — brugerfladen skal fremhæve det, ikke forhindre det. Optimering af udbetalingsrækkefølge er brugerens arbejde, ikke motorens.
 
 Kontoabstraktionen designes med en udbetalingsstrategi pr. beholdning, så en behøvsdrevet strategi med prioriteret dækningsrækkefølge kan slås til senere uden at motoren skal rives op.
+
+## Se også
+
+- [Diagram: Pengestrømmen](../diagrams/04-pengestroem.md) — frie midler som restpost, og hvad der kan gøre saldoen negativ.
+- [Diagram: Domænemodellen](../diagrams/01-domaenemodel.md) — udbetalingsplanen hænger på beholdningen, ikke på personen.

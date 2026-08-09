@@ -12,6 +12,14 @@ Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog 
 
 **Tidsfølsomhed:** Ægtefælledækning på en livrente skal købes, før udbetalingen starter, og kan ikke tilføjes bagefter. Beslutningen skal derfor være regnet igennem inden den ældste fylder 60.
 
+## Markedsrente-livrenter
+
+**Status:** Udskudt. Modellen antager gennemsnitsrente, hvor den årlige ydelse er garanteret og kun ændres ved bonustildeling.
+
+**Hvorfor det betyder noget:** En markedsrente-livrente genberegner ydelsen hvert år som depot divideret med en annuitetsfaktor, der falder med alderen. Afkastet slår derfor direkte igennem i den årlige ydelse, og en levetidsmodel bliver nødvendig. Med gennemsnitsrente er ydelsen i stedet et tal, selskabet har garanteret.
+
+**Hvad der skal bygges, når det tages op:** En annuitetsfaktor pr. alder — Finanstilsynets levetidsbenchmark er den offentlige standard, selskaberne måles mod — diskonteret med beholdningens eget nettoafkast, plus en produkttype pr. livrente så begge former kan sameksistere. Det er en reel udvidelse af domænemodellen, ikke en parameterændring.
+
 ## Monte Carlo-simulation
 
 **Status:** Udskudt. Afkast angives som ét fast tal pr. beholdning, jf. [ADR-0003](./adr/0003-fast-afkast-pr-beholdning.md).
