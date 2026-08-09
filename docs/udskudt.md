@@ -1,0 +1,31 @@
+# Bevidst udskudt
+
+Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog af idéer — en liste over beslutninger, så de ikke skal tages forfra.
+
+## Efterladtescenarie (dødsfald)
+
+**Status:** Udskudt til efter v1. `Person` har et slutår fra dag ét, så mekanikken kan slås til uden at rive domænemodellen op.
+
+**Hvorfor det betyder noget:** Med 12 års aldersforskel og kvinders højere levealder er det mest sandsynlige forløb, at hustruen står alene i cirka 18 år. Ved dødsfald ophører den livsvarige livrente, ATP og folkepensionen for afdøde på én gang, mens udgifterne kun falder til omkring 70 %. Den efterlevendes folkepension skifter til enlig-sats: højere tillæg, men aftrapningsgrænsen falder fra 198.800 til 99.200 kr.
+
+**Hvad der skal bygges, når det tages op:** Livrentens ophør og eventuel garantiperiode eller ægtefælledækning, folkepensionens enlig-satser med den lavere aftrapningsgrænse, ATP's ophør, og behandlingen af restsaldi. En billig forenkling: antag at den efterlevende overtager rateudbetalingerne og beskattes af dem som almindelig indkomst — så undgås 40 %-afgiften i det almindelige tilfælde.
+
+**Tidsfølsomhed:** Ægtefælledækning på en livrente skal købes, før udbetalingen starter, og kan ikke tilføjes bagefter. Beslutningen skal derfor være regnet igennem inden den ældste fylder 60.
+
+## Monte Carlo-simulation
+
+**Status:** Udskudt. Afkast angives som ét fast tal pr. beholdning, jf. [ADR-0003](./adr/0003-fast-afkast-pr-beholdning.md).
+
+**Konsekvens:** Afkastmodellen skal bygges om, når det tages op — stokastisk simulation kræver volatilitet og korrelation, som et enkelt forventet afkast ikke indeholder. Prisen er kendt og accepteret.
+
+## Behøvsdrevne udbetalinger
+
+**Status:** Udskudt. Motoren er plan-drevet, jf. [ADR-0002](./adr/0002-plan-drevet-motor-med-frie-midler-som-buffer.md).
+
+**Konsekvens:** Beholdninger designes med en udbetalingsstrategi, så en prioriteret dækningsrækkefølge kan slås til pr. beholdning senere.
+
+## PensionsInfo-import
+
+**Status:** Afvist, ikke udskudt. Undersøgt og lukket.
+
+**Hvorfor:** Adgang kræver MitID, der findes ingen offentlig API for privatpersoner, og de eksisterende B2B-integrationer er forbeholdt regulerede finansielle virksomheder. En SPA uden backend kan ikke autentificere mod MitID uanset. Den eneste farbare vej ville være lokal parsing af den downloadede PDF med pdf.js — fravalgt, fordi 6-10 poster opdateres én gang om året.
