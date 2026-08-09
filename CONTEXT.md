@@ -2,7 +2,9 @@
 
 Et personligt værktøj til at fremskrive én husstands økonomi år for år fra i dag og gennem hele pensionen, med danske skatte- og pensionsregler indregnet.
 
-Strukturen bag begreberne herunder er tegnet i [docs/diagrams/](./docs/diagrams/).
+Strukturen bag begreberne herunder er tegnet i [docs/diagrams/](./docs/diagrams/), og beslutningerne bag den står i [docs/adr/](./docs/adr/).
+
+PRD'er og issues ligger på GitHub, ikke i repoet: [hoved-PRD'en](https://github.com/jbhdk/PensionPlanner/issues/1) beskriver hele værktøjet, og hver etape har sit eget issue. Repoet rummer det varige — glossaret, ADR'erne, diagrammerne og satsårene.
 
 ## Language
 

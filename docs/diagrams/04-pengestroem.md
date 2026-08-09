@@ -77,6 +77,5 @@ flowchart TD
 
 ## Åbne punkter
 
-- **Indgår aktieindkomst i `TaperBase`?** Diagrammet viser kun nettokapitalindkomst. Det er åbent spørgsmål 1 i PRD'en, og det har reel betydning, når frie midler er lagerbeskattede.
-- **Lagerbeskatningen af `FreeAssets` mangler som pil.** Skatten af årets urealiserede gevinst på frie midler og aktiesparekonto skal ind i vandfaldet — i dag ligger den implicit i `Tax`.
-- **Hvad forrenter en negativ saldo?** Åbent spørgsmål 5. Uden en rente står et underskud stille. Det påvirker ikke søgningen efter tidligste holdbare `workEndAge`, jf. [ADR-0008](../adr/0008-holdbarhed-maales-paa-bufferen-alene.md), kun hvor slemt et fejlende forløb ser ud.
+- **Lagerbeskatningen af `FreeAssets` mangler som pil.** Skatten af årets urealiserede gevinst på frie midler og aktiesparekonto skal ind i vandfaldet — i dag ligger den implicit i `Tax`. Det haster mere nu, hvor aktieindkomsten er bekræftet at indgå i `TaperBase`, jf. [ADR-0010](../adr/0010-beskatningsformen-er-variantens-akse-og-indkomsten-foeres-pr-person.md).
+- **Hvad forrenter en negativ saldo?** Stadig åbent. Uden en rente står et underskud stille. Det påvirker ikke søgningen efter tidligste holdbare `workEndAge`, jf. [ADR-0008](../adr/0008-holdbarhed-maales-paa-bufferen-alene.md), kun hvor slemt et fejlende forløb ser ud.

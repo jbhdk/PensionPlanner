@@ -11,6 +11,6 @@ Fire views af designet. De er skrevet i Mermaid direkte i markdown, så de kan d
 
 Begreberne er defineret i [CONTEXT.md](../../CONTEXT.md). Beslutningerne bag dem står i [ADR'erne](../adr/). Diagrammerne tilføjer ingen nye begreber — finder du et ord her, som ikke står i CONTEXT.md, er det en fejl i diagrammet.
 
-Med én undtagelse: en klasse mærket `<<skitse>>` er tegnet efter PRD'en og ikke efter glossaret. Den viser en form, der endnu ikke er afgjort, og dens navne er ikke bindende for koden. Mærket forsvinder, når termerne er grillet på plads.
+Med én undtagelse: en klasse mærket `<<skitse>>` er tegnet efter [hoved-PRD'en](https://github.com/jbhdk/PensionPlanner/issues/1) og ikke efter glossaret. Den viser en form, der endnu ikke er afgjort, og dens navne er ikke bindende for koden. Mærket forsvinder, når termerne er grillet på plads.
 
 Hver fil slutter med et afsnit **Åbne punkter**: steder hvor diagrammet er tegnet efter en antagelse, der ikke er afgjort endnu.

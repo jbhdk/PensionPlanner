@@ -157,4 +157,4 @@ classDiagram
 ## Åbne punkter
 
 
-- **`Property` og `Loan` er mærket `<<skitse>>`.** De er tegnet efter PRD'en, ikke efter glossaret, og deres termer afgøres først i etape 4 — ejendomsskattereformens rabatordning og dens bortfald ved salg er et hjørne, der skal grilles for sig. Mærket betyder: brug dem ikke som om de var afgjorte.
+- **`Property` og `Loan` er mærket `<<skitse>>`.** De er tegnet efter [hoved-PRD'en](https://github.com/jbhdk/PensionPlanner/issues/1), ikke efter glossaret, og deres termer afgøres først i etape 4 — ejendomsskattereformens rabatordning og dens bortfald ved salg er et hjørne, der skal grilles for sig. Mærket betyder: brug dem ikke som om de var afgjorte.
