@@ -204,10 +204,13 @@ Fuld regelmotor med AM-bidrag, personfradrag, bundskat, kommune- og kirkeskat, m
 ### Folkepension
 
 - Grundbeløbet er fladt: hverken arbejdsindkomst eller anden indkomst reducerer det.
-- Pensionstillægget aftrappes af et **aftrapningsgrundlag**, der omfatter ATP, livrente- og ratepensionsudbetalinger samt nettokapitalindkomst — men hverken arbejdsindkomst eller udbetalinger fra aldersopsparing.
+- Pensionstillægget aftrappes af et **aftrapningsgrundlag**, der efter pensionslovens § 29 omfatter ATP, livrente- og ratepensionsudbetalinger, **positiv kapitalindkomst** og **aktieindkomst efter personskattelovens § 8 a, stk. 1 og 2** — men hverken arbejdsindkomst, udbetalinger fra aldersopsparing eller afkast på en aktiesparekonto.
+- Kapitalindkomsten indgår kun når den er positiv. Negativ nettokapitalindkomst lemper ikke grundlaget, og rentefradraget fra etape 4 har derfor ingen virkning på aftrapningen.
+- Lovens bundfradrag på 5.000 kr. aktieudbytte modelleres ikke: det gælder udbytte, og en lagerbeskattet beholdning uden kostprissporing har intet udbytte at anvende det på.
 - Ægtefællens indkomst indgår med **54 % bortseelse**, og ægtefællens arbejdsindkomst indgår slet ikke.
 - Aftrapningsgrænsen afhænger af, om ægtefællen selv er pensionist, og skifter derfor i det år nummer to når sin folkepensionsalder. 2026-tal: gift med ikke-pensionist aftrappes fra 198.800 kr. med bortfald ved 366.400 kr.; gift med pensionist har bortfald ved 533.800 kr.
 - **Konsekvens for arkitekturen:** skatten kan ikke beregnes som to uafhængige personberegninger. Der skal være et koblingstrin på husstandsniveau, hvor den ene persons ydelse afhænger af den andens indkomst.
+- **Konsekvens for `Årsresultat`:** aktieindkomst og kapitalindkomst føres **pr. person**, og begge aggregeringer er afledte. Skatten summerer dem over husstanden, fordi progressionsgrænsen for aktieindkomst er fælles og overførbar; aftrapningen bruger derimod persongrundlaget, fordi ægtefællens indgår med 54 % bortseelse. En gemt husstandssum kan ikke splittes tilbage, og feltet findes derfor ikke.
 
 ### Satser over tid
 
@@ -302,17 +305,17 @@ Rækkefølgen er valgt, fordi udbetalingsplaner tømmer beløb, der er gætværk
 
 Disse skal afklares undervejs, men blokerer ikke etape 1:
 
-1. **Indgår aktieindkomst i aftrapningsgrundlaget for pensionstillæg?** Nettokapitalindkomst gør, men aktieindkomst er en selvstændig indkomstkategori i dansk skatteret, og det er ikke verificeret. Det har reel betydning, når frie midler er lagerbeskattede.
-2. **Aftrapningssatsen for pensionstillæg** er bekræftet til 32 % for gifte; satsen for enlige er ikke verificeret og bliver først relevant med efterladtescenariet.
-3. **Amortisationsrenten i annuitetsprincippet** er fastsat efter en metode angivet i loven og skal slås op præcist.
-4. **De nøjagtige 2026-beløbsgrænser** skal hentes fra Skatteministeriets officielle tabel. Reformtallene, der cirkulerer (mellemskat fra 568.900 kr., topskat fra 690.000 kr., top-topskat fra 2,3 mio. kr.), er angivet i 2024-niveau og reguleres opad.
-5. **Renten på en negativ saldo på frie midler.** Forslag: et inputfelt for kassekreditrente, så et underskud eskalerer realistisk frem for at stå stille. Påvirker ikke søgningen efter tidligste holdbare erhvervsophør, jf. [ADR-0008](./adr/0008-holdbarhed-maales-paa-bufferen-alene.md).
-6. **Hustruens folkepensionsalder** er ikke vedtaget for hendes fødselsår og indgår som et skøn, der kan overstyres.
+1. **Aftrapningssatsen for pensionstillæg** er bekræftet til 32 % for gifte; satsen for enlige er ikke verificeret og bliver først relevant med efterladtescenariet.
+2. **Amortisationsrenten i annuitetsprincippet** er fastsat efter en metode angivet i loven og skal slås op præcist.
+3. **De nøjagtige 2026-beløbsgrænser** skal hentes fra Skatteministeriets officielle tabel. Reformtallene, der cirkulerer (mellemskat fra 568.900 kr., topskat fra 690.000 kr., top-topskat fra 2,3 mio. kr.), er angivet i 2024-niveau og reguleres opad.
+4. **Renten på en negativ saldo på frie midler.** Forslag: et inputfelt for kassekreditrente, så et underskud eskalerer realistisk frem for at stå stille. Påvirker ikke søgningen efter tidligste holdbare erhvervsophør, jf. [ADR-0008](./adr/0008-holdbarhed-maales-paa-bufferen-alene.md).
+5. **Hustruens folkepensionsalder** er ikke vedtaget for hendes fødselsår og indgår som et skøn, der kan overstyres.
 
 ### Kilder
 
 - [skat.dk om bund-, mellem-, top- og toptopskat](https://skat.dk/en-us/help/botton-bracket-middle-bracket-top-bracket-and-additional-top-bracket-tax)
 - [Skatteministeriets beløbsgrænser efter personskattelovens § 20](https://skm.dk/tal-og-metode/satser/regulering-af-beloebsgraenser/beloebsgraenser-i-skattelovgivningen-der-reguleres-efter-personskattelovens-20-2025-2026)
+- [Pensionsloven § 29 om indtægtsgrundlaget for pensionstillæg](https://danskelove.dk/pensionsloven/29)
 - [borger.dk om grundbeløb og pensionstillæg](https://www.borger.dk/pension-og-efterloen/Folkepension-oversigt/foer-du-gaar-paa-folkepension/Folkepension-grundbeloeb-pensionstillaeg)
 - [borger.dk om ægtefælles indkomst og 54 %-reglen](https://www.borger.dk/pension-og-efterloen/Folkepension-oversigt/naar-du-er-paa-folkepension)
 - [skat.dk om PAL-skat](https://skat.dk/borger/pension-og-efterloen/skat-af-pensionsafkast)

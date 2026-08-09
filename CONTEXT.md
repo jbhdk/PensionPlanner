@@ -15,7 +15,7 @@ Tre navnefælder, der er lette at falde i:
 - `Annuity` optræder i to ubeslægtede sammenhænge: `LifeAnnuity` (livrente, en beholdning der omsættes) og `AnnuityPrinciple` (annuitetsprincippet, en beregningsmåde for en ratepension). De har intet med hinanden at gøre.
 
 Ordninger og beskatningsformer, der ikke har en egen term herunder, men som koden navngiver:
-`InstalmentPension` (ratepension), `OldAgeSavings` (aldersopsparing), `ShareSavingsAccount` (aktiesparekonto), `StatePension` (folkepension), `BasicAmount` (grundbeløb), `PensionSupplement` (pensionstillæg), `PalTax` (PAL-skat), `AnnualCostRate` (ÅOP), `BottomBracketTax` / `MiddleBracketTax` / `TopBracketTax` / `AdditionalTopBracketTax` (bund-, mellem-, top- og top-topskat, efter skat.dk's egne engelske betegnelser).
+`InstalmentPension` (ratepension), `OldAgeSavings` (aldersopsparing), `ShareSavingsAccount` (aktiesparekonto), `ShareIncome` og `CapitalIncome` (de to beskatningsformer for frie midler), `StatePension` (folkepension), `BasicAmount` (grundbeløb), `PensionSupplement` (pensionstillæg), `PalTax` (PAL-skat), `AnnualCostRate` (ÅOP), `BottomBracketTax` / `MiddleBracketTax` / `TopBracketTax` / `AdditionalTopBracketTax` (bund-, mellem-, top- og top-topskat, efter skat.dk's egne engelske betegnelser).
 
 ### Husstanden
 
@@ -60,7 +60,7 @@ Forholdet mellem selskabets oplyste årlige ydelse og dets oplyste depot ved udb
 _Avoid_: Annuitetsdivisor, annuitetsfaktor, kapitaliseringsfaktor
 
 **Frie midler** · `FreeAssets`:
-En persons beskattede opsparing uden bindinger. Husstanden kan have flere sæt, ét pr. person, og de beskattes hver for sig.
+En persons beskattede opsparing uden bindinger, i to former efter beskatning: lagerbeskattet aktieindkomst og kapitalindkomst. Husstanden kan have flere sæt, ét pr. person, og de beskattes hver for sig. Aktiesparekontoen er ikke frie midler — den har et indskudsloft.
 _Avoid_: Kontanter, bankkonto, opsparing, likvider
 
 **Buffer** · `Buffer`:
@@ -130,7 +130,7 @@ Motorens fulde output for ét simuleringsår, inklusive alle mellemregninger og 
 _Avoid_: Række, resultat, output, snapshot
 
 **Aftrapningsgrundlag** · `TaperBase`:
-Den indkomst der reducerer pensionstillægget. Omfatter ATP, livrente- og ratepensionsudbetalinger samt nettokapitalindkomst — men hverken arbejdsindkomst eller udbetalinger fra aldersopsparing. Ægtefællens indkomst indgår med 54 % bortseelse, og ægtefællens arbejdsindkomst indgår slet ikke.
+Den indkomst der reducerer pensionstillægget. Omfatter ATP, livrente- og ratepensionsudbetalinger, positiv kapitalindkomst og aktieindkomst — men hverken arbejdsindkomst, udbetalinger fra aldersopsparing eller afkast på en aktiesparekonto. Kapitalindkomsten tæller kun når den er positiv: en negativ nettokapitalindkomst lemper ikke grundlaget. Ægtefællens indkomst indgår med 54 % bortseelse, og ægtefællens arbejdsindkomst indgår slet ikke.
 _Avoid_: Modregningsgrundlag, indtægtsgrundlag
 
 ### Aldre

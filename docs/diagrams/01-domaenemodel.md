@@ -30,6 +30,7 @@ classDiagram
     }
 
     class Holding {
+        +variant
         +balance
         +grossReturn
         +annualCostRate
@@ -121,7 +122,7 @@ classDiagram
     Transfer --> "1" Holding : from
     Transfer --> "1" Holding : to
 
-    note for Holding "InstalmentPension, OldAgeSavings, ShareSavingsAccount og FreeAssets. Varianterne adskiller sig kun ved beskatning."
+    note for Holding "Fem varianter: InstalmentPension, OldAgeSavings, ShareSavingsAccount, ShareIncome og CapitalIncome. De adskiller sig kun ved beskatning."
     note for Property "Skitse: tegnet efter PRD'en, ikke efter glossaret. Afgøres i etape 4."
     note for Contribution "Bevægelse ind i en beholdning, med skattevirkning og loft. Lønposter angives brutto inkl. arbejdsgiverbidrag."
     note for Transfer "Skattefri flytning mellem to holdings. I v1 kun FreeAssets til FreeAssets — en flytning ind i en pensionsordning er en indbetaling, ikke en Transfer."
@@ -130,7 +131,19 @@ classDiagram
 
 ## Hvad diagrammet gør krav på
 
-- **`Holding` er én type med varianter, ikke fire typer.** Ratepension, aldersopsparing, aktiesparekonto og frie midler deler saldo, afkast og udbetalingsplan; de adskiller sig i beskatning. Se [ADR-0003](../adr/0003-fast-afkast-pr-beholdning.md) for hvorfor afkastet er ét fast tal pr. beholdning.
+- **`Holding` er én type med fem varianter, ikke fem typer.** De deler saldo, afkast og udbetalingsplan og adskiller sig udelukkende i beskatning. Se [ADR-0003](../adr/0003-fast-afkast-pr-beholdning.md) for hvorfor afkastet er ét fast tal pr. beholdning.
+- **`variant` er én akse, ikke to.** Beskatningen er ikke et selvstændigt felt ved siden af varianten, for så ville kombinationer, der ikke findes — en aldersopsparing beskattet som kapitalindkomst — skulle valideres frem for at være uskrivelige. Hele beholdningssiden af skattemotoren bliver dermed ét opslag:
+
+  | Variant | Afkast | Hævning/udbetaling | I `TaperBase` | Loft |
+  |---|---|---|---|---|
+  | `InstalmentPension` | PAL 15,3 % | personlig indkomst | ja | fradragsloft |
+  | `OldAgeSavings` | PAL 15,3 % | skattefri | nej | eget loft med trappe |
+  | `ShareSavingsAccount` | 17 % lager | skattefri | nej | indskudsloft |
+  | `ShareIncome` | 27/42 % lager, fælles overførbar grænse | skattefri | ja | intet |
+  | `CapitalIncome` | kapitalindkomst | skattefri | ja, kun når positiv | intet |
+
+  `LifeAnnuity` arver `InstalmentPension`-rækken; den er en underklasse, ikke en sjette variant. Varianterne er opkaldt efter skattespanden og ikke efter aktivet — `ShareIncome` er derfor både variantnavn og feltnavn på `YearResult`, og det er med vilje: navnet siger, hvilket felt afkastet lander i.
+- **`FreeAssets` er en kategori, ikke en variant.** Den dækker `ShareIncome` og `CapitalIncome` under ét, og det er den, buffer- og overførselsreglerne taler om. Aktiesparekontoen hører ikke med — den har et indskudsloft.
 - **`PayoutSchedule` hænger på beholdningen, ikke på personen.** Det er dét, der gør motoren plan-drevet — se [ADR-0002](../adr/0002-plan-drevet-motor-med-frie-midler-som-buffer.md).
 - **`payoutAge()` er afledt, ikke indtastet.** Den udledes af `openedOn` via udbetalingsregimet, med `payoutAgeOverride` til overførselstilfælde. Fordi to af de tre regimer er relative til folkepensionsalderen, ændrer den sig, når `Person.statePensionAge` justeres.
 - **`Entry` er én figur for både indtægt og udgift.** Kun indtægtsposter bærer en `taxTreatment`.
