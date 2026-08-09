@@ -197,6 +197,9 @@ Tre grundtyper til pensionsposter, jf. `CONTEXT.md`:
 
 Fuld regelmotor med AM-bidrag, personfradrag, bundskat, kommune- og kirkeskat, mellemskat, topskat, top-topskat, skråt skatteloft, beskæftigelsesfradrag, jobfradrag og ekstra pensionsfradrag.
 
+- **Progressionsgrænserne måles på personlig indkomst efter AM-bidrag.** Det er den form § 20 regulerer. Sekundære kilder angiver rutinemæssigt de samme grænser før AM-bidrag — 697.000 i stedet for 641.200 — og de to sæt må aldrig blandes.
+- **Det skrå skatteloft er trappet fra 2026** og er ikke længere ét tal: 44,57 % op til mellemskat, 52,07 % med topskat, 57,07 % med top-topskat.
+
 - **PAL-skat** på 15,3 % af årets afkast pr. pensionsbeholdning.
 - **Frie midler** i tre former: lagerbeskattet aktieindkomst (27 %/42 % med ægtefællernes fælles, overførbare progressionsgrænse), aktiesparekonto (17 % lager med indskudsloft) og kapitalindkomst med rentefradrag. **Realisationsbeskatning er fravalgt**, hvilket betyder, at der ikke føres kostpris nogen steder, og at en hævning fra frie midler er en ren saldoreduktion uden skattekonsekvens.
 - Kommune- og kirkeskatteprocent er inputfelter.
@@ -208,13 +211,14 @@ Fuld regelmotor med AM-bidrag, personfradrag, bundskat, kommune- og kirkeskat, m
 - Kapitalindkomsten indgår kun når den er positiv. Negativ nettokapitalindkomst lemper ikke grundlaget, og rentefradraget fra etape 4 har derfor ingen virkning på aftrapningen.
 - Lovens bundfradrag på 5.000 kr. aktieudbytte modelleres ikke: det gælder udbytte, og en lagerbeskattet beholdning uden kostprissporing har intet udbytte at anvende det på.
 - Ægtefællens indkomst indgår med **54 % bortseelse**, og ægtefællens arbejdsindkomst indgår slet ikke.
-- Aftrapningsgrænsen afhænger af, om ægtefællen selv er pensionist, og skifter derfor i det år nummer to når sin folkepensionsalder. 2026-tal: gift med ikke-pensionist aftrappes fra 198.800 kr. med bortfald ved 366.400 kr.; gift med pensionist har bortfald ved 533.800 kr.
+- **Både aftrapningsprocenten og bortfaldsgrænsen skifter**, når ægtefællen selv bliver folkepensionist. Fradragsbeløbet er 198.800 kr. i begge tilfælde, men gift med en ikke-pensionist aftrappes med 32 % til bortfald ved 366.400 kr., mens gift med en pensionist aftrappes med 16 % til bortfald ved 533.800 kr. (2026). Overgangen er derfor et spring i marginalskatten, ikke kun i grænsen — og den falder i vores tilfælde omkring 15 år inde i min folkepension.
+- Bortfaldsgrænsen er ikke et selvstændigt tal, men følger af ydelsen, fradragsbeløbet og procenten. Se [satsår 2026](./satser/2026.md) for udledningen; forholdet er den rigtige invariant at teste et satsår på.
 - **Konsekvens for arkitekturen:** skatten kan ikke beregnes som to uafhængige personberegninger. Der skal være et koblingstrin på husstandsniveau, hvor den ene persons ydelse afhænger af den andens indkomst.
 - **Konsekvens for `Årsresultat`:** aktieindkomst og kapitalindkomst føres **pr. person**, og begge aggregeringer er afledte. Skatten summerer dem over husstanden, fordi progressionsgrænsen for aktieindkomst er fælles og overførbar; aftrapningen bruger derimod persongrundlaget, fordi ægtefællens indgår med 54 % bortseelse. En gemt husstandssum kan ikke splittes tilbage, og feltet findes derfor ikke.
 
 ### Satser over tid
 
-- Ét komplet **satsår** pr. kendt kalenderår, holdt som data med kilde-URL pr. sæt. Satser er delt referencedata: en plan pinner dem ikke, men `Årsresultat` stempler hvilket grundlag det er regnet på. Se [ADR-0005](./adr/0005-satser-er-referencedata-planen-pinner-ikke.md).
+- Ét komplet **satsår** pr. kendt kalenderår, holdt som data med kilde-URL pr. sæt. 2026 er hentet og verificeret i [docs/satser/2026.md](./satser/2026.md). Satser er delt referencedata: en plan pinner dem ikke, men `Årsresultat` stempler hvilket grundlag det er regnet på. Se [ADR-0005](./adr/0005-satser-er-referencedata-planen-pinner-ikke.md).
 - Simuleringsår efter det sidst kendte satsår fremskrives: procentsatser holdes konstante, mens beløbsgrænser løftes — skattelovgivningens grænser efter personskattelovens § 20 og de satsregulerede ydelser efter satsreguleringsprocenten, hver med sin justerbare antagelse.
 - Folkepensionsalder kommer fra en indbygget fødselsårstabel (67 i 2025, 68 fra 2030, 70 fra 2040) og kan overstyres pr. person.
 
@@ -305,11 +309,12 @@ Rækkefølgen er valgt, fordi udbetalingsplaner tømmer beløb, der er gætværk
 
 Disse skal afklares undervejs, men blokerer ikke etape 1:
 
-1. **Aftrapningssatsen for pensionstillæg** er bekræftet til 32 % for gifte; satsen for enlige er ikke verificeret og bliver først relevant med efterladtescenariet.
-2. **Amortisationsrenten i annuitetsprincippet** er fastsat efter en metode angivet i loven og skal slås op præcist.
-3. **De nøjagtige 2026-beløbsgrænser** skal hentes fra Skatteministeriets officielle tabel. Reformtallene, der cirkulerer (mellemskat fra 568.900 kr., topskat fra 690.000 kr., top-topskat fra 2,3 mio. kr.), er angivet i 2024-niveau og reguleres opad.
-4. **Renten på en negativ saldo på frie midler.** Forslag: et inputfelt for kassekreditrente, så et underskud eskalerer realistisk frem for at stå stille. Påvirker ikke søgningen efter tidligste holdbare erhvervsophør, jf. [ADR-0008](./adr/0008-holdbarhed-maales-paa-bufferen-alene.md).
-5. **Hustruens folkepensionsalder** er ikke vedtaget for hendes fødselsår og indgår som et skøn, der kan overstyres.
+- **Amortisationsrenten i annuitetsprincippet** er fastsat efter en metode angivet i loven og skal slås op præcist.
+- **Renten på en negativ saldo på frie midler.** Forslag: et inputfelt for kassekreditrente, så et underskud eskalerer realistisk frem for at stå stille. Påvirker ikke søgningen efter tidligste holdbare erhvervsophør, jf. [ADR-0008](./adr/0008-holdbarhed-maales-paa-bufferen-alene.md).
+- **Hustruens folkepensionsalder** er ikke vedtaget for hendes fødselsår og indgår som et skøn, der kan overstyres.
+- **Det ekstra pensionsfradrags maksimum.** § 20-tabellen angiver 87.800 kr., mens sekundære kilder angiver 10.536 og 28.096 kr. for de to satstrin. De måler ikke det samme, og forskellen skal forstås før facitcasen skrives.
+- **Er 54 %-bortseelsen for ægtefællens indtægt loftlagt?** Selve satsen er bekræftet i pensionslovens § 49; et eventuelt maksimumbeløb er ikke undersøgt.
+- **Fradragsbeløbene i aftrapningen indeholder en midlertidig forhøjelse.** Om den videreføres efter 2026 er ikke undersøgt, og det påvirker fremskrivningen af satsåret.
 
 ### Kilder
 
