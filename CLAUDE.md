@@ -2,7 +2,7 @@
 
 Pensionsplanneren er et personligt værktøj til at fremskrive én husstands økonomi år for år gennem hele pensionen, med danske skatte- og pensionsregler indregnet. Læs [CONTEXT.md](./CONTEXT.md) før du gør noget som helst — den er glossaret, og den er bindende.
 
-**Status:** Der er endnu ingen kode. Designet er grillet igennem og dokumenteret; etape 1 er beskrevet i [issue #2](https://github.com/jbhdk/PensionPlanner/issues/2). Node og npm er ikke installeret på maskinen — det skal på plads, før der kan skrives kode.
+**Status:** Der er endnu ingen kode. Designet er grillet igennem og dokumenteret; etape 1 er beskrevet i [issue #2](https://github.com/jbhdk/PensionPlanner/issues/2). Brugerfladen til det færdige system er tegnet i [`docs/mockup/`](./docs/mockup/). Node ligger i `C:\Program Files\nodejs` (v24, npm 11) — men ikke altid på `PATH` i en frisk terminal.
 
 ## Sproget
 
