@@ -287,4 +287,69 @@ describe('skatteopgørelsen', () => {
     // indbetaling har intet fradrag, uanset hvor tæt folkepensionsalderen er.
     expect(assess({ earnedIncome: 500_000 }).allowances.extraPensionAllowance).toBe(0)
   })
+
+  it('lægger positiv kapitalindkomst til bundskattens grundlag', () => {
+    // Ingen arbejdsindkomst isolerer laget: bundskat af personlig indkomst er
+    // nul, så hele beløbet kommer fra kapitalindkomsten. 50.000 kr. ligger
+    // under bundfradraget i topskat, så kun bundskattens sats rammer den.
+    // 50.000 × 12,01 % = 6.005.
+    expect(assess({ capitalIncome: 50_000 }).layers.bottomBracketTax).toBeCloseTo(6_005, 2)
+  })
+
+  it('lægger topskat på den del af kapitalindkomsten, der overstiger dens egen bundfradragsgrænse', () => {
+    // 80.000 kr. kapitalindkomst: bundfradraget i topskat er 55.000, så
+    // 25.000 kr. bærer topskattens 7,5 % oven i bundskattens 12,01 %.
+    // Bundskat  80.000 × 12,01 %       =  9.608,00
+    // Topskat   25.000 ×  7,50 %       =  1.875,00
+    const assessment = assess({ capitalIncome: 80_000 })
+
+    expect(assessment.layers.bottomBracketTax).toBeCloseTo(9_608, 2)
+    expect(assessment.layers.topBracketTax).toBeCloseTo(1_875, 2)
+  })
+
+  it('lofter kapitalindkomstens kombinerede sats til 42 %, uafhængigt af det skrå skatteloft', () => {
+    // Bund + kommune alene: 12,01 + 28 = 40,01 %, under loftet — bundskatten
+    // står urørt. Læg topskatten oven i: 40,01 + 7,50 = 47,51 %, 5,51
+    // procentpoint over loftet, så topskattens andel sættes ned til 1,99 %.
+    // Loftet rammer altså kun laget over grænsen, ikke laget under.
+    // Bundskat  200.000 × 12,01 %  = 24.020,00
+    // Topskat   145.000 ×  1,99 %  =  2.885,50
+    const assessment = assess({ capitalIncome: 200_000, municipalTaxRate: 0.28 })
+
+    expect(assessment.layers.bottomBracketTax).toBeCloseTo(24_020, 2)
+    expect(assessment.layers.topBracketTax).toBeCloseTo(2_885.5, 2)
+  })
+
+  it('nedsætter skattepligtig indkomst med negativ kapitalindkomst uden at udløse bund- eller topskat', () => {
+    const assessment = assess({ earnedIncome: 500_000, capitalIncome: -30_000 })
+
+    expect(assessment.taxableIncome).toBeCloseTo(460_000 - 66_400 - 30_000, 2)
+    expect(assessment.layers.bottomBracketTax).toBeCloseTo(
+      assess({ earnedIncome: 500_000 }).layers.bottomBracketTax,
+      2,
+    )
+  })
+
+  it('lægger kapitalindkomsten til skattepligtig indkomst, så kommune- og kirkeskatten stiger', () => {
+    // Arbejdsindkomst nok til at løfte skattepligtig indkomst over
+    // personfradraget i begge tilfælde, så tilføjelsen slår igennem krone for
+    // krone og ikke delvis sluges af fradraget.
+    const withCapitalIncome = assess({
+      earnedIncome: 500_000,
+      capitalIncome: 50_000,
+      municipalTaxRate: 0.254,
+      churchTaxRate: 0.0074,
+    })
+    const without = assess({
+      earnedIncome: 500_000,
+      municipalTaxRate: 0.254,
+      churchTaxRate: 0.0074,
+    })
+
+    expect(withCapitalIncome.taxableIncome).toBeCloseTo(without.taxableIncome + 50_000, 2)
+    expect(withCapitalIncome.layers.municipalTax).toBeCloseTo(
+      without.layers.municipalTax + 50_000 * 0.254,
+      2,
+    )
+  })
 })

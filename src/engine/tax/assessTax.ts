@@ -16,6 +16,10 @@ export type TaxAssessmentInput = {
     amount: Nominal
     yearsToStatePensionAge: number
   }
+  /** Nettokapitalindkomst, positiv eller negativ. Lægges til skattepligtig
+      indkomst, og positiv kapitalindkomst tillægges desuden bundskattens og
+      topskattens grundlag, jf. ADR-0010. */
+  capitalIncome?: Nominal
 }
 
 /** Trappen: hvert progressionslag parret med det trin på det skrå skatteloft,
@@ -77,9 +81,13 @@ export function assessTax(
     extraPensionAllowance: extraPensionAllowance(input, rates),
   }
 
-  // De ligningsmæssige fradrag er hele forskellen på de to indkomster —
-  // indtil kapitalindkomsten (#8) også skiller dem ad.
-  const taxableIncome = personalIncome - sum(allowances)
+  const capitalIncome = input.capitalIncome ?? 0
+  const taxableIncome = personalIncome - sum(allowances) + capitalIncome
+  const capitalIncomeContribution = capitalIncomeTax(
+    capitalIncome,
+    input.municipalTaxRate,
+    rates,
+  )
 
   return {
     rateYear: rates.year,
@@ -90,12 +98,16 @@ export function assessTax(
       labourMarketContribution,
       bottomBracketTax:
         afterPersonalAllowance(personalIncome, rates) *
-        rates.bracketTaxRates.bottomBracketTax,
+          rates.bracketTaxRates.bottomBracketTax +
+        capitalIncomeContribution.bottomBracketTax,
       municipalTax:
         afterPersonalAllowance(taxableIncome, rates) * input.municipalTaxRate,
       churchTax:
         afterPersonalAllowance(taxableIncome, rates) * input.churchTaxRate,
-      ...progression(personalIncome, input.municipalTaxRate, rates),
+      ...addCapitalIncomeToTopBracket(
+        progression(personalIncome, input.municipalTaxRate, rates),
+        capitalIncomeContribution.topBracketTax,
+      ),
     },
   }
 }
@@ -198,6 +210,45 @@ function progression(
   }
 
   return layers
+}
+
+/** Positiv nettokapitalindkomst tillægges bundskattens grundlag helt uden
+    bundfradrag, og topskattens grundlag kun for den del, der ligger over
+    kapitalindkomstens egen bundfradragsgrænse — aldrig mellem- eller
+    top-topskattens, jf. docs/satser/2026.md. Den kombinerede sats har sit
+    eget loft på 42 %, uafhængigt af det skrå skatteloftets tre trin, og
+    negativ kapitalindkomst rammer hverken laget her eller personfradraget:
+    den nedsætter kun skattepligtig indkomst. */
+function capitalIncomeTax(
+  capitalIncome: Nominal,
+  municipalTaxRate: number,
+  rates: RateYear,
+): { bottomBracketTax: Nominal; topBracketTax: Nominal } {
+  const positive = Math.max(0, capitalIncome)
+  const aboveThreshold = Math.max(0, positive - rates.thresholds.capitalIncomeInTopBracket)
+
+  let combinedRate = rates.bracketTaxRates.bottomBracketTax + municipalTaxRate
+  const bottomRate =
+    rates.bracketTaxRates.bottomBracketTax - Math.max(0, combinedRate - rates.taxCeiling.capitalIncome)
+
+  combinedRate += rates.bracketTaxRates.topBracketTax
+  const topRate =
+    rates.bracketTaxRates.topBracketTax - Math.max(0, combinedRate - rates.taxCeiling.capitalIncome)
+
+  return {
+    bottomBracketTax: positive * bottomRate,
+    topBracketTax: aboveThreshold * topRate,
+  }
+}
+
+/** Kapitalindkomstens topskattebidrag lægges oven i det almindelige
+    topskattelag — de to måles på hver sin grænse og hvert sit loft, men
+    opgørelsen viser kun ét `topBracketTax`, jf. "hvert lag for sig". */
+function addCapitalIncomeToTopBracket(
+  layers: Record<ProgressionLayer, Nominal>,
+  fromCapitalIncome: Nominal,
+): Record<ProgressionLayer, Nominal> {
+  return { ...layers, topBracketTax: layers.topBracketTax + fromCapitalIncome }
 }
 
 /** Personfradraget anvendes i det enkelte lag frem for som en samlet

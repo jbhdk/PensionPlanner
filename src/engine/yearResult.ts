@@ -10,9 +10,17 @@ export type HoldingYear = {
 
 /** Årets skatteopgørelse for én person. Indkomsten føres pr. person og aldrig
     som husstandssum, jf. ADR-0010: skatten summerer over husstanden, men
-    aftrapningen bruger persongrundlaget, og en gemt sum kan ikke splittes. */
+    aftrapningen bruger persongrundlaget, og en gemt sum kan ikke splittes.
+
+    `shareIncome` og `capitalIncome` er afkastet af personens egne
+    `ShareIncome`- og `CapitalIncome`-beholdninger — ikke en skat, men
+    grundlaget senere etapers aftrapning skal bruge. Aktieindkomstens skat
+    står ikke her: den er en husstandsberegning og indgår kun i
+    `YearResult.tax`, jf. ADR-0010. */
 export type PersonYear = {
   person: PersonId
+  shareIncome: Nominal
+  capitalIncome: Nominal
   tax: TaxAssessment
 }
 

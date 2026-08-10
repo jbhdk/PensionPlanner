@@ -174,6 +174,24 @@ describe('fladen', () => {
     expect(screen.getByText('9,50 %')).toBeTruthy()
   })
 
+  it('lader en beholdnings variant vælges mellem Aktieindkomst og Kapitalindkomst', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan()} />)
+
+    await user.click(screen.getByRole('button', { name: /Frie midler/ }))
+    const variant = screen.getByLabelText(/Variant/) as HTMLSelectElement
+
+    // Fixturens beholdning er CapitalIncome, og etape 1 tilbyder kun de to
+    // lovlige varianter — ingen af de tre, der først findes i senere etaper.
+    expect(variant.value).toBe('Kapitalindkomst')
+    expect(
+      Array.from(variant.options).map((option) => option.value),
+    ).toEqual(['Aktieindkomst', 'Kapitalindkomst'])
+
+    await user.selectOptions(variant, 'Aktieindkomst')
+    expect(variant.value).toBe('Aktieindkomst')
+  })
+
   it('lader en posts forfald vælges som jævnt fordelt eller en bestemt måned', async () => {
     const user = userEvent.setup()
     render(

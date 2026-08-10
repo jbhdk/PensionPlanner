@@ -1,4 +1,4 @@
-import type { Entry, Plan, Timing } from '../plan'
+import type { Entry, HoldingVariant, Plan, Timing } from '../plan'
 import type { YearResult } from '../yearResult'
 
 type Options = {
@@ -7,6 +7,7 @@ type Options = {
   birthYear?: number
   horizon?: number
   balance?: number
+  variant?: HoldingVariant
   grossReturn?: number
   annualCostRate?: number
   entries?: Entry[]
@@ -27,6 +28,7 @@ export function aPlan(options: Options = {}): Plan {
     birthYear = 1973,
     horizon = 90,
     balance = 1_000_000,
+    variant = 'CapitalIncome',
     grossReturn = 0,
     annualCostRate = 0,
     entries = [],
@@ -55,7 +57,7 @@ export function aPlan(options: Options = {}): Plan {
             {
               id: 'free-assets',
               name: 'Frie midler',
-              variant: 'CapitalIncome',
+              variant,
               balance,
               grossReturn,
               annualCostRate,

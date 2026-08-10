@@ -2,8 +2,10 @@ import type {
   Entry,
   Holding,
   HoldingId,
+  HoldingVariant,
   Nominal,
   Person,
+  PersonId,
   Plan,
   SimulationYear,
   Timing,
@@ -47,30 +49,41 @@ function simulateYear(
 
   const income = sumOf(plan.entries, 'Income', projection)
   const expenses = sumOf(plan.entries, 'Expense', projection)
-  const assessments = plan.household.persons.map((person) =>
-    assess(plan, person, projection, rates),
-  )
-  const tax = assessments.reduce((sum, { tax }) => sum + totalTax(tax), 0)
 
-  // Årets restpost lander på bufferen. Den er det ene sted, over- og
-  // underskuddet må samle sig, og den må gerne gå negativt — det er modellens
-  // måde at sige, at planen ikke holder, jf. ADR-0002.
-  balances.set(plan.buffer, balances.get(plan.buffer)! + income - tax - expenses)
-
-  // Afkastet krediteres først, når alle årets strømme er kendt, på den
-  // vægtede gennemsnitssaldo efter Modified Dietz, jf. ADR-0006. Kun
-  // bufferen modtager poster i denne skive — indbetalinger og overførsler
-  // rammer andre beholdninger i senere etaper.
+  // Afkastet regnes først, på primosaldi og årets strømme alene efter
+  // Modified Dietz, jf. ADR-0006 — det afhænger aldrig af skatten, kun
+  // omvendt: ShareIncome og CapitalIncome beskattes af netop dette afkast.
+  // Kun bufferen modtager poster i denne skive — indbetalinger og
+  // overførsler rammer andre beholdninger i senere etaper.
   const bufferFlow = weightedNetFlow(plan.entries, projection)
   const returns = new Map<HoldingId, Nominal>()
   for (const holding of allHoldings(plan)) {
     const base =
       opening.get(holding.id)! + (holding.id === plan.buffer ? bufferFlow : 0)
-    const credited = netReturn(holding) * base
-    returns.set(holding.id, credited)
-    balances.set(holding.id, balances.get(holding.id)! + credited)
+    returns.set(holding.id, netReturn(holding) * base)
   }
   const totalReturn = [...returns.values()].reduce((sum, r) => sum + r, 0)
+
+  const shareIncomeByPerson = incomeByVariant(plan, returns, 'ShareIncome')
+  const capitalIncomeByPerson = incomeByVariant(plan, returns, 'CapitalIncome')
+
+  const assessments = plan.household.persons.map((person) =>
+    assess(plan, person, projection, rates, capitalIncomeByPerson.get(person.id)!),
+  )
+  const personalTax = assessments.reduce((sum, { tax }) => sum + totalTax(tax), 0)
+  const shareTax = shareIncomeTax(
+    plan.household.persons.map((person) => shareIncomeByPerson.get(person.id)!),
+    rates,
+  )
+  const tax = personalTax + shareTax
+
+  // Årets restpost lander på bufferen. Den er det ene sted, over- og
+  // underskuddet må samle sig, og den må gerne gå negativt — det er modellens
+  // måde at sige, at planen ikke holder, jf. ADR-0002.
+  balances.set(plan.buffer, balances.get(plan.buffer)! + income - tax - expenses)
+  for (const [holding, credited] of returns) {
+    balances.set(holding, balances.get(holding)! + credited)
+  }
 
   return {
     year,
@@ -83,8 +96,46 @@ function simulateYear(
     expenses,
     conversion: 0,
     holdings: holdingYears(opening, balances, returns),
-    persons: assessments,
+    persons: assessments.map(({ person, tax }) => ({
+      person,
+      shareIncome: shareIncomeByPerson.get(person)!,
+      capitalIncome: capitalIncomeByPerson.get(person)!,
+      tax,
+    })),
   }
+}
+
+/** Summen af afkastet på en persons beholdninger af én variant — grundlaget
+    for aktie- og kapitalindkomsten pr. person, jf. ADR-0010. */
+function incomeByVariant(
+  plan: Plan,
+  returns: Map<HoldingId, Nominal>,
+  variant: HoldingVariant,
+): Map<PersonId, Nominal> {
+  return new Map(
+    plan.household.persons.map((person) => [
+      person.id,
+      person.holdings
+        .filter((holding) => holding.variant === variant)
+        .reduce((sum, holding) => sum + returns.get(holding.id)!, 0),
+    ]),
+  )
+}
+
+/** Aktieindkomstens progressionsgrænse er fælles og overførbar mellem
+    ægtefæller, så skatten regnes af husstandens samlede aktieindkomst mod
+    husstandens samlede grænse — aldrig person for person, jf. ADR-0010 og
+    docs/satser/2026.md. Summen lagres ikke; den findes kun her. */
+function shareIncomeTax(shareIncomes: Nominal[], rates: RateYear): Nominal {
+  const total = Math.max(0, shareIncomes.reduce((sum, income) => sum + income, 0))
+  const threshold = rates.thresholds.shareIncome * shareIncomes.length
+  const belowThreshold = Math.min(total, threshold)
+  const aboveThreshold = total - belowThreshold
+
+  return (
+    belowThreshold * rates.taxRates.shareIncomeBelowThreshold +
+    aboveThreshold * rates.taxRates.shareIncomeAboveThreshold
+  )
 }
 
 /** Nettoafkastsatsen er bruttoafkast minus ÅOP — udledt og aldrig et gemt
@@ -118,6 +169,7 @@ function assess(
   person: Person,
   projection: number,
   rates: RateYear,
+  capitalIncome: Nominal,
 ): { person: string; tax: TaxAssessment } {
   const earnedIncome = plan.entries
     .filter(
@@ -135,6 +187,7 @@ function assess(
         earnedIncome,
         municipalTaxRate: plan.municipalTaxRate,
         churchTaxRate: plan.churchTax ? plan.churchTaxRate : 0,
+        capitalIncome,
       },
       rates,
     ),

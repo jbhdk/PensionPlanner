@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useId } from 'react'
-import type { Direction, Plan, TaxTreatment, Timing } from '../engine/plan'
+import type { Direction, HoldingVariant, Plan, TaxTreatment, Timing } from '../engine/plan'
 import { procent } from './format'
 import {
   findEntry,
@@ -191,6 +191,14 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
             onChange(withHolding(plan, id, (h) => ({ ...h, balance })))
           }
         />
+        <SelectField
+          label="Variant"
+          value={danish(variants, holding.variant)}
+          options={Object.keys(variants)}
+          onChange={(choice) =>
+            onChange(withHolding(plan, id, (h) => ({ ...h, variant: variants[choice]! })))
+          }
+        />
         <RadioField
           label="Buffer"
           checked={plan.buffer === id}
@@ -237,6 +245,13 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
 const directions: Record<string, Direction> = {
   Indtægt: 'Income',
   Udgift: 'Expense',
+}
+
+/** Etape 1 kender kun de to varianter for frie midler — de tre øvrige findes
+    ikke i fladen, før de findes i motoren, jf. ADR-0010. */
+const variants: Record<string, HoldingVariant> = {
+  Aktieindkomst: 'ShareIncome',
+  Kapitalindkomst: 'CapitalIncome',
 }
 
 const treatments: Record<string, TaxTreatment> = {

@@ -183,8 +183,36 @@ describe('simulate', () => {
     // Nettoafkastsatsen er 6 %, og uden strømme er grundlaget bare primosaldoen.
     expect(years[0]!.return).toBeCloseTo(60_000, 6)
     expect(years[0]!.income).toBe(0)
-    expect(bufferBalance(years[0]!)).toBeCloseTo(1_060_000, 6)
-    expect(bufferBalance(years[1]!)).toBeCloseTo(1_060_000 * 1.06, 6)
+
+    // Beholdningen er CapitalIncome (fixturens standard), så afkastet
+    // beskattes i samme åndedrag som det krediteres, jf. ADR-0010: bundskat
+    // af hele beløbet, og topskat af de 5.000 kr. over kapitalindkomstens
+    // eget bundfradrag på 55.000 — men bundskat og kommuneskat alene lægger
+    // sig på 37,41 %, så topskattens 7,50 % sættes ned til 4,59 % af
+    // kapitalindkomstens eget loft på 42 %.
+    // Bundskat    60.000 × 12,01 %  = 7.206,00
+    // Topskat      5.000 ×  4,59 %  =   229,50
+    // Kommuneskat  5.900 × 25,40 %  = 1.498,60
+    // Kirkeskat    5.900 ×  0,74 %  =    43,66
+    //                                 ─────────
+    //                                 8.977,76
+    expect(years[0]!.tax).toBeCloseTo(8_977.76, 2)
+    expect(bufferBalance(years[0]!)).toBeCloseTo(1_000_000 + 60_000 - 8_977.76, 2)
+  })
+
+  it('fører afkastet af en CapitalIncome-beholdning som ejerens kapitalindkomst', () => {
+    const plan = aPlan({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      grossReturn: 0.07,
+      annualCostRate: 0.01,
+      entries: [],
+    })
+
+    const person = simulateChecked(plan)[0]!.persons[0]!
+
+    expect(person.capitalIncome).toBeCloseTo(60_000, 6)
+    expect(person.shareIncome).toBe(0)
   })
 
   it('bogfører afkastet for sig og ikke som en indtægt i pengestrømmen', () => {
@@ -282,6 +310,86 @@ describe('simulate', () => {
     expect(buffer.return).toBeCloseTo(0.06 * 1_000_000, 6)
     expect(anden.return).toBeCloseTo(0.035 * 500_000, 6)
     expect(year.return).toBeCloseTo(buffer.return + anden.return, 6)
+  })
+
+  it('lagerbeskatter en ShareIncome-beholdnings afkast med 27/42 % om progressionsgrænsen', () => {
+    const plan = aPlan({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      variant: 'ShareIncome',
+      grossReturn: 0.1,
+      annualCostRate: 0,
+      entries: [],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    // Afkastet er 100.000 kr., 20.600 kr. over den enlige persons egen
+    // progressionsgrænse på 79.400 kr.
+    // 27 % af  79.400 = 21.438,00
+    // 42 % af  20.600 =  8.652,00
+    //                    ─────────
+    //                    30.090,00
+    expect(year.persons[0]!.shareIncome).toBeCloseTo(100_000, 6)
+    expect(year.tax).toBeCloseTo(30_090, 2)
+  })
+
+  it('facitcase: et par deler aktieindkomstens progressionsgrænse på tværs', () => {
+    // Kilde: docs/satser/2026.md — progressionsgrænsen for aktieindkomst er
+    // 79.400 kr. pr. person og fælles og overførbar mellem ægtefæller, så
+    // parret tilsammen har 158.800 kr. til 27 %. Verificeret 2026-08-10.
+    //
+    // Jesper har 40.000 kr. i aktieindkomst — under sin egen grænse — og
+    // Maria har 140.000 kr. — over sin egen. Delte de ikke grænsen, ville
+    // Jespers ubrugte rum gå tabt, og husstanden betale mere:
+    //   uden deling: 40.000 × 27 % + 79.400 × 27 % + 60.600 × 42 %
+    //              =  10.800,00   +  21.438,00     +  25.452,00 = 57.690,00
+    // Med den fælles grænse er det den samlede aktieindkomst, 180.000 kr.,
+    // der prøves mod den samlede grænse, 158.800 kr.:
+    //   27 % af 158.800 = 42.876,00
+    //   42 % af  21.200 =  8.904,00
+    //                      ─────────
+    //                      51.780,00
+    const base = aPlan({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      variant: 'ShareIncome',
+      grossReturn: 0.04,
+      annualCostRate: 0,
+      entries: [],
+    })
+    const plan: Plan = {
+      ...base,
+      household: {
+        persons: [
+          ...base.household.persons,
+          {
+            id: 'maria',
+            name: 'Maria',
+            birthYear: 1973,
+            horizon: 90,
+            holdings: [
+              {
+                id: 'marias-aktier',
+                name: 'Marias frie midler',
+                variant: 'ShareIncome',
+                balance: 2_000_000,
+                grossReturn: 0.07,
+                annualCostRate: 0,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const year = simulateChecked(plan)[0]!
+    const jesper = year.persons.find((p) => p.person === 'jesper')!
+    const maria = year.persons.find((p) => p.person === 'maria')!
+
+    expect(jesper.shareIncome).toBeCloseTo(40_000, 6)
+    expect(maria.shareIncome).toBeCloseTo(140_000, 6)
+    expect(year.tax).toBeCloseTo(51_780, 2)
   })
 
   it('bærer hvert fradrag for sig i årsresultatet', () => {
