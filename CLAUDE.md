@@ -19,6 +19,7 @@ CONTEXT.md er et glossar og intet andet. Ingen implementeringsdetaljer, ingen sp
 | Begreber | `CONTEXT.md` |
 | Beslutninger | `docs/adr/` |
 | Struktur og rækkefølge | `docs/diagrams/` |
+| Brugerfladen til det færdige system | `docs/mockup/` |
 | Officielle satser pr. år | `docs/satser/` |
 | Bevidst fravalgt til senere | `docs/udskudt.md` |
 | PRD'er, issues, planer | **GitHub — aldrig i repoet** |
@@ -36,6 +37,14 @@ Følg formen i de eksisterende: overskriften er selve påstanden i ét udsagn, b
 Mermaid skrevet direkte i markdown, så de kan diffes i git og renderes af GitHub og VS Code uden værktøjskæde. De tilføjer ingen begreber: et ord i et diagram, som ikke står i CONTEXT.md, er en fejl i diagrammet. Hver fil slutter med **Åbne punkter** — antagelser der ikke er afgjort. Bliver et punkt afgjort, så fjern det samme dag; en besvaret åben post er værre end ingen.
 
 En klasse mærket `<<skitse>>` er tegnet efter PRD'en og ikke efter glossaret. Behandl den ikke som afgjort.
+
+## Fladekortet
+
+`docs/mockup/` er mock-uppen af brugerfladen til **det færdige system**, ikke til en enkelt etape. Den er referencen, når en skive skal bygge sin del af fladen, og den ligger i repoet frem for på GitHub, fordi den skal kunne diffes ved siden af koden. Rå HTML, CSS og JavaScript uden værktøjskæde — åbnes direkte i en browser.
+
+Den er ikke bundet af glossaret på samme måde som resten: hvor den bruger et ord, der endnu ikke står i CONTEXT.md, er ordet mærket **skitse** med stiplet ramme. Et skitsemærket ord skal gennem glossaret, før det bliver til kode. `plan.js` er en grov fremskrivning, der findes for at give fladen realistiske tal — den er ikke motoren og må aldrig blive forlæg for en ADR.
+
+Ændrer fladekortet en beslutning, så skriv den ned, hvor den hører hjemme, og fjern punktet fra README'ens **Åbne punkter** samme dag.
 
 ## Satser
 
