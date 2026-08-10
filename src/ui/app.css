@@ -1,0 +1,483 @@
+/* Udtrykket er 4a · Aften fra fladekortet, og skelettet er B3 med skuffe:
+   docs/mockup/navigator.html#b3-fane.
+
+   Den regel, der bærer resten: siden ruller ikke. Fladen fylder præcis
+   vinduet, hver spalte ruller for sig, og spaltehovedet bliver stående. */
+
+:root {
+  --f-titel: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  --f-broed: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --f-tal: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+
+  --laerred: #14181e;
+  --flade: #202730;
+  --top: #141920;
+  --ink: #e6ebf1;
+  --label: #a6b0bc;
+  --muted: #78838f;
+  --linje: #2f3843;
+  --linje-svag: #262e38;
+  --accent: #e0a33a;
+  --neg: #e2685c;
+  --paa-accent: #191204;
+  --felt-bg: #141920;
+  --felt-kant: #333d49;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--laerred);
+  color: var(--ink);
+  font-family: var(--f-broed);
+  font-size: 13px;
+}
+
+/* ---------- rammen ---------- */
+
+.app {
+  height: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--laerred);
+}
+
+.topbjaelke {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 11px 18px;
+  background: var(--top);
+  border-bottom: 1px solid var(--linje);
+}
+
+.maerke {
+  font-family: var(--f-titel);
+  font-weight: 650;
+  font-size: 15px;
+}
+
+.plannavn {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.spalter {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+}
+
+.spalte {
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 12px;
+}
+
+.spalte + .spalte {
+  border-left: 1px solid var(--linje);
+}
+
+/* Skuffen ligger oven på resultatspalten, men skubber indholdet fri af sig,
+   så den aldrig dækker årstabellens sidste kolonne. */
+.spalter.med-skuffe > .resultatspalte {
+  padding-right: 356px;
+}
+
+/* Spaltehovedet bliver stående, når spalten ruller under det. */
+.spaltehoved,
+.resultathoved {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--top);
+  border-bottom: 1px solid var(--linje);
+}
+
+.spaltehoved {
+  padding: 13px 16px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.resultathoved {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.resultathoved .titel {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.enhedsmaerke {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ---------- navigatoren ---------- */
+
+.nav-gruppe {
+  margin: 10px 10px 0;
+  padding: 11px 13px;
+  overflow: hidden;
+  background: var(--flade);
+  border: 1px solid var(--linje);
+  border-radius: 6px;
+}
+
+.nav-gruppe > h3 {
+  margin: 0;
+}
+
+.nav-gruppe:not(.foldet) > h3 {
+  margin-bottom: 7px;
+}
+
+.foldknap {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8e99a6;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.foldknap:hover {
+  color: var(--ink);
+}
+
+.foldknap .vip {
+  width: 10px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  transform: rotate(90deg);
+  transition: transform 0.12s;
+}
+
+.nav-gruppe.foldet .foldknap .vip {
+  transform: none;
+}
+
+.antal {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 12px;
+  font-family: var(--f-tal);
+}
+
+/* En foldet gruppe må ikke være tavs: resuméet træder i stedet for listen. */
+.foldknap .resume {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  font-family: var(--f-tal);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+}
+
+.nav-gruppe.foldet .foldknap .resume {
+  opacity: 1;
+}
+
+/* Rækkerne bløder ud til kassens kant, så markeringen af den valgte får fat
+   i hele bredden. */
+.nav-krop {
+  margin: 0 -13px -11px;
+  padding-bottom: 4px;
+}
+
+.nav-rk {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 13px 5px 10px;
+  font: inherit;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.nav-rk:hover {
+  background: #1d242c;
+}
+
+.nav-rk.valgt {
+  background: #242c36;
+  border-left-color: var(--accent);
+}
+
+.nav-rk .navn {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-rk .tal {
+  margin-left: auto;
+  font-family: var(--f-tal);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--label);
+  white-space: nowrap;
+}
+
+/* ---------- inspektørskuffen ---------- */
+
+.skuffe {
+  position: absolute;
+  top: 45px;
+  right: 0;
+  bottom: 0;
+  width: 356px;
+  z-index: 20;
+  background: var(--top);
+  border-left: 1px solid var(--linje);
+  box-shadow: -18px 0 40px rgba(0, 0, 0, 0.45);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 12px;
+}
+
+.inspektor > .titel {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 14px 16px 0;
+  font-family: var(--f-titel);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.inspektor .luk {
+  margin-left: auto;
+  padding: 0 4px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.inspektor .luk:hover {
+  color: var(--ink);
+}
+
+.inspektor > .undertitel {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 3px 16px 0;
+}
+
+.afsnit {
+  margin: 10px 10px 0;
+  padding: 13px 15px;
+  background: var(--flade);
+  border: 1px solid var(--linje);
+  border-radius: 6px;
+}
+
+.afsnit > h3 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8e99a6;
+}
+
+.felt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+/* Etiketten giver efter, ikke feltet — enheden må aldrig klippes af. */
+.felt label,
+.felt .etiket {
+  color: var(--label);
+  font-size: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.felt .vaerdi {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.felt input[type='text'] {
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--felt-bg);
+  border: 1px solid var(--felt-kant);
+  border-radius: 4px;
+  padding: 3px 8px;
+  width: 122px;
+}
+
+.felt input.tal {
+  font-family: var(--f-tal);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.felt .laast {
+  width: 122px;
+  text-align: right;
+  color: var(--muted);
+  font-style: italic;
+  border-bottom: 1px dotted var(--felt-kant);
+  padding: 3px 8px 2px 0;
+}
+
+/* Enheden står ved hvert felt, så ingen er i tvivl om, hvad der tastes. */
+.felt .enhed {
+  color: var(--muted);
+  font-size: 11px;
+  width: 108px;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 6px 0 0;
+  line-height: 1.5;
+}
+
+/* ---------- årstabellen ---------- */
+
+.tabelramme {
+  margin: 10px;
+  background: var(--flade);
+  border: 1px solid var(--linje);
+  border-radius: 6px;
+}
+
+table.aar {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--f-tal);
+  font-variant-numeric: tabular-nums;
+}
+
+table.aar th {
+  position: sticky;
+  top: 45px;
+  z-index: 2;
+  background: #1b222b;
+  color: var(--muted);
+  font-family: var(--f-broed);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: right;
+  padding: 6px 11px;
+  border-bottom: 1px solid var(--linje);
+  white-space: nowrap;
+}
+
+table.aar td {
+  text-align: right;
+  padding: 4px 11px;
+  font-size: 12px;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--linje-svag);
+}
+
+table.aar th:first-child,
+table.aar td:first-child {
+  text-align: left;
+}
+
+table.aar tbody tr:hover {
+  background: #262e38;
+}
+
+table.aar td.formue {
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---------- under omkring 1000 px lægges delene under hinanden ---------- */
+
+@media (max-width: 1000px) {
+  body {
+    overflow: auto;
+  }
+
+  .app {
+    height: auto;
+    min-height: 100%;
+  }
+
+  .spalter {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .spalte {
+    height: auto;
+    overflow: visible;
+  }
+
+  .spalter.med-skuffe > .resultatspalte {
+    padding-right: 0;
+  }
+
+  .skuffe {
+    position: static;
+    width: auto;
+    box-shadow: none;
+    border-left: 0;
+    border-top: 1px solid var(--linje);
+  }
+}
