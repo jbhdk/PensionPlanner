@@ -56,5 +56,5 @@ sequenceDiagram
 
 ## Åbne punkter
 
-- **Balanceinvarianten skal kunne udtrykkes på dette diagram.** `closingWealth − openingWealth = income + return − tax − expenses` er den delte assertion i alle motortests; hvis et trin her ikke er synligt i den ligning, mangler diagrammet noget.
+- **Balanceinvarianten skal kunne udtrykkes på dette diagram.** `closingWealth − openingWealth = income + return − tax − expenses − conversion` er den delte assertion i alle motortests; hvis et trin her ikke er synligt i den ligning, mangler diagrammet noget. `Conversion` mangler stadig som et synligt trin.
 - **`Property` og `Loan` mangler.** Ejendomsværdiskat, grundskyld og låneydelsens split i renter og afdrag hører til etape 4 — men de skal ind i denne rækkefølge, ikke ved siden af den.

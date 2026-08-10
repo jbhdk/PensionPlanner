@@ -54,7 +54,7 @@ Et satsår er delt referencedata, aldrig en del af en plan ([ADR-0005](./docs/ad
 
 - Motoren regner i **løbende priser**; brugerfladen viser **dagens kroner** ([ADR-0001](./docs/adr/0001-nominel-regning-real-visning.md)).
 - Motoren er en ren funktion: `simulate(plan) → YearResult[]`. Ingen backend, intet netværk, ingen skjult tilstand.
-- **Balanceinvarianten** er den fælles assertion: `closingWealth − openingWealth = income + return − tax − expenses`. Knækker den, er modellen forkert — ikke testen.
+- **Balanceinvarianten** er den fælles assertion: `closingWealth − openingWealth = income + return − tax − expenses − conversion`. Knækker den, er modellen forkert — ikke testen. Sidste led er nul i alle andre år end det, hvor en livrente omsættes; dér forlader depotet formuen uden at være hverken en udgift eller en skat, og uden det led går regnestykket ikke op.
 - To testsømme, og ikke flere: hele `simulate(plan)`, og skatteopgørelsen for ét år og én person. Test udefra; læg ikke en søm om en mellemregning.
 
 ## Stakken, når koden kommer

@@ -57,6 +57,10 @@ _Avoid_: Udbetaling, indtægt, ret
 En beholdning, der ved udbetalingsstart omsættes én gang til en garanteret livsvarig årlig ydelse. Depotet forrentes og modtager indbetalinger indtil da, men styrer intet bagefter.
 _Avoid_: Livsvarig alderspension, annuitet
 
+**Omsætning** · `Conversion`:
+Engangshandlingen hvor en livrentes saldo ved udbetalingsstart bliver til en livsvarig ydelse. Saldoen forlader husstandens formue og styrer intet bagefter. Beløbet er hverken en udgift eller en skat, og det indgår derfor med sit eget led i balanceinvarianten — i omsætningsåret, og kun der.
+_Avoid_: Kapitalisering, annuitisering, konvertering, ophør
+
 **Omsætningsfaktor** · `ConversionFactor`:
 Forholdet mellem selskabets oplyste årlige ydelse og dets oplyste depot ved udbetalingsstart. Anvendes én gang på det faktisk fremskrevne depot og ændres aldrig derefter.
 _Avoid_: Annuitetsdivisor, annuitetsfaktor, kapitaliseringsfaktor

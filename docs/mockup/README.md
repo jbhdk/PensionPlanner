@@ -199,13 +199,12 @@ Fladekortet foreslår **liste med kompakte linjer plus en detaljerude, der folde
 den valgte**. Det er en beslutning, der skal træffes i [#3](https://github.com/jbhdk/PensionPlanner/issues/3),
 ikke bagefter.
 
-**Balanceinvarianten holder ikke, som den står.** `closingWealth − openingWealth =
+**Balanceinvarianten manglede et led.** `closingWealth − openingWealth =
 income + return − tax − expenses` knækkede i mock-motoren med 1,85 mio. kr. i 2054 —
 året hvor livrentedepotet omsættes. Depotet forlader formuen uden at være hverken en
 udgift eller en udbetaling, jf. [ADR-0009](../adr/0009-livrenten-omsaettes-en-gang-ved-udbetalingsstart.md).
-Enten skal invarianten have et led for omsætningen, eller også skal livrenten blive
-stående på balancen som en residual. **Det er ikke afgjort, og det er den fælles
-assertion for hele motoren.**
+Invarianten har nu `− conversion` som sit eget led, og **Omsætning · `Conversion`** er
+skrevet ind i glossaret. Med det led afviger fremskrivningen 0,000000 kr. i alle 55 år.
 
 **Livrenten skifter art undervejs.** Før omsætningen er den en `Holding` med en saldo;
 bagefter er dens årlige beløb en `Benefit` uden saldo. I mock-motoren var det først
@@ -247,7 +246,6 @@ afprøves med kode, før det bliver til en beslutning — og den beslutning hør
 
 ## Åbne punkter
 
-- **Balanceinvariantens led for livrentens omsætning** er ikke afgjort. Se ovenfor.
 - **Hvad venstre spalte viser, når to planer sammenlignes.** Fladekortet foreslår, at den
   bliver ved med at vise den aktive plan, og at sammenligningen er en tilstand i højre
   spalte alene. Ikke afprøvet mod etape 5.
