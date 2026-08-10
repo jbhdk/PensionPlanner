@@ -37,13 +37,24 @@ export type Household = {
 /** Om en post lægger til eller trækker fra husstandens pengestrøm. */
 export type Direction = 'Income' | 'Expense'
 
-export type Entry = {
+/** Det skattemæssige spor en indtægtspost lander i. `EarnedIncome` er
+    AM-pligtig og indgår i den personlige indkomst; `TaxFree` beskattes ikke. */
+export type TaxTreatment = 'EarnedIncome' | 'TaxFree'
+
+type EntryBase = {
   id: string
   name: string
   /** Positivt i begge retninger — fortegnet er retningens arbejde. */
   amountInRealKroner: Real
-  direction: Direction
+  owner: PersonId
 }
+
+/** Kun indtægtsposter bærer en skattebehandling. Retningen er diskriminanten
+    frem for et felt ved siden af den: en udgiftspost med en skattebehandling
+    er ikke noget, motoren skal validere sig ud af — den kan ikke skrives. */
+export type Entry =
+  | (EntryBase & { direction: 'Income'; taxTreatment: TaxTreatment })
+  | (EntryBase & { direction: 'Expense' })
 
 export type Plan = {
   name: string
@@ -52,6 +63,12 @@ export type Plan = {
   inflationAssumption: number
   household: Household
   entries: Entry[]
+  /** Andel pr. år, ikke procent: 0,254 er 25,40 %. Hører til husstanden og
+      ikke til satsåret, fordi den afhænger af, hvor man bor. */
+  municipalTaxRate: number
+  /** Om husstanden betaler kirkeskat. Satsen huskes, når den slås fra. */
+  churchTax: boolean
+  churchTaxRate: number
   /** Beholdningen årets restpost lander på. Præcis én, og pegeren er påkrævet. */
   buffer: HoldingId
 }

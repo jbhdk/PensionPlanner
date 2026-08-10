@@ -353,7 +353,8 @@ body {
   align-items: center;
 }
 
-.felt input[type='text'] {
+.felt input[type='text'],
+.felt select {
   font: inherit;
   font-size: 12px;
   color: var(--ink);

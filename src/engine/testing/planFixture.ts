@@ -8,10 +8,16 @@ type Options = {
   horizon?: number
   balance?: number
   entries?: Entry[]
+  municipalTaxRate?: number
+  churchTax?: boolean
+  churchTaxRate?: number
 }
 
 /** Den tyndeste gyldige plan: én person, én beholdning der er buffer, ingen
-    poster. Testene skruer på det, de handler om, og lader resten stå. */
+    poster. Testene skruer på det, de handler om, og lader resten stå.
+
+    Kommune- og kirkeskatteprocenten er den samme som i skattemodulets
+    facitcase, så en lønpost her og en opgørelse dér kan sammenlignes. */
 export function aPlan(options: Options = {}): Plan {
   const {
     startYear = 2026,
@@ -20,6 +26,9 @@ export function aPlan(options: Options = {}): Plan {
     horizon = 90,
     balance = 1_000_000,
     entries = [],
+    municipalTaxRate = 0.254,
+    churchTax = true,
+    churchTaxRate = 0.0074,
   } = options
 
   return {
@@ -28,6 +37,9 @@ export function aPlan(options: Options = {}): Plan {
     inflationAssumption,
     buffer: 'free-assets',
     entries,
+    municipalTaxRate,
+    churchTax,
+    churchTaxRate,
     household: {
       persons: [
         {
@@ -56,7 +68,23 @@ export function anExpense(options: { amountInRealKroner: number }): Entry {
     id: 'living-costs',
     name: 'Faste udgifter',
     amountInRealKroner: options.amountInRealKroner,
+    owner: 'jesper',
     direction: 'Expense',
+  }
+}
+
+/** En lønpost. Beløbet er brutto inklusive arbejdsgiverbidrag, jf. ADR-0007. */
+export function aSalary(options: {
+  amountInRealKroner: number
+  owner?: string
+}): Entry {
+  return {
+    id: 'salary',
+    name: 'Løn',
+    amountInRealKroner: options.amountInRealKroner,
+    owner: options.owner ?? 'jesper',
+    direction: 'Income',
+    taxTreatment: 'EarnedIncome',
   }
 }
 
@@ -64,4 +92,16 @@ export function anExpense(options: { amountInRealKroner: number }): Entry {
 export function bufferBalance(year: YearResult): number {
   return year.holdings.find((holding) => holding.holding === 'free-assets')!
     .closingBalance
+}
+
+/** En skattefri indtægtspost — en arv, for eksempel. */
+export function aTaxFreeIncome(options: { amountInRealKroner: number }): Entry {
+  return {
+    id: 'inheritance',
+    name: 'Arv',
+    amountInRealKroner: options.amountInRealKroner,
+    owner: 'jesper',
+    direction: 'Income',
+    taxTreatment: 'TaxFree',
+  }
 }

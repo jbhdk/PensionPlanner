@@ -1,12 +1,16 @@
 import type {
-  Direction,
   Entry,
   Holding,
   HoldingId,
   Nominal,
+  Person,
   Plan,
   SimulationYear,
 } from './plan'
+import { latestRateYear } from './rates/rates'
+import type { RateYear } from './rates/rateYear'
+import { assessTax, totalTax } from './tax/assessTax'
+import type { TaxAssessment } from './tax/assessTax'
 import type { HoldingYear, YearResult } from './yearResult'
 
 type Balances = Map<HoldingId, Nominal>
@@ -21,9 +25,10 @@ export function simulate(plan: Plan): YearResult[] {
     )
   }
 
+  const rates = latestRateYear()
   const results: YearResult[] = []
   for (let year = plan.startYear; year <= lastYear(plan); year++) {
-    results.push(simulateYear(plan, year, balances))
+    results.push(simulateYear(plan, year, balances, rates))
   }
   return results
 }
@@ -34,29 +39,66 @@ function simulateYear(
   plan: Plan,
   year: SimulationYear,
   balances: Balances,
+  rates: RateYear,
 ): YearResult {
   const opening = new Map(balances)
   const projection = inflation(plan, year)
 
-  // Indtægtsposter findes som retning, men bogføres først i #4 sammen med
-  // deres skattebehandling — de kan ikke oprettes i fladen endnu.
+  const income = sumOf(plan.entries, 'Income', projection)
   const expenses = sumOf(plan.entries, 'Expense', projection)
+  const assessments = plan.household.persons.map((person) =>
+    assess(plan, person, projection, rates),
+  )
+  const tax = assessments.reduce((sum, { tax }) => sum + totalTax(tax), 0)
 
   // Årets restpost lander på bufferen. Den er det ene sted, over- og
   // underskuddet må samle sig, og den må gerne gå negativt — det er modellens
   // måde at sige, at planen ikke holder, jf. ADR-0002.
-  balances.set(plan.buffer, balances.get(plan.buffer)! - expenses)
+  balances.set(plan.buffer, balances.get(plan.buffer)! + income - tax - expenses)
 
   return {
     year,
+    rateYear: rates.year,
     openingWealth: total(opening),
     closingWealth: total(balances),
-    income: 0,
+    income,
     return: 0,
-    tax: 0,
+    tax,
     expenses,
     conversion: 0,
     holdings: holdingYears(opening, balances),
+    persons: assessments,
+  }
+}
+
+/** Skatteopgørelsen for én person i ét år. Kirkeskatten slås fra ved at regne
+    med nul — satsen på planen står urørt, så den er der igen, hvis den slås
+    til. */
+function assess(
+  plan: Plan,
+  person: Person,
+  projection: number,
+  rates: RateYear,
+): { person: string; tax: TaxAssessment } {
+  const earnedIncome = plan.entries
+    .filter(
+      (entry) =>
+        entry.direction === 'Income' &&
+        entry.owner === person.id &&
+        entry.taxTreatment === 'EarnedIncome',
+    )
+    .reduce((sum, entry) => sum + entry.amountInRealKroner * projection, 0)
+
+  return {
+    person: person.id,
+    tax: assessTax(
+      {
+        earnedIncome,
+        municipalTaxRate: plan.municipalTaxRate,
+        churchTaxRate: plan.churchTax ? plan.churchTaxRate : 0,
+      },
+      rates,
+    ),
   }
 }
 
@@ -70,7 +112,7 @@ function holdingYears(opening: Balances, closing: Balances): HoldingYear[] {
 
 function sumOf(
   entries: Entry[],
-  direction: Direction,
+  direction: Entry['direction'],
   projection: number,
 ): Nominal {
   return entries

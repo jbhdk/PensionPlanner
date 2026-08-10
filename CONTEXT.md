@@ -17,7 +17,10 @@ Tre navnefælder, der er lette at falde i:
 - `Annuity` optræder i to ubeslægtede sammenhænge: `LifeAnnuity` (livrente, en beholdning der omsættes) og `AnnuityPrinciple` (annuitetsprincippet, en beregningsmåde for en ratepension). De har intet med hinanden at gøre.
 
 Ordninger og beskatningsformer, der ikke har en egen term herunder, men som koden navngiver:
-`InstalmentPension` (ratepension), `OldAgeSavings` (aldersopsparing), `ShareSavingsAccount` (aktiesparekonto), `ShareIncome` og `CapitalIncome` (de to beskatningsformer for frie midler), `StatePension` (folkepension), `BasicAmount` (grundbeløb), `PensionSupplement` (pensionstillæg), `PalTax` (PAL-skat), `AnnualCostRate` (ÅOP), `BottomBracketTax` / `MiddleBracketTax` / `TopBracketTax` / `AdditionalTopBracketTax` (bund-, mellem-, top- og top-topskat, efter skat.dk's egne engelske betegnelser).
+`InstalmentPension` (ratepension), `OldAgeSavings` (aldersopsparing), `ShareSavingsAccount` (aktiesparekonto), `ShareIncome` og `CapitalIncome` (de to beskatningsformer for frie midler), `StatePension` (folkepension), `BasicAmount` (grundbeløb), `PensionSupplement` (pensionstillæg), `PalTax` (PAL-skat), `AnnualCostRate` (ÅOP), `BottomBracketTax` / `MiddleBracketTax` / `TopBracketTax` / `AdditionalTopBracketTax` (bund-, mellem-, top- og top-topskat, efter skat.dk's egne engelske betegnelser), `LabourMarketContribution` (AM-bidrag), `PersonalAllowance` (personfradrag), `MunicipalTax` (kommuneskat), `ChurchTax` (kirkeskat), `EarnedIncome` (arbejdsindkomst), `PersonalIncome` (personlig indkomst) og `TaxableIncome` (skattepligtig indkomst).
+
+Fradrag, lofter og øvrige satsbegreber, som koden navngiver:
+`TaxCeiling` (skråt skatteloft), `EmploymentAllowance` (beskæftigelsesfradrag), `JobAllowance` (jobfradrag), `ExtraPensionAllowance` (ekstra pensionsfradrag), `Taper` (aftrapningen af pensionstillægget) og `CivilStatus` (civilstand).
 
 ### Husstanden
 
@@ -99,6 +102,18 @@ _Avoid_: Skatteår, satssæt, parametre
 Udelukkende det 7,5 %-lag der rammer personlig indkomst over topskattegrænsen. Bruges aldrig som samlebetegnelse for mellemskat, topskat og top-topskat — de tre lag benævnes hver for sig.
 _Avoid_: Topskat brugt om progressionen som helhed
 
+**Skattelag** · `TaxLayer`:
+Ét af de lag, en persons skat falder i — AM-bidrag, bundskat, kommuneskat, kirkeskat og progressionslagene. Lagene opgøres og vises hver for sig; kun summen af dem er skatten.
+_Avoid_: Skattetrin, skatteart, bracket
+
+**Skatteopgørelse** · `TaxAssessment`:
+Skatten for ét simuleringsår og én person, opgjort med hvert lag for sig og stemplet med det satsår, den er regnet på. Totalen er summen af lagene, ikke et felt ved siden af dem.
+_Avoid_: Skatteberegning, årsopgørelse, skattetotal
+
+**Facitcase** · `WorkedExample`:
+Et gennemregnet eksempel med kilde og verifikationsdato, som skatteopgørelsen prøves imod. Tallene står som data frem for som assertions spredt ud i en test, så det kan ses, hvor de kommer fra, og hvornår de sidst er efterset. Bygger casen på et satstal, der endnu ikke er officielt bekræftet, siger den det selv.
+_Avoid_: Testcase, eksempel, referenceberegning
+
 ### Pengestrømme
 
 **Post** · `Entry`:
@@ -108,6 +123,10 @@ _Avoid_: Linje, række, cashflow, transaktion
 **Retning** · `Direction`:
 Om en post lægger til eller trækker fra husstandens pengestrøm: `Income` eller `Expense`. Beløbet er positivt i begge retninger — fortegnet er retningens arbejde, ikke beløbets. Kun `Income` bærer en skattebehandling.
 _Avoid_: Fortegn, type, ind/ud
+
+**Skattebehandling** · `TaxTreatment`:
+Det skattemæssige spor en indtægtspost lander i: `EarnedIncome`, som er AM-pligtig og indgår i den personlige indkomst, eller `TaxFree`, som ikke beskattes. Kun indtægtsposter bærer den — en udgiftspost har ikke feltet.
+_Avoid_: Skattetype, skattekode, indkomstart
 
 **Forankring** · `Anchor`:
 Om en posts periode er bundet til kalenderår eller til en persons alder. Aldersforankrede poster flytter sig automatisk, når pensioneringstidspunktet ændres.

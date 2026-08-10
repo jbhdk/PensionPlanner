@@ -1,4 +1,4 @@
-import type { Entry, Holding, Person, Plan } from '../engine/plan'
+import type { Direction, Entry, Holding, Person, Plan } from '../engine/plan'
 
 /** Redigeringerne er rene: de bygger en ny plan frem for at rette i den
     gamle. Motoren er en ren funktion, og en muteret plan ville gøre det
@@ -70,4 +70,24 @@ export function parseNumber(text: string): number {
   const cleaned = text.replace(/\s|\.(?=\d{3}\b)/g, '').replace(',', '.')
   const value = Number(cleaned)
   return Number.isFinite(value) ? value : 0
+}
+
+/** Skifter en posts retning. En indtægtspost bærer en skattebehandling, en
+    udgiftspost har ikke feltet — så retningsskiftet bygger en ny post frem
+    for at sætte et felt. Behandlingen huskes ikke hen over en tur forbi
+    udgift: den findes ikke at huske på. */
+export function withDirection(entry: Entry, direction: Direction): Entry {
+  const { id, name, amountInRealKroner, owner } = entry
+
+  if (direction === 'Expense') {
+    return { id, name, amountInRealKroner, owner, direction: 'Expense' }
+  }
+  return {
+    id,
+    name,
+    amountInRealKroner,
+    owner,
+    direction: 'Income',
+    taxTreatment: entry.direction === 'Income' ? entry.taxTreatment : 'EarnedIncome',
+  }
 }

@@ -7,13 +7,25 @@ export function defaultPlan(): Plan {
     name: 'Min plan',
     startYear: new Date().getFullYear(),
     inflationAssumption: 0.02,
+    municipalTaxRate: 0.254,
+    churchTax: true,
+    churchTaxRate: 0.0074,
     buffer: 'free-assets',
     entries: [
       {
         id: 'living-costs',
         name: 'Faste udgifter',
         amountInRealKroner: 360_000,
+        owner: 'person-1',
         direction: 'Expense',
+      },
+      {
+        id: 'salary',
+        name: 'Løn',
+        amountInRealKroner: 600_000,
+        owner: 'person-1',
+        direction: 'Income',
+        taxTreatment: 'EarnedIncome',
       },
     ],
     household: {

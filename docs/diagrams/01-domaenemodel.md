@@ -17,6 +17,7 @@ classDiagram
         +benefitRegulation
         +municipalTaxRate
         +churchTax
+        +churchTaxRate
         +buffer
     }
 

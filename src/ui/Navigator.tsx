@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Plan } from '../engine/plan'
+import type { Direction, Plan } from '../engine/plan'
 import { kroner } from './format'
 import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
@@ -83,9 +83,12 @@ function groupsOf(plan: Plan, period: string): Group[] {
   const persons = plan.household.persons
   const holdings = persons.flatMap((person) => person.holdings)
   const holdingSum = holdings.reduce((sum, h) => sum + h.balance, 0)
-  const expenseSum = plan.entries
-    .filter((entry) => entry.direction === 'Expense')
-    .reduce((sum, entry) => sum + entry.amountInRealKroner, 0)
+  // Resuméet er posternes nettovirkning pr. år, ikke udgifterne alene:
+  // en foldet gruppe skal kunne læses som det, den dækker over.
+  const entrySum = plan.entries.reduce(
+    (sum, entry) => sum + signed(entry.amountInRealKroner, entry.direction),
+    0,
+  )
 
   return [
     {
@@ -121,16 +124,18 @@ function groupsOf(plan: Plan, period: string): Group[] {
       id: 'poster',
       title: 'Poster',
       count: String(plan.entries.length),
-      summary: `${kroner(-expenseSum)} kr./år`,
+      summary: `${kroner(entrySum)} kr./år`,
       rows: plan.entries.map((entry) => ({
         name: entry.name,
-        value: kroner(
-          entry.direction === 'Expense'
-            ? -entry.amountInRealKroner
-            : entry.amountInRealKroner,
-        ),
+        value: kroner(signed(entry.amountInRealKroner, entry.direction)),
         target: { kind: 'entry', id: entry.id },
       })),
     },
   ]
+}
+
+/** Fortegnet er retningens arbejde, ikke beløbets — posten selv er altid
+    positiv, og det er først på skærmen, en udgift bliver til et minus. */
+function signed(amount: number, direction: Direction): number {
+  return direction === 'Expense' ? -amount : amount
 }

@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
 import { useId } from 'react'
-import type { Plan } from '../engine/plan'
+import type { Direction, Plan, TaxTreatment } from '../engine/plan'
 import {
   findEntry,
   findHolding,
   findPerson,
   parseNumber,
+  withDirection,
   withEntry,
   withHolding,
   withPerson,
@@ -93,6 +94,35 @@ function PlanFields({ plan, onChange, onClose }: FieldsProps) {
           }
         />
       </Section>
+      <Section title="Skatten">
+        <NumberField
+          label="Kommuneskat"
+          unit="%"
+          value={asPercent(plan.municipalTaxRate)}
+          onChange={(percent) =>
+            onChange({ ...plan, municipalTaxRate: percent / 100 })
+          }
+        />
+        <CheckboxField
+          label="Betaler kirkeskat"
+          checked={plan.churchTax}
+          onChange={(churchTax) => onChange({ ...plan, churchTax })}
+        />
+        {plan.churchTax && (
+          <NumberField
+            label="Kirkeskat"
+            unit="%"
+            value={asPercent(plan.churchTaxRate)}
+            onChange={(percent) =>
+              onChange({ ...plan, churchTaxRate: percent / 100 })
+            }
+          />
+        )}
+        <Hint>
+          Begge procenter afhænger af, hvor husstanden bor, og står derfor på
+          planen frem for i satsåret.
+        </Hint>
+      </Section>
     </>
   )
 }
@@ -174,13 +204,35 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
   )
 }
 
+/** Retningen og skattebehandlingen står på skærmen med deres danske navne;
+    kortene herunder er det ene sted, de to sprog møder hinanden. */
+const directions: Record<string, Direction> = {
+  Indtægt: 'Income',
+  Udgift: 'Expense',
+}
+
+const treatments: Record<string, TaxTreatment> = {
+  Arbejdsindkomst: 'EarnedIncome',
+  Skattefri: 'TaxFree',
+}
+
+function danish<T extends string>(map: Record<string, T>, value: T): string {
+  return Object.keys(map).find((key) => map[key] === value)!
+}
+
 function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {
   const entry = findEntry(plan, id)
   if (!entry) return null
 
+  const income = entry.direction === 'Income'
+
   return (
     <>
-      <Head title={entry.name} subtitle="Post · udgift" onClose={onClose} />
+      <Head
+        title={entry.name}
+        subtitle={`Post · ${income ? 'indtægt' : 'udgift'}`}
+        onClose={onClose}
+      />
       <Section title="Posten">
         <TextField
           label="Navn"
@@ -197,7 +249,39 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
             onChange(withEntry(plan, id, (e) => ({ ...e, amountInRealKroner })))
           }
         />
-        <LockedField label="Retning" value="Udgift" />
+        <SelectField
+          label="Retning"
+          value={danish(directions, entry.direction)}
+          options={Object.keys(directions)}
+          onChange={(choice) =>
+            onChange(
+              withEntry(plan, id, (e) => withDirection(e, directions[choice]!)),
+            )
+          }
+        />
+        {entry.direction === 'Income' && (
+          <SelectField
+            label="Skattebehandling"
+            value={danish(treatments, entry.taxTreatment)}
+            options={Object.keys(treatments)}
+            onChange={(choice) =>
+              onChange(
+                withEntry(plan, id, (e) =>
+                  e.direction === 'Income'
+                    ? { ...e, taxTreatment: treatments[choice]! }
+                    : e,
+                ),
+              )
+            }
+          />
+        )}
+        {entry.direction === 'Income' && entry.taxTreatment === 'EarnedIncome' && (
+          <Hint>
+            Beløbet er brutto inklusive arbejdsgiverbidrag — ikke det, der
+            udbetales. Arbejdsgiverens pensionsbidrag flyttes til ordningen for
+            sig.
+          </Hint>
+        )}
       </Section>
       <Section title="Perioden">
         <LockedField label="Forankring" value="Kalenderår" />
@@ -326,6 +410,63 @@ function RadioField({
           checked={checked}
           onChange={onSelect}
         />
+        <span className="enhed" />
+      </span>
+    </div>
+  )
+}
+
+function CheckboxField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+}) {
+  const id = useId()
+  return (
+    <div className="felt">
+      <label htmlFor={id}>{label}</label>
+      <span className="vaerdi">
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        <span className="enhed" />
+      </span>
+    </div>
+  )
+}
+
+/** Et valg mellem få faste muligheder. Værdierne er de danske navne — intet
+    engelsk identifier når skærmen. */
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+}) {
+  const id = useId()
+  return (
+    <div className="felt">
+      <label htmlFor={id}>{label}</label>
+      <span className="vaerdi">
+        <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
         <span className="enhed" />
       </span>
     </div>

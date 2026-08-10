@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { simulate } from './simulate'
-import { anExpense, aPlan, bufferBalance } from './testing/planFixture'
+import {
+  aPlan,
+  aSalary,
+  aTaxFreeIncome,
+  anExpense,
+  bufferBalance,
+} from './testing/planFixture'
 import { simulateChecked } from './testing/simulateChecked'
 
 describe('simulate', () => {
@@ -83,5 +89,60 @@ describe('simulate', () => {
     const plan = { ...aPlan(), buffer: 'findes-ikke' }
 
     expect(() => simulate(plan)).toThrow(/buffer/i)
+  })
+
+  it('lægger lønnen til årets indtægter og trækker årets skat af den', () => {
+    const plan = aPlan({
+      inflationAssumption: 0,
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+    })
+
+    const years = simulateChecked(plan)
+
+    // Samme lønmodtager som facitcasen i skattemodulet: 600.000 kr. brutto,
+    // 25,40 % kommuneskat og 0,74 % kirkeskat.
+    expect(years[0]!.income).toBeCloseTo(600_000, 6)
+    expect(years[0]!.tax).toBeCloseTo(237_948.85, 2)
+    expect(bufferBalance(years[0]!)).toBeCloseTo(1_000_000 + 600_000 - 237_948.85, 2)
+  })
+
+  it('lader en skattefri indtægtspost øge formuen uden at udløse skat', () => {
+    const plan = aPlan({
+      entries: [aTaxFreeIncome({ amountInRealKroner: 900_000 })],
+    })
+
+    const years = simulateChecked(plan)
+
+    expect(years[0]!.income).toBeCloseTo(900_000, 6)
+    expect(years[0]!.tax).toBe(0)
+    expect(bufferBalance(years[0]!)).toBeCloseTo(1_900_000, 6)
+  })
+
+  it('regner uden kirkeskat, når husstanden ikke betaler den', () => {
+    const entries = [aSalary({ amountInRealKroner: 600_000 })]
+    const medlem = simulateChecked(aPlan({ entries }))
+    const udenfor = simulateChecked(aPlan({ entries, churchTax: false }))
+
+    expect(medlem[0]!.persons[0]!.tax.layers.churchTax).toBeCloseTo(3_684.46, 2)
+    expect(udenfor[0]!.persons[0]!.tax.layers.churchTax).toBe(0)
+    expect(udenfor[0]!.tax).toBeCloseTo(medlem[0]!.tax - 3_684.46, 2)
+  })
+
+  it('bærer hvert skattelag for sig pr. person og stempler satsgrundlaget', () => {
+    const plan = aPlan({ entries: [aSalary({ amountInRealKroner: 600_000 })] })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(year.rateYear).toBe(2026)
+    expect(year.persons.map((person) => person.person)).toEqual(['jesper'])
+
+    const { tax } = year.persons[0]!
+    expect(tax.rateYear).toBe(2026)
+    expect(tax.layers).toEqual({
+      labourMarketContribution: expect.closeTo(48_000, 2),
+      bottomBracketTax: expect.closeTo(59_797.79, 2),
+      municipalTax: expect.closeTo(126_466.6, 2),
+      churchTax: expect.closeTo(3_684.46, 2),
+    })
   })
 })
