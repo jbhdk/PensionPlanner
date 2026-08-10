@@ -32,6 +32,14 @@ Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog 
 
 **Konsekvens:** Beholdninger designes med en udbetalingsstrategi, så en prioriteret dækningsrækkefølge kan slås til pr. beholdning senere.
 
+## Sammenligning af flere planer side om side
+
+**Status:** Afvist, ikke udskudt. Tegnet i fladekortets `#sammenlign` og forkastet dér.
+
+**Hvorfor:** Den koster en tilstand i resultatspalten — grafen skal kunne bære flere serier af samme slags oven i hinanden — og den efterlader et ubesvaret spørgsmål om, hvad planspalten viser, mens to planer er fremme. Til gengæld svarer den ikke på mere, end to browserfaner gør: en plan er en selvstændig fil, ikke en variant af en fælles kerne, og to af dem kan stå ved siden af hinanden uden at værktøjet gør noget særligt.
+
+**Konsekvens:** Planvælgeren i topbjælken bliver — man skifter mellem planer, man ser dem ikke samtidig. Grafbiblioteket skal ikke kunne stable flere sæt serier, hvilket fjerner et krav fra [#18](https://github.com/jbhdk/PensionPlanner/issues/18). Ordene fra `#sammenlign` skal aldrig gennem glossaret.
+
 ## PensionsInfo-import
 
 **Status:** Afvist, ikke udskudt. Undersøgt og lukket.

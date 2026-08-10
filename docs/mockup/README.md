@@ -9,6 +9,10 @@ hvilke krav grafbiblioteket faktisk skal opfylde.
 intet bibliotek. Hver skærm har sin egen adresse, så en tilstand kan linkes fra et issue:
 `#hoved`, `#forklar:2043`, `#cashflow`, `#sammenlign`, `#fejl`.
 
+`index.html` er det første udkast. Skelettet er siden afgjort i
+[`navigator.html`](./navigator.html) — **B3 med tabellen på egen fane**, `#b3-fane`. Hvad
+der er afgjort om `index.html`s øvrige skærme, står under **De fem skærme** nedenfor.
+
 ## Udtrykkene
 
 [`udtryk.html`](./udtryk.html) er noget andet og enklere: grundtoner for den samme flade,
@@ -89,7 +93,7 @@ ruller ikke**. Fladen fylder præcis vinduet, hver spalte ruller for sig, og spa
 bliver stående. Man kan ikke længere komme til at rulle grafen ud af syne, mens man leder
 efter en post.
 
-**Valgt: B3 med tabellen på egen fane.** De to andre bliver staaende som dokumentation af,
+**Valgt: B3 med tabellen på egen fane.** De to andre bliver stående som dokumentation af,
 hvad der blev fravalgt.
 
 Det andet svar er, hvordan navigatoren holdes kort:
@@ -165,18 +169,38 @@ de steder er mærket — stiplet ramme og et **skitse**-mærke, ligesom `<<skits
 diagrammerne. Et skitsemærket ord er ikke afgjort og skal gennem glossaret, før det
 bliver til kode.
 
-Mærket sidder på: **Bolig og lån** (hele etape 4), **cashflow-grafen**,
-**sammenligningen af planer** og **milepælene** i formuegrafen.
+Mærket sidder på: **Bolig og lån** (hele etape 4), **cashflow-grafen** og **milepælene**
+i formuegrafen. Det sad også på **sammenligningen af planer**, som nu er droppet — ordet
+skal derfor aldrig gennem glossaret.
 
 ## De fem skærme
 
-| Skærm | Hvad den afgør |
-|---|---|
-| `#hoved` | Om venstre spalte bærer alle etaper, og om årstabellen tåler tolv kolonner |
-| `#forklar:2043` | Det tætteste skærmbillede i hele appen. Bygges allerede i etape 1 ([#13](https://github.com/jbhdk/PensionPlanner/issues/13)) |
-| `#cashflow` | Divergerende stablet søjlegraf — det ene af de to hårde grafkrav |
-| `#sammenlign` | Flere planer oven i hinanden, og hvad venstre spalte så viser |
-| `#fejl` | Ugyldig plan mod uholdbar plan, og markeringen af de år, hvor bufferen er tom |
+| Skærm | Hvad den afgør | Status |
+|---|---|---|
+| `#hoved` | Om planspalten bærer alle etaper, og om årstabellen tåler tolv kolonner | Afløst af `navigator.html#b3-fane` |
+| `#forklar:2043` | Det tætteste skærmbillede i hele appen. Bygges allerede i etape 1 ([#13](https://github.com/jbhdk/PensionPlanner/issues/13)) | Bærer |
+| `#cashflow` | Divergerende stablet søjlegraf | Formen forkastet |
+| `#sammenlign` | Flere planer oven i hinanden, og hvad planspalten så viser | Droppet |
+| `#fejl` | Ugyldig plan mod uholdbar plan, og markeringen af de år, hvor bufferen er tom | Bærer |
+
+De tre sidste står stadig i `index.html`, som de blev tegnet. De bliver stående som
+dokumentation af, hvad der blev prøvet — ikke som forlæg. Hvad der er afgjort om hver af
+dem:
+
+**`#forklar:2043` bærer.** Indholdet er rigtigt: skattelagene pr. person, afkastet pr.
+beholdning, posterne med forfald og vægt. Det, der mangler, er B3's udtryk — samme
+spaltehoved, samme kort, samme talformat som navigatoren. Formen skal ikke opfindes igen,
+kun styles.
+
+**`#cashflow`s form er forkastet.** Den divergerende stablede søjlegraf viser ikke det,
+man skal bruge. Det interessante er, om årets resultat — løn plus ordninger plus ydelser
+minus skat minus udgifter — nogensinde bliver negativt, og et fortegnsskift i én størrelse
+er præcis det, en stabling af 55 kategorier skjuler. Hvad der kommer i stedet, er ikke
+tegnet. Cashflow hører til etape 5.
+
+**`#sammenlign` er droppet, ikke udskudt.** Den koster en tilstand i resultatspalten og et
+ubesvaret spørgsmål om, hvad planspalten så viser, og den svarer ikke på mere, end to
+browserfaner gør. Planvælgeren i topbjælken bliver.
 
 Klik på en række i årstabellen for at åbne forklar-året. Klik på en beholdning i venstre
 spalte for at folde detaljeruden ud. Omskifteren mellem dagens kroner og løbende priser
@@ -241,22 +265,25 @@ kravspecifikationen:
    flest biblioteker fejler på. Det er nu afgjort, at det ikke er nødvendigt. Prisen er,
    at stablens overkant ikke er formuen i de år: den overvurderer med det, bufferen
    mangler. Tabellen har det rigtige tal.
-2. **Divergerende stablet søjlegraf** med indtægter opad og skat og udgifter nedad, 55
-   kategorier på x-aksen. Se `#cashflow`.
-3. **Flere serier af samme slags oven i hinanden** til plansammenligningen. Se
-   `#sammenlign`.
-4. **Klik på et år**, der åbner forklar-året, og som holder grafen og tabelrækken
+2. **En markering af et interval på x-aksen, bag serierne.** Egen tone pr. tilstand og et
+   mærkat pr. spænd. Det er krav 1's anden halvdel, og det er dét, der er kommet i stedet
+   for det krydsende bånd. Se `#fejl`.
+3. **Klik på et år**, der åbner forklar-året, og som holder grafen og tabelrækken
    synkroniseret.
+4. **Grafen måles efter den plads, den har, og tegnes om** — ved vinduesskift, og når
+   inspektørskuffen åbner eller lukker. En fast højde duer ikke.
 5. Dansk talformatering, `tabular-nums`, og en akse i millioner.
 
-Recharts står nævnt i #17 med et "eller tilsvarende". Punkt 1 og 2 er dem, der skal
+To krav er faldet bort. Den **divergerende stablede søjlegraf** stod som krav 2 med
+henvisning til `#cashflow`, og den form er forkastet; **flere serier af samme slags oven i
+hinanden** stod som krav 3 til plansammenligningen, som er droppet.
+
+Recharts står nævnt i #17 med et "eller tilsvarende". Punkt 1, 2 og 4 er dem, der skal
 afprøves med kode, før det bliver til en beslutning — og den beslutning hører i en ADR.
+Spiket er [#18](https://github.com/jbhdk/PensionPlanner/issues/18).
 
 ## Åbne punkter
 
-- **Hvad venstre spalte viser, når to planer sammenlignes.** Fladekortet foreslår, at den
-  bliver ved med at vise den aktive plan, og at sammenligningen er en tilstand i højre
-  spalte alene. Ikke afprøvet mod etape 5.
 - **Milepælene i formuegrafen** (erhvervsophør, udbetalingsstart, folkepension) er
   fladekortets eget påfund. De er ikke i glossaret og ikke lovet nogen steder.
 - **Farverne** er en tonal ramp valgt for at kunne skelne ni bånd. Det er ikke et
