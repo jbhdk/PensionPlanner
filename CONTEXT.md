@@ -105,6 +105,10 @@ _Avoid_: Topskat brugt om progressionen som helhed
 En navngiven ind- eller udbetaling med beløb i dagens kroner, ejer, periode, gentagelse og egen reguleringssats. Indtægtsposter bærer desuden en skattebehandling; udgiftsposter gør ikke.
 _Avoid_: Linje, række, cashflow, transaktion
 
+**Retning** · `Direction`:
+Om en post lægger til eller trækker fra husstandens pengestrøm: `Income` eller `Expense`. Beløbet er positivt i begge retninger — fortegnet er retningens arbejde, ikke beløbets. Kun `Income` bærer en skattebehandling.
+_Avoid_: Fortegn, type, ind/ud
+
 **Forankring** · `Anchor`:
 Om en posts periode er bundet til kalenderår eller til en persons alder. Aldersforankrede poster flytter sig automatisk, når pensioneringstidspunktet ændres.
 _Avoid_: Tidsbinding, reference
