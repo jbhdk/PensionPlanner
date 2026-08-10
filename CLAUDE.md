@@ -64,3 +64,5 @@ React + TypeScript + Vite, ingen backend. Motoren er rene funktioner uden React-
 ## Commits
 
 Dansk, imperativ, én sammenhængende ændring pr. commit ("Afklar aktieindkomstens rolle i aftrapningsgrundlaget"). Commit og push kun når du bliver bedt om det.
+
+Arbejdet foregår direkte på hovedgrenen — ingen feature-grene og ingen PR'er. Der er én udvikler, og en gren, der skal flettes bagefter, er kun ekstra arbejde. Commit på den gren, der er tjekket ud, frem for at oprette en ny.
