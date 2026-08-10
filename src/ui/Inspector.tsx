@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useId } from 'react'
-import type { Direction, Plan, TaxTreatment } from '../engine/plan'
+import type { Direction, Plan, TaxTreatment, Timing } from '../engine/plan'
+import { procent } from './format'
 import {
   findEntry,
   findHolding,
@@ -200,6 +201,33 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
           beholdning kan være det.
         </Hint>
       </Section>
+      <Section title="Afkast">
+        <NumberField
+          label="Bruttoafkast"
+          unit="% p.a."
+          value={asPercent(holding.grossReturn)}
+          onChange={(percent) =>
+            onChange(
+              withHolding(plan, id, (h) => ({ ...h, grossReturn: percent / 100 })),
+            )
+          }
+        />
+        <NumberField
+          label="ÅOP"
+          unit="% p.a."
+          value={asPercent(holding.annualCostRate)}
+          onChange={(percent) =>
+            onChange(
+              withHolding(plan, id, (h) => ({ ...h, annualCostRate: percent / 100 })),
+            )
+          }
+        />
+        <LockedField
+          label="Nettoafkast"
+          value={procent(holding.grossReturn - holding.annualCostRate)}
+          unit="udledt"
+        />
+      </Section>
     </>
   )
 }
@@ -216,8 +244,30 @@ const treatments: Record<string, TaxTreatment> = {
   Skattefri: 'TaxFree',
 }
 
+/** De danske månedsnavne er koden helt uvedkommende — kun tallet 1–12
+    forlader dette kort. */
+const timings: Record<string, Timing> = {
+  'Jævnt fordelt': 'Even',
+  Januar: 1,
+  Februar: 2,
+  Marts: 3,
+  April: 4,
+  Maj: 5,
+  Juni: 6,
+  Juli: 7,
+  August: 8,
+  September: 9,
+  Oktober: 10,
+  November: 11,
+  December: 12,
+}
+
 function danish<T extends string>(map: Record<string, T>, value: T): string {
   return Object.keys(map).find((key) => map[key] === value)!
+}
+
+function danishTiming(timing: Timing): string {
+  return Object.keys(timings).find((key) => timings[key] === timing)!
 }
 
 function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {
@@ -286,8 +336,18 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
       <Section title="Perioden">
         <LockedField label="Forankring" value="Kalenderår" />
         <LockedField label="Gentagelse" value="Hvert år" />
-        <LockedField label="Forfald" value="Jævnt fordelt" />
-        <Hint>Låst i denne udgave. Posten løber hele horisonten.</Hint>
+        <SelectField
+          label="Forfald"
+          value={danishTiming(entry.timing)}
+          options={Object.keys(timings)}
+          onChange={(choice) =>
+            onChange(withEntry(plan, id, (e) => ({ ...e, timing: timings[choice]! })))
+          }
+        />
+        <Hint>
+          Forankring og gentagelse er låst i denne udgave. Posten løber hele
+          horisonten.
+        </Hint>
       </Section>
     </>
   )
@@ -473,14 +533,23 @@ function SelectField({
   )
 }
 
-/** Et felt, der findes, men som først bliver redigerbart i en senere skive. */
-function LockedField({ label, value }: { label: string; value: string }) {
+/** Et felt der ikke kan tastes i — enten fordi det først bliver redigerbart i
+    en senere skive ("låst"), eller fordi det er udledt af andre felter. */
+function LockedField({
+  label,
+  value,
+  unit = 'låst',
+}: {
+  label: string
+  value: string
+  unit?: string
+}) {
   return (
     <div className="felt">
       <span className="etiket">{label}</span>
       <span className="vaerdi">
         <span className="laast">{value}</span>
-        <span className="enhed">låst</span>
+        <span className="enhed">{unit}</span>
       </span>
     </div>
   )

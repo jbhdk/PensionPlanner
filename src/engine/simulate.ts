@@ -6,6 +6,7 @@ import type {
   Person,
   Plan,
   SimulationYear,
+  Timing,
 } from './plan'
 import { latestRateYear } from './rates/rates'
 import type { RateYear } from './rates/rateYear'
@@ -56,19 +57,57 @@ function simulateYear(
   // måde at sige, at planen ikke holder, jf. ADR-0002.
   balances.set(plan.buffer, balances.get(plan.buffer)! + income - tax - expenses)
 
+  // Afkastet krediteres først, når alle årets strømme er kendt, på den
+  // vægtede gennemsnitssaldo efter Modified Dietz, jf. ADR-0006. Kun
+  // bufferen modtager poster i denne skive — indbetalinger og overførsler
+  // rammer andre beholdninger i senere etaper.
+  const bufferFlow = weightedNetFlow(plan.entries, projection)
+  const returns = new Map<HoldingId, Nominal>()
+  for (const holding of allHoldings(plan)) {
+    const base =
+      opening.get(holding.id)! + (holding.id === plan.buffer ? bufferFlow : 0)
+    const credited = netReturn(holding) * base
+    returns.set(holding.id, credited)
+    balances.set(holding.id, balances.get(holding.id)! + credited)
+  }
+  const totalReturn = [...returns.values()].reduce((sum, r) => sum + r, 0)
+
   return {
     year,
     rateYear: rates.year,
     openingWealth: total(opening),
     closingWealth: total(balances),
     income,
-    return: 0,
+    return: totalReturn,
     tax,
     expenses,
     conversion: 0,
-    holdings: holdingYears(opening, balances),
+    holdings: holdingYears(opening, balances, returns),
     persons: assessments,
   }
+}
+
+/** Nettoafkastsatsen er bruttoafkast minus ÅOP — udledt og aldrig et gemt
+    felt, jf. CONTEXT.md. */
+function netReturn(holding: Holding): number {
+  return holding.grossReturn - holding.annualCostRate
+}
+
+/** Summen af årets strømme, hver vægtet efter sit forfald — grundlaget der
+    lægges til primosaldoen i Modified Dietz. */
+function weightedNetFlow(entries: Entry[], projection: number): Nominal {
+  return entries.reduce((sum, entry) => {
+    const signed =
+      entry.direction === 'Income' ? entry.amountInRealKroner : -entry.amountInRealKroner
+    return sum + signed * projection * returnWeight(entry.timing)
+  }, 0)
+}
+
+/** `Even` er det matematisk rigtige for jævnt fordelte strømme, ikke en
+    tilnærmelse; måned N vejer strømmen efter, hvor meget af året der er
+    tilbage, jf. ADR-0006. */
+function returnWeight(timing: Timing): number {
+  return timing === 'Even' ? 0.5 : (12 - timing + 1) / 12
 }
 
 /** Skatteopgørelsen for én person i ét år. Kirkeskatten slås fra ved at regne
@@ -102,11 +141,16 @@ function assess(
   }
 }
 
-function holdingYears(opening: Balances, closing: Balances): HoldingYear[] {
+function holdingYears(
+  opening: Balances,
+  closing: Balances,
+  returns: Map<HoldingId, Nominal>,
+): HoldingYear[] {
   return [...closing].map(([holding, closingBalance]) => ({
     holding,
     openingBalance: opening.get(holding) ?? 0,
     closingBalance,
+    return: returns.get(holding) ?? 0,
   }))
 }
 

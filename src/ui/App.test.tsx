@@ -143,6 +143,51 @@ describe('fladen', () => {
     expect(Number(skat!.replace(/\D/g, ''))).toBeGreaterThan(0)
   })
 
+  it('viser nettoafkastet udledt af bruttoafkast og ÅOP i beholdningens inspektør', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({ grossReturn: 0.07, annualCostRate: 0.005 })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Frie midler/ }))
+
+    expect((screen.getByLabelText(/Bruttoafkast/) as HTMLInputElement).value).toBe('7')
+    expect((screen.getByLabelText(/ÅOP/) as HTMLInputElement).value).toBe('0.5')
+    expect(screen.getByText('6,50 %')).toBeTruthy()
+  })
+
+  it('opdaterer nettoafkastet, når bruttoafkastet rettes i skuffen', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({ grossReturn: 0.07, annualCostRate: 0.005 })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Frie midler/ }))
+    const bruttoafkast = screen.getByLabelText(/Bruttoafkast/)
+    await user.clear(bruttoafkast)
+    await user.type(bruttoafkast, '10')
+
+    expect(screen.getByText('9,50 %')).toBeTruthy()
+  })
+
+  it('lader en posts forfald vælges som jævnt fordelt eller en bestemt måned', async () => {
+    const user = userEvent.setup()
+    render(
+      <App initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })} />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    const forfald = screen.getByLabelText(/Forfald/) as HTMLSelectElement
+    expect(forfald.value).toBe('Jævnt fordelt')
+
+    await user.selectOptions(forfald, 'Juni')
+    expect(forfald.value).toBe('Juni')
+  })
+
   it('viser posternes nettovirkning pr. år i navigatorens resumé', () => {
     render(
       <App

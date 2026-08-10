@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { Plan } from './plan'
 import { simulate } from './simulate'
 import {
   aPlan,
@@ -166,6 +167,121 @@ describe('simulate', () => {
       topBracketTax: 0,
       additionalTopBracketTax: 0,
     })
+  })
+
+  it('krediterer nettoafkastet på beholdningens primosaldo, når planen ingen strømme har', () => {
+    const plan = aPlan({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      grossReturn: 0.07,
+      annualCostRate: 0.01,
+      entries: [],
+    })
+
+    const years = simulateChecked(plan)
+
+    // Nettoafkastsatsen er 6 %, og uden strømme er grundlaget bare primosaldoen.
+    expect(years[0]!.return).toBeCloseTo(60_000, 6)
+    expect(years[0]!.income).toBe(0)
+    expect(bufferBalance(years[0]!)).toBeCloseTo(1_060_000, 6)
+    expect(bufferBalance(years[1]!)).toBeCloseTo(1_060_000 * 1.06, 6)
+  })
+
+  it('bogfører afkastet for sig og ikke som en indtægt i pengestrømmen', () => {
+    const plan = aPlan({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      grossReturn: 0.07,
+      annualCostRate: 0.01,
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+    })
+
+    const years = simulateChecked(plan)
+
+    // Indtægten er kun lønnen — afkastet står i sit eget felt. Lønnen er
+    // jævnt fordelt og vejer derfor med ½ i afkastgrundlaget.
+    expect(years[0]!.income).toBeCloseTo(600_000, 6)
+    expect(years[0]!.return).toBeCloseTo(0.06 * (1_000_000 + 0.5 * 600_000), 6)
+  })
+
+  it('vejer en strøm i januar tungere end den samme strøm i december, efter Modified Dietz', () => {
+    const early = simulateChecked(
+      aPlan({
+        balance: 1_000_000,
+        inflationAssumption: 0,
+        grossReturn: 0.07,
+        annualCostRate: 0.01,
+        entries: [aTaxFreeIncome({ amountInRealKroner: 600_000, timing: 1 })],
+      }),
+    )
+    const late = simulateChecked(
+      aPlan({
+        balance: 1_000_000,
+        inflationAssumption: 0,
+        grossReturn: 0.07,
+        annualCostRate: 0.01,
+        entries: [aTaxFreeIncome({ amountInRealKroner: 600_000, timing: 12 })],
+      }),
+    )
+
+    // Vægt januar = (12−1+1)/12 = 1; vægt december = (12−12+1)/12 = 1/12.
+    expect(early[0]!.return).toBeCloseTo(0.06 * (1_000_000 + 1 * 600_000), 6)
+    expect(late[0]!.return).toBeCloseTo(0.06 * (1_000_000 + (1 / 12) * 600_000), 6)
+    expect(early[0]!.return).toBeGreaterThan(late[0]!.return)
+  })
+
+  it('giver en jævnt fordelt strøm vægten ½', () => {
+    const years = simulateChecked(
+      aPlan({
+        balance: 1_000_000,
+        inflationAssumption: 0,
+        grossReturn: 0.07,
+        annualCostRate: 0.01,
+        entries: [aTaxFreeIncome({ amountInRealKroner: 600_000, timing: 'Even' })],
+      }),
+    )
+
+    expect(years[0]!.return).toBeCloseTo(0.06 * (1_000_000 + 0.5 * 600_000), 6)
+  })
+
+  it('bærer afkastet pr. beholdning i YearResult, ikke kun husstandens samlede', () => {
+    const base = aPlan({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      grossReturn: 0.07,
+      annualCostRate: 0.01,
+      entries: [],
+    })
+    const plan: Plan = {
+      ...base,
+      household: {
+        persons: [
+          {
+            ...base.household.persons[0]!,
+            holdings: [
+              ...base.household.persons[0]!.holdings,
+              {
+                id: 'anden-beholdning',
+                name: 'Anden beholdning',
+                variant: 'CapitalIncome',
+                balance: 500_000,
+                grossReturn: 0.04,
+                annualCostRate: 0.005,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const year = simulateChecked(plan)[0]!
+
+    const buffer = year.holdings.find((h) => h.holding === 'free-assets')!
+    const anden = year.holdings.find((h) => h.holding === 'anden-beholdning')!
+
+    expect(buffer.return).toBeCloseTo(0.06 * 1_000_000, 6)
+    expect(anden.return).toBeCloseTo(0.035 * 500_000, 6)
+    expect(year.return).toBeCloseTo(buffer.return + anden.return, 6)
   })
 
   it('bærer hvert fradrag for sig i årsresultatet', () => {

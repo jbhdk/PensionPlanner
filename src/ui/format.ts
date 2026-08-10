@@ -15,5 +15,5 @@ export function kroner(amount: number): string {
 
 /** Satser med to decimaler, fordi satserne har dem — 12,01 % er ikke 12 %. */
 export function procent(rate: number): string {
-  return procentFormat.format(rate * 100)
+  return `${procentFormat.format(rate * 100)} %`
 }

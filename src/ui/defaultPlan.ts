@@ -18,6 +18,7 @@ export function defaultPlan(): Plan {
         amountInRealKroner: 360_000,
         owner: 'person-1',
         direction: 'Expense',
+        timing: 'Even',
       },
       {
         id: 'salary',
@@ -26,6 +27,7 @@ export function defaultPlan(): Plan {
         owner: 'person-1',
         direction: 'Income',
         taxTreatment: 'EarnedIncome',
+        timing: 'Even',
       },
     ],
     household: {
@@ -41,6 +43,8 @@ export function defaultPlan(): Plan {
               name: 'Frie midler',
               variant: 'CapitalIncome',
               balance: 8_000_000,
+              grossReturn: 0.07,
+              annualCostRate: 0.005,
             },
           ],
         },

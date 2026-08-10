@@ -19,6 +19,10 @@ export type Holding = {
   variant: HoldingVariant
   /** Saldoen ved planens startår, hvor dagens kroner og løbende priser er ét. */
   balance: Real
+  /** Andel pr. år, ikke procent: 0,07 er 7 %. Nettoafkastsatsen er
+      bruttoafkast minus ÅOP og udledes, hvor den vises, jf. ADR-0003. */
+  grossReturn: number
+  annualCostRate: number
 }
 
 export type Person = {
@@ -41,12 +45,18 @@ export type Direction = 'Income' | 'Expense'
     AM-pligtig og indgår i den personlige indkomst; `TaxFree` beskattes ikke. */
 export type TaxTreatment = 'EarnedIncome' | 'TaxFree'
 
+/** Hvornår inden for året en strøm falder. Oversættes til en vægt på årets
+    afkast, aldrig til et tidsskridt: `'Even'` giver ½, måned N giver
+    `(12 − N + 1) / 12`, jf. ADR-0006. */
+export type Timing = 'Even' | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12
+
 type EntryBase = {
   id: string
   name: string
   /** Positivt i begge retninger — fortegnet er retningens arbejde. */
   amountInRealKroner: Real
   owner: PersonId
+  timing: Timing
 }
 
 /** Kun indtægtsposter bærer en skattebehandling. Retningen er diskriminanten

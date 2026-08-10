@@ -53,6 +53,18 @@ _Avoid_: Reale kroner, faste priser, nutidskroner
 En pensions- eller opsparingspost med en saldo, du ejer: den forrentes, beskattes løbende og tømmes af en udbetalingsplan. Ratepension, aldersopsparing, aktiesparekonto og frie midler er beholdninger.
 _Avoid_: Konto, depot, opsparing
 
+**Afkast** · `Return`:
+Årets forrentning af en beholdnings saldo. Tilskrives saldoen som en sidesløjfe og passerer aldrig årets pengestrøm — det bliver først til penge, husstanden kan bruge, når der hæves.
+_Avoid_: Rente, gevinst, forrentning brugt om andet end selve tilskrivningen
+
+**Bruttoafkast** · `GrossReturn`:
+Beholdningens faste forventede afkast før omkostninger, angivet pr. beholdning frem for som aktivallokering, jf. [ADR-0003](./docs/adr/0003-fast-afkast-pr-beholdning.md).
+_Avoid_: Forventet afkast, markedsafkast
+
+**Nettoafkastsats** · `NetReturn`:
+Bruttoafkast minus ÅOP — den sats motoren rent faktisk forrenter saldoen med. Udledt af de to og aldrig et selvstændigt gemt felt.
+_Avoid_: Nettoafkast brugt som et felt på `Holding`, realafkast
+
 **Ydelse** · `Benefit`:
 En årlig strøm uden en saldo du ejer, fastlagt af regler eller af et selskabs tilsagn. Folkepension og ATP er ydelser.
 _Avoid_: Udbetaling, indtægt, ret
@@ -150,7 +162,7 @@ En dateret flytning af penge fra én beholdning til en anden inden for husstande
 _Avoid_: Flytning, indskud, indbetaling, omplacering
 
 **Forfald** · `Timing`:
-Hvornår inden for et simuleringsår en pengestrøm falder: jævnt fordelt over årets måneder, eller i én bestemt måned. Oversættes til en vægt på årets afkast, aldrig til et tidsskridt.
+Hvornår inden for et simuleringsår en pengestrøm falder: jævnt fordelt over årets måneder (`'Even'`), eller i én bestemt måned (1–12). Oversættes til en vægt på årets afkast, aldrig til et tidsskridt: `Even` giver ½, måned N giver `(12 − N + 1) / 12`.
 _Avoid_: Måned, dato, betalingstidspunkt
 
 **Gentagelse** · `Recurrence`:

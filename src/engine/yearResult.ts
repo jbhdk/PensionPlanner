@@ -5,6 +5,7 @@ export type HoldingYear = {
   holding: HoldingId
   openingBalance: Nominal
   closingBalance: Nominal
+  return: Nominal
 }
 
 /** Årets skatteopgørelse for én person. Indkomsten føres pr. person og aldrig

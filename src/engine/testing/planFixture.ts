@@ -1,4 +1,4 @@
-import type { Entry, Plan } from '../plan'
+import type { Entry, Plan, Timing } from '../plan'
 import type { YearResult } from '../yearResult'
 
 type Options = {
@@ -7,6 +7,8 @@ type Options = {
   birthYear?: number
   horizon?: number
   balance?: number
+  grossReturn?: number
+  annualCostRate?: number
   entries?: Entry[]
   municipalTaxRate?: number
   churchTax?: boolean
@@ -25,6 +27,8 @@ export function aPlan(options: Options = {}): Plan {
     birthYear = 1973,
     horizon = 90,
     balance = 1_000_000,
+    grossReturn = 0,
+    annualCostRate = 0,
     entries = [],
     municipalTaxRate = 0.254,
     churchTax = true,
@@ -53,6 +57,8 @@ export function aPlan(options: Options = {}): Plan {
               name: 'Frie midler',
               variant: 'CapitalIncome',
               balance,
+              grossReturn,
+              annualCostRate,
             },
           ],
         },
@@ -61,15 +67,20 @@ export function aPlan(options: Options = {}): Plan {
   }
 }
 
-/** En udgiftspost. Forankring, gentagelse og forfald er låst i denne skive:
-    posten løber hele horisonten, jævnt fordelt, hvert år. */
-export function anExpense(options: { amountInRealKroner: number }): Entry {
+/** En udgiftspost. Forankring og gentagelse er låst i denne skive: posten
+    løber hele horisonten, hvert år. Forfald er jævnt fordelt, med mindre
+    andet angives. */
+export function anExpense(options: {
+  amountInRealKroner: number
+  timing?: Timing
+}): Entry {
   return {
     id: 'living-costs',
     name: 'Faste udgifter',
     amountInRealKroner: options.amountInRealKroner,
     owner: 'jesper',
     direction: 'Expense',
+    timing: options.timing ?? 'Even',
   }
 }
 
@@ -77,6 +88,7 @@ export function anExpense(options: { amountInRealKroner: number }): Entry {
 export function aSalary(options: {
   amountInRealKroner: number
   owner?: string
+  timing?: Timing
 }): Entry {
   return {
     id: 'salary',
@@ -85,6 +97,7 @@ export function aSalary(options: {
     owner: options.owner ?? 'jesper',
     direction: 'Income',
     taxTreatment: 'EarnedIncome',
+    timing: options.timing ?? 'Even',
   }
 }
 
@@ -95,7 +108,10 @@ export function bufferBalance(year: YearResult): number {
 }
 
 /** En skattefri indtægtspost — en arv, for eksempel. */
-export function aTaxFreeIncome(options: { amountInRealKroner: number }): Entry {
+export function aTaxFreeIncome(options: {
+  amountInRealKroner: number
+  timing?: Timing
+}): Entry {
   return {
     id: 'inheritance',
     name: 'Arv',
@@ -103,5 +119,6 @@ export function aTaxFreeIncome(options: { amountInRealKroner: number }): Entry {
     owner: 'jesper',
     direction: 'Income',
     taxTreatment: 'TaxFree',
+    timing: options.timing ?? 'Even',
   }
 }

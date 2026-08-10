@@ -77,16 +77,17 @@ export function parseNumber(text: string): number {
     for at sætte et felt. Behandlingen huskes ikke hen over en tur forbi
     udgift: den findes ikke at huske på. */
 export function withDirection(entry: Entry, direction: Direction): Entry {
-  const { id, name, amountInRealKroner, owner } = entry
+  const { id, name, amountInRealKroner, owner, timing } = entry
 
   if (direction === 'Expense') {
-    return { id, name, amountInRealKroner, owner, direction: 'Expense' }
+    return { id, name, amountInRealKroner, owner, timing, direction: 'Expense' }
   }
   return {
     id,
     name,
     amountInRealKroner,
     owner,
+    timing,
     direction: 'Income',
     taxTreatment: entry.direction === 'Income' ? entry.taxTreatment : 'EarnedIncome',
   }
