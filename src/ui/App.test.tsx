@@ -118,18 +118,19 @@ describe('fladen', () => {
       within(within(screen.getByRole('table')).getAllByRole('row')[1]!)
         .getAllByRole('cell')[3]!.textContent
 
-    expect(skat()).toBe('-237.949')
+    expect(skat()).toBe('-220.592')
 
     await user.click(screen.getByRole('button', { name: /Ophør som 58/ }))
     const kommune = screen.getByLabelText(/Kommuneskat/)
     await user.clear(kommune)
     await user.type(kommune, '20')
 
-    // 497.900 kr. efter personfradrag, nu til 20 % frem for 25,40 %.
-    expect(skat()).toBe('-211.062')
+    // 431.500 kr. i skattepligtig indkomst efter personfradrag, nu til 20 %
+    // frem for 25,40 %.
+    expect(skat()).toBe('-197.291')
 
     await user.click(screen.getByLabelText(/Betaler kirkeskat/))
-    expect(skat()).toBe('-207.378')
+    expect(skat()).toBe('-194.098')
   })
 
   it('møder brugeren med en skattekolonne, der ikke længere er nul', () => {

@@ -36,16 +36,16 @@ describe('satsår 2026', () => {
       expect(block.source, `blokken ${name} har ingen kilde`).toMatch(/^https:\/\//)
     }
 
-    // Fradragsprocenterne og folkepensionens ydelser er krydstjekket mellem
-    // sekundære kilder, men ikke fundet i en officiel tabel. Mærket følger med
-    // ind i dataene, så et ubekræftet tal ikke kan nå ind i en facitcase
-    // ubemærket.
-    expect(rateYear2026.allowanceRates.unconfirmed).toContain('employmentAllowance')
+    // Folkepensionens ydelser er krydstjekket mellem sekundære kilder, men
+    // ikke fundet i en officiel tabel. Mærket følger med ind i dataene, så et
+    // ubekræftet tal ikke kan nå ind i en facitcase ubemærket.
     expect(rateYear2026.statePension.unconfirmed).toContain('basicAmount')
 
-    // § 20-tabellen er Skatteministeriets egen, og de fire lag på personlig
-    // indkomst står på skat.dk selv. Intet i de to blokke er ⚠︎.
+    // § 20-tabellen er Skatteministeriets egen, de fire lag på personlig
+    // indkomst står på skat.dk selv, og fradragsprocenterne står dels på
+    // skat.dk, dels i ligningsloven. Intet i de tre blokke er ⚠︎.
     expect(rateYear2026.thresholds.unconfirmed).toEqual([])
     expect(rateYear2026.bracketTaxRates.unconfirmed).toEqual([])
+    expect(rateYear2026.allowanceRates.unconfirmed).toEqual([])
   })
 })

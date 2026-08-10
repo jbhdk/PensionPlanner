@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { rateYear2026 } from '../rates/rateYear2026'
 import { assessTax, totalTax } from './assessTax'
-import type { TaxLayer } from './assessTax'
+import type { Allowance, TaxLayer } from './assessTax'
 import { workedExamples } from './testing/workedExamples'
 
 /** Facitcasene. Testen er den samme for dem alle — det er dataene, der bærer
@@ -12,9 +12,17 @@ describe('facitcase', () => {
   for (const example of workedExamples) {
     it(example.name, () => {
       const assessment = assessTax(example.input, rateYear2026)
-      const { personalIncome, layers, total } = example.expected
+      const { personalIncome, taxableIncome, allowances, layers, total } =
+        example.expected
 
       expect(assessment.personalIncome).toBeCloseTo(personalIncome, 2)
+      expect(assessment.taxableIncome).toBeCloseTo(taxableIncome, 2)
+      for (const [allowance, expected] of Object.entries(allowances)) {
+        expect(
+          assessment.allowances[allowance as Allowance],
+          `${allowance} i "${example.name}"`,
+        ).toBeCloseTo(expected, 2)
+      }
       for (const [layer, expected] of Object.entries(layers)) {
         expect(
           assessment.layers[layer as TaxLayer],
@@ -31,8 +39,11 @@ describe('facitcase', () => {
       expect(example.verifiedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     }
 
-    // Casen hviler alene på tal fra skm.dk og skat.dk selv. Fradragene (#6)
-    // trækker på ⚠︎-mærkede procenter, og deres cases vil sige det her.
-    expect(workedExamples[0]!.dependsOnUnconfirmed).toEqual([])
+    // Ingen af casene hviler på et ⚠︎-mærket tal: beløbsgrænserne står i
+    // skm.dk's § 20-tabel, de fire lag og fradragsprocenterne på skat.dk, og
+    // det ekstra pensionsfradrags satser i loven selv.
+    for (const example of workedExamples) {
+      expect(example.dependsOnUnconfirmed, example.name).toEqual([])
+    }
   })
 })

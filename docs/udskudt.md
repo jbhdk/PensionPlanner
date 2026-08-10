@@ -2,6 +2,14 @@
 
 Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog af idéer — en liste over beslutninger, så de ikke skal tages forfra.
 
+## Pensionsindbetalingens skattevirkning
+
+**Status:** Udskudt til etape 2, hvor `Contribution` og pensionsbeholdningerne bygges. Det ekstra pensionsfradrag regnes allerede — det er indbetalingens *anden* skattevirkning, der mangler.
+
+**Hvorfor det betyder noget:** En indbetaling til en ratepension eller en livrente holdes uden for den personlige indkomst: bortseelsesret for den arbejdsgiveradministrerede ordning, fradrag i personlig indkomst for den private. Med 700.000 kr. i bruttoløn og 105.000 kr. i bidrag falder den personlige indkomst fra 644.000 til omkring 547.400 kr., mens AM-bidraget stadig betales af hele bruttolønnen. Den virkning er langt større end det ekstra pensionsfradrag på 12/32 %, og en skatteopgørelse for et indbetalende år er derfor for høj, indtil den er bygget.
+
+**Hvad der skal bygges, når det tages op:** `Contribution` som figur på planen, jf. [ADR-0007](./adr/0007-indbetalinger-er-bevaegelser-og-loennen-er-brutto.md), bortseelsesretten i skatteopgørelsen, og ratepensionens fradragsloft på 68.700 kr. med behandling af det overskydende. Facitcasen *pensionsindbetalende arbejdsår* i `src/engine/tax/testing/workedExamples.ts` siger selv, at den kun dækker fradragene, og skal regnes om samtidig.
+
 ## Efterladtescenarie (dødsfald)
 
 **Status:** Udskudt til efter v1. `Person` har et slutår fra dag ét, så mekanikken kan slås til uden at rive domænemodellen op.

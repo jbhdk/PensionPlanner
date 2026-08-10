@@ -48,7 +48,7 @@ export const rateYear2026: RateYear = {
     employmentAllowanceMax: 63_300,
     jobAllowanceMax: 3_100,
     jobAllowanceFloor: 235_200,
-    extraPensionAllowanceMax: 87_800,
+    extraPensionAllowanceBaseMax: 87_800,
     oldAgeSavingsCap: 9_900,
     oldAgeSavingsCapNearStatePensionAge: 64_200,
     instalmentPensionCap: 68_700,
@@ -56,13 +56,13 @@ export const rateYear2026: RateYear = {
   },
 
   allowanceRates: {
-    source: 'https://www.skatteguiden.dk/skattesatser/',
-    unconfirmed: [
-      'employmentAllowance',
-      'jobAllowance',
-      'extraPensionAllowanceEarly',
-      'extraPensionAllowanceLate',
-    ],
+    source:
+      'https://skat.dk/en-us/individuals/deductions-and-allowances/' +
+      'deductions-and-allowances-when-working/employment-and-job-allowances ' +
+      '(beskæftigelses- og jobfradrag) og ' +
+      'https://danskelove.dk/ligningsloven/9l ' +
+      '(det ekstra pensionsfradrags to satser)',
+    unconfirmed: [],
     employmentAllowance: 0.1275,
     jobAllowance: 0.045,
     extraPensionAllowanceEarly: 0.12,

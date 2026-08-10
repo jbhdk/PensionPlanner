@@ -10,10 +10,11 @@ PRD'er og issues ligger på GitHub, ikke i repoet: [hoved-PRD'en](https://github
 
 Hver term har et dansk navn — det vi taler — og et engelsk identifier i backticks, som er det navn koden, typerne og diagrammerne bruger. Parret er bindende begge veje: findes ordet ikke her, findes det heller ikke i koden.
 
-Tre navnefælder, der er lette at falde i:
+Fire navnefælder, der er lette at falde i:
 
 - Dansk **rate** (én årlig udbetaling fra en ratepension) hedder `instalment` på engelsk. Dansk **sats** hedder `rate`. De to må aldrig bytte plads.
 - Dansk **udbetaling** dækker både `payout` (penge ud af en beholdning) og `benefit` (en ydelse uden saldo). Vælg det snævre ord.
+- `Allowance` er de tre ligningsmæssige fradrag under ét. `PersonalAllowance` er ikke et af dem, selv om det deler ordet — personfradraget nedsætter også bundskattens grundlag.
 - `Annuity` optræder i to ubeslægtede sammenhænge: `LifeAnnuity` (livrente, en beholdning der omsættes) og `AnnuityPrinciple` (annuitetsprincippet, en beregningsmåde for en ratepension). De har intet med hinanden at gøre.
 
 Ordninger og beskatningsformer, der ikke har en egen term herunder, men som koden navngiver:
@@ -109,6 +110,10 @@ _Avoid_: Skattetrin, skatteart, bracket
 **Progressionslag** · `ProgressionLayer`:
 De tre skattelag over mellemskattegrænsen — mellemskat, topskat og top-topskat — under ét. Hvert har sin egen grænse, sin egen sats og sit eget trin på det skrå skatteloft, og de tre ligger oven på hinanden frem for at afløse hinanden. Ordet findes for at `TopBracketTax` aldrig skal bruges som samlebetegnelse for dem.
 _Avoid_: Topskat brugt om de tre, progressionstrin, bracket
+
+**Ligningsmæssigt fradrag** · `Allowance`:
+Et fradrag der kun nedsætter den skattepligtige indkomst — grundlaget for kommune- og kirkeskat — og ikke den personlige indkomst. De tre er beskæftigelsesfradraget, jobfradraget og det ekstra pensionsfradrag, og de opgøres hver for sig ligesom skattelagene. Personfradraget er ikke et af dem: det hører til de enkelte lag og nedsætter også bundskattens grundlag.
+_Avoid_: Fradrag, ligningsfradrag, deduction
 
 **Skatteopgørelse** · `TaxAssessment`:
 Skatten for ét simuleringsår og én person, opgjort med hvert lag for sig og stemplet med det satsår, den er regnet på. Totalen er summen af lagene, ikke et felt ved siden af dem.

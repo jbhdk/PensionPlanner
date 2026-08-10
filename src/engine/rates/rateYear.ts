@@ -53,7 +53,10 @@ export type Thresholds = {
   employmentAllowanceMax: Nominal
   jobAllowanceMax: Nominal
   jobAllowanceFloor: Nominal
-  extraPensionAllowanceMax: Nominal
+  /** Loftet over den indbetaling, procenten regnes af — ikke over fradraget.
+      § 20-tabellen kalder linjen "Maksimalt grundlag for ekstra
+      pensionsfradrag (§ 9 L, stk. 1)". */
+  extraPensionAllowanceBaseMax: Nominal
   oldAgeSavingsCap: Nominal
   oldAgeSavingsCapNearStatePensionAge: Nominal
   instalmentPensionCap: Nominal

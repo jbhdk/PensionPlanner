@@ -40,18 +40,22 @@ describe('skatteopgørelsen', () => {
     )
   })
 
-  it('beregner kommuneskat efter planens sats af indkomsten efter personfradrag', () => {
+  it('beregner kommuneskat efter planens sats af den skattepligtige indkomst', () => {
     // Kommuneskatteprocenten er husstandens egen og står på planen — den er
     // ikke satsdata, fordi den afhænger af, hvor man bor.
-    const assessment = assess({ earnedIncome: 500_000, municipalTaxRate: 0.254 })
+    // Personlig indkomst      220.000 − 8 %          = 202.400
+    // Beskæftigelsesfradrag   12,75 % af 220.000     =  28.050
+    // Skattepligtig indkomst  202.400 − 28.050       = 174.350
+    // Efter personfradrag     174.350 − 54.100       = 120.250
+    const assessment = assess({ earnedIncome: 220_000, municipalTaxRate: 0.254 })
 
-    expect(assessment.layers.municipalTax).toBeCloseTo(103_098.6, 2)
+    expect(assessment.layers.municipalTax).toBeCloseTo(30_543.5, 2)
   })
 
   it('beregner kirkeskat på samme grundlag som kommuneskatten', () => {
-    const assessment = assess({ earnedIncome: 500_000, churchTaxRate: 0.0074 })
+    const assessment = assess({ earnedIncome: 220_000, churchTaxRate: 0.0074 })
 
-    expect(assessment.layers.churchTax).toBeCloseTo(3_003.66, 2)
+    expect(assessment.layers.churchTax).toBeCloseTo(889.85, 2)
   })
 
   it('lader ikke personfradraget give negativ skat i et lag', () => {
@@ -161,5 +165,126 @@ describe('skatteopgørelsen', () => {
     // Planen pinner ikke satserne, jf. ADR-0005 — derfor er stemplet det
     // eneste sted, det står, hvad tallene faktisk er regnet efter.
     expect(assess({ earnedIncome: 500_000 }).rateYear).toBe(2026)
+  })
+
+  it('nedsætter kun den skattepligtige indkomst med beskæftigelsesfradraget', () => {
+    // Fradraget er 12,75 % af grundlaget for arbejdsmarkedsbidrag — altså
+    // arbejdsindkomsten *før* AM-bidrag, jf. LL § 9 J. Det er en anden form
+    // end den, progressionsgrænserne læses i, og de to må ikke bytte plads.
+    // Beskæftigelsesfradrag  12,75 % af 200.000 =  25.500
+    // Personlig indkomst     200.000 − 8 %      = 184.000
+    // Skattepligtig indkomst 184.000 − 25.500   = 158.500
+    const assessment = assess({ earnedIncome: 200_000, municipalTaxRate: 0.254 })
+
+    expect(assessment.allowances.employmentAllowance).toBeCloseTo(25_500, 2)
+    expect(assessment.taxableIncome).toBeCloseTo(158_500, 2)
+
+    // Kommuneskatten falder med fradraget: (158.500 − 54.100) × 25,40 %.
+    expect(assessment.layers.municipalTax).toBeCloseTo(26_517.6, 2)
+
+    // Bundskatten står urørt. Et ligningsmæssigt fradrag rører kun den
+    // skattepligtige indkomst, aldrig den personlige.
+    expect(assessment.layers.bottomBracketTax).toBeCloseTo(15_600.99, 2)
+  })
+
+  it('stopper beskæftigelsesfradraget ved sit maksimum', () => {
+    // Skat.dk siger, at det fulde fradrag nås ved 496.471 kr. Det er samtidig
+    // satsårets selvkontrol: 63.300 ÷ 12,75 % = 496.470,59, og de to tal er
+    // hentet hver for sig. Lige under grænsen er fradraget procenten af
+    // lønnen; lige over står det stille.
+    expect(assess({ earnedIncome: 496_000 }).allowances.employmentAllowance).toBeCloseTo(
+      63_240,
+      2,
+    )
+    expect(assess({ earnedIncome: 496_471 }).allowances.employmentAllowance).toBeCloseTo(
+      63_300,
+      2,
+    )
+    expect(assess({ earnedIncome: 900_000 }).allowances.employmentAllowance).toBeCloseTo(
+      63_300,
+      2,
+    )
+  })
+
+  it('giver jobfradrag af arbejdsindkomsten over bundgrænsen', () => {
+    // Jobfradraget måles på samme grundlag som beskæftigelsesfradraget, jf.
+    // LL § 9 K, men kun af det, der ligger over bundgrænsen på 235.200.
+    // 4,50 % af (250.000 − 235.200) = 666
+    expect(assess({ earnedIncome: 235_200 }).allowances.jobAllowance).toBe(0)
+    expect(assess({ earnedIncome: 250_000 }).allowances.jobAllowance).toBeCloseTo(
+      666,
+      2,
+    )
+  })
+
+  it('stopper jobfradraget ved sit maksimum', () => {
+    // Maksimum nås ved 235.200 + 3.100 ÷ 4,50 % = 304.088,89. Lige under er
+    // fradraget stadig procenten af det, der ligger over bundgrænsen.
+    const job = (earnedIncome: number) =>
+      assess({ earnedIncome }).allowances.jobAllowance
+
+    expect(job(304_000)).toBeCloseTo(3_096, 2)
+    expect(job(900_000)).toBeCloseTo(3_100, 2)
+  })
+
+  it('lader de ligningsmæssige fradrag stå uden for den personlige indkomst', () => {
+    // Grænsen mellem de to indkomster er hele pointen med et ligningsmæssigt
+    // fradrag: det nedsætter kommune- og kirkeskattens grundlag og intet
+    // andet. Flyttede fradragene ind i den personlige indkomst, ville både
+    // bundskatten og progressionslagene falde med dem.
+    const assessment = assess({ earnedIncome: 900_000 })
+
+    expect(assessment.personalIncome).toBeCloseTo(828_000, 2)
+    expect(assessment.taxableIncome).toBeCloseTo(761_600, 2)
+
+    // 7,50 % af (828.000 − 641.200) — målt på den personlige indkomst.
+    expect(assessment.layers.middleBracketTax).toBeCloseTo(14_010, 2)
+  })
+
+  it('giver ekstra pensionsfradrag af indbetalingen med den lave sats', () => {
+    // LL § 9 L: 12 % indtil det 15. indkomstår før det år, personen når
+    // folkepensionsalderen. 12 % af 50.000 = 6.000.
+    const assessment = assess({
+      earnedIncome: 500_000,
+      contribution: { amount: 50_000, yearsToStatePensionAge: 20 },
+    })
+
+    expect(assessment.allowances.extraPensionAllowance).toBeCloseTo(6_000, 2)
+  })
+
+  it('skifter til den høje sats fra og med det 15. år før folkepensionsalderen', () => {
+    // "Fra og med det 15. indkomstår før det indkomstår, hvor personen når
+    // folkepensionsalderen" — grænsen er inklusiv, så året med 15 år tilbage
+    // er det første med 32 %. 32 % af 50.000 = 16.000.
+    const pension = (yearsToStatePensionAge: number) =>
+      assess({
+        earnedIncome: 500_000,
+        contribution: { amount: 50_000, yearsToStatePensionAge },
+      }).allowances.extraPensionAllowance
+
+    expect(pension(16)).toBeCloseTo(6_000, 2)
+    expect(pension(15)).toBeCloseTo(16_000, 2)
+  })
+
+  it('lofter grundlaget for det ekstra pensionsfradrag, ikke fradraget selv', () => {
+    // § 20-tabellens linje hedder ordret "Maksimalt grundlag for ekstra
+    // pensionsfradrag (§ 9 L, stk. 1)": de 87.800 er loftet over den
+    // indbetaling, procenten regnes af — ikke over fradraget. Derfor bliver
+    // det største fradrag 12 % × 87.800 = 10.536 og 32 % × 87.800 = 28.096,
+    // og det er præcis de to tal, sekundære kilder angiver som maksimum.
+    const pension = (yearsToStatePensionAge: number) =>
+      assess({
+        earnedIncome: 900_000,
+        contribution: { amount: 120_000, yearsToStatePensionAge },
+      }).allowances.extraPensionAllowance
+
+    expect(pension(20)).toBeCloseTo(10_536, 2)
+    expect(pension(10)).toBeCloseTo(28_096, 2)
+  })
+
+  it('giver intet ekstra pensionsfradrag i et år uden indbetaling', () => {
+    // Fradraget følger indbetalingen og ikke personen: et år uden
+    // indbetaling har intet fradrag, uanset hvor tæt folkepensionsalderen er.
+    expect(assess({ earnedIncome: 500_000 }).allowances.extraPensionAllowance).toBe(0)
   })
 })

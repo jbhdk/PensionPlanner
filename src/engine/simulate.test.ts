@@ -102,8 +102,8 @@ describe('simulate', () => {
     // Samme lønmodtager som facitcasen i skattemodulet: 600.000 kr. brutto,
     // 25,40 % kommuneskat og 0,74 % kirkeskat.
     expect(years[0]!.income).toBeCloseTo(600_000, 6)
-    expect(years[0]!.tax).toBeCloseTo(237_948.85, 2)
-    expect(bufferBalance(years[0]!)).toBeCloseTo(1_000_000 + 600_000 - 237_948.85, 2)
+    expect(years[0]!.tax).toBeCloseTo(220_591.89, 2)
+    expect(bufferBalance(years[0]!)).toBeCloseTo(1_000_000 + 600_000 - 220_591.89, 2)
   })
 
   it('lader en skattefri indtægtspost øge formuen uden at udløse skat', () => {
@@ -123,9 +123,9 @@ describe('simulate', () => {
     const medlem = simulateChecked(aPlan({ entries }))
     const udenfor = simulateChecked(aPlan({ entries, churchTax: false }))
 
-    expect(medlem[0]!.persons[0]!.tax.layers.churchTax).toBeCloseTo(3_684.46, 2)
+    expect(medlem[0]!.persons[0]!.tax.layers.churchTax).toBeCloseTo(3_193.1, 2)
     expect(udenfor[0]!.persons[0]!.tax.layers.churchTax).toBe(0)
-    expect(udenfor[0]!.tax).toBeCloseTo(medlem[0]!.tax - 3_684.46, 2)
+    expect(udenfor[0]!.tax).toBeCloseTo(medlem[0]!.tax - 3_193.1, 2)
   })
 
   it('lader progressionslagene og loftet slå igennem på årets skat', () => {
@@ -141,7 +141,7 @@ describe('simulate', () => {
     const { layers } = years[0]!.persons[0]!.tax
     expect(layers.middleBracketTax).toBeCloseTo(16_668.48, 2)
     expect(layers.topBracketTax).toBeCloseTo(6_880.76, 2)
-    expect(years[0]!.tax).toBeCloseTo(412_341.09, 2)
+    expect(years[0]!.tax).toBeCloseTo(394_984.13, 2)
   })
 
   it('bærer hvert skattelag for sig pr. person og stempler satsgrundlaget', () => {
@@ -157,8 +157,8 @@ describe('simulate', () => {
     expect(tax.layers).toEqual({
       labourMarketContribution: expect.closeTo(48_000, 2),
       bottomBracketTax: expect.closeTo(59_797.79, 2),
-      municipalTax: expect.closeTo(126_466.6, 2),
-      churchTax: expect.closeTo(3_684.46, 2),
+      municipalTax: expect.closeTo(109_601, 2),
+      churchTax: expect.closeTo(3_193.1, 2),
       // 552.000 i personlig indkomst ligger under mellemskattegrænsen. De tre
       // progressionslag står som nul frem for at mangle — hvert lag er der
       // altid, så et lag ikke kan blive glemt i summen.
@@ -166,5 +166,26 @@ describe('simulate', () => {
       topBracketTax: 0,
       additionalTopBracketTax: 0,
     })
+  })
+
+  it('bærer hvert fradrag for sig i årsresultatet', () => {
+    const plan = aPlan({ entries: [aSalary({ amountInRealKroner: 600_000 })] })
+
+    const { tax } = simulateChecked(plan)[0]!.persons[0]!
+
+    // Fradragene står hver for sig og aldrig som én sum — forklar-året skal
+    // kunne vise linjerne, og et fradrag i loft skal kunne kendes fra et,
+    // der ikke er.
+    expect(tax.allowances).toEqual({
+      employmentAllowance: expect.closeTo(63_300, 2),
+      jobAllowance: expect.closeTo(3_100, 2),
+      // Etape 1 har ingen indbetalinger på planen, så det ekstra
+      // pensionsfradrag står som nul frem for at mangle.
+      extraPensionAllowance: 0,
+    })
+
+    // Og de nedsætter den skattepligtige indkomst, ikke den personlige.
+    expect(tax.personalIncome).toBeCloseTo(552_000, 2)
+    expect(tax.taxableIncome).toBeCloseTo(485_600, 2)
   })
 })
