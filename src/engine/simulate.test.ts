@@ -128,6 +128,22 @@ describe('simulate', () => {
     expect(udenfor[0]!.tax).toBeCloseTo(medlem[0]!.tax - 3_684.46, 2)
   })
 
+  it('lader progressionslagene og loftet slå igennem på årets skat', () => {
+    const plan = aPlan({
+      inflationAssumption: 0,
+      entries: [aSalary({ amountInRealKroner: 950_000 })],
+    })
+
+    const years = simulateChecked(plan)
+
+    // Samme lønmodtager som facitcasen, hvor det skrå skatteloft binder:
+    // 950.000 kr. brutto, 25,40 % kommuneskat og 0,74 % kirkeskat.
+    const { layers } = years[0]!.persons[0]!.tax
+    expect(layers.middleBracketTax).toBeCloseTo(16_668.48, 2)
+    expect(layers.topBracketTax).toBeCloseTo(6_880.76, 2)
+    expect(years[0]!.tax).toBeCloseTo(412_341.09, 2)
+  })
+
   it('bærer hvert skattelag for sig pr. person og stempler satsgrundlaget', () => {
     const plan = aPlan({ entries: [aSalary({ amountInRealKroner: 600_000 })] })
 
@@ -143,6 +159,12 @@ describe('simulate', () => {
       bottomBracketTax: expect.closeTo(59_797.79, 2),
       municipalTax: expect.closeTo(126_466.6, 2),
       churchTax: expect.closeTo(3_684.46, 2),
+      // 552.000 i personlig indkomst ligger under mellemskattegrænsen. De tre
+      // progressionslag står som nul frem for at mangle — hvert lag er der
+      // altid, så et lag ikke kan blive glemt i summen.
+      middleBracketTax: 0,
+      topBracketTax: 0,
+      additionalTopBracketTax: 0,
     })
   })
 })

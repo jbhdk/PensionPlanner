@@ -106,6 +106,10 @@ _Avoid_: Topskat brugt om progressionen som helhed
 Ét af de lag, en persons skat falder i — AM-bidrag, bundskat, kommuneskat, kirkeskat og progressionslagene. Lagene opgøres og vises hver for sig; kun summen af dem er skatten.
 _Avoid_: Skattetrin, skatteart, bracket
 
+**Progressionslag** · `ProgressionLayer`:
+De tre skattelag over mellemskattegrænsen — mellemskat, topskat og top-topskat — under ét. Hvert har sin egen grænse, sin egen sats og sit eget trin på det skrå skatteloft, og de tre ligger oven på hinanden frem for at afløse hinanden. Ordet findes for at `TopBracketTax` aldrig skal bruges som samlebetegnelse for dem.
+_Avoid_: Topskat brugt om de tre, progressionstrin, bracket
+
 **Skatteopgørelse** · `TaxAssessment`:
 Skatten for ét simuleringsår og én person, opgjort med hvert lag for sig og stemplet med det satsår, den er regnet på. Totalen er summen af lagene, ikke et felt ved siden af dem.
 _Avoid_: Skatteberegning, årsopgørelse, skattetotal
