@@ -184,27 +184,92 @@ function beholdningsdetalje(b) {
 
 /* ================= formuegrafen ================= */
 
-function tegnFormuegraf(data, serier, hoejde) {
+/* Likviditet andetsteds = alt, der kan flyttes med en overførsel uden at bryde
+   en udbetalingsplan: de øvrige frie midler og aktiesparekontoen. */
+function likviditetUdenBuffer(x) {
+  var sum = 0;
+  BEHOLDNINGER.forEach(function (b) {
+    if (b.buffer) return;
+    if (b.type === 'frie' || b.type === 'ask') sum += x.ultimo[b.id];
+  });
+  return sum;
+}
+
+/* Sammenhængende spænd af år, hvor bufferen er tom eller i minus, delt op i de
+   to tilstande. De to skal skelnes: den ene mangler en overførsel, den anden
+   mangler penge. Dybden går tabt, når båndet gulves ved nul, og bæres derfor
+   af mærkatets beløb — det dybeste år i spændet. */
+function holdbarhedsspaen(data) {
+  var ud = [], nu = null;
+  data.forEach(function (r, i) {
+    if (r.bufferSaldo > 0) { nu = null; return; }
+    var mangler = Math.abs(Math.min(0, r.bufferSaldo));
+    var slags = likviditetUdenBuffer(r) >= mangler ? 'ufuldstaendig' : 'uholdbar';
+    if (nu && nu.slags === slags) {
+      nu.til = i;
+      nu.dybest = Math.max(nu.dybest, mangler * faktor(r));
+      return;
+    }
+    nu = { fra: i, til: i, slags: slags, aar: r.aar, dybest: mangler * faktor(r) };
+    ud.push(nu);
+  });
+  return ud;
+}
+
+function tegnFormuegraf(data, serier, hoejde, maerker) {
   var B = 900, H = hoejde || 250, M = { t: 8, r: 8, b: 20, l: 58 };
   var n = data.length;
   var x = function (i) { return M.l + i * (B - M.l - M.r) / (n - 1); };
 
-  var toppe = [], bunde = [], bånd = serier.map(function () { return []; });
+  var toppe = [], bånd = serier.map(function () { return []; });
   for (var i = 0; i < n; i++) {
-    var pos = 0, neg = 0;
+    var pos = 0;
     serier.forEach(function (s, si) {
-      var v = s.vaerdi(data[i]);
-      if (v >= 0) { bånd[si].push([pos, pos + v]); pos += v; }
-      else { bånd[si].push([neg + v, neg]); neg += v; }
+      /* Negative værdier gulves ved nul. En tom buffer er ikke en beholdning
+         med negativ værdi — det er et hul i planen, og et hul har ingen
+         udstrækning på formueaksen. Året markeres i stedet, se maerker. */
+      var v = Math.max(0, s.vaerdi(data[i]));
+      bånd[si].push([pos, pos + v]); pos += v;
     });
-    toppe.push(pos); bunde.push(neg);
+    toppe.push(pos);
   }
-  var maks = Math.max.apply(null, toppe), min = Math.min.apply(null, bunde);
+  var maks = Math.max.apply(null, toppe), min = 0;
   if (maks === min) maks = min + 1;
   var pad = (maks - min) * 0.06;
   var y = function (v) { return M.t + (maks + pad - v) * (H - M.t - M.b) / (maks - min + 2 * pad); };
 
   var s = ['<svg viewBox="0 0 ' + B + ' ' + H + '" role="img" aria-label="Formuegraf">'];
+
+  /* Mærkaterne tegnes først, så gitter og bånd ligger oven på dem. */
+  var TONER = {
+    ufuldstaendig: { flade: 'rgba(138,107,31,.12)', streg: '#8a6b1f', ord: 'Ufuldstændig' },
+    uholdbar: { flade: 'rgba(164,39,29,.12)', streg: '#a4271d', ord: 'Uholdbar' }
+  };
+  /* Mærkaterne sidder nede ved aksen, fordi milepælene har toppen, og de
+     trappes indbyrdes: to spænd kan ligge få år fra hinanden. */
+  var sidsteVenstre = 1e9, etageM = -1;
+  (maerker || []).slice().reverse().forEach(function (m) {
+    var halv = (B - M.l - M.r) / (n - 1) / 2;
+    var x0 = Math.max(M.l, x(m.fra) - halv), x1 = Math.min(B - M.r, x(m.til) + halv);
+    var t = TONER[m.slags];
+    s.push('<rect x="' + x0.toFixed(1) + '" y="' + M.t + '" width="' + (x1 - x0).toFixed(1) +
+      '" height="' + (H - M.b - M.t) + '" fill="' + t.flade + '"/>');
+    s.push('<line x1="' + x0.toFixed(1) + '" x2="' + x0.toFixed(1) + '" y1="' + M.t +
+      '" y2="' + (H - M.b) + '" stroke="' + t.streg + '" stroke-width="1"/>');
+
+    /* Beløbet står i mærkatet, fordi båndet ikke længere kan vise dybden. */
+    var tekst = t.ord + ' fra ' + m.aar + ' · op til ' +
+      (m.dybest < 1000000 ? K(m.dybest) + ' kr.' : mio(m.dybest) + ' kr.') + ' i minus';
+    var bredde = tekst.length * 4.6 + 10;
+    var venstre = Math.min(x0 + 4, B - M.r - bredde);
+    etageM = venstre + bredde + 6 > sidsteVenstre ? etageM + 1 : 0;
+    sidsteVenstre = venstre;
+    var linje = H - M.b - 6 - etageM * 16;
+    s.push('<rect x="' + venstre.toFixed(1) + '" y="' + (linje - 10) + '" width="' + bredde.toFixed(1) +
+      '" height="14" rx="2" fill="#ffffff" fill-opacity="0.86"/>');
+    s.push('<text x="' + (venstre + 5).toFixed(1) + '" y="' + linje +
+      '" font-size="9.5" fill="' + t.streg + '">' + tekst + '</text>');
+  });
 
   /* y-gitter */
   var trin = Math.pow(10, Math.floor(Math.log10(Math.max(1, maks - min)))) / 2;
@@ -555,14 +620,7 @@ function tegnFejltilstande() {
   var r = RAEKKER.uholdbar;
   /* Likviditet andetsteds = alt, der kan flyttes med en overførsel uden at
      bryde en udbetalingsplan: de øvrige frie midler og aktiesparekontoen. */
-  var likviditet = function (x) {
-    var sum = 0;
-    BEHOLDNINGER.forEach(function (b) {
-      if (b.buffer) return;
-      if (b.type === 'frie' || b.type === 'ask') sum += x.ultimo[b.id];
-    });
-    return sum;
-  };
+  var likviditet = likviditetUdenBuffer;
   var foerste = r.filter(function (x) { return x.bufferSaldo < 0; })[0];
   var foersteUholdbar = r.filter(function (x) {
     return x.bufferSaldo < 0 && likviditet(x) < Math.abs(x.bufferSaldo);
@@ -594,10 +652,14 @@ function tegnFejltilstande() {
     '<p class="hint">De to tilstande skal skelnes i tabellen, ikke kun farves ens. ' +
     'Forslaget her er en markør i buffer-kolonnen frem for en helt rød række.</p></div>' +
 
-    '<div class="graf">' + tegnFormuegraf(RAEKKER.uholdbar, formueserier()) + '</div>' +
+    '<div class="graf">' +
+    tegnFormuegraf(RAEKKER.uholdbar, formueserier(), null, holdbarhedsspaen(RAEKKER.uholdbar)) + '</div>' +
     forklaring(formueserier()) +
-    '<div class="hint" style="padding:0 16px 12px">Det negative bånd under nul er bufferen. ' +
-    'Stablingen må ikke bryde sammen, fordi ét bånd krydser nul — det er det hårdeste krav til grafbiblioteket.</div>' +
+    '<div class="hint" style="padding:0 16px 12px">Bufferen tegnes aldrig under nul. ' +
+    'En tom buffer er ikke en beholdning med negativ værdi — det er et hul i planen, og et hul har ingen ' +
+    'udstrækning på formueaksen. Årene markeres i stedet, i hver sin tone for de to tilstande, og dybden ' +
+    'står som beløb i mærkatet og i tabellens bufferkolonne. Til gengæld er stablens overkant ikke ' +
+    'formuen i de år: den overvurderer med det, bufferen mangler.</div>' +
     tegnAarstabelFor(RAEKKER.uholdbar);
 }
 
@@ -625,7 +687,8 @@ function tegnResultatspalte() {
 
   if (TILSTAND.skaerm === 'hoved') {
     var serier = formueserier();
-    h.push('<div class="graf">' + tegnFormuegraf(raekker(), serier) + '</div>');
+    h.push('<div class="graf">' +
+      tegnFormuegraf(raekker(), serier, null, holdbarhedsspaen(raekker())) + '</div>');
     h.push(forklaring(serier));
     h.push(tegnAarstabel());
   } else if (TILSTAND.skaerm === 'forklar') {

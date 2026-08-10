@@ -176,7 +176,7 @@ Mærket sidder på: **Bolig og lån** (hele etape 4), **cashflow-grafen**,
 | `#forklar:2043` | Det tætteste skærmbillede i hele appen. Bygges allerede i etape 1 ([#13](https://github.com/jbhdk/PensionPlanner/issues/13)) |
 | `#cashflow` | Divergerende stablet søjlegraf — det ene af de to hårde grafkrav |
 | `#sammenlign` | Flere planer oven i hinanden, og hvad venstre spalte så viser |
-| `#fejl` | Ugyldig plan mod uholdbar plan, og det negative bånd i stablingen |
+| `#fejl` | Ugyldig plan mod uholdbar plan, og markeringen af de år, hvor bufferen er tom |
 
 Klik på en række i årstabellen for at åbne forklar-året. Klik på en beholdning i venstre
 spalte for at folde detaljeruden ud. Omskifteren mellem dagens kroner og løbende priser
@@ -230,9 +230,17 @@ ligner det en fejl i motoren.
 Fladekortets grafer er råt SVG, netop fordi valget ikke er truffet. Det, de viser, er
 kravspecifikationen:
 
-1. **Stablet areal, hvor ét bånd krydser nul.** Bufferen kan blive negativ og skal tegnes
-   under nul, uden at resten af stablingen bryder sammen. Se `#fejl`. Det er det krav,
-   flest biblioteker fejler på.
+1. **Stablet areal med gulv ved nul, og et markeret spænd af år.** Bufferen kan blive
+   negativ, men tegnes ikke under aksen: en tom buffer er ikke en beholdning med negativ
+   værdi, det er et hul i planen, og et hul har ingen udstrækning på formueaksen. Årene
+   markeres i stedet med en tonet baggrund bag stablingen — én tone for *ufuldstændig*
+   og én for *uholdbar* — og dybden står som beløb i mærkatet og i tabellens
+   bufferkolonne. Se `#fejl`.
+
+   Det var oprindeligt krav 1, at et bånd skulle kunne krydse nul, og det er dét krav,
+   flest biblioteker fejler på. Det er nu afgjort, at det ikke er nødvendigt. Prisen er,
+   at stablens overkant ikke er formuen i de år: den overvurderer med det, bufferen
+   mangler. Tabellen har det rigtige tal.
 2. **Divergerende stablet søjlegraf** med indtægter opad og skat og udgifter nedad, 55
    kategorier på x-aksen. Se `#cashflow`.
 3. **Flere serier af samme slags oven i hinanden** til plansammenligningen. Se
