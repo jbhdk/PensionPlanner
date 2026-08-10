@@ -1,0 +1,391 @@
+/* Tre udtryk for den samme flade. Kun udseende: farver, skrift, rytme, vægt.
+   Indholdet er identisk i alle tre — det er meningen, at det kun er tonen,
+   der skifter. Se README.md. */
+
+/* ---------- omskifterkappen (ikke en del af skitsen) ---------- */
+
+body { margin: 0; background: #1b1e22; }
+
+.kappe {
+  background: #101317;
+  color: #d6d9dd;
+  padding: 10px 18px;
+  display: flex; gap: 18px; align-items: baseline; flex-wrap: wrap;
+  font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
+  position: sticky; top: 0; z-index: 50;
+}
+.kappe b { font-weight: 600; }
+.kappe .note { color: #83888f; font-size: 12px; }
+.kappe nav { display: flex; gap: 6px; margin-left: auto; }
+.kappe button {
+  font: inherit; font-size: 12px;
+  background: transparent; color: #b9bec5;
+  border: 1px solid #363b42; border-radius: 3px;
+  padding: 4px 14px; cursor: pointer;
+}
+.kappe button:hover { border-color: #6a7079; color: #fff; }
+.kappe button[aria-current="true"] { background: #e8eaed; color: #101317; border-color: #e8eaed; }
+
+/* ================= fælles struktur =================
+   Al struktur står her én gang. Udtrykkene herunder ændrer variabler,
+   skrift og enkelte greb — ikke opbygningen. */
+
+.app {
+  font-family: var(--f-broed);
+  background: var(--bg);
+  color: var(--ink);
+  min-height: calc(100vh - 40px);
+}
+
+.topbjaelke {
+  display: flex; align-items: center; gap: 14px;
+  padding: var(--top-pad);
+  background: var(--top-bg);
+  border-bottom: 1px solid var(--linje);
+}
+.maerke { font-family: var(--f-titel); font-weight: var(--v-titel); font-size: 15px; letter-spacing: var(--sp-titel); }
+.topbjaelke select, .topbjaelke .knap {
+  font: inherit; font-size: 13px;
+  color: var(--ink); background: var(--felt-bg);
+  border: 1px solid var(--felt-kant); border-radius: var(--r);
+  padding: 4px 10px;
+}
+.topbjaelke .hoejre { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.gemt { color: var(--muted); font-size: 12px; }
+
+.spalter { display: grid; grid-template-columns: var(--spalte) minmax(0, 1fr); align-items: start; }
+@media (max-width: 1000px) { .spalter { grid-template-columns: 1fr; } }
+
+.planspalte { background: var(--panel); border-right: 1px solid var(--linje); min-height: 100vh; }
+.spaltetitel {
+  font-family: var(--f-titel);
+  font-size: var(--str-spaltetitel); letter-spacing: var(--sp-etiket);
+  text-transform: var(--tf-etiket); color: var(--muted);
+  padding: var(--afsnit-pad); border-bottom: 1px solid var(--linje);
+}
+
+.afsnit { border-bottom: 1px solid var(--linje); padding: var(--afsnit-pad); }
+.afsnit > h3 {
+  margin: 0 0 10px; font-family: var(--f-titel);
+  font-size: var(--str-afsnit); font-weight: var(--v-afsnit);
+  letter-spacing: var(--sp-etiket); text-transform: var(--tf-etiket);
+  color: var(--afsnit-ink);
+  display: flex; align-items: baseline; gap: 8px;
+}
+.afsnit > h3 .antal { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 12px; }
+
+.felt { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
+.felt label { color: var(--label); font-size: var(--str-label); }
+.felt input {
+  font: inherit; font-family: var(--f-tal); font-variant-numeric: tabular-nums;
+  text-align: right; width: 110px;
+  color: var(--ink); background: var(--felt-bg);
+  border: var(--felt-kant-bredde) solid var(--felt-kant); border-radius: var(--r);
+  padding: 3px 8px;
+}
+.felt .enhed { color: var(--muted); font-size: 11px; width: 74px; }
+
+.rk { padding: 7px 0; border-bottom: 1px solid var(--linje-svag); }
+.rk:last-child { border-bottom: 0; }
+.rk .hoved { display: flex; align-items: baseline; gap: 8px; }
+.rk .navn { font-weight: var(--v-navn); }
+.rk .tal { margin-left: auto; font-family: var(--f-tal); font-variant-numeric: tabular-nums; }
+.rk .under { color: var(--muted); font-size: var(--str-under); margin-top: 2px; }
+.rk.valgt { box-shadow: inset 3px 0 0 var(--accent); padding-left: 10px; margin-left: -10px; }
+
+.ejer {
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--accent); border: 1px solid var(--accent-svag);
+  background: var(--accent-flade);
+  border-radius: var(--r-mikro); padding: 1px 5px;
+}
+
+.resultat { min-width: 0; }
+.resultathoved {
+  display: flex; align-items: center; gap: 12px;
+  padding: var(--afsnit-pad); border-bottom: 1px solid var(--linje);
+  background: var(--top-bg);
+}
+.resultathoved .titel {
+  font-family: var(--f-titel); font-size: var(--str-spaltetitel);
+  letter-spacing: var(--sp-etiket); text-transform: var(--tf-etiket); color: var(--muted);
+}
+.omskifter { margin-left: auto; display: inline-flex; border: 1px solid var(--felt-kant); border-radius: var(--r); overflow: hidden; }
+.omskifter button {
+  font: inherit; font-size: 12px; border: 0; cursor: pointer;
+  background: var(--felt-bg); color: var(--muted); padding: 5px 14px;
+}
+.omskifter button + button { border-left: 1px solid var(--felt-kant); }
+.omskifter button[aria-pressed="true"] { background: var(--accent); color: var(--paa-accent); }
+
+.graf { padding: var(--graf-pad); }
+.graf svg { display: block; width: 100%; height: auto; }
+.tegnforklaring {
+  display: flex; flex-wrap: wrap; gap: 5px 16px;
+  padding: 0 var(--kant) 14px; font-size: 12px; color: var(--label);
+}
+.tegnforklaring span { display: inline-flex; align-items: center; gap: 6px; }
+.proeve { width: 10px; height: 10px; border-radius: var(--r-mikro); }
+
+table.aar { border-collapse: collapse; width: 100%; font-family: var(--f-tal); font-variant-numeric: tabular-nums; }
+.tabelramme { border-top: 1px solid var(--linje); max-height: 44vh; overflow: auto; }
+table.aar th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--tabelhoved-bg); color: var(--muted);
+  font-family: var(--f-broed); font-size: 11px; font-weight: 600;
+  letter-spacing: var(--sp-etiket); text-transform: var(--tf-etiket);
+  text-align: right; padding: var(--celle); border-bottom: 1px solid var(--linje);
+  white-space: nowrap;
+}
+table.aar td { text-align: right; padding: var(--celle); white-space: nowrap; border-bottom: 1px solid var(--linje-svag); }
+table.aar th:first-child, table.aar td:first-child { text-align: left; }
+table.aar tbody tr:hover { background: var(--raekke-hover); }
+table.aar tbody tr.valgt { background: var(--raekke-valgt); }
+table.aar td.alder { color: var(--muted); }
+table.aar td.svag { color: var(--muted); }
+table.aar td.formue { font-weight: var(--v-navn); }
+
+/* ================= 1 · PAPIR =================
+   Trykt årsrapport. Varm bund, antikva, hårfine streger, ingen kasser.
+   Tallene bærer siden; alt andet træder tilbage. */
+
+[data-udtryk="papir"] {
+  --f-titel: Cambria, "Iowan Old Style", Georgia, serif;
+  --f-broed: "Segoe UI", system-ui, sans-serif;
+  --f-tal: Cambria, "Iowan Old Style", Georgia, serif;
+
+  --bg: #fbf9f4;
+  --panel: #fbf9f4;
+  --top-bg: #f4f0e7;
+  --ink: #211d17;
+  --label: #4a443b;
+  --muted: #8c8477;
+  --linje: #ddd5c6;
+  --linje-svag: #ebe5d8;
+  --accent: #3c5a80;
+  --accent-svag: #c3cfdd;
+  --accent-flade: transparent;
+  --accent-neg: #97382b;
+  --paa-accent: #fbf9f4;
+
+  --felt-bg: transparent;
+  --felt-kant: #c9c0ae;
+  --felt-kant-bredde: 0 0 1px 0;
+  --r: 0; --r-mikro: 0;
+
+  --spalte: 400px;
+  --kant: 26px;
+  --top-pad: 14px 26px;
+  --afsnit-pad: 16px 26px;
+  --graf-pad: 20px 26px 8px;
+  --celle: 6px 14px;
+
+  --str-spaltetitel: 12px; --str-afsnit: 13px; --str-label: 13px; --str-under: 12px;
+  --sp-titel: .01em; --sp-etiket: .14em; --tf-etiket: uppercase;
+  --v-titel: 600; --v-afsnit: 600; --v-navn: 600;
+
+  --tabelhoved-bg: #f4f0e7;
+  --raekke-hover: #f2ecdf;
+  --raekke-valgt: #ece3d0;
+}
+[data-udtryk="papir"] .felt input { border-width: 0 0 1px 0; padding-right: 2px; }
+[data-udtryk="papir"] .afsnit > h3 { --afsnit-ink: #6f6656; }
+[data-udtryk="papir"] .maerke { font-size: 19px; letter-spacing: .02em; }
+[data-udtryk="papir"] .topbjaelke { border-bottom-width: 2px; border-bottom-color: #211d17; }
+[data-udtryk="papir"] table.aar th { font-family: var(--f-broed); }
+[data-udtryk="papir"] .ejer { border: 0; padding: 0; color: var(--muted); letter-spacing: .1em; }
+[data-udtryk="papir"] .proeve { border-radius: 0; }
+
+/* ================= 2 · NORDISK =================
+   Moderne værktøj. Kølig grå-blå bund, hvide flader med bløde kanter,
+   luft mellem tingene, én mættet accent. */
+
+[data-udtryk="nordisk"] {
+  --f-titel: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --f-broed: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --f-tal: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+
+  --bg: #f5f7fa;
+  --panel: #ffffff;
+  --top-bg: #ffffff;
+  --ink: #101828;
+  --label: #475467;
+  --muted: #8a94a6;
+  --linje: #e4e9f0;
+  --linje-svag: #eef1f6;
+  --accent: #2f6bdb;
+  --accent-svag: #bed3f8;
+  --accent-flade: #eaf1fd;
+  --accent-neg: #d1483c;
+  --paa-accent: #ffffff;
+
+  --felt-bg: #ffffff;
+  --felt-kant: #d3dae4;
+  --felt-kant-bredde: 1px;
+  --r: 7px; --r-mikro: 3px;
+
+  --spalte: 392px;
+  --kant: 22px;
+  --top-pad: 13px 22px;
+  --afsnit-pad: 18px 22px;
+  --graf-pad: 20px 22px 10px;
+  --celle: 9px 14px;
+
+  --str-spaltetitel: 11px; --str-afsnit: 13px; --str-label: 13px; --str-under: 12px;
+  --sp-titel: -.01em; --sp-etiket: .07em; --tf-etiket: uppercase;
+  --v-titel: 650; --v-afsnit: 650; --v-navn: 600;
+
+  --tabelhoved-bg: #f9fafc;
+  --raekke-hover: #f4f8ff;
+  --raekke-valgt: #eaf1fd;
+}
+[data-udtryk="nordisk"] .planspalte { border-right: 1px solid var(--linje); }
+[data-udtryk="nordisk"] .afsnit { margin: 14px 14px 0; padding: 16px 18px; background: #fff;
+  border: 1px solid var(--linje); border-radius: 10px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+[data-udtryk="nordisk"] .planspalte { background: #f5f7fa; padding-bottom: 16px; }
+[data-udtryk="nordisk"] .spaltetitel { background: #fff; }
+[data-udtryk="nordisk"] .afsnit > h3 { --afsnit-ink: #101828; }
+[data-udtryk="nordisk"] .resultat { background: #f5f7fa; }
+[data-udtryk="nordisk"] .graf { background: #fff; margin: 14px 14px 0; padding: 18px;
+  border: 1px solid var(--linje); border-radius: 10px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+[data-udtryk="nordisk"] .tegnforklaring { padding: 12px 32px 0; }
+[data-udtryk="nordisk"] .tabelramme { background: #fff; margin: 14px; border: 1px solid var(--linje);
+  border-radius: 10px; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+[data-udtryk="nordisk"] .omskifter { border-radius: 8px; }
+[data-udtryk="nordisk"] table.aar tbody tr:last-child td { border-bottom: 0; }
+
+/* ================= 3 · INSTRUMENT =================
+   Mørkt instrumentbræt. Tal i fast bredde, høj tæthed, lav pynt,
+   én varm accent der kun bruges til det, der er valgt. */
+
+[data-udtryk="instrument"] {
+  --f-titel: "Segoe UI", system-ui, sans-serif;
+  --f-broed: "Segoe UI", system-ui, sans-serif;
+  --f-tal: "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  --bg: #0f1318;
+  --panel: #131820;
+  --top-bg: #0b0e12;
+  --ink: #dfe6ee;
+  --label: #9aa5b1;
+  --muted: #6b7684;
+  --linje: #222a35;
+  --linje-svag: #1a212a;
+  --accent: #e0a33a;
+  --accent-svag: #4a3a1c;
+  --accent-flade: #241d0f;
+  --accent-neg: #e2685c;
+  --paa-accent: #14100a;
+
+  --felt-bg: #0c1015;
+  --felt-kant: #2a333f;
+  --felt-kant-bredde: 1px;
+  --r: 2px; --r-mikro: 1px;
+
+  --spalte: 376px;
+  --kant: 18px;
+  --top-pad: 10px 18px;
+  --afsnit-pad: 13px 18px;
+  --graf-pad: 14px 18px 6px;
+  --celle: 4px 12px;
+
+  --str-spaltetitel: 10px; --str-afsnit: 11px; --str-label: 12px; --str-under: 11px;
+  --sp-titel: .06em; --sp-etiket: .16em; --tf-etiket: uppercase;
+  --v-titel: 600; --v-afsnit: 600; --v-navn: 500;
+
+  --tabelhoved-bg: #0b0e12;
+  --raekke-hover: #182029;
+  --raekke-valgt: #1d2530;
+}
+[data-udtryk="instrument"] .maerke { text-transform: uppercase; font-size: 12px; }
+[data-udtryk="instrument"] .afsnit > h3 { --afsnit-ink: #7f8b99; font-size: 10px; }
+[data-udtryk="instrument"] .rk .navn { font-size: 13px; }
+[data-udtryk="instrument"] table.aar td { font-size: 12px; }
+[data-udtryk="instrument"] table.aar td.formue { color: #fff; }
+[data-udtryk="instrument"] .ejer { background: var(--accent-flade); border-color: var(--accent-svag); }
+[data-udtryk="instrument"] .felt input { color: #f0f4f8; }
+
+
+/* ================= 4 · AFTEN =================
+   Instrument, men blødere. Bunden er mørk skifer og ikke sort, tallene
+   beholder den faste bredde, og teksten får etiketskriften tilbage.
+   Grafen låner Papirs dæmpede toner. Afsnittene er samlet i flader efter
+   Nordisks princip, men strammere — de koster plads og køber ro.
+
+   4a · aften        med flader
+   4b · aften-flad   uden flader, kun hårfine streger */
+
+[data-udtryk^="aften"] {
+  --f-titel: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --f-broed: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --f-tal: "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  --bg: #191e25;
+  --panel: #191e25;
+  --top-bg: #141920;
+  --ink: #e6ebf1;
+  --label: #a6b0bc;
+  --muted: #78838f;
+  --linje: #2f3843;
+  --linje-svag: #262e38;
+  --accent: #e0a33a;
+  --accent-svag: #524126;
+  --accent-flade: #2a2416;
+  --accent-neg: #e2685c;
+  --paa-accent: #191204;
+
+  --felt-bg: #141920;
+  --felt-kant: #333d49;
+  --felt-kant-bredde: 1px;
+  --r: 4px; --r-mikro: 2px;
+
+  --spalte: 384px;
+  --kant: 18px;
+  --top-pad: 11px 18px;
+  --afsnit-pad: 14px 18px;
+  --graf-pad: 16px 18px 8px;
+  --celle: 4px 12px;
+
+  --str-spaltetitel: 10px; --str-afsnit: 10px; --str-label: 12px; --str-under: 11px;
+  --sp-titel: .01em; --sp-etiket: .14em; --tf-etiket: uppercase;
+  --v-titel: 650; --v-afsnit: 600; --v-navn: 600;
+
+  --tabelhoved-bg: #1b222b;
+  --raekke-hover: #262e38;
+  --raekke-valgt: #2b3441;
+}
+
+/* Teksten er tekst, tallene er tal. Kun det, der skal stå i kolonne,
+   får den faste bredde. */
+[data-udtryk^="aften"] .felt input.tekst { font-family: var(--f-broed); text-align: left; }
+[data-udtryk^="aften"] .felt input.tal { font-family: var(--f-tal); }
+[data-udtryk^="aften"] .rk .navn { font-family: var(--f-broed); font-size: 13px; }
+[data-udtryk^="aften"] .maerke { font-size: 15px; letter-spacing: 0; text-transform: none; }
+[data-udtryk^="aften"] .afsnit > h3 { --afsnit-ink: #8e99a6; }
+[data-udtryk^="aften"] table.aar td { font-size: 12px; }
+[data-udtryk^="aften"] table.aar td.formue { color: #fff; }
+[data-udtryk^="aften"] .ejer { background: var(--accent-flade); border-color: var(--accent-svag); }
+
+/* 4a · fladerne. Strammere end Nordisks kort: mindre luft, mindre radius,
+   ingen skygge — en skygge findes ikke på en mørk bund. */
+[data-udtryk="aften"] .planspalte { background: #14181e; padding-bottom: 12px; border-right: 1px solid var(--linje); }
+[data-udtryk="aften"] .resultat { background: #14181e; }
+[data-udtryk="aften"] .spaltetitel { background: var(--top-bg); }
+[data-udtryk="aften"] .afsnit {
+  margin: 10px 10px 0; padding: 13px 15px;
+  background: #202730; border: 1px solid var(--linje); border-radius: 6px;
+}
+[data-udtryk="aften"] .graf {
+  margin: 10px 10px 0; padding: 14px 16px 6px;
+  background: #202730; border: 1px solid var(--linje); border-radius: 6px;
+}
+[data-udtryk="aften"] .tegnforklaring { padding: 10px 26px 0; }
+[data-udtryk="aften"] .tabelramme {
+  margin: 10px; border: 1px solid var(--linje); border-radius: 6px;
+  background: #202730; border-top: 1px solid var(--linje);
+}
+[data-udtryk="aften"] table.aar th { background: #1b222b; }
+[data-udtryk="aften"] table.aar tbody tr:last-child td { border-bottom: 0; }
+
+/* 4b · uden flader. Samme tone, hårfine streger, mere plads til tabellen. */
+[data-udtryk="aften-flad"] .planspalte { border-right: 1px solid var(--linje); }

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fladekortet — Pensionsplanner</title>
+<link rel="stylesheet" href="flade.css">
+</head>
+<body>
+
+<div class="kappe">
+  <b>Fladekortet</b>
+  <span class="note">Mock-up af det færdige system. Ikke kode, ikke en prototype — et layoutstudie.</span>
+  <nav>
+    <button data-skaerm="hoved" onclick="saetSkaerm('hoved')">Hovedskærmen</button>
+    <button data-skaerm="forklar" onclick="saetSkaerm('forklar')">Forklar-året</button>
+    <button data-skaerm="cashflow" onclick="saetSkaerm('cashflow')">Cashflow</button>
+    <button data-skaerm="sammenlign" onclick="saetSkaerm('sammenlign')">Sammenligning</button>
+    <button data-skaerm="fejl" onclick="saetSkaerm('fejl')">Tilstande</button>
+  </nav>
+</div>
+
+<div class="app">
+  <div class="topbjaelke">
+    <span class="titel">Pensionsplanner</span>
+    <select class="planvalg">
+      <option>Ophør som 58</option>
+      <option>Ophør som 55</option>
+      <option>Ophør som 62</option>
+    </select>
+    <button class="knap">Dupliker</button>
+    <span class="skitsemaerke">flere planer: etape 5</span>
+    <span class="hoejre">
+      <span class="gemt">Gemt</span>
+      <button class="knap">Eksporter</button>
+      <button class="knap">Importer</button>
+    </span>
+  </div>
+
+  <div class="spalter">
+    <div class="planspalte" id="planspalte"></div>
+    <div class="resultatspalte" id="resultatspalte"></div>
+  </div>
+</div>
+
+<script src="plan.js"></script>
+<script src="flade.js"></script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Udtryk — Pensionsplanner</title>
+<link rel="stylesheet" href="udtryk.css">
+</head>
+<body>
+
+<div class="kappe">
+  <b>Udtryk</b>
+  <span class="note">Grundtoner for den samme flade. Kun farver, skrift og rytme — ikke funktion.</span>
+  <nav>
+    <button data-u="papir" onclick="saetUdtryk('papir')">1 · Papir</button>
+    <button data-u="nordisk" onclick="saetUdtryk('nordisk')">2 · Nordisk</button>
+    <button data-u="instrument" onclick="saetUdtryk('instrument')">3 · Instrument</button>
+    <button data-u="aften" onclick="saetUdtryk('aften')">4a · Aften</button>
+    <button data-u="aften-flad" onclick="saetUdtryk('aften-flad')">4b · Aften, flad</button>
+  </nav>
+</div>
+
+<div class="app">
+  <div class="topbjaelke">
+    <span class="maerke">Pensionsplanner</span>
+    <select><option>Ophør som 58</option><option>Ophør som 55</option></select>
+    <span class="hoejre">
+      <span class="gemt">Gemt</span>
+      <button class="knap">Eksporter</button>
+      <button class="knap">Importer</button>
+    </span>
+  </div>
+  <div class="spalter">
+    <div class="planspalte" id="planspalte"></div>
+    <div class="resultat" id="resultat"></div>
+  </div>
+</div>
+
+<script src="plan.js"></script>
+<script src="udtryk.js"></script>
+</body>
+</html>

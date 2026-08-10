@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Navigatoren — Pensionsplanner</title>
+<link rel="stylesheet" href="navigator.css">
+</head>
+<body>
+
+<div class="kappe">
+  <b>Navigatoren</b>
+  <span class="note">Tre udgaver af B. Samme plan, samme udtryk. Ingen af spalterne ruller siden — hver spalte ruller for sig.</span>
+  <nav>
+    <span class="gruppe">
+      <button data-m="b1" onclick="saetModelN('b1')">B1 · Foldbar</button>
+      <button data-m="b2" onclick="saetModelN('b2')">B2 · Faner</button>
+      <button data-m="b3" onclick="saetModelN('b3')">B3 · Skuffe</button>
+    </span>
+    <span class="gruppe">
+      <button data-t="under" onclick="saetTabelN('under')">Tabel under grafen</button>
+      <button data-t="fane" onclick="saetTabelN('fane')">Tabel på egen fane</button>
+    </span>
+  </nav>
+</div>
+
+<div class="app" id="app">
+  <div class="topbjaelke">
+    <span class="maerke">Pensionsplanner</span>
+    <select><option>Ophør som 58</option><option>Ophør som 55</option></select>
+    <span class="hoejre">Gemt <button class="knap">Eksporter</button> <button class="knap">Importer</button></span>
+  </div>
+  <div class="spalter" id="spalter"></div>
+  <aside class="skuffe" id="skuffe" hidden></aside>
+</div>
+
+<script src="plan.js"></script>
+<script src="navigator.js"></script>
+</body>
+</html>

@@ -1,0 +1,255 @@
+/* Tre udgaver af B · Navigator. Udtrykket er 4a · Aften, uændret — det er
+   højden og pladsen, der undersøges her. Se README.md.
+
+   Fælles for alle tre: siden ruller ikke. Fladen fylder præcis vinduet, og
+   hver spalte ruller for sig. Det er den halvdel af svaret, der ikke er til
+   diskussion; foldningen er den anden halvdel.                            */
+
+:root {
+  --f-titel: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --f-broed: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --f-tal: "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  --laerred: #14181e;
+  --flade: #202730;
+  --top: #141920;
+  --ink: #e6ebf1;
+  --label: #a6b0bc;
+  --muted: #78838f;
+  --linje: #2f3843;
+  --linje-svag: #262e38;
+  --accent: #e0a33a;
+  --accent-svag: #524126;
+  --accent-flade: #2a2416;
+  --neg: #e2685c;
+  --paa-accent: #191204;
+  --felt-bg: #141920;
+  --felt-kant: #333d49;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; height: 100vh; overflow: hidden;
+  display: flex; flex-direction: column;
+  background: #1b1e22; font-family: var(--f-broed); font-size: 13px;
+}
+
+/* ---------- omskifterkappen ---------- */
+.kappe {
+  flex: 0 0 auto; background: #101317; color: #d6d9dd; padding: 10px 18px;
+  display: flex; gap: 18px; align-items: baseline; flex-wrap: wrap;
+  font: 13px/1.4 var(--f-broed);
+}
+.kappe b { font-weight: 600; }
+.kappe .note { color: #83888f; font-size: 12px; }
+.kappe nav { display: flex; gap: 20px; margin-left: auto; }
+.kappe .gruppe { display: flex; gap: 6px; }
+.kappe button {
+  font: inherit; font-size: 12px; background: transparent; color: #b9bec5;
+  border: 1px solid #363b42; border-radius: 3px; padding: 4px 12px; cursor: pointer;
+}
+.kappe button:hover { border-color: #6a7079; color: #fff; }
+.kappe button[aria-current="true"] { background: #e8eaed; color: #101317; border-color: #e8eaed; }
+
+/* ---------- fladens ramme ---------- */
+.app {
+  flex: 1 1 auto; min-height: 0; position: relative;
+  display: flex; flex-direction: column;
+  background: var(--laerred); color: var(--ink);
+}
+.topbjaelke {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 14px; padding: 11px 18px;
+  background: var(--top); border-bottom: 1px solid var(--linje);
+}
+.maerke { font-family: var(--f-titel); font-weight: 650; font-size: 15px; }
+.topbjaelke select, .knap {
+  font: inherit; font-size: 12px; color: var(--ink); background: var(--felt-bg);
+  border: 1px solid var(--felt-kant); border-radius: 4px; padding: 4px 10px; cursor: pointer;
+}
+.topbjaelke .hoejre { margin-left: auto; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+
+.spalter { flex: 1 1 auto; min-height: 0; display: grid; }
+.spalte { min-width: 0; height: 100%; overflow-y: auto; overflow-x: hidden; padding-bottom: 12px; }
+.spalte + .spalte { border-left: 1px solid var(--linje); }
+
+/* Spaltehovedet bliver stående, når spalten ruller under det. */
+.spaltehoved {
+  position: sticky; top: 0; z-index: 5;
+  padding: 13px 16px; border-bottom: 1px solid var(--linje); background: var(--top);
+  font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+  display: flex; align-items: center; gap: 8px;
+}
+.spaltehoved .hoejre { margin-left: auto; text-transform: none; letter-spacing: 0; font-size: 12px; }
+
+/* ---------- fælles smådele ---------- */
+.tal { font-family: var(--f-tal); font-variant-numeric: tabular-nums; }
+.antal { color: var(--muted); font-weight: 400; font-size: 12px; font-family: var(--f-tal); }
+.hint { color: var(--muted); font-size: 11px; margin-top: 6px; line-height: 1.5; }
+.skitsemaerke {
+  font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: #7d8894;
+  border: 1px dashed #4a535e; border-radius: 2px; padding: 0 4px; margin-left: 6px;
+}
+.skitse {
+  outline: 1px dashed #5c6570; outline-offset: 2px;
+  background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(120,131,143,.08) 6px 12px);
+}
+
+.felt { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
+/* Etiketten giver efter, ikke feltet: Pensionsudbetalingsalder skal kunne
+   brække over to linjer i en smal rude frem for at klippe enheden af. */
+.felt label { color: var(--label); font-size: 12px; flex: 1 1 auto; min-width: 0; line-height: 1.35; }
+.felt > span { flex: 0 0 auto; }
+.felt input, .felt select {
+  font: inherit; font-size: 12px; color: var(--ink); background: var(--felt-bg);
+  border: 1px solid var(--felt-kant); border-radius: 4px; padding: 3px 8px; width: 122px;
+}
+.felt input.tal { font-family: var(--f-tal); text-align: right; }
+.felt .udledt {
+  width: 122px; text-align: right; color: var(--muted); font-style: italic;
+  font-family: var(--f-tal); border-bottom: 1px dotted var(--felt-kant); padding: 3px 8px 2px 0;
+}
+.felt .enhed { color: var(--muted); font-size: 11px; width: 72px; }
+
+/* ---------- fladen ----------
+   4a's kasse: strammere end Nordisks kort — mindre luft, mindre radius, ingen
+   skygge. Alt undtagen bjælkerne står på sådan en. */
+
+.afsnit, .nav-gruppe {
+  margin: 10px 10px 0; padding: 13px 15px; overflow: hidden;
+  background: var(--flade); border: 1px solid var(--linje); border-radius: 6px;
+}
+.afsnit > h3 {
+  margin: 0 0 8px; font-size: 10px; font-weight: 600; letter-spacing: .14em;
+  text-transform: uppercase; color: #8e99a6; display: flex; align-items: baseline; gap: 8px;
+}
+
+/* ---------- navigatoren ---------- */
+
+.nav-gruppe { padding: 11px 13px; }
+.nav-gruppe > h3 {
+  margin: 0; padding: 0; font-size: 10px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; color: #8e99a6;
+  display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+}
+.nav-gruppe:not(.foldet) > h3 { margin-bottom: 7px; }
+.nav-gruppe > h3:hover { color: var(--ink); }
+.nav-gruppe > h3 .vip {
+  width: 10px; flex: 0 0 auto; color: var(--muted); font-size: 10px;
+  transform: rotate(90deg); transition: transform .12s;
+}
+.nav-gruppe.foldet > h3 .vip { transform: none; }
+.nav-gruppe > h3 .resume {
+  margin-left: auto; text-transform: none; letter-spacing: 0; font-size: 11px;
+  font-weight: 400; color: var(--muted); font-family: var(--f-tal);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0;
+}
+.nav-gruppe.foldet > h3 .resume { opacity: 1; }
+.nav-gruppe.foldet .nav-krop { display: none; }
+/* Rækkerne bløder ud til kassens kant, så markeringen af den valgte får fat i
+   hele bredden — som i 4a. */
+.nav-krop { margin: 0 -13px -11px; padding-bottom: 4px; }
+
+.nav-rk {
+  display: flex; align-items: baseline; gap: 8px; padding: 5px 13px 5px 10px;
+  cursor: pointer; border-left: 3px solid transparent;
+}
+.nav-rk:hover { background: #1d242c; }
+.nav-rk.valgt { background: #242c36; border-left-color: var(--accent); }
+.nav-rk .navn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-rk .tal { margin-left: auto; font-size: 12px; color: var(--label); white-space: nowrap; }
+.nav-rk .prik { width: 7px; height: 7px; border-radius: 2px; flex: 0 0 auto; }
+.nav-rk .stille { color: var(--muted); font-style: italic; }
+
+.nav-bund { padding: 8px 13px 8px; }
+.nav-bund .knap { width: 100%; text-align: left; color: var(--label); }
+
+/* B2 · fanebåndet øverst i navigatoren */
+.faneboand {
+  position: sticky; top: 41px; z-index: 4; background: var(--laerred);
+  margin-bottom: -4px;
+  display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 11px;
+  border-bottom: 1px solid var(--linje);
+}
+.faneboand button {
+  font: inherit; font-size: 11.5px; color: var(--label); cursor: pointer;
+  background: var(--felt-bg); border: 1px solid var(--felt-kant);
+  border-radius: 999px; padding: 3px 10px;
+  display: inline-flex; align-items: baseline; gap: 6px;
+}
+.faneboand button:hover { border-color: #55606d; color: var(--ink); }
+.faneboand button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--paa-accent); }
+.faneboand button[aria-pressed="true"] .antal { color: #6b5115; }
+.faneboand .antal { font-size: 11px; }
+
+/* ---------- inspektøren ---------- */
+
+.inspektor { padding-bottom: 4px; }
+.inspektor > .titel {
+  display: flex; align-items: baseline; gap: 8px; padding: 14px 16px 0;
+  font-family: var(--f-titel); font-size: 16px; font-weight: 650;
+}
+.inspektor > .titel .luk { margin-left: auto; color: var(--muted); cursor: pointer; font-size: 15px; }
+.inspektor > .titel .luk:hover { color: var(--ink); }
+.inspektor > .undertitel { color: var(--muted); font-size: 12px; padding: 3px 16px 0; }
+.tomrude {
+  margin: 10px 10px 0; padding: 40px 24px; text-align: center;
+  background: var(--flade); border: 1px solid var(--linje); border-radius: 6px;
+  color: var(--muted); font-size: 12px; line-height: 1.65;
+}
+
+/* B3 · inspektøren som skuffe hen over resultatet */
+.skuffe {
+  position: absolute; top: 45px; right: 0; bottom: 0; width: 356px; z-index: 20;
+  background: var(--top); border-left: 1px solid var(--linje);
+  box-shadow: -18px 0 40px rgba(0,0,0,.45);
+  overflow-y: auto; overflow-x: hidden; padding-bottom: 12px;
+}
+.skuffe[hidden] { display: none; }
+/* Skuffen ligger oven på resultatspalten, men skubber indholdet fri af sig,
+   så den aldrig dækker hverken grafen eller tabellens sidste kolonne. */
+.spalter.med-skuffe > .spalte:last-child { padding-right: 356px; }
+
+/* ---------- resultatspalten ---------- */
+
+.resultathoved {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 12px; padding: 9px 16px;
+  border-bottom: 1px solid var(--linje); background: var(--top);
+}
+.resultathoved .titel { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.omskifter { display: inline-flex; border: 1px solid var(--felt-kant); border-radius: 4px; overflow: hidden; }
+.omskifter.hoejre { margin-left: auto; }
+.omskifter button { font: inherit; font-size: 12px; border: 0; background: var(--felt-bg); color: var(--muted); padding: 4px 12px; cursor: pointer; }
+.omskifter button[aria-pressed="true"] { background: var(--accent); color: var(--paa-accent); }
+
+.graf { margin: 10px 10px 0; padding: 12px 14px 4px; background: var(--flade); border: 1px solid var(--linje); border-radius: 6px; }
+.graf svg { display: block; width: 100%; height: auto; }
+.graflegende {
+  display: flex; flex-wrap: wrap; gap: 5px 14px; padding: 9px 4px 3px;
+  font-size: 11px; color: var(--muted);
+}
+.graflegende span { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.graflegende i { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+.graflegende span.valgt { color: var(--ink); }
+
+.tabelramme { margin: 10px; background: var(--flade); border: 1px solid var(--linje); border-radius: 6px; }
+table.aar { border-collapse: collapse; width: 100%; font-family: var(--f-tal); font-variant-numeric: tabular-nums; }
+table.aar th {
+  position: sticky; top: 0; z-index: 2; background: #1b222b; color: var(--muted);
+  font-family: var(--f-broed); font-size: 10px; font-weight: 600; letter-spacing: .12em;
+  text-transform: uppercase; text-align: right; padding: 5px 11px;
+  border-bottom: 1px solid var(--linje); white-space: nowrap;
+}
+table.aar td { text-align: right; padding: 4px 11px; font-size: 12px; white-space: nowrap; border-bottom: 1px solid var(--linje-svag); }
+table.aar th:first-child, table.aar td:first-child { text-align: left; }
+table.aar tbody tr:hover { background: #262e38; }
+table.aar tbody tr.valgt { background: #2b3441; }
+table.aar td.alder, table.aar td.svag { color: var(--muted); }
+table.aar td.formue { color: #fff; font-weight: 600; }
+
+/* Markøren, der viser at tabellen fortsætter under grafen. */
+.videre {
+  display: flex; align-items: center; gap: 10px; margin: 18px 10px 0;
+  color: var(--muted); font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+}
+.videre::before, .videre::after { content: ""; height: 1px; background: var(--linje); flex: 1 1 auto; }
