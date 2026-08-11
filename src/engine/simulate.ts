@@ -14,11 +14,11 @@ import type {
   Timing,
   Transfer,
 } from './plan'
-import { latestRateYear } from './rates/rates'
+import { rateYearFor } from './rates/rates'
 import type { RateYear } from './rates/rateYear'
 import { assessTax, marginalTaxRate, totalTax } from './tax/assessTax'
 import type { TaxAssessment } from './tax/assessTax'
-import type { BufferState, HoldingYear, YearResult } from './yearResult'
+import type { BufferState, HoldingYear, RateBasis, YearResult } from './yearResult'
 
 type Balances = Map<HoldingId, Nominal>
 
@@ -38,10 +38,10 @@ export function simulate(plan: Plan): YearResult[] {
 
   const balances = openingBalances(plan)
 
-  const rates = latestRateYear()
   const results: YearResult[] = []
   for (let year = plan.startYear; year <= lastYear(plan); year++) {
-    results.push(simulateYear(plan, year, balances, rates))
+    const { rates, basis } = rateYearFor(year, plan)
+    results.push(simulateYear(plan, year, balances, rates, basis))
   }
   return results
 }
@@ -53,6 +53,7 @@ function simulateYear(
   year: SimulationYear,
   balances: Balances,
   rates: RateYear,
+  rateBasis: RateBasis,
 ): YearResult {
   const opening = new Map(balances)
   const entries = entriesInYear(plan, year)
@@ -108,7 +109,7 @@ function simulateYear(
 
   return {
     year,
-    rateYear: rates.year,
+    rateBasis,
     openingWealth: total(opening),
     closingWealth: total(balances),
     income,

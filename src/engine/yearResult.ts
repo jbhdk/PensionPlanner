@@ -7,6 +7,14 @@ import type { TaxAssessment } from './tax/assessTax'
     også er negative. Fraværende, når bufferen ikke er negativ. */
 export type BufferState = 'Incomplete' | 'Unsustainable'
 
+/** Om et `YearResult` er regnet på et kendt satsår eller på et fremskrevet,
+    jf. ADR-0005. `knownYear` er satsåret selv, når `projected` er falsk, og
+    det kendte satsår fremskrivningen løber fra, når den er sand. */
+export type RateBasis = {
+  knownYear: SimulationYear
+  projected: boolean
+}
+
 /** En post, sammen med dens beløb i årets egne, løbende priser — for de
     poster der rent faktisk falder i det pågældende år. Forfaldet står ikke
     her: det er en egenskab ved posten selv og læses fra `Plan.entries`,
@@ -58,7 +66,7 @@ export type PersonYear = {
 export type YearResult = {
   year: SimulationYear
   /** Satsgrundlaget, året er regnet på, jf. ADR-0005. */
-  rateYear: SimulationYear
+  rateBasis: RateBasis
   openingWealth: Nominal
   closingWealth: Nominal
   income: Nominal

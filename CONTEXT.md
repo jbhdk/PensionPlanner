@@ -123,6 +123,18 @@ _Avoid_: Fast rate, konstant udbetaling
 Et komplet sæt af officielle satser og beløbsgrænser gældende for ét kalenderår, med kildeangivelse. Delt referencedata, aldrig en del af en plan. Simuleringsår efter det sidst kendte satsår får satser ved fremskrivning.
 _Avoid_: Skatteår, satssæt, parametre
 
+**§ 20-fremskrivning** · `Section20ProjectionAssumption`:
+Planens antagelse om den årlige stigning i de beløbsgrænser, personskattelovens § 20 regulerer, for simuleringsår efter det sidst kendte satsår. Andel pr. år, ikke procent. Selvstændig af `inflationAssumption` og `BenefitProjectionAssumption`, fordi de tre følger hvert sit indeks.
+_Avoid_: Fremskrivning, beløbsregulering, indeksering
+
+**Satsregulering** · `BenefitProjectionAssumption`:
+Planens antagelse om den årlige stigning i satsregulerede ydelser — folkepensionens grundbeløb og pensionstillæg — for simuleringsår efter det sidst kendte satsår. Andel pr. år, ikke procent. Rører kun ydelsernes kronebeløb, aldrig aftrapningens procent.
+_Avoid_: Ydelsesregulering, satsfremskrivning
+
+**Satsgrundlag** · `RateBasis`:
+Om et `YearResult` er regnet på et kendt satsår eller på et fremskrevet, og i så fald hvilket kendt satsår fremskrivningen løber fra. Tilføjes et nyt kendt satsår, overtager det automatisk de simuleringsår, der før blev fremskrevet.
+_Avoid_: Satsår brugt som om det altid var kendt, fremskrivningsgrundlag
+
 **Topskat** · `TopBracketTax`:
 Udelukkende det 7,5 %-lag der rammer personlig indkomst over topskattegrænsen. Bruges aldrig som samlebetegnelse for mellemskat, topskat og top-topskat — de tre lag benævnes hver for sig.
 _Avoid_: Topskat brugt om progressionen som helhed

@@ -7,6 +7,8 @@ export function defaultPlan(): Plan {
     name: 'Min plan',
     startYear: new Date().getFullYear(),
     inflationAssumption: 0.02,
+    section20ProjectionAssumption: 0.02,
+    benefitProjectionAssumption: 0.02,
     municipalTaxRate: 0.254,
     churchTax: true,
     churchTaxRate: 0.0074,

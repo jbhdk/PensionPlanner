@@ -125,6 +125,13 @@ export type Plan = {
   startYear: SimulationYear
   /** Andel pr. år, ikke procent: 0,02 er 2 %. */
   inflationAssumption: number
+  /** Andel pr. år. Løfter § 20-regulerede beløbsgrænser (`Thresholds`) for
+      simuleringsår efter det sidst kendte satsår, jf. `RateBasis`. */
+  section20ProjectionAssumption: number
+  /** Andel pr. år. Løfter satsregulerede ydelser (folkepensionens grundbeløb
+      og pensionstillæg) for simuleringsår efter det sidst kendte satsår —
+      rører aldrig aftrapningens procent. */
+  benefitProjectionAssumption: number
   household: Household
   entries: Entry[]
   transfers: Transfer[]

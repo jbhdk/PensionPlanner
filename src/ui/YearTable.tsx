@@ -56,7 +56,17 @@ export function YearTable({
                 className={state ? bufferStateClasses[state] : undefined}
                 onClick={() => onSelectYear(year.year)}
               >
-                <td>{year.year}</td>
+                <td>
+                  {year.year}
+                  {year.rateBasis.projected && (
+                    <span
+                      className="fremskrevet"
+                      title={`Fremskrevet fra satsår ${year.rateBasis.knownYear}`}
+                    >
+                      *
+                    </span>
+                  )}
+                </td>
                 {persons.map((person) => (
                   <td key={person.id}>{year.year - person.birthYear}</td>
                 ))}

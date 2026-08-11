@@ -2,7 +2,7 @@ import type { Holding, Person, Plan } from '../engine/plan'
 import { returnWeight } from '../engine/simulate'
 import type { LayerAmount, TaxLayer } from '../engine/tax/assessTax'
 import { totalTax } from '../engine/tax/assessTax'
-import type { HoldingYear, PersonYear, YearResult } from '../engine/yearResult'
+import type { HoldingYear, PersonYear, RateBasis, YearResult } from '../engine/yearResult'
 import { kroner, procent } from './format'
 import { danishTiming } from './Inspector'
 import { inRealKroner } from './real'
@@ -60,7 +60,7 @@ export function YearExplanation({
               {person.name} {year.year - person.birthYear} år
             </span>
           ))}
-          <span>Satsår {year.rateYear}</span>
+          <span>Satsår {satsaarLabel(year.rateBasis)}</span>
         </span>
         <span className="hoejre">
           {previous && (
@@ -104,6 +104,12 @@ export function YearExplanation({
       <EntriesBlock plan={plan} year={year} display={display} />
     </div>
   )
+}
+
+/** "2026" for et kendt satsår, "2026 (fremskrevet)" for et fremskrevet — så
+    det ses, hvor tallene holder op med at være officielle, jf. `RateBasis`. */
+function satsaarLabel(basis: RateBasis): string {
+  return basis.projected ? `${basis.knownYear} (fremskrevet)` : String(basis.knownYear)
 }
 
 /** Årets poster med forfald og afkastvægt, så det tal Modified Dietz lagde

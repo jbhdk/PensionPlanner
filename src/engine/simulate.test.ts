@@ -327,7 +327,7 @@ describe('simulate', () => {
 
     const year = simulateChecked(plan)[0]!
 
-    expect(year.rateYear).toBe(2026)
+    expect(year.rateBasis).toEqual({ knownYear: 2026, projected: false })
     expect(year.persons.map((person) => person.person)).toEqual(['jesper'])
 
     const { tax } = year.persons[0]!
@@ -602,6 +602,51 @@ describe('simulate', () => {
     // Og de nedsætter den skattepligtige indkomst, ikke den personlige.
     expect(tax.personalIncome).toBeCloseTo(552_000, 2)
     expect(tax.taxableIncome).toBeCloseTo(485_600, 2)
+  })
+})
+
+describe('satsfremskrivning', () => {
+  it('markerer kun de simuleringsår efter det sidst kendte satsår som fremskrevne', () => {
+    // birthYear 1973 + horizon 54 = 2027: to år, 2026 (kendt) og 2027 (fremskrevet).
+    const years = simulateChecked(aPlan({ horizon: 54 }))
+
+    expect(years.map((year) => year.rateBasis)).toEqual([
+      { knownYear: 2026, projected: false },
+      { knownYear: 2026, projected: true },
+    ])
+  })
+
+  it('lader en ændret § 20-fremskrivning slå igennem i det fremskrevne år, men ikke i det kendte', () => {
+    const build = (section20ProjectionAssumption: number) =>
+      aPlan({
+        horizon: 54,
+        inflationAssumption: 0,
+        section20ProjectionAssumption,
+        entries: [aSalary({ amountInRealKroner: 600_000 })],
+      })
+
+    const low = simulateChecked(build(0))
+    const high = simulateChecked(build(0.05))
+
+    // 2026 er kendt for begge planer, uanset fremskrivningsantagelsen.
+    expect(low[0]!.tax).toBeCloseTo(high[0]!.tax, 6)
+    // 2027 er fremskrevet, så en højere § 20-sats løfter personfradrag og
+    // øvrige grænser og giver en anden skat.
+    expect(low[1]!.tax).not.toBeCloseTo(high[1]!.tax, 2)
+  })
+
+  it('holder balanceinvarianten i et fremskrevet år, også når fremskrivningen løfter beløbsgrænserne', () => {
+    simulateChecked(
+      aPlan({
+        horizon: 54,
+        section20ProjectionAssumption: 0.02,
+        benefitProjectionAssumption: 0.02,
+        entries: [
+          aSalary({ amountInRealKroner: 950_000 }),
+          anExpense({ amountInRealKroner: 200_000 }),
+        ],
+      }),
+    )
   })
 })
 

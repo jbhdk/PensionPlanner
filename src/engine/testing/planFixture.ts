@@ -13,6 +13,8 @@ import type { YearResult } from '../yearResult'
 type Options = {
   startYear?: number
   inflationAssumption?: number
+  section20ProjectionAssumption?: number
+  benefitProjectionAssumption?: number
   birthYear?: number
   birthMonth?: number
   workEndAge?: number
@@ -42,6 +44,8 @@ export function aPlan(options: Options = {}): Plan {
   const {
     startYear = 2026,
     inflationAssumption = 0,
+    section20ProjectionAssumption = 0,
+    benefitProjectionAssumption = 0,
     birthYear = 1973,
     birthMonth = 6,
     workEndAge = 58,
@@ -61,6 +65,8 @@ export function aPlan(options: Options = {}): Plan {
     name: 'Ophør som 58',
     startYear,
     inflationAssumption,
+    section20ProjectionAssumption,
+    benefitProjectionAssumption,
     buffer: 'free-assets',
     entries,
     transfers,

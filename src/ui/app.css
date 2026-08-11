@@ -657,6 +657,15 @@ table.aar td.buffer .tilstand {
   white-space: nowrap;
 }
 
+/* Markerer et simuleringsår regnet på et fremskrevet satsår frem for et
+   kendt, jf. issue #14 — så det ses, hvor tallene holder op med at være
+   officielle. Muted og ikke rød: det er ikke en fejltilstand som bufferens. */
+table.aar td .fremskrevet {
+  color: var(--muted);
+  margin-left: 2px;
+  cursor: help;
+}
+
 /* ---------- forklar-året ---------- */
 
 .forklarhoved {

@@ -120,6 +120,27 @@ function PlanFields({ plan, onChange, onClose }: FieldsProps) {
             onChange({ ...plan, inflationAssumption: percent / 100 })
           }
         />
+        <NumberField
+          label="§ 20-fremskrivning"
+          unit="% p.a."
+          value={asPercent(plan.section20ProjectionAssumption)}
+          onChange={(percent) =>
+            onChange({ ...plan, section20ProjectionAssumption: percent / 100 })
+          }
+        />
+        <NumberField
+          label="Satsregulering"
+          unit="% p.a."
+          value={asPercent(plan.benefitProjectionAssumption)}
+          onChange={(percent) =>
+            onChange({ ...plan, benefitProjectionAssumption: percent / 100 })
+          }
+        />
+        <Hint>
+          De to fremskrivningssatser løfter beløbsgrænser og ydelser for
+          simuleringsår efter det sidst kendte satsår — hver efter sit eget
+          indeks, uafhængigt af inflationsantagelsen.
+        </Hint>
       </Section>
       <Section title="Skatten">
         <NumberField
