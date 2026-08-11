@@ -883,11 +883,12 @@ describe('fladen', () => {
     await user.click(rows[1]!)
 
     expect(screen.getByRole('heading', { name: '2026' })).toBeTruthy()
-    expect(screen.queryByRole('table')).toBeNull()
+    // Ikke årstabellen — forklar-året har sine egne tabeller (skattelagene).
+    expect(document.querySelector('.tabelramme')).toBeNull()
 
     await user.click(screen.getByRole('button', { name: 'Tilbage til tabellen' }))
 
-    expect(screen.getByRole('table')).toBeTruthy()
+    expect(document.querySelector('.tabelramme')).toBeTruthy()
   })
 
   it('viser hver persons alder og satsåret i forklar-årets hoved', async () => {
@@ -923,6 +924,41 @@ describe('fladen', () => {
     expect(post('Skat')).toBe('0')
     expect(post('Udgifter')).toBe('-40.000')
     expect(post('Formue ultimo')).toBe('960.000')
+  })
+
+  it('viser skattelagene pr. person som en lodret opstilling af grundlag, sats og beløb', async () => {
+    // Samme tal som facitcasen "lønmodtager under mellemskattegrænsen,
+    // 600.000 kr. brutto" i workedExamples.ts.
+    const user = userEvent.setup()
+    const plan = aPlan({
+      startYear: 2026,
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      municipalTaxRate: 0.254,
+      churchTax: true,
+      churchTaxRate: 0.0074,
+    })
+    render(<App initialPlan={plan} />)
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2026
+
+    const blok = screen.getByRole('heading', { name: 'Jesper', level: 3 }).closest('.blok') as HTMLElement
+    const rowFor = (label: string) =>
+      within(blok)
+        .getByText(label)
+        .closest('tr') as HTMLElement
+
+    const cells = (label: string) =>
+      within(rowFor(label))
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent)
+
+    expect(cells('AM-bidrag')).toEqual(['AM-bidrag', '600.000', '8,00 %', '48.000'])
+    expect(cells('Bundskat')).toEqual(['Bundskat', '497.900', '12,01 %', '59.798'])
+    expect(cells('Kommuneskat')).toEqual(['Kommuneskat', '431.500', '25,40 %', '109.601'])
+    expect(cells('Kirkeskat')).toEqual(['Kirkeskat', '431.500', '0,74 %', '3.193'])
+    expect(cells('Skat i alt')).toEqual(['Skat i alt', '', '', '220.592'])
   })
 
   it('åbner inspektøren for beholdningen, når der klikkes på grafens legend', async () => {
