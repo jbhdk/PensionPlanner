@@ -1037,6 +1037,27 @@ describe('fladen', () => {
     expect(cells('Faste udgifter')).toEqual(['Faste udgifter', '-40.000', 'Juni', '58,33 %'])
   })
 
+  it('opdaterer forklar-året med det samme, når noget rettes i skuffen, mens forklaringen er åben', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2026
+
+    const holdingsTable = document.querySelector('table.beholdningstabel') as HTMLElement
+    expect(within(holdingsTable).getByText('1.000.000')).toBeTruthy()
+
+    // Navigatoren og skuffen bliver stående, mens forklaringen er åben —
+    // beholdningens inspektør kan stadig åbnes og rettes herfra.
+    await user.click(navigatorButton(/Frie midler/))
+    const balance = screen.getByLabelText(/Saldo/)
+    await user.clear(balance)
+    await user.type(balance, '2000000')
+
+    expect(within(holdingsTable).getByText('2.000.000')).toBeTruthy()
+  })
+
   it('åbner inspektøren for beholdningen, når der klikkes på grafens legend', async () => {
     const user = userEvent.setup()
     const plan = aPlanWithSecondHolding()
