@@ -235,9 +235,6 @@ function planFelterN() {
     felt('Startår', inp('2026', 'tal')) +
     felt('Inflation', inp('2,00', 'tal'), '% p.a.') +
     felt('Lønregulering', inp('3,00', 'tal'), '% p.a.')) +
-  afsnitN('Skat',
-    felt('Kommuneskat', inp('25,40', 'tal'), '%') +
-    felt('Kirkeskat', inp('0,74', 'tal'), '%')) +
   afsnitN('Fremskrivning',
     felt('§ 20-regulering', inp('2,00', 'tal'), '% p.a.') +
     felt('Satsregulering', inp('2,00', 'tal'), '% p.a.') +
@@ -268,7 +265,15 @@ function inspektorKrop() {
         '<div class="hint">' + (p.udledt
           ? 'Udledt af fødselsåret efter den vedtagne indeksering.'
           : 'Folkepensionsalderen er ikke vedtaget for ' + p.foedselsaar + '. Tallet er sat i hånden.') +
-        '</div>') + '</div>';
+        '</div>') +
+      afsnitN('Skat',
+        felt('Kommune', vlg([p.kommune])) +
+        felt('Kommuneskat', udl(PN(PLAN.kommuneskat)), 'udledt') +
+        felt('Medlem af folkekirken',
+          '<input type="checkbox" ' + (p.medlemFolkekirken ? 'checked' : '') + ' style="width:auto">') +
+        (p.medlemFolkekirken ? felt('Kirkeskat', udl(PN(PLAN.kirkeskat)), 'udledt') : '') +
+        '<div class="hint">Sats slået op for ' + p.kommune + ' i satsåret. Ikke et tal, der tastes.</div>') +
+      '</div>';
   }
   var b = behN(N.valgt);
   if (b) {

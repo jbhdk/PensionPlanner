@@ -48,9 +48,9 @@ var PLAN = {
 
 var PERSONER = [
   { id: 'j', navn: 'Jesper', foedselsaar: 1973, erhvervsophoerAlder: 58,
-    folkepensionsalder: 70, udledt: true, horisont: 95 },
+    folkepensionsalder: 70, udledt: true, horisont: 95, kommune: 'Aarhus', medlemFolkekirken: true },
   { id: 'a', navn: 'Anne', foedselsaar: 1985, erhvervsophoerAlder: 62,
-    folkepensionsalder: 72, udledt: false, horisont: 95 }
+    folkepensionsalder: 72, udledt: false, horisont: 95, kommune: 'Aarhus', medlemFolkekirken: false }
 ];
 
 /* type: frie | ask | rate | alder | livrente */
