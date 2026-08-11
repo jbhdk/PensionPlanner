@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { aPlan } from '../engine/testing/planFixture'
 import type { Plan } from '../engine/plan'
-import { removePerson } from './planEdits'
+import { addEntry, removePerson } from './planEdits'
 
 /** Et to-personers udgangspunkt: fixturens Jesper har bufferen
     ("free-assets"), Maria har en anden beholdning ved siden af. */
@@ -78,5 +78,39 @@ describe('removePerson', () => {
     const result = removePerson(withEntry, 'maria')
 
     expect(result.entries).toEqual([])
+  })
+})
+
+describe('addEntry', () => {
+  it('tilføjer en indtægt med lønindkomst som skattebehandling', () => {
+    const plan = aPlan()
+
+    const result = addEntry(plan, 'Income')
+
+    expect(result.entries).toHaveLength(1)
+    const entry = result.entries[0]!
+    expect(entry.name).toBe('Indtægt 1')
+    expect(entry.owner).toBe('jesper')
+    expect(entry.direction).toBe('Income')
+    expect(entry.direction === 'Income' && entry.taxTreatment).toBe('EarnedIncome')
+  })
+
+  it('tilføjer en udgift uden skattebehandling', () => {
+    const plan = aPlan()
+
+    const result = addEntry(plan, 'Expense')
+
+    expect(result.entries).toHaveLength(1)
+    const entry = result.entries[0]!
+    expect(entry.name).toBe('Udgift 1')
+    expect(entry.direction).toBe('Expense')
+  })
+
+  it('tæller kun poster med samme retning ved navngivningen', () => {
+    const plan = addEntry(addEntry(aPlan(), 'Income'), 'Expense')
+
+    const result = addEntry(plan, 'Income')
+
+    expect(result.entries.map((e) => e.name)).toEqual(['Indtægt 1', 'Udgift 1', 'Indtægt 2'])
   })
 })

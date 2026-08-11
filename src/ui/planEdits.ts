@@ -172,6 +172,39 @@ export function withHoldingOwner(plan: Plan, holdingId: string, newOwnerId: stri
   }
 }
 
+/** Den tyndeste post, der kan tilføjes: nul beløb, hele horisonten, hvert år,
+    hos husstandens første person. En indtægt får skattebehandlingen
+    lønindkomst; en udgift har ikke feltet, jf. `Direction` i domænemodellen. */
+export function addEntry(plan: Plan, direction: Direction): Plan {
+  const owner = plan.household.persons[0]
+  if (!owner) return plan
+
+  const count = plan.entries.filter((entry) => entry.direction === direction).length
+  const base = {
+    id: freshEntryId(plan),
+    name: direction === 'Income' ? `Indtægt ${count + 1}` : `Udgift ${count + 1}`,
+    amountInRealKroner: 0,
+    owner: owner.id,
+    timing: 'Even' as const,
+    period: { anchor: 'CalendarYear' as const },
+    recurrence: { kind: 'Annual' as const },
+    regulationRate: 0,
+  }
+  const entry: Entry =
+    direction === 'Income'
+      ? { ...base, direction: 'Income', taxTreatment: 'EarnedIncome' }
+      : { ...base, direction: 'Expense' }
+
+  return { ...plan, entries: [...plan.entries, entry] }
+}
+
+function freshEntryId(plan: Plan): string {
+  const existing = new Set(plan.entries.map((entry) => entry.id))
+  let n = 1
+  while (existing.has(`entry-${n}`)) n++
+  return `entry-${n}`
+}
+
 export function findEntry(plan: Plan, id: string): Entry | undefined {
   return plan.entries.find((entry) => entry.id === id)
 }

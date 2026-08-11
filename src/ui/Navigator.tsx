@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Plan } from '../engine/plan'
 import { kroner } from './format'
-import { addHolding, addPerson, addTransfer } from './planEdits'
+import { addEntry, addHolding, addPerson, addTransfer } from './planEdits'
 import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
 
@@ -149,6 +149,8 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
         value: kroner(entry.amountInRealKroner),
         target: { kind: 'entry', id: entry.id },
       })),
+      addLabel: '+ Indtægt',
+      onAdd: () => onChange(addEntry(plan, 'Income')),
     },
     {
       id: 'udgifter',
@@ -162,6 +164,8 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
         value: kroner(-entry.amountInRealKroner),
         target: { kind: 'entry', id: entry.id },
       })),
+      addLabel: '+ Udgift',
+      onAdd: () => onChange(addEntry(plan, 'Expense')),
     },
     {
       id: 'overfoersler',

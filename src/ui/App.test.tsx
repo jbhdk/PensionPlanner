@@ -726,6 +726,17 @@ describe('fladen', () => {
     expect(within(beholdninger).getByText('2')).toBeTruthy()
   })
 
+  it('tilføjer en indtægt og en udgift via deres grupper', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Indtægt' }))
+    expect(navigatorButton(/^Indtægt 1/)).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: '+ Udgift' }))
+    expect(navigatorButton(/^Udgift 1/)).toBeTruthy()
+  })
+
   it('lader "+ Beholdning" gøre "+ Overførsel" muligt, når husstanden kun havde én beholdning', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlan()} />)
