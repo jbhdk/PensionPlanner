@@ -1,7 +1,7 @@
-import type { Person, Plan } from '../engine/plan'
+import type { Holding, Person, Plan } from '../engine/plan'
 import type { LayerAmount, TaxLayer } from '../engine/tax/assessTax'
 import { totalTax } from '../engine/tax/assessTax'
-import type { PersonYear, YearResult } from '../engine/yearResult'
+import type { HoldingYear, PersonYear, YearResult } from '../engine/yearResult'
 import { kroner, procent } from './format'
 import { inRealKroner } from './real'
 
@@ -97,6 +97,58 @@ export function YearExplanation({
           )
         })}
       </div>
+
+      <HoldingsBlock plan={plan} year={year} display={display} />
+    </div>
+  )
+}
+
+/** Afkastet pr. beholdning: primosaldo og vægtet strøm er grundlaget,
+    nettoafkastsatsen er beholdningens egen — udledt af brutto minus ÅOP,
+    aldrig et gemt felt, jf. CONTEXT.md — og de tre ganget/lagt sammen giver
+    afkastet, så en række kan efterregnes i hånden alene ud fra sig selv. */
+function HoldingsBlock({
+  plan,
+  year,
+  display,
+}: {
+  plan: Plan
+  year: YearResult
+  display: (amount: number) => number
+}) {
+  const holdings = plan.household.persons.flatMap((person) => person.holdings)
+  const holdingYear = (holding: Holding): HoldingYear | undefined =>
+    year.holdings.find((h) => h.holding === holding.id)
+
+  return (
+    <div className="blok bred">
+      <h3>Beholdningerne</h3>
+      <table className="beholdningstabel">
+        <thead>
+          <tr>
+            <th>Beholdning</th>
+            <th>Primosaldo</th>
+            <th>Vægtet strøm</th>
+            <th>Nettoafkastsats</th>
+            <th>Afkast</th>
+          </tr>
+        </thead>
+        <tbody>
+          {holdings.map((holding) => {
+            const h = holdingYear(holding)
+            if (!h) return null
+            return (
+              <tr key={holding.id}>
+                <td>{holding.name}</td>
+                <td>{kroner(display(h.openingBalance))}</td>
+                <td>{kroner(display(h.weightedFlow))}</td>
+                <td>{procent(holding.grossReturn - holding.annualCostRate)}</td>
+                <td>{kroner(display(h.return))}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }

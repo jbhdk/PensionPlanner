@@ -982,6 +982,34 @@ describe('fladen', () => {
     expect(cells('Skat i alt')).toEqual(['Skat i alt', '', '', '220.592'])
   })
 
+  it('viser primosaldo, vægtet strøm, nettoafkastsats og afkast pr. beholdning', async () => {
+    const user = userEvent.setup()
+    const plan: Plan = {
+      ...aPlanWithSecondHolding(),
+      startYear: 2026,
+      transfers: [
+        aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 200_000 }),
+      ],
+    }
+    render(<App initialPlan={plan} />)
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2026
+
+    const holdingsTable = document.querySelector('table.beholdningstabel') as HTMLElement
+    const cells = (name: string) =>
+      within(within(holdingsTable).getByText(name).closest('tr') as HTMLElement)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent)
+
+    // Jævnt forfald vejer overførslen halvt: 200.000 bliver 100.000, negativt
+    // hos afgiveren og positivt hos modtageren. Begge beholdninger har 0 %
+    // nettoafkast i fixturen, så afkastet er 0 uanset grundlaget.
+    expect(cells('Frie midler')).toEqual(['Frie midler', '1.000.000', '-100.000', '0,00 %', '0'])
+    expect(cells('Anden beholdning')).toEqual(['Anden beholdning', '0', '100.000', '0,00 %', '0'])
+  })
+
   it('åbner inspektøren for beholdningen, når der klikkes på grafens legend', async () => {
     const user = userEvent.setup()
     const plan = aPlanWithSecondHolding()

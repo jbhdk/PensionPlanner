@@ -653,6 +653,25 @@ describe('overførsler', () => {
     expect(anden(early)).toBeGreaterThan(anden(late))
   })
 
+  it('bærer den vægtede strøm, der indgik i afkastgrundlaget, pr. beholdning', () => {
+    const plan = aPlanWithSecondHolding({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      transfers: [
+        aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 200_000 }),
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+    const buffer = year.holdings.find((h) => h.holding === 'free-assets')!
+    const anden = year.holdings.find((h) => h.holding === 'anden-beholdning')!
+
+    // Jævnt forfald vejer halvt: 200.000 kr. bliver til 100.000 i grundlaget,
+    // negativt hos afgiveren og positivt hos modtageren.
+    expect(buffer.weightedFlow).toBeCloseTo(-100_000, 6)
+    expect(anden.weightedFlow).toBeCloseTo(100_000, 6)
+  })
+
   it('afviser en plan hvor to beholdninger er udpeget som samme buffer', () => {
     const base = aPlanWithSecondHolding()
     const plan: Plan = {

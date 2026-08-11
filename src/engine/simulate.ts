@@ -67,12 +67,14 @@ function simulateYear(
   // Kun bufferen modtager poster; en overførsel vejer ind i afkastgrundlaget
   // i begge ender, jf. ADR-0004.
   const bufferFlow = weightedNetFlow(entries)
+  const flows = new Map<HoldingId, Nominal>()
   const returns = new Map<HoldingId, Nominal>()
   for (const holding of allHoldings(plan)) {
-    const base =
-      opening.get(holding.id)! +
+    const flow =
       (holding.id === plan.buffer ? bufferFlow : 0) +
       weightedTransferFlow(transfers, holding.id)
+    flows.set(holding.id, flow)
+    const base = opening.get(holding.id)! + flow
     returns.set(holding.id, netReturn(holding) * base)
   }
   const totalReturn = [...returns.values()].reduce((sum, r) => sum + r, 0)
@@ -114,7 +116,7 @@ function simulateYear(
     tax,
     expenses,
     conversion: 0,
-    holdings: holdingYears(opening, balances, returns),
+    holdings: holdingYears(opening, balances, returns, flows),
     persons: assessments.map(({ person, tax }) => ({
       person,
       shareIncome: shareIncomeByPerson.get(person)!,
@@ -244,12 +246,14 @@ function holdingYears(
   opening: Balances,
   closing: Balances,
   returns: Map<HoldingId, Nominal>,
+  flows: Map<HoldingId, Nominal>,
 ): HoldingYear[] {
   return [...closing].map(([holding, closingBalance]) => ({
     holding,
     openingBalance: opening.get(holding) ?? 0,
     closingBalance,
     return: returns.get(holding) ?? 0,
+    weightedFlow: flows.get(holding) ?? 0,
   }))
 }
 

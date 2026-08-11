@@ -12,6 +12,11 @@ export type HoldingYear = {
   openingBalance: Nominal
   closingBalance: Nominal
   return: Nominal
+  /** Årets strømme ind og ud af beholdningen, hver vægtet efter sit forfald
+      — bufferens andel af posterne, og enhver overførsel til eller fra
+      beholdningen. Det, der lægges til primosaldoen i Modified Dietz, før
+      afkastet regnes, jf. `netReturn`. */
+  weightedFlow: Nominal
 }
 
 /** Årets skatteopgørelse for én person. Indkomsten føres pr. person og aldrig
