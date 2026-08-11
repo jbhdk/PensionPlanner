@@ -117,6 +117,7 @@ function simulateYear(
     expenses,
     conversion: 0,
     holdings: holdingYears(opening, balances, returns, flows),
+    entries: entries.map(({ entry, amount }) => ({ entry: entry.id, amount })),
     persons: assessments.map(({ person, tax }) => ({
       person,
       shareIncome: shareIncomeByPerson.get(person)!,
@@ -204,8 +205,9 @@ function weightedTransferFlow(transfers: ActiveTransfer[], holding: HoldingId): 
 
 /** `Even` er det matematisk rigtige for jævnt fordelte strømme, ikke en
     tilnærmelse; måned N vejer strømmen efter, hvor meget af året der er
-    tilbage, jf. ADR-0006. */
-function returnWeight(timing: Timing): number {
+    tilbage, jf. ADR-0006. Eksporteret så fladen kan vise afkastvægten for en
+    post uden at regne den om. */
+export function returnWeight(timing: Timing): number {
   return timing === 'Even' ? 0.5 : (12 - timing + 1) / 12
 }
 

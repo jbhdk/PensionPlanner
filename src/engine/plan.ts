@@ -10,6 +10,7 @@ export type Real = number
 export type HoldingId = string
 export type PersonId = string
 export type TransferId = string
+export type EntryId = string
 
 /** Beskatningsformen er beholdningens akse. Etape 1 kender kun de to frie. */
 export type HoldingVariant = 'ShareIncome' | 'CapitalIncome'
@@ -84,7 +85,7 @@ export type Recurrence =
   | { kind: 'EveryNYears'; n: number }
 
 type EntryBase = {
-  id: string
+  id: EntryId
   name: string
   /** Positivt i begge retninger — fortegnet er retningens arbejde. */
   amountInRealKroner: Real

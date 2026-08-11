@@ -100,6 +100,30 @@ describe('simulate', () => {
     expect(years.find((y) => y.year === 2030)!.expenses).toBe(0)
   })
 
+  it('bærer årets aktive poster i entries, og udelader dem uden for deres periode', () => {
+    const plan = aPlan({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      entries: [
+        aSalary({ amountInRealKroner: 600_000 }),
+        anExpense({
+          amountInRealKroner: 320_000,
+          period: { anchor: 'CalendarYear', from: 2029 },
+          recurrence: { kind: 'Once' },
+        }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+    const entriesIn = (year: number) => years.find((y) => y.year === year)!.entries
+
+    expect(entriesIn(2028)).toEqual([{ entry: 'salary', amount: 600_000 }])
+    expect(entriesIn(2029)).toEqual([
+      { entry: 'salary', amount: 600_000 },
+      { entry: 'living-costs', amount: 320_000 },
+    ])
+  })
+
   it('summerer to overlappende poster korrekt i de år, hvor begges perioder dækker', () => {
     const plan = aPlan({
       balance: 1_000_000,
