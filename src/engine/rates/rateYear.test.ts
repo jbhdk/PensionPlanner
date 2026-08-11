@@ -1,5 +1,33 @@
+// @vitest-environment node
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { rateYear2026 } from './rateYear2026'
+
+/** Læser kommunetabellen af docs/satser/2026.md, så testen bruger dokumentet
+    som facit i stedet for at gentage tallene som en separat liste her.
+    `rateYear2026.ts`'s egen kommentar siger det ligeud: retter man et tal i
+    dokumentet, retter man det begge steder — denne test er den kontrol af
+    at det faktisk sker. */
+function municipalTaxFromDoc(): Record<string, { municipalTaxRate: number; churchTaxRate: number }> {
+  const doc = readFileSync(
+    fileURLToPath(new URL('../../../docs/satser/2026.md', import.meta.url)),
+    'utf8',
+  )
+  const section = doc.split('## Kommune- og kirkeskatteprocenter')[1]!.split(/\n## /)[0]!
+  const rowPattern = /^\| (.+) \| ([\d,]+) % \| ([\d,]+) % \|$/gm
+
+  const result: Record<string, { municipalTaxRate: number; churchTaxRate: number }> = {}
+  for (const match of section.matchAll(rowPattern)) {
+    const [, name, municipalPct, churchPct] = match
+    if (name === 'Kommune') continue
+    result[name!] = {
+      municipalTaxRate: Math.round((Number(municipalPct!.replace(',', '.')) / 100) * 10_000) / 10_000,
+      churchTaxRate: Math.round((Number(churchPct!.replace(',', '.')) / 100) * 10_000) / 10_000,
+    }
+  }
+  return result
+}
 
 /** Satsårets egen selvkontrol, jf. docs/satser/2026.md.
 
@@ -51,5 +79,12 @@ describe('satsår 2026', () => {
     // Kommune- og kirkeskatteprocenterne er læst direkte af Skatteministeriets
     // egen Excel-eksport, ikke krydstjekket sekundært, så heller ikke den er ⚠︎.
     expect(rateYear2026.municipalTax.unconfirmed).toEqual([])
+  })
+
+  it('slår op for alle ca. 98 kommuner, og med samme tal som docs/satser/2026.md', () => {
+    const fromDoc = municipalTaxFromDoc()
+
+    expect(Object.keys(fromDoc).length).toBeGreaterThan(90)
+    expect(rateYear2026.municipalTax.rates).toEqual(fromDoc)
   })
 })

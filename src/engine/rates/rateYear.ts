@@ -121,8 +121,7 @@ export type RateYear = {
   thresholds: Sourced<Thresholds>
   allowanceRates: Sourced<AllowanceRates>
   statePension: Sourced<StatePension>
-  /** Kommune- og kirkeskatteprocenten pr. kommune. Kun de kommuner, der er
-      lagt ind som fixture-/facitcasedata — den fulde tabel over alle knap 98
-      kommuner er en afgrænset opgave for sig. */
+  /** Kommune- og kirkeskatteprocenten pr. kommune, for alle landets ca. 98
+      kommuner. */
   municipalTax: Sourced<MunicipalTax>
 }
