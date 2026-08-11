@@ -75,6 +75,26 @@ body {
   font-size: 12px;
 }
 
+.filhandlinger {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.importfejl {
+  color: var(--neg);
+  font-size: 12px;
+}
+
+.skjult-filvaelger {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
 .spalter {
   flex: 1 1 auto;
   min-height: 0;

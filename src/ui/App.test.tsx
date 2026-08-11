@@ -1,8 +1,9 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Plan } from '../engine/plan'
 import { aPlan, aSalary, aTransfer, anExpense } from '../engine/testing/planFixture'
+import { exportPlan } from '../persistence/planFile'
 import { loadPlan } from '../persistence/planStorage'
 import { App } from './App'
 import { defaultPlan } from './defaultPlan'
@@ -1134,5 +1135,73 @@ describe('fladen', () => {
     const bufferBaand = graf.querySelector('path[data-holding="free-assets"]')!
     expect(andenBaand.getAttribute('fill-opacity')).toBe('1')
     expect(bufferBaand.getAttribute('fill-opacity')).toBe('1')
+  })
+
+  describe('eksport og import', () => {
+    let createdBlobs: Blob[]
+
+    beforeEach(() => {
+      createdBlobs = []
+      URL.createObjectURL = vi.fn((blob: Blob) => {
+        createdBlobs.push(blob)
+        return 'blob:mock'
+      }) as typeof URL.createObjectURL
+      URL.revokeObjectURL = vi.fn()
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('eksporterer planen som præcis den JSON, en import forventer', async () => {
+      const user = userEvent.setup()
+      const plan = aThreeYearPlan()
+      render(<App initialPlan={plan} />)
+
+      await user.click(screen.getByRole('button', { name: 'Eksporter' }))
+
+      expect(createdBlobs).toHaveLength(1)
+      const contents = await createdBlobs[0]!.text()
+      expect(contents).toBe(exportPlan(plan))
+    })
+
+    it('erstatter planen med den importerede, når filen accepteres', async () => {
+      const user = userEvent.setup()
+      render(<App initialPlan={aThreeYearPlan()} />)
+
+      const importeretPlan: Plan = { ...aPlan(), name: 'Importeret plan' }
+      const file = new File([exportPlan(importeretPlan)], 'plan.json', {
+        type: 'application/json',
+      })
+
+      await user.upload(screen.getByLabelText(/Importer/), file)
+
+      expect(await screen.findByText('Importeret plan', { selector: '.plannavn' })).toBeTruthy()
+    })
+
+    it('afviser en ugyldig fil med en forklaring, uden at ændre den nuværende plan', async () => {
+      const user = userEvent.setup()
+      render(<App initialPlan={aThreeYearPlan()} />)
+
+      const file = new File(['ikke json{'], 'plan.json', { type: 'application/json' })
+      await user.upload(screen.getByLabelText(/Importer/), file)
+
+      expect(await screen.findByText(/kan ikke importeres/i)).toBeTruthy()
+      expect(screen.getByText('Ophør som 58', { selector: '.plannavn' })).toBeTruthy()
+    })
+
+    it('nævner en ukendt fremtidig skemaversion som sådan, når importen afvises', async () => {
+      const user = userEvent.setup()
+      render(<App initialPlan={aThreeYearPlan()} />)
+
+      const file = new File(
+        [JSON.stringify({ schemaVersion: 99, plan: aPlan() })],
+        'plan.json',
+        { type: 'application/json' },
+      )
+      await user.upload(screen.getByLabelText(/Importer/), file)
+
+      expect(await screen.findByText(/nyere version/i)).toBeTruthy()
+    })
   })
 })

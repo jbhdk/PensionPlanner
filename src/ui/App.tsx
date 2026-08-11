@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import type { Plan } from '../engine/plan'
 import { simulate, validateBuffer } from '../engine/simulate'
+import { exportPlan, importPlan } from '../persistence/planFile'
 import { savePlan } from '../persistence/planStorage'
 import { Inspector } from './Inspector'
 import { Navigator } from './Navigator'
@@ -40,6 +42,8 @@ export function App({
   const [resultView, setResultView] = useState<ResultView>('Wealth')
   const [unit, setUnit] = useState<AmountUnit>('Real')
   const [explainedYear, setExplainedYear] = useState<number | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Ingen gem-knap: planen gemmes ved hver ændring, jf. issue #15. Er
   // indlæsningen selv fejlet, må vi ikke overskrive det ulæselige gemte data
@@ -53,6 +57,30 @@ export function App({
   function explainYear(year: number) {
     setExplainedYear(year)
     setResultView('YearExplanation')
+  }
+
+  function handleExport() {
+    const blob = new Blob([exportPlan(plan)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${plan.name}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleFileChosen(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    const result = importPlan(await file.text())
+    if (result.kind === 'Loaded') {
+      setPlan(result.plan)
+      setImportError(null)
+    } else {
+      setImportError(result.reason)
+    }
   }
 
   if (loadError) {
@@ -84,6 +112,27 @@ export function App({
       <header className="topbjaelke">
         <span className="maerke">Pensionsplanner</span>
         <span className="plannavn">{plan.name}</span>
+        <span className="filhandlinger">
+          {importError && (
+            <span className="importfejl" role="alert">
+              Filen kan ikke importeres: {importError}
+            </span>
+          )}
+          <button type="button" className="knap" onClick={handleExport}>
+            Eksporter
+          </button>
+          <button type="button" className="knap" onClick={() => fileInputRef.current?.click()}>
+            Importer
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="skjult-filvaelger"
+            aria-label="Importer"
+            onChange={handleFileChosen}
+          />
+        </span>
       </header>
 
       <div className={'spalter' + (selected ? ' med-skuffe' : '')}>

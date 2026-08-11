@@ -67,6 +67,15 @@ describe('planStorage', () => {
     expect(result.kind).toBe('Failed')
   })
 
+  it('afviser en ukendt fremtidig skemaversion i stedet for at indlæse den umigreret', () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: 99, plan: aPlan() }))
+
+    const result = loadPlan()
+
+    expect(result.kind).toBe('Failed')
+    expect((result as { reason: string }).reason).toMatch(/nyere version/i)
+  })
+
   it('giver Failed frem for at kaste, når det gemte er gyldig JSON men ikke en konvolut', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ noget: 'helt andet' }))
 
