@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import type {
   AgeBound,
   Anchor,
@@ -22,6 +22,7 @@ import {
   findHoldingOwner,
   findPerson,
   findTransfer,
+  formatNumber,
   parseNumber,
   removeEntry,
   removeHolding,
@@ -981,6 +982,21 @@ function NumberField({
   onChange: (value: number) => void
 }) {
   const id = useId()
+  const [text, setText] = useState(() => formatNumber(value))
+  const [lastValue, setLastValue] = useState(value)
+
+  // Teksten er sandheden, mens der tastes. Et halvskrevet tal som "7," eller
+  // "-" parser til noget andet end det, der står, og skrev feltet sig selv
+  // tilbage til den parsede værdi ved hvert tastetryk, ville decimaltegnet
+  // blive ædt, før decimalen nåede at blive tastet: "7,5" endte som 75.
+  // Kommer værdien derimod udefra — en anden beholdning valgt i navigatoren,
+  // en import, en fortrydelse — svarer teksten ikke længere til den, og så er
+  // det teksten, der viger.
+  if (!Object.is(value, lastValue)) {
+    setLastValue(value)
+    if (parseNumber(text) !== value) setText(formatNumber(value))
+  }
+
   return (
     <div className="felt">
       <label htmlFor={id}>{label}</label>
@@ -990,8 +1006,11 @@ function NumberField({
           type="text"
           inputMode="decimal"
           className="tal"
-          value={String(value)}
-          onChange={(event) => onChange(parseNumber(event.target.value))}
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value)
+            onChange(parseNumber(event.target.value))
+          }}
         />
         <span className="enhed">{unit ?? ''}</span>
       </span>

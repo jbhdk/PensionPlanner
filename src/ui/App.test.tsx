@@ -276,8 +276,9 @@ describe('fladen', () => {
 
     await user.click(navigatorButton(/Frie midler/))
 
+    // Komma er decimaltegnet i felterne, som det er det i `parseNumber`.
     expect((screen.getByLabelText(/Bruttoafkast/) as HTMLInputElement).value).toBe('7')
-    expect((screen.getByLabelText(/ÅOP/) as HTMLInputElement).value).toBe('0.5')
+    expect((screen.getByLabelText(/ÅOP/) as HTMLInputElement).value).toBe('0,5')
     expect(screen.getByText('6,50 %')).toBeTruthy()
   })
 
@@ -295,6 +296,46 @@ describe('fladen', () => {
     await user.type(bruttoafkast, '10')
 
     expect(screen.getByText('9,50 %')).toBeTruthy()
+  })
+
+  it('lader et decimaltal tastes i bruttoafkast og ÅOP', async () => {
+    // Kommaet er decimaltegnet, jf. `parseNumber`. Feltet må ikke skrive
+    // brugerens tekst om, mens der tastes: "7," parser til 7, og skrev feltet
+    // sig selv tilbage til "7", ville kommaet blive ædt ved hvert tastetryk,
+    // og en sats med decimaler kunne aldrig indtastes.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan({ grossReturn: 0.07, annualCostRate: 0.005 })} />)
+
+    await user.click(navigatorButton(/Frie midler/))
+    const bruttoafkast = screen.getByLabelText(/Bruttoafkast/) as HTMLInputElement
+    await user.clear(bruttoafkast)
+    await user.type(bruttoafkast, '7,5')
+
+    expect(bruttoafkast.value).toBe('7,5')
+
+    const aaop = screen.getByLabelText(/ÅOP/) as HTMLInputElement
+    await user.clear(aaop)
+    await user.type(aaop, '0,25')
+
+    expect(aaop.value).toBe('0,25')
+    expect(screen.getByText('7,25 %')).toBeTruthy()
+  })
+
+  it('viser den nye beholdnings sats, når en anden beholdning vælges', async () => {
+    // Modstykket til testen ovenfor: talfeltet holder på sin egen tekst, mens
+    // der tastes, og må derfor ikke blive stående med den forrige beholdnings
+    // sats, når navigatoren peger et nyt sted hen.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithSecondHolding()} />)
+
+    await user.click(navigatorButton(/Frie midler/))
+    const bruttoafkast = () => screen.getByLabelText(/Bruttoafkast/) as HTMLInputElement
+    await user.clear(bruttoafkast())
+    await user.type(bruttoafkast(), '7,5')
+
+    await user.click(navigatorButton(/Anden beholdning/))
+
+    expect(bruttoafkast().value).toBe('0')
   })
 
   it('lader en beholdnings variant vælges mellem Aktieindkomst og Kapitalindkomst', async () => {

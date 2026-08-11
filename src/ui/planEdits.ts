@@ -302,6 +302,15 @@ export function parseNumber(text: string): number {
   return Number.isFinite(value) ? value : 0
 }
 
+/** Skriver et tal, som brugeren ville have tastet det: komma som decimaltegn.
+    Den nøjagtige modsatte vej af `parseNumber` — `parseNumber(formatNumber(x))`
+    er `x` — og det er den egenskab, talfeltet hviler på, når det afgør, om en
+    værdi er kommet udefra eller fra tastaturet. Uden tusindtalsseparator:
+    feltet skal kunne redigeres, ikke kun læses. */
+export function formatNumber(value: number): string {
+  return String(value).replace('.', ',')
+}
+
 /** Skifter en posts retning. En indtægtspost bærer en skattebehandling, en
     udgiftspost har ikke feltet — så retningsskiftet bygger en ny post frem
     for at sætte et felt. Behandlingen huskes ikke hen over en tur forbi
