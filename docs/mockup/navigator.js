@@ -98,7 +98,7 @@ function grupperN() {
     },
     {
       id: 'overfoersler', titel: 'Overførsler', kort: 'Overførsler', antal: OVERFOERSLER.length,
-      resume: OVERFOERSLER.length + ' faste',
+      resume: OVERFOERSLER.length + ' faste', tilfoej: '+ Overførsel',
       raekker: OVERFOERSLER.map(function (o, i) {
         return { id: 'o' + i, navn: behN(o.fra).navn + ' → ' + behN(o.til).navn, tal: KN(o.beloeb) };
       })
