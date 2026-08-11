@@ -23,7 +23,10 @@ import {
   findPerson,
   findTransfer,
   parseNumber,
+  removeEntry,
+  removeHolding,
   removePerson,
+  removeTransfer,
   withDirection,
   withEntry,
   withHolding,
@@ -157,6 +160,16 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
         title={person.name}
         subtitle={`Født ${person.birthYear} · horisont ${person.birthYear + person.horizon}`}
         onClose={onClose}
+        onDelete={
+          plan.household.persons.length > 1
+            ? () => {
+                onChange(removePerson(plan, id))
+                onClose()
+              }
+            : undefined
+        }
+        deleteLabel="Fjern person"
+        deleteHint="personens beholdninger og poster fjernes med"
       />
       <Section title="Personen">
         <TextField
@@ -217,21 +230,6 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
       <Section title="Folkepension">
         <StatePensionAgeFields plan={plan} id={id} onChange={onChange} />
       </Section>
-      {plan.household.persons.length > 1 && (
-        <Section title="Fjern">
-          <button
-            type="button"
-            className="fjern-person"
-            onClick={() => {
-              onChange(removePerson(plan, id))
-              onClose()
-            }}
-          >
-            Fjern person
-          </button>
-          <Hint>Personens beholdninger og poster fjernes med.</Hint>
-        </Section>
-      )}
     </>
   )
 }
@@ -313,7 +311,17 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
 
   return (
     <>
-      <Head title={holding.name} subtitle="Beholdning" onClose={onClose} />
+      <Head
+        title={holding.name}
+        subtitle="Beholdning"
+        onClose={onClose}
+        onDelete={() => {
+          onChange(removeHolding(plan, id))
+          onClose()
+        }}
+        deleteLabel="Fjern beholdning"
+        deleteHint="overførsler til eller fra beholdningen fjernes med"
+      />
       <Section title="Beholdningen">
         <TextField
           label="Navn"
@@ -464,6 +472,11 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
         title={entry.name}
         subtitle={`Post · ${income ? 'indtægt' : 'udgift'}`}
         onClose={onClose}
+        onDelete={() => {
+          onChange(removeEntry(plan, id))
+          onClose()
+        }}
+        deleteLabel={`Fjern ${income ? 'indtægt' : 'udgift'}`}
       />
       <Section title="Posten">
         <TextField
@@ -734,6 +747,11 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
         title={`${holdingName(transfer.from)} → ${holdingName(transfer.to)}`}
         subtitle="Overførsel"
         onClose={onClose}
+        onDelete={() => {
+          onChange(removeTransfer(plan, id))
+          onClose()
+        }}
+        deleteLabel="Fjern overførsel"
       />
       <Section title="Overførslen">
         <SelectField
@@ -843,26 +861,72 @@ function Head({
   title,
   subtitle,
   onClose,
+  onDelete,
+  deleteLabel,
+  deleteHint,
 }: {
   title: string
   subtitle: string
   onClose: () => void
+  /** Udeladt betyder, at objektet ikke kan slettes herfra — Person udelader
+      den, når husstanden kun har én tilbage. */
+  onDelete?: () => void
+  deleteLabel?: string
+  /** Uddyber, hvad der følger med i slettet, hvis andet end selve objektet —
+      vises kun i tooltippet, så den korte handling ikke drukner i tekst. */
+  deleteHint?: string
 }) {
   return (
     <>
       <div className="titel">
         {title}
-        <button
-          type="button"
-          className="luk"
-          aria-label="Luk inspektøren"
-          onClick={onClose}
-        >
-          ×
-        </button>
+        <span className="handlinger">
+          {onDelete && (
+            <>
+              <button
+                type="button"
+                className="slet"
+                aria-label={deleteLabel}
+                title={deleteHint ? `${deleteLabel} — ${deleteHint}` : deleteLabel}
+                onClick={onDelete}
+              >
+                <TrashIcon />
+              </button>
+              <span className="skl" aria-hidden="true" />
+            </>
+          )}
+          <button
+            type="button"
+            className="luk"
+            aria-label="Luk inspektøren"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </span>
       </div>
       <div className="undertitel">{subtitle}</div>
     </>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 4.5h10" />
+      <path d="M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5" />
+      <path d="M4.2 4.5l.5 8.3a1 1 0 0 0 1 .95h4.6a1 1 0 0 0 1-.95l.5-8.3" />
+      <path d="M6.5 7v4" />
+      <path d="M9.5 7v4" />
+    </svg>
   )
 }
 

@@ -537,6 +537,48 @@ describe('fladen', () => {
     expect(screen.queryByRole('button', { name: /Fjern person/ })).toBeNull()
   })
 
+  it('fjerner en beholdning igen fra dennes inspektør', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithSecondHolding()} />)
+
+    await user.click(navigatorButton(/Anden beholdning/))
+    await user.click(screen.getByRole('button', { name: /Fjern beholdning/ }))
+
+    expect(screen.queryByRole('button', { name: /Anden beholdning/ })).toBeNull()
+    // Skuffen lukker, fordi den viste beholdning ikke findes mere.
+    expect(screen.queryByLabelText(/Fjern beholdning/)).toBeNull()
+  })
+
+  it('fjerner en indtægt igen fra dennes inspektør', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan({ entries: [aSalary({ amountInRealKroner: 400_000 })] })} />)
+
+    await user.click(navigatorButton(/Løn/))
+    await user.click(screen.getByRole('button', { name: /Fjern indtægt/ }))
+
+    expect(screen.queryByRole('button', { name: /Løn/ })).toBeNull()
+  })
+
+  it('fjerner en overførsel igen fra dennes inspektør', async () => {
+    const user = userEvent.setup()
+    const plan = aPlanWithSecondHolding()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          transfers: [
+            aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 1_000 }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(navigatorButton(/Frie midler → Anden beholdning/))
+    await user.click(screen.getByRole('button', { name: /Fjern overførsel/ }))
+
+    expect(screen.queryByRole('button', { name: /Frie midler → Anden beholdning/ })).toBeNull()
+  })
+
   it('flytter en beholdning til en anden ejer via ejer-vælgeren', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlan()} />)

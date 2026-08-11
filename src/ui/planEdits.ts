@@ -139,6 +139,32 @@ export function addHolding(plan: Plan): Plan {
   }))
 }
 
+/** Fjerner beholdningen og overførslerne, der peger på den (en overførsel
+    uden begge ender ville flytte penge fra eller til et ingenting). Var
+    beholdningen bufferen, arver den første tilbageværende beholdning rollen,
+    ligesom ved `removePerson` — findes ingen, peger bufferen videre på et
+    tomrum, og resultatspalten viser det som en simuleringsfejl frem for at
+    styrte. */
+export function removeHolding(plan: Plan, id: string): Plan {
+  const persons = plan.household.persons.map((person) => ({
+    ...person,
+    holdings: person.holdings.filter((holding) => holding.id !== id),
+  }))
+  const remainingHoldingIds = persons.flatMap((person) =>
+    person.holdings.map((holding) => holding.id),
+  )
+  const buffer = remainingHoldingIds.includes(plan.buffer)
+    ? plan.buffer
+    : (remainingHoldingIds[0] ?? plan.buffer)
+
+  return {
+    ...plan,
+    buffer,
+    household: { persons },
+    transfers: plan.transfers.filter((transfer) => transfer.from !== id && transfer.to !== id),
+  }
+}
+
 function freshHoldingId(plan: Plan): string {
   const existing = new Set(
     plan.household.persons.flatMap((person) => person.holdings.map((holding) => holding.id)),
@@ -211,8 +237,16 @@ export function findEntry(plan: Plan, id: string): Entry | undefined {
   return plan.entries.find((entry) => entry.id === id)
 }
 
+export function removeEntry(plan: Plan, id: string): Plan {
+  return { ...plan, entries: plan.entries.filter((entry) => entry.id !== id) }
+}
+
 export function findTransfer(plan: Plan, id: string): Transfer | undefined {
   return plan.transfers.find((transfer) => transfer.id === id)
+}
+
+export function removeTransfer(plan: Plan, id: string): Plan {
+  return { ...plan, transfers: plan.transfers.filter((transfer) => transfer.id !== id) }
 }
 
 export function withTransfer(
