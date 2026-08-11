@@ -697,11 +697,7 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
         )}
         <Hint>
           {periodNote !== undefined && <>{periodNote} </>}
-          {entry.direction === 'Expense'
-            ? 'Udgiften står i dagens kroner og følger planens inflationsantagelse — kun indtægter har deres egen reguleringssats.'
-            : entry.recurrence.kind === 'Once'
-              ? 'Beløbet står i dagens kroner, og satsen er prisudviklingen frem til det år, posten falder — ikke en årlig gentagelse. Sat til nul bliver posten billigere, jo længere ude den ligger.'
-              : 'Reguleringssatsen er indtægtens egen og adskilt fra planens inflationsantagelse.'}
+          {regulationNote(entry)}
         </Hint>
       </Section>
     </>
@@ -731,6 +727,21 @@ function defaultRecurrence(kind: Recurrence['kind']): Recurrence {
 
 /** Den kalenderårsrække, en aldersforankret periode faktisk falder i — samme
     udledning som motoren selv bruger, jf. `periodBounds`. */
+/** Notens anden sætning: hvad beløbet fremskrives med. Ingen af de fire
+    tilfælde gentager året — det har `derivedPeriodNote` allerede sagt — og
+    ingen af dem sætter "dagens kroner" og "det års egne kroner" op mod
+    hinanden uden at forklare forskellen. */
+function regulationNote(entry: Entry): string {
+  if (entry.direction === 'Expense') {
+    return entry.recurrence.kind === 'Once'
+      ? 'Beløbet tastes i dagens kroner og følger planens inflation frem til det år — kun indtægter har deres egen reguleringssats.'
+      : 'Udgiften står i dagens kroner og følger planens inflationsantagelse — kun indtægter har deres egen reguleringssats.'
+  }
+  return entry.recurrence.kind === 'Once'
+    ? 'Beløbet tastes i dagens kroner, og satsen bærer det op til det år — den gentager ingenting. Er satsen nul, følger beløbet ikke priserne og er dermed mindre værd, jo længere ude posten ligger.'
+    : 'Reguleringssatsen er indtægtens egen og adskilt fra planens inflationsantagelse.'
+}
+
 /** Det udledte om perioden, som en sætning til noten: hvornår posten løber,
     og for en engangspost hvad den koster i det år, den falder. Begge dele
     stod før som egne værdirækker med etiketter som "til 2033" — i prosa skal
@@ -750,7 +761,7 @@ function derivedPeriodNote(plan: Plan, entry: Entry): string | undefined {
     const year = from ?? to
     if (year === undefined) return undefined
     const amount = kroner(entry.amountInRealKroner * entryProjection(entry, plan, year))
-    return `Posten falder i ${year} med ${amount} kr. i det års egne kroner.`
+    return `Posten falder i ${year} med ${amount} kr.`
   }
 
   if (entry.period.anchor !== 'PersonAge') return undefined

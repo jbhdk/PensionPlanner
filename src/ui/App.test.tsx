@@ -489,7 +489,7 @@ describe('fladen', () => {
     await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
 
     expect(
-      screen.getByText(/Posten falder i 2036 med 243\.799 kr\. i det års egne kroner\./),
+      screen.getByText(/Posten falder i 2036 med 243\.799 kr\./),
     ).toBeTruthy()
 
     // Udgiften har ikke satsfeltet — det er kun indtægter, der har et eget
