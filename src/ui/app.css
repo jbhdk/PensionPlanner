@@ -323,6 +323,10 @@ body {
   background: var(--top);
   border-left: 1px solid var(--linje);
   box-shadow: -18px 0 40px rgba(0, 0, 0, 0.45);
+  /* Skyggen er kun tænkt som dybde til venstre. Uden klipningen bløder dens
+     krumning opad forbi skuffens egen kant og ind under topbjælken, hvor den
+     ses som en tyk streg i øverste højre hjørne. */
+  clip-path: inset(0 -100px -100px -100px);
   overflow-y: auto;
   overflow-x: hidden;
   padding-bottom: 12px;
