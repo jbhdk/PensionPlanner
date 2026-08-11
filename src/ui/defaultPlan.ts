@@ -9,9 +9,6 @@ export function defaultPlan(): Plan {
     inflationAssumption: 0.02,
     section20ProjectionAssumption: 0.02,
     benefitProjectionAssumption: 0.02,
-    municipalTaxRate: 0.254,
-    churchTax: true,
-    churchTaxRate: 0.0074,
     buffer: 'free-assets',
     transfers: [],
     entries: [
@@ -48,6 +45,8 @@ export function defaultPlan(): Plan {
           birthMonth: 1,
           workEndAge: 65,
           horizon: 90,
+          municipality: 'Hvidovre',
+          churchMember: true,
           holdings: [
             {
               id: 'free-assets',

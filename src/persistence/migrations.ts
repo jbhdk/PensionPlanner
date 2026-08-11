@@ -4,10 +4,40 @@ export type Migration = {
   migrate: (data: unknown) => unknown
 }
 
-/** Kæden fra dag ét. Tom ved v1 — der er endnu ikke gemt en plan under en
-    ældre version, jf. issue #15. Et nyt skemaskifte tilføjer et led her,
-    aldrig en ombygning af et eksisterende. */
-export const migrations: Migration[] = []
+/** Kæden fra dag ét. Et nyt skemaskifte tilføjer et led her, aldrig en
+    ombygning af et eksisterende. */
+export const migrations: Migration[] = [
+  {
+    // v1 → v2, jf. issue #19: kommune- og kirkeskat flytter fra planen til
+    // hver person. En v1-plan gemte dem som frit indtastede tal på planen —
+    // migrationen kan ikke gætte, hvilken kommune et sådant tal svarede til,
+    // så hver person lander på Hvidovre og bærer kun det gamle
+    // kirkemedlemskab videre. Brugeren retter kommunen i personens
+    // inspektør, hvis Hvidovre ikke er den rigtige.
+    from: 1,
+    migrate: (data) => {
+      const plan = data as {
+        municipalTaxRate?: unknown
+        churchTax?: unknown
+        churchTaxRate?: unknown
+        household: { persons: Array<Record<string, unknown>> }
+        [key: string]: unknown
+      }
+      const { municipalTaxRate: _municipalTaxRate, churchTax, churchTaxRate: _churchTaxRate, ...rest } = plan
+
+      return {
+        ...rest,
+        household: {
+          persons: plan.household.persons.map((person) => ({
+            ...person,
+            municipality: 'Hvidovre',
+            churchMember: churchTax ?? true,
+          })),
+        },
+      }
+    },
+  },
+]
 
 /** Kører kæden fra `fromVersion` til `toVersion`, ét led ad gangen. Rent og
     uafhængigt af den rigtige kæde ovenfor, så mekanikken kan bevises med et

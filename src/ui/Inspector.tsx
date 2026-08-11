@@ -12,6 +12,7 @@ import type {
   TaxTreatment,
   Timing,
 } from '../engine/plan'
+import { latestRateYear } from '../engine/rates/rates'
 import { periodBounds } from '../engine/simulate'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
 import { procent } from './format'
@@ -142,35 +143,6 @@ function PlanFields({ plan, onChange, onClose }: FieldsProps) {
           indeks, uafhængigt af inflationsantagelsen.
         </Hint>
       </Section>
-      <Section title="Skatten">
-        <NumberField
-          label="Kommuneskat"
-          unit="%"
-          value={asPercent(plan.municipalTaxRate)}
-          onChange={(percent) =>
-            onChange({ ...plan, municipalTaxRate: percent / 100 })
-          }
-        />
-        <CheckboxField
-          label="Betaler kirkeskat"
-          checked={plan.churchTax}
-          onChange={(churchTax) => onChange({ ...plan, churchTax })}
-        />
-        {plan.churchTax && (
-          <NumberField
-            label="Kirkeskat"
-            unit="%"
-            value={asPercent(plan.churchTaxRate)}
-            onChange={(percent) =>
-              onChange({ ...plan, churchTaxRate: percent / 100 })
-            }
-          />
-        )}
-        <Hint>
-          Begge procenter afhænger af, hvor husstanden bor, og står derfor på
-          planen frem for i satsåret.
-        </Hint>
-      </Section>
     </>
   )
 }
@@ -218,6 +190,27 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
           }
         />
         <Hint>Simuleringen løber til og med det år, personen fylder så mange år.</Hint>
+      </Section>
+      <Section title="Skat">
+        <SelectField
+          label="Kommune"
+          value={person.municipality}
+          options={Object.keys(latestRateYear().municipalTax.rates)}
+          onChange={(municipality) =>
+            onChange(withPerson(plan, id, (p) => ({ ...p, municipality })))
+          }
+        />
+        <CheckboxField
+          label="Medlem af folkekirken"
+          checked={person.churchMember}
+          onChange={(churchMember) =>
+            onChange(withPerson(plan, id, (p) => ({ ...p, churchMember })))
+          }
+        />
+        <Hint>
+          Kommune- og kirkeskatteprocenten hører til satsåret og slås op efter
+          bopælskommunen — ikke tastet ind her.
+        </Hint>
       </Section>
       <Section title="Folkepension">
         <StatePensionAgeFields plan={plan} id={id} onChange={onChange} />

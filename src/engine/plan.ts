@@ -12,6 +12,11 @@ export type PersonId = string
 export type TransferId = string
 export type EntryId = string
 
+/** Den kommune en person er bosat i. En nøgle ind i satsårets
+    `RateYear.municipalTax`, ikke et tal skrevet direkte på personen — kommune-
+    og kirkeskatteprocenten slås op for det simuleringsår, der regnes på. */
+export type Municipality = string
+
 /** Beskatningsformen er beholdningens akse. Etape 1 kender kun de to frie. */
 export type HoldingVariant = 'ShareIncome' | 'CapitalIncome'
 
@@ -42,6 +47,12 @@ export type Person = {
   statePensionAgeOverride?: number
   /** Alderen simuleringen løber til og med. */
   horizon: number
+  /** Bopælskommunen. Kommune- og kirkeskatteprocenten hører til satsåret og
+      slås op dér for hvert simuleringsår — ikke gemt som et tal her. */
+  municipality: Municipality
+  /** Om personen betaler kirkeskat. Uafhængig af `municipality`: to personer
+      i samme kommune kan have hver sit svar. */
+  churchMember: boolean
   holdings: Holding[]
 }
 
@@ -135,12 +146,6 @@ export type Plan = {
   household: Household
   entries: Entry[]
   transfers: Transfer[]
-  /** Andel pr. år, ikke procent: 0,254 er 25,40 %. Hører til husstanden og
-      ikke til satsåret, fordi den afhænger af, hvor man bor. */
-  municipalTaxRate: number
-  /** Om husstanden betaler kirkeskat. Satsen huskes, når den slås fra. */
-  churchTax: boolean
-  churchTaxRate: number
   /** Beholdningen årets restpost lander på. Præcis én, og pegeren er påkrævet. */
   buffer: HoldingId
 }

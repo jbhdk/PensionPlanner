@@ -278,10 +278,10 @@ describe('simulate', () => {
     const years = simulateChecked(plan)
 
     // Samme lønmodtager som facitcasen i skattemodulet: 600.000 kr. brutto,
-    // 25,40 % kommuneskat og 0,74 % kirkeskat.
+    // Hvidovres 25,40 % kommuneskat og 0,72 % kirkeskat.
     expect(years[0]!.income).toBeCloseTo(600_000, 6)
-    expect(years[0]!.tax).toBeCloseTo(220_591.89, 2)
-    expect(bufferBalance(years[0]!)).toBeCloseTo(1_000_000 + 600_000 - 220_591.89, 2)
+    expect(years[0]!.tax).toBeCloseTo(220_505.59, 2)
+    expect(bufferBalance(years[0]!)).toBeCloseTo(1_000_000 + 600_000 - 220_505.59, 2)
   })
 
   it('lader en skattefri indtægtspost øge formuen uden at udløse skat', () => {
@@ -296,14 +296,14 @@ describe('simulate', () => {
     expect(bufferBalance(years[0]!)).toBeCloseTo(1_900_000, 6)
   })
 
-  it('regner uden kirkeskat, når husstanden ikke betaler den', () => {
+  it('regner uden kirkeskat, når personen ikke er medlem af folkekirken', () => {
     const entries = [aSalary({ amountInRealKroner: 600_000 })]
     const medlem = simulateChecked(aPlan({ entries }))
-    const udenfor = simulateChecked(aPlan({ entries, churchTax: false }))
+    const udenfor = simulateChecked(aPlan({ entries, churchMember: false }))
 
-    expect(medlem[0]!.persons[0]!.tax.layers.churchTax.amount).toBeCloseTo(3_193.1, 2)
+    expect(medlem[0]!.persons[0]!.tax.layers.churchTax.amount).toBeCloseTo(3_106.8, 2)
     expect(udenfor[0]!.persons[0]!.tax.layers.churchTax.amount).toBe(0)
-    expect(udenfor[0]!.tax).toBeCloseTo(medlem[0]!.tax - 3_193.1, 2)
+    expect(udenfor[0]!.tax).toBeCloseTo(medlem[0]!.tax - 3_106.8, 2)
   })
 
   it('lader progressionslagene og loftet slå igennem på årets skat', () => {
@@ -315,11 +315,11 @@ describe('simulate', () => {
     const years = simulateChecked(plan)
 
     // Samme lønmodtager som facitcasen, hvor det skrå skatteloft binder:
-    // 950.000 kr. brutto, 25,40 % kommuneskat og 0,74 % kirkeskat.
+    // 950.000 kr. brutto, Hvidovres 25,40 % kommuneskat og 0,72 % kirkeskat.
     const { layers } = years[0]!.persons[0]!.tax
     expect(layers.middleBracketTax.amount).toBeCloseTo(16_668.48, 2)
     expect(layers.topBracketTax.amount).toBeCloseTo(6_880.76, 2)
-    expect(years[0]!.tax).toBeCloseTo(394_984.13, 2)
+    expect(years[0]!.tax).toBeCloseTo(394_833.43, 2)
   })
 
   it('bærer hvert skattelag for sig pr. person og stempler satsgrundlaget', () => {
@@ -342,7 +342,7 @@ describe('simulate', () => {
       labourMarketContribution: expect.closeTo(48_000, 2),
       bottomBracketTax: expect.closeTo(59_797.79, 2),
       municipalTax: expect.closeTo(109_601, 2),
-      churchTax: expect.closeTo(3_193.1, 2),
+      churchTax: expect.closeTo(3_106.8, 2),
       // 552.000 i personlig indkomst ligger under mellemskattegrænsen. De tre
       // progressionslag står som nul frem for at mangle — hvert lag er der
       // altid, så et lag ikke kan blive glemt i summen.
@@ -354,8 +354,8 @@ describe('simulate', () => {
     // Begge fradrag er i loft ved 600.000, og personlig indkomst ligger
     // under mellemskattegrænsen: næste krone koster kun AM-bidrag, bundskat,
     // kommune- og kirkeskat, ingen af dem loftbegrænsede ved denne kommunesats.
-    // 8 % + 92 % × (12,01 % + 25,40 % + 0,74 %) = 43,098 %.
-    expect(year.persons[0]!.marginalTaxRate).toBeCloseTo(0.43098, 5)
+    // 8 % + 92 % × (12,01 % + 25,40 % + 0,72 %) = 43,0796 %.
+    expect(year.persons[0]!.marginalTaxRate).toBeCloseTo(0.430796, 5)
   })
 
   it('krediterer nettoafkastet på beholdningens primosaldo, når planen ingen strømme har', () => {
@@ -382,11 +382,11 @@ describe('simulate', () => {
     // Bundskat    60.000 × 12,01 %  = 7.206,00
     // Topskat      5.000 ×  4,59 %  =   229,50
     // Kommuneskat  5.900 × 25,40 %  = 1.498,60
-    // Kirkeskat    5.900 ×  0,74 %  =    43,66
+    // Kirkeskat    5.900 ×  0,72 %  =    42,48
     //                                 ─────────
-    //                                 8.977,76
-    expect(years[0]!.tax).toBeCloseTo(8_977.76, 2)
-    expect(bufferBalance(years[0]!)).toBeCloseTo(1_000_000 + 60_000 - 8_977.76, 2)
+    //                                 8.976,58
+    expect(years[0]!.tax).toBeCloseTo(8_976.58, 2)
+    expect(bufferBalance(years[0]!)).toBeCloseTo(1_000_000 + 60_000 - 8_976.58, 2)
   })
 
   it('fører afkastet af en CapitalIncome-beholdning som ejerens kapitalindkomst', () => {
@@ -559,6 +559,8 @@ describe('simulate', () => {
             birthMonth: 6,
             workEndAge: 58,
             horizon: 90,
+            municipality: 'Hvidovre',
+            churchMember: true,
             holdings: [
               {
                 id: 'marias-aktier',
@@ -602,6 +604,83 @@ describe('simulate', () => {
     // Og de nedsætter den skattepligtige indkomst, ikke den personlige.
     expect(tax.personalIncome).toBeCloseTo(552_000, 2)
     expect(tax.taxableIncome).toBeCloseTo(485_600, 2)
+  })
+})
+
+describe('kommune- og kirkeskat', () => {
+  it('slår personens kommune op i satsåret og beskatter med kommunens sats', () => {
+    // Hvidovre 2026: 25,40 % kommuneskat, 0,72 % kirkeskat, jf.
+    // docs/satser/2026.md. Samme lønmodtager som facitcasen i skattemodulet,
+    // men kirkeskatten er nu kommunens egen sats frem for et tal på planen.
+    const plan = aPlan({
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      municipality: 'Hvidovre',
+      churchMember: true,
+    })
+
+    const year = simulateChecked(plan)[0]!
+    const { layers } = year.persons[0]!.tax
+
+    expect(layers.municipalTax.amount).toBeCloseTo(109_601, 2)
+    expect(layers.churchTax.amount).toBeCloseTo(3_106.8, 2)
+  })
+
+  it('beskatter to personer i samme husstand efter hver sin kommune', () => {
+    // Jesper bor i Hvidovre (25,40 % / 0,72 %), Maria i København
+    // (23,39 % / 0,80 %) — samme løn, forskellig kommune, jf.
+    // docs/satser/2026.md. Beviser opslaget er pr. person, ikke pr. husstand.
+    const base = aPlan({
+      entries: [aSalary({ amountInRealKroner: 600_000, owner: 'jesper' })],
+      municipality: 'Hvidovre',
+      churchMember: true,
+    })
+    const plan: Plan = {
+      ...base,
+      entries: [
+        ...base.entries,
+        { ...aSalary({ amountInRealKroner: 600_000, owner: 'maria' }), id: 'salary-maria' },
+      ],
+      household: {
+        persons: [
+          ...base.household.persons,
+          {
+            id: 'maria',
+            name: 'Maria',
+            birthYear: 1973,
+            birthMonth: 6,
+            workEndAge: 58,
+            horizon: 90,
+            municipality: 'København',
+            churchMember: true,
+            holdings: [],
+          },
+        ],
+      },
+    }
+
+    const year = simulateChecked(plan)[0]!
+    const jesper = year.persons.find((p) => p.person === 'jesper')!
+    const maria = year.persons.find((p) => p.person === 'maria')!
+
+    expect(jesper.tax.layers.municipalTax.amount).toBeCloseTo(109_601, 2)
+    expect(jesper.tax.layers.churchTax.amount).toBeCloseTo(3_106.8, 2)
+    expect(maria.tax.layers.municipalTax.amount).toBeCloseTo(100_927.85, 2)
+    expect(maria.tax.layers.churchTax.amount).toBeCloseTo(3_452, 2)
+  })
+
+  it('holder kommune- og kirkeskatteprocenten uændret i et fremskrevet simuleringsår', () => {
+    // birthYear 1973 + horizon 54 = 2027: 2026 er kendt, 2027 er fremskrevet.
+    // Kommune- og kirkeskatteprocenten fremskrives efter sidst kendte
+    // satsår med samme mekanisme som de øvrige procentsatser — den holdes
+    // konstant, jf. issue #19.
+    const plan = aPlan({ horizon: 54, entries: [aSalary({ amountInRealKroner: 600_000 })] })
+
+    const years = simulateChecked(plan)
+    const known = years[0]!.persons[0]!.tax.layers
+    const projected = years[1]!.persons[0]!.tax.layers
+
+    expect(projected.municipalTax.rate).toBeCloseTo(known.municipalTax.rate, 10)
+    expect(projected.churchTax.rate).toBeCloseTo(known.churchTax.rate, 10)
   })
 })
 

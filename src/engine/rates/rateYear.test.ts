@@ -47,5 +47,9 @@ describe('satsår 2026', () => {
     expect(rateYear2026.thresholds.unconfirmed).toEqual([])
     expect(rateYear2026.bracketTaxRates.unconfirmed).toEqual([])
     expect(rateYear2026.allowanceRates.unconfirmed).toEqual([])
+
+    // Kommune- og kirkeskatteprocenterne er læst direkte af Skatteministeriets
+    // egen Excel-eksport, ikke krydstjekket sekundært, så heller ikke den er ⚠︎.
+    expect(rateYear2026.municipalTax.unconfirmed).toEqual([])
   })
 })

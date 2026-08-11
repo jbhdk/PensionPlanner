@@ -84,7 +84,7 @@ function simulateYear(
   const capitalIncomeByPerson = incomeByVariant(plan, returns, 'CapitalIncome')
 
   const assessments = plan.household.persons.map((person) =>
-    assess(plan, entries, person, rates, capitalIncomeByPerson.get(person.id)!),
+    assess(entries, person, rates, capitalIncomeByPerson.get(person.id)!),
   )
   const personalTax = assessments.reduce((sum, { tax }) => sum + totalTax(tax), 0)
   const shareTax = shareIncomeTax(
@@ -213,11 +213,10 @@ export function returnWeight(timing: Timing): number {
   return timing === 'Even' ? 0.5 : (12 - timing + 1) / 12
 }
 
-/** Skatteopgørelsen for én person i ét år. Kirkeskatten slås fra ved at regne
-    med nul — satsen på planen står urørt, så den er der igen, hvis den slås
-    til. */
+/** Skatteopgørelsen for én person i ét år. Kommune- og kirkeskatteprocenten
+    slås op i satsåret efter personens bopælskommune. Kirkeskatten slås fra
+    ved at regne med nul, når personen ikke er medlem af folkekirken. */
 function assess(
-  plan: Plan,
   entries: ActiveEntry[],
   person: Person,
   rates: RateYear,
@@ -232,10 +231,11 @@ function assess(
     )
     .reduce((sum, { amount }) => sum + amount, 0)
 
+  const municipalTax = rates.municipalTax.rates[person.municipality]!
   const input = {
     earnedIncome,
-    municipalTaxRate: plan.municipalTaxRate,
-    churchTaxRate: plan.churchTax ? plan.churchTaxRate : 0,
+    municipalTaxRate: municipalTax.municipalTaxRate,
+    churchTaxRate: person.churchMember ? municipalTax.churchTaxRate : 0,
     capitalIncome,
   }
 

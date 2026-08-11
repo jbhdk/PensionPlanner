@@ -19,6 +19,8 @@ function aTwoPersonPlan(): Plan {
           birthMonth: 1,
           workEndAge: 65,
           horizon: 90,
+          municipality: 'Hvidovre',
+          churchMember: true,
           holdings: [
             {
               id: 'marias-konto',

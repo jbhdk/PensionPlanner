@@ -208,7 +208,7 @@ describe('fladen', () => {
     expect(behandling.value).toBe('Arbejdsindkomst')
   })
 
-  it('sætter kommuneskat og kirkeskat i planafsnittet, og årstabellen følger med', async () => {
+  it('sætter kommune og kirkemedlemskab i personens inspektør, og årstabellen følger med', async () => {
     const user = userEvent.setup()
     render(
       <App
@@ -227,19 +227,19 @@ describe('fladen', () => {
       within(within(screen.getByRole('table')).getAllByRole('row')[1]!)
         .getAllByRole('cell')[4]!.textContent
 
-    expect(skat()).toBe('-220.592')
+    // Fixturens Jesper bor i Hvidovre og er medlem af folkekirken.
+    expect(skat()).toBe('-220.506')
 
-    await user.click(screen.getByRole('button', { name: /Ophør som 58/ }))
-    const kommune = screen.getByLabelText(/Kommuneskat/)
-    await user.clear(kommune)
-    await user.type(kommune, '20')
+    await user.click(screen.getByRole('button', { name: /^Jesper/ }))
+    await user.selectOptions(screen.getByLabelText(/Kommune/), 'København')
 
-    // 431.500 kr. i skattepligtig indkomst efter personfradrag, nu til 20 %
-    // frem for 25,40 %.
-    expect(skat()).toBe('-197.291')
+    // 431.500 kr. i skattepligtig indkomst efter personfradrag: 23,39 % i
+    // kommuneskat og 0,80 % i kirkeskat i København, mod Hvidovres 25,40 %
+    // og 0,72 %, jf. docs/satser/2026.md.
+    expect(skat()).toBe('-212.178')
 
-    await user.click(screen.getByLabelText(/Betaler kirkeskat/))
-    expect(skat()).toBe('-194.098')
+    await user.click(screen.getByLabelText(/Medlem af folkekirken/))
+    expect(skat()).toBe('-208.726')
   })
 
   it('møder brugeren med en skattekolonne, der ikke længere er nul', async () => {
@@ -980,15 +980,15 @@ describe('fladen', () => {
   })
 
   it('viser skattelagene pr. person som en lodret opstilling af grundlag, sats og beløb', async () => {
-    // Samme tal som facitcasen "lønmodtager under mellemskattegrænsen,
-    // 600.000 kr. brutto" i workedExamples.ts.
+    // Samme lønindkomst som facitcasen "lønmodtager under
+    // mellemskattegrænsen, 600.000 kr. brutto" i workedExamples.ts, men
+    // kirkeskatten er nu Hvidovres egen sats, jf. docs/satser/2026.md.
     const user = userEvent.setup()
     const plan = aPlan({
       startYear: 2026,
       entries: [aSalary({ amountInRealKroner: 600_000 })],
-      municipalTaxRate: 0.254,
-      churchTax: true,
-      churchTaxRate: 0.0074,
+      municipality: 'Hvidovre',
+      churchMember: true,
     })
     render(<App initialPlan={plan} />)
     await showYearTable(user)
@@ -1010,14 +1010,14 @@ describe('fladen', () => {
     expect(cells('AM-bidrag')).toEqual(['AM-bidrag', '600.000', '8,00 %', '48.000'])
     expect(cells('Bundskat')).toEqual(['Bundskat', '497.900', '12,01 %', '59.798'])
     expect(cells('Kommuneskat')).toEqual(['Kommuneskat', '431.500', '25,40 %', '109.601'])
-    expect(cells('Kirkeskat')).toEqual(['Kirkeskat', '431.500', '0,74 %', '3.193'])
-    expect(cells('Skat i alt')).toEqual(['Skat i alt', '', '', '220.592'])
+    expect(cells('Kirkeskat')).toEqual(['Kirkeskat', '431.500', '0,72 %', '3.107'])
+    expect(cells('Skat i alt')).toEqual(['Skat i alt', '', '', '220.506'])
 
-    // 8 % AM-bidrag + 92 % × (12,01 % bund + 25,40 % kommune + 0,74 % kirke)
+    // 8 % AM-bidrag + 92 % × (12,01 % bund + 25,40 % kommune + 0,72 % kirke)
     // — begge fradrag er i loft ved 600.000, og indkomsten ligger under
     // mellemskattegrænsen, så ingen af dem rører næste krone.
     expect(within(blok).getByText('Marginalskat')).toBeTruthy()
-    expect(within(blok).getByText('43,10 %')).toBeTruthy()
+    expect(within(blok).getByText('43,08 %')).toBeTruthy()
   })
 
   it('viser primosaldo, vægtet strøm, nettoafkastsats og afkast pr. beholdning', async () => {

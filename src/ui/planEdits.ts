@@ -69,6 +69,8 @@ export function addPerson(plan: Plan): Plan {
           birthMonth: 1,
           workEndAge: 65,
           horizon: 90,
+          municipality: 'Hvidovre',
+          churchMember: true,
           holdings: [],
         },
       ],

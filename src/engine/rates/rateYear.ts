@@ -1,4 +1,4 @@
-import type { Nominal, SimulationYear } from '../plan'
+import type { Municipality, Nominal, SimulationYear } from '../plan'
 
 /** En blok satsdata med den kilde, den er hentet fra.
 
@@ -72,6 +72,20 @@ export type AllowanceRates = {
   extraPensionAllowanceLate: number
 }
 
+/** Kommune- og kirkeskatteprocenten for én kommune. Fastsat af kommunen selv
+    år for år, jf. `Municipality`. */
+export type MunicipalTaxRates = {
+  municipalTaxRate: number
+  churchTaxRate: number
+}
+
+/** Kommunerne slås op under `rates`, ikke direkte på `Sourced<MunicipalTax>`
+    selv — et indeks-signatur-felt kan ikke sameksistere med de navngivne
+    `source`/`unconfirmed`-felter, `Sourced<T>` lægger til. */
+export type MunicipalTax = {
+  rates: Record<Municipality, MunicipalTaxRates>
+}
+
 export type CivilStatus = 'Single' | 'WithNonPensioner' | 'WithPensioner'
 
 /** Aftrapningen af pensionstillægget for én civilstand.
@@ -96,8 +110,7 @@ export type StatePension = {
 }
 
 /** Et komplet sæt officielle satser for ét kalenderår. Delt referencedata,
-    aldrig en del af en plan, jf. ADR-0005. Kommune- og kirkeskatteprocent
-    står derfor ikke her — de er felter på planen. */
+    aldrig en del af en plan, jf. ADR-0005. */
 export type RateYear = {
   year: SimulationYear
   /** Hvornår tallene sidst blev efterset mod kilderne. */
@@ -108,4 +121,8 @@ export type RateYear = {
   thresholds: Sourced<Thresholds>
   allowanceRates: Sourced<AllowanceRates>
   statePension: Sourced<StatePension>
+  /** Kommune- og kirkeskatteprocenten pr. kommune. Kun de kommuner, der er
+      lagt ind som fixture-/facitcasedata — den fulde tabel over alle knap 98
+      kommuner er en afgrænset opgave for sig. */
+  municipalTax: Sourced<MunicipalTax>
 }

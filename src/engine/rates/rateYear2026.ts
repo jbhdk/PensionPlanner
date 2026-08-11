@@ -69,6 +69,15 @@ export const rateYear2026: RateYear = {
     extraPensionAllowanceLate: 0.32,
   },
 
+  municipalTax: {
+    source: 'https://skm.dk/media/0oia30i5/kommuneskattesatser_2026.xlsx',
+    unconfirmed: [],
+    rates: {
+      'København': { municipalTaxRate: 0.2339, churchTaxRate: 0.008 },
+      Hvidovre: { municipalTaxRate: 0.254, churchTaxRate: 0.0072 },
+    },
+  },
+
   statePension: {
     source:
       'https://www.borger.dk/pension-og-efterloen/Folkepension-oversigt/foer-du-gaar-paa-folkepension/Folkepension-grundbeloeb-pensionstillaeg',

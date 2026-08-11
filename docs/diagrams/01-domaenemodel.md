@@ -15,9 +15,6 @@ classDiagram
         +inflationAssumption
         +s20Projection
         +benefitRegulation
-        +municipalTaxRate
-        +churchTax
-        +churchTaxRate
         +buffer
     }
 
@@ -30,6 +27,8 @@ classDiagram
         +statePensionAgeOverride
         +statePensionAge()
         +horizon
+        +municipality
+        +churchMember
     }
 
     class Holding {

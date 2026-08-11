@@ -1,6 +1,7 @@
 import type {
   Entry,
   HoldingVariant,
+  Municipality,
   Period,
   Plan,
   Recurrence,
@@ -25,9 +26,8 @@ type Options = {
   annualCostRate?: number
   entries?: Entry[]
   transfers?: Transfer[]
-  municipalTaxRate?: number
-  churchTax?: boolean
-  churchTaxRate?: number
+  municipality?: Municipality
+  churchMember?: boolean
 }
 
 /** Hele horisonten, hvert år — sådan en post løber, med mindre testen
@@ -38,8 +38,9 @@ const annually: Recurrence = { kind: 'Annual' }
 /** Den tyndeste gyldige plan: én person, én beholdning der er buffer, ingen
     poster. Testene skruer på det, de handler om, og lader resten stå.
 
-    Kommune- og kirkeskatteprocenten er den samme som i skattemodulets
-    facitcase, så en lønpost her og en opgørelse dér kan sammenlignes. */
+    Bopælskommunen er Hvidovre, den samme kommuneskat som i skattemodulets
+    facitcase, så en lønpost her og en opgørelse dér kan sammenlignes — jf.
+    docs/satser/2026.md. */
 export function aPlan(options: Options = {}): Plan {
   const {
     startYear = 2026,
@@ -56,9 +57,8 @@ export function aPlan(options: Options = {}): Plan {
     annualCostRate = 0,
     entries = [],
     transfers = [],
-    municipalTaxRate = 0.254,
-    churchTax = true,
-    churchTaxRate = 0.0074,
+    municipality = 'Hvidovre',
+    churchMember = true,
   } = options
 
   return {
@@ -70,9 +70,6 @@ export function aPlan(options: Options = {}): Plan {
     buffer: 'free-assets',
     entries,
     transfers,
-    municipalTaxRate,
-    churchTax,
-    churchTaxRate,
     household: {
       persons: [
         {
@@ -82,6 +79,8 @@ export function aPlan(options: Options = {}): Plan {
           birthMonth,
           workEndAge,
           horizon,
+          municipality,
+          churchMember,
           holdings: [
             {
               id: 'free-assets',
