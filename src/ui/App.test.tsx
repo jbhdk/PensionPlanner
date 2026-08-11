@@ -13,7 +13,7 @@ function aThreeYearPlan() {
     horizon: 55,
     balance: 1_000_000,
     inflationAssumption: 0.02,
-    entries: [anExpense({ amountInRealKroner: 40_000 })],
+    entries: [anExpense({ amountInRealKroner: 40_000, regulationRate: 0.02 })],
   })
 }
 
@@ -204,6 +204,116 @@ describe('fladen', () => {
 
     await user.selectOptions(forfald, 'Juni')
     expect(forfald.value).toBe('Juni')
+  })
+
+  it('lader forankringen vælges, og periodefelterne skifter mellem årstal og aldre', async () => {
+    const user = userEvent.setup()
+    render(
+      <App initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })} />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    expect(screen.getByLabelText(/Fra \(år\)/)).toBeTruthy()
+    expect(screen.queryByLabelText(/Fra \(alder\)/)).toBeNull()
+
+    await user.selectOptions(screen.getByLabelText(/Forankring/), 'Alder')
+
+    expect(screen.queryByLabelText(/Fra \(år\)/)).toBeNull()
+    expect(screen.getByLabelText(/Fra \(alder\)/)).toBeTruthy()
+  })
+
+  it('spørger kun om N, når gentagelsen er "Hvert N. år"', async () => {
+    const user = userEvent.setup()
+    render(
+      <App initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })} />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    expect(screen.queryByLabelText(/Hvert/)).toBeNull()
+
+    await user.selectOptions(screen.getByLabelText(/Gentagelse/), 'Hvert N. år')
+    expect(screen.getByLabelText(/Hvert/)).toBeTruthy()
+
+    await user.selectOptions(screen.getByLabelText(/Gentagelse/), 'Én gang')
+    expect(screen.queryByLabelText(/Hvert/)).toBeNull()
+  })
+
+  it('lader postens reguleringssats redigeres uafhængigt af planens inflation', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          inflationAssumption: 0.02,
+          entries: [anExpense({ amountInRealKroner: 40_000, regulationRate: 0.03 })],
+        })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    const regulering = screen.getByLabelText(/Reguleringssats/) as HTMLInputElement
+    expect(regulering.value).toBe('3')
+
+    await user.click(screen.getByRole('button', { name: /Ophør som 58/ }))
+    expect((screen.getByLabelText(/Inflation/) as HTMLInputElement).value).toBe('2')
+
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.clear(screen.getByLabelText(/Reguleringssats/))
+    await user.type(screen.getByLabelText(/Reguleringssats/), '5')
+    expect((screen.getByLabelText(/Reguleringssats/) as HTMLInputElement).value).toBe('5')
+
+    await user.click(screen.getByRole('button', { name: /Ophør som 58/ }))
+    expect((screen.getByLabelText(/Inflation/) as HTMLInputElement).value).toBe('2')
+  })
+
+  it('viser en aldersforankret periode som de årstal, den faktisk falder i', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          startYear: 2026,
+          birthYear: 1973,
+          entries: [
+            anExpense({
+              amountInRealKroner: 40_000,
+              period: { anchor: 'PersonAge', from: 70, to: 80 },
+            }),
+          ],
+        })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+
+    // Født 1973: alder 70 falder i 2043, alder 80 i 2053.
+    expect(screen.getByText('2043–2053')).toBeTruthy()
+  })
+
+  it('lader et periodeendepunkt sættes til erhvervsophør via afkrydsningsfeltet', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          startYear: 2026,
+          birthYear: 1973,
+          workEndAge: 60,
+          entries: [anExpense({ amountInRealKroner: 40_000 })],
+        })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.selectOptions(screen.getByLabelText(/Forankring/), 'Alder')
+
+    const til = screen.getByLabelText(/Til \(alder\)/) as HTMLInputElement
+    // "Fra" og "Til" har hver sit afkrydsningsfelt — "Til" er det andet.
+    const [, tilErhvervsophoer] = screen.getAllByRole('checkbox', {
+      name: /erhvervsophør/i,
+    })
+    await user.click(tilErhvervsophoer!)
+
+    expect(til.disabled).toBe(true)
+    // Født 1973, erhvervsophør 60 falder i 2033.
+    expect(screen.getByText('til 2033')).toBeTruthy()
   })
 
   it('viser posternes nettovirkning pr. år i navigatorens resumé', () => {

@@ -50,11 +50,134 @@ describe('simulate', () => {
     expect(bufferBalance(years[1]!)).toBe(920_000)
   })
 
-  it('fremskriver postens beløb fra dagens kroner til løbende priser', () => {
+  it('lader en engangsudgift falde i ét år alene, når gentagelsen er "Once"', () => {
+    const plan = aPlan({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      entries: [
+        anExpense({
+          amountInRealKroner: 320_000,
+          period: { anchor: 'CalendarYear', from: 2029 },
+          recurrence: { kind: 'Once' },
+        }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+
+    expect(years.find((y) => y.year === 2028)!.expenses).toBe(0)
+    expect(years.find((y) => y.year === 2029)!.expenses).toBe(320_000)
+    expect(years.find((y) => y.year === 2030)!.expenses).toBe(0)
+  })
+
+  it('summerer to overlappende poster korrekt i de år, hvor begges perioder dækker', () => {
+    const plan = aPlan({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      entries: [
+        anExpense({
+          amountInRealKroner: 100_000,
+          period: { anchor: 'CalendarYear', from: 2026, to: 2035 },
+        }),
+        anExpense({
+          amountInRealKroner: 60_000,
+          period: { anchor: 'CalendarYear', from: 2030 },
+        }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+    const expensesIn = (year: number) => years.find((y) => y.year === year)!.expenses
+
+    expect(expensesIn(2028)).toBe(100_000)
+    expect(expensesIn(2032)).toBe(160_000)
+    expect(expensesIn(2040)).toBe(60_000)
+  })
+
+  it('lader en post med "Hvert N. år" falde med det interval, uden at ramme årene imellem', () => {
+    const plan = aPlan({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      entries: [
+        anExpense({
+          amountInRealKroner: 420_000,
+          period: { anchor: 'CalendarYear', from: 2028 },
+          recurrence: { kind: 'EveryNYears', n: 8 },
+        }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+    const expensesIn = (year: number) => years.find((y) => y.year === year)!.expenses
+
+    expect(expensesIn(2028)).toBe(420_000)
+    expect(expensesIn(2031)).toBe(0)
+    expect(expensesIn(2036)).toBe(420_000)
+  })
+
+  it('forankrer en post til en fast alder, så perioden følger personens fødselsår', () => {
     const plan = aPlan({
       startYear: 2026,
-      inflationAssumption: 0.02,
-      entries: [anExpense({ amountInRealKroner: 40_000 })],
+      birthYear: 1973,
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      entries: [
+        anExpense({
+          amountInRealKroner: 110_000,
+          period: { anchor: 'PersonAge', from: 70, to: 80 },
+        }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+    const expensesIn = (year: number) => years.find((y) => y.year === year)!.expenses
+
+    // Jesper er født 1973, så alder 70 falder i 2043 og alder 80 i 2053.
+    expect(expensesIn(2042)).toBe(0)
+    expect(expensesIn(2043)).toBe(110_000)
+    expect(expensesIn(2053)).toBe(110_000)
+    expect(expensesIn(2054)).toBe(0)
+  })
+
+  it('flytter en aldersforankret post, der peger på erhvervsophør, når workEndAge ændres — uden at posten redigeres', () => {
+    const entries = [
+      aSalary({
+        amountInRealKroner: 600_000,
+        period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+      }),
+    ]
+    const stopperTidligt = aPlan({
+      startYear: 2026,
+      birthYear: 1973,
+      workEndAge: 58,
+      inflationAssumption: 0,
+      entries,
+    })
+    const stopperSent = aPlan({
+      startYear: 2026,
+      birthYear: 1973,
+      workEndAge: 65,
+      inflationAssumption: 0,
+      entries,
+    })
+
+    const tidligt = simulateChecked(stopperTidligt)
+    const sent = simulateChecked(stopperSent)
+
+    // Født 1973: alder 58 falder i 2031, alder 65 i 2038 — samme post, ingen
+    // redigering, kun workEndAge der flytter.
+    expect(tidligt.find((y) => y.year === 2031)!.income).toBeCloseTo(600_000, 6)
+    expect(tidligt.find((y) => y.year === 2032)!.income).toBe(0)
+    expect(sent.find((y) => y.year === 2031)!.income).toBeCloseTo(600_000, 6)
+    expect(sent.find((y) => y.year === 2038)!.income).toBeCloseTo(600_000, 6)
+    expect(sent.find((y) => y.year === 2039)!.income).toBe(0)
+  })
+
+  it('fremskriver postens beløb fra dagens kroner til løbende priser efter dens egen reguleringssats', () => {
+    const plan = aPlan({
+      startYear: 2026,
+      inflationAssumption: 0,
+      entries: [anExpense({ amountInRealKroner: 40_000, regulationRate: 0.02 })],
     })
 
     const years = simulateChecked(plan)
@@ -367,6 +490,7 @@ describe('simulate', () => {
             id: 'maria',
             name: 'Maria',
             birthYear: 1973,
+            workEndAge: 58,
             horizon: 90,
             holdings: [
               {

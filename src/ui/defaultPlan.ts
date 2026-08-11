@@ -19,6 +19,9 @@ export function defaultPlan(): Plan {
         owner: 'person-1',
         direction: 'Expense',
         timing: 'Even',
+        period: { anchor: 'CalendarYear' },
+        recurrence: { kind: 'Annual' },
+        regulationRate: 0.02,
       },
       {
         id: 'salary',
@@ -28,6 +31,9 @@ export function defaultPlan(): Plan {
         direction: 'Income',
         taxTreatment: 'EarnedIncome',
         timing: 'Even',
+        period: { anchor: 'CalendarYear' },
+        recurrence: { kind: 'Annual' },
+        regulationRate: 0.02,
       },
     ],
     household: {
@@ -36,6 +42,7 @@ export function defaultPlan(): Plan {
           id: 'person-1',
           name: 'Person 1',
           birthYear: 1973,
+          workEndAge: 65,
           horizon: 90,
           holdings: [
             {

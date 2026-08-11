@@ -29,6 +29,10 @@ export type Person = {
   id: PersonId
   name: string
   birthYear: number
+  /** Det år personen holder op med at arbejde. En fri beslutning, ikke en
+      lovbestemt alder — se `AgeBound`, som aldersforankrede perioder kan
+      binde sig til. */
+  workEndAge: number
   /** Alderen simuleringen løber til og med. */
   horizon: number
   holdings: Holding[]
@@ -50,6 +54,29 @@ export type TaxTreatment = 'EarnedIncome' | 'TaxFree'
     `(12 − N + 1) / 12`, jf. ADR-0006. */
 export type Timing = 'Even' | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12
 
+/** Om en posts periode er bundet til kalenderår eller til en persons alder. */
+export type Anchor = 'CalendarYear' | 'PersonAge'
+
+/** Et periodeendepunkt for en aldersforankret post: enten en fast alder,
+    eller en henvisning til personens erhvervsophør. Et endepunkt sat til
+    `'WorkEndAge'` følger `Person.workEndAge`, så posten flytter sig, når
+    erhvervsophørsalderen ændres, uden at posten selv redigeres. */
+export type AgeBound = number | 'WorkEndAge'
+
+/** Postens periode. Et udeladt endepunkt betyder "fra planens start"
+    henholdsvis "til horisontens slut" — sådan skrives en post, der løber
+    hele forløbet. Formen på `from`/`to` følger `anchor`. */
+export type Period =
+  | { anchor: 'CalendarYear'; from?: SimulationYear; to?: SimulationYear }
+  | { anchor: 'PersonAge'; from?: AgeBound; to?: AgeBound }
+
+/** Hvor ofte en post falder inden for sin periode. `n` findes kun ved
+    `EveryNYears`, så det ikke kan sættes ved et valg, der ikke bruger det. */
+export type Recurrence =
+  | { kind: 'Annual' }
+  | { kind: 'Once' }
+  | { kind: 'EveryNYears'; n: number }
+
 type EntryBase = {
   id: string
   name: string
@@ -57,6 +84,11 @@ type EntryBase = {
   amountInRealKroner: Real
   owner: PersonId
   timing: Timing
+  period: Period
+  recurrence: Recurrence
+  /** Andel pr. år, ikke procent. Postens egen fremskrivning — uafhængig af
+      `Plan.inflationAssumption`. */
+  regulationRate: number
 }
 
 /** Kun indtægtsposter bærer en skattebehandling. Retningen er diskriminanten

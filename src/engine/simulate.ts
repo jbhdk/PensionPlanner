@@ -1,9 +1,11 @@
 import type {
+  AgeBound,
   Entry,
   Holding,
   HoldingId,
   HoldingVariant,
   Nominal,
+  Period,
   Person,
   PersonId,
   Plan,
@@ -17,6 +19,10 @@ import type { TaxAssessment } from './tax/assessTax'
 import type { HoldingYear, YearResult } from './yearResult'
 
 type Balances = Map<HoldingId, Nominal>
+
+/** En post sammen med dens beløb i årets løbende priser, for de poster der
+    rent faktisk falder i det pågældende år. */
+type ActiveEntry = { entry: Entry; amount: Nominal }
 
 /** Fremskriver planen år for år i løbende priser. Ren funktion: samme plan
     giver altid samme årsrække, og planen røres ikke. */
@@ -45,17 +51,17 @@ function simulateYear(
   rates: RateYear,
 ): YearResult {
   const opening = new Map(balances)
-  const projection = inflation(plan, year)
+  const entries = entriesInYear(plan, year)
 
-  const income = sumOf(plan.entries, 'Income', projection)
-  const expenses = sumOf(plan.entries, 'Expense', projection)
+  const income = sumOf(entries, 'Income')
+  const expenses = sumOf(entries, 'Expense')
 
   // Afkastet regnes først, på primosaldi og årets strømme alene efter
   // Modified Dietz, jf. ADR-0006 — det afhænger aldrig af skatten, kun
   // omvendt: ShareIncome og CapitalIncome beskattes af netop dette afkast.
   // Kun bufferen modtager poster i denne skive — indbetalinger og
   // overførsler rammer andre beholdninger i senere etaper.
-  const bufferFlow = weightedNetFlow(plan.entries, projection)
+  const bufferFlow = weightedNetFlow(entries)
   const returns = new Map<HoldingId, Nominal>()
   for (const holding of allHoldings(plan)) {
     const base =
@@ -68,7 +74,7 @@ function simulateYear(
   const capitalIncomeByPerson = incomeByVariant(plan, returns, 'CapitalIncome')
 
   const assessments = plan.household.persons.map((person) =>
-    assess(plan, person, projection, rates, capitalIncomeByPerson.get(person.id)!),
+    assess(plan, entries, person, rates, capitalIncomeByPerson.get(person.id)!),
   )
   const personalTax = assessments.reduce((sum, { tax }) => sum + totalTax(tax), 0)
   const shareTax = shareIncomeTax(
@@ -146,11 +152,10 @@ function netReturn(holding: Holding): number {
 
 /** Summen af årets strømme, hver vægtet efter sit forfald — grundlaget der
     lægges til primosaldoen i Modified Dietz. */
-function weightedNetFlow(entries: Entry[], projection: number): Nominal {
-  return entries.reduce((sum, entry) => {
-    const signed =
-      entry.direction === 'Income' ? entry.amountInRealKroner : -entry.amountInRealKroner
-    return sum + signed * projection * returnWeight(entry.timing)
+function weightedNetFlow(entries: ActiveEntry[]): Nominal {
+  return entries.reduce((sum, { entry, amount }) => {
+    const signed = entry.direction === 'Income' ? amount : -amount
+    return sum + signed * returnWeight(entry.timing)
   }, 0)
 }
 
@@ -166,19 +171,19 @@ function returnWeight(timing: Timing): number {
     til. */
 function assess(
   plan: Plan,
+  entries: ActiveEntry[],
   person: Person,
-  projection: number,
   rates: RateYear,
   capitalIncome: Nominal,
 ): { person: string; tax: TaxAssessment } {
-  const earnedIncome = plan.entries
+  const earnedIncome = entries
     .filter(
-      (entry) =>
+      ({ entry }) =>
         entry.direction === 'Income' &&
         entry.owner === person.id &&
         entry.taxTreatment === 'EarnedIncome',
     )
-    .reduce((sum, entry) => sum + entry.amountInRealKroner * projection, 0)
+    .reduce((sum, { amount }) => sum + amount, 0)
 
   return {
     person: person.id,
@@ -207,20 +212,72 @@ function holdingYears(
   }))
 }
 
-function sumOf(
-  entries: Entry[],
-  direction: Entry['direction'],
-  projection: number,
-): Nominal {
+function sumOf(entries: ActiveEntry[], direction: Entry['direction']): Nominal {
   return entries
-    .filter((entry) => entry.direction === direction)
-    .reduce((sum, entry) => sum + entry.amountInRealKroner * projection, 0)
+    .filter(({ entry }) => entry.direction === direction)
+    .reduce((sum, { amount }) => sum + amount, 0)
 }
 
-/** Faktoren der løfter dagens kroner op i årets egne. Startåret er
+function entriesInYear(plan: Plan, year: SimulationYear): ActiveEntry[] {
+  return plan.entries
+    .filter((entry) => appliesInYear(entry, year, ownerOf(plan, entry)))
+    .map((entry) => ({
+      entry,
+      amount: entry.amountInRealKroner * entryProjection(entry, plan.startYear, year),
+    }))
+}
+
+function ownerOf(plan: Plan, entry: Entry): Person {
+  return plan.household.persons.find((person) => person.id === entry.owner)!
+}
+
+/** Faktoren der løfter dagens kroner op i årets egne, efter postens egen
+    reguleringssats — uafhængig af planens inflationsantagelse. Startåret er
     prisniveauet, så faktoren er 1 dér. */
-function inflation(plan: Plan, year: SimulationYear): number {
-  return (1 + plan.inflationAssumption) ** (year - plan.startYear)
+function entryProjection(entry: Entry, startYear: SimulationYear, year: SimulationYear): number {
+  return (1 + entry.regulationRate) ** (year - startYear)
+}
+
+/** Om en post falder i det pågældende år: dens periode skal dække året, og
+    dens gentagelse skal ramme netop det år. */
+function appliesInYear(entry: Entry, year: SimulationYear, owner: Person): boolean {
+  const { from, to } = periodBounds(entry.period, owner)
+  if (from !== undefined && year < from) return false
+  if (to !== undefined && year > to) return false
+
+  switch (entry.recurrence.kind) {
+    case 'Annual':
+      return true
+    case 'Once':
+      return year === (from ?? to)
+    case 'EveryNYears':
+      return from !== undefined && (year - from) % entry.recurrence.n === 0
+  }
+}
+
+/** Periodens endepunkter oversat til kalenderår. Ved `PersonAge` følger et
+    endepunkt sat til `'WorkEndAge'` `owner.workEndAge`, så perioden flytter
+    sig, når erhvervsophørsalderen ændres, uden at posten selv redigeres.
+
+    Eksporteret så fladen kan vise en aldersforankret periode som de årstal,
+    den faktisk falder i, med samme udledning som motoren selv bruger. */
+export function periodBounds(
+  period: Period,
+  owner: Person,
+): { from?: SimulationYear; to?: SimulationYear } {
+  if (period.anchor === 'CalendarYear') {
+    return { from: period.from, to: period.to }
+  }
+  return {
+    from: resolveAgeBound(period.from, owner),
+    to: resolveAgeBound(period.to, owner),
+  }
+}
+
+function resolveAgeBound(bound: AgeBound | undefined, owner: Person): SimulationYear | undefined {
+  if (bound === undefined) return undefined
+  const age = bound === 'WorkEndAge' ? owner.workEndAge : bound
+  return owner.birthYear + age
 }
 
 function openingBalances(plan: Plan): Balances {

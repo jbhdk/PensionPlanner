@@ -1,6 +1,18 @@
 import type { ReactNode } from 'react'
 import { useId } from 'react'
-import type { Direction, HoldingVariant, Plan, TaxTreatment, Timing } from '../engine/plan'
+import type {
+  AgeBound,
+  Anchor,
+  Direction,
+  Entry,
+  HoldingVariant,
+  Period,
+  Plan,
+  Recurrence,
+  TaxTreatment,
+  Timing,
+} from '../engine/plan'
+import { periodBounds } from '../engine/simulate'
 import { procent } from './format'
 import {
   findEntry,
@@ -349,8 +361,99 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
         )}
       </Section>
       <Section title="Perioden">
-        <LockedField label="Forankring" value="Kalenderår" />
-        <LockedField label="Gentagelse" value="Hvert år" />
+        <SelectField
+          label="Forankring"
+          value={danish(anchors, entry.period.anchor)}
+          options={Object.keys(anchors)}
+          onChange={(choice) =>
+            onChange(
+              withEntry(plan, id, (e) => ({ ...e, period: defaultPeriod(anchors[choice]!) })),
+            )
+          }
+        />
+        {entry.period.anchor === 'CalendarYear' ? (
+          <>
+            <OptionalNumberField
+              label="Fra (år)"
+              unit="år"
+              value={entry.period.from}
+              onChange={(from) =>
+                onChange(
+                  withEntry(plan, id, (e) =>
+                    e.period.anchor === 'CalendarYear' ? { ...e, period: { ...e.period, from } } : e,
+                  ),
+                )
+              }
+            />
+            <OptionalNumberField
+              label="Til (år)"
+              unit="år"
+              value={entry.period.to}
+              onChange={(to) =>
+                onChange(
+                  withEntry(plan, id, (e) =>
+                    e.period.anchor === 'CalendarYear' ? { ...e, period: { ...e.period, to } } : e,
+                  ),
+                )
+              }
+            />
+          </>
+        ) : (
+          <>
+            <AgeBoundField
+              label="Fra (alder)"
+              value={entry.period.from}
+              onChange={(from) =>
+                onChange(
+                  withEntry(plan, id, (e) =>
+                    e.period.anchor === 'PersonAge' ? { ...e, period: { ...e.period, from } } : e,
+                  ),
+                )
+              }
+            />
+            <AgeBoundField
+              label="Til (alder)"
+              value={entry.period.to}
+              onChange={(to) =>
+                onChange(
+                  withEntry(plan, id, (e) =>
+                    e.period.anchor === 'PersonAge' ? { ...e, period: { ...e.period, to } } : e,
+                  ),
+                )
+              }
+            />
+            <LockedField label="Falder i" value={resolvedPeriodLabel(plan, entry)} unit="udledt" />
+          </>
+        )}
+        <SelectField
+          label="Gentagelse"
+          value={danish(recurrences, entry.recurrence.kind)}
+          options={Object.keys(recurrences)}
+          onChange={(choice) =>
+            onChange(
+              withEntry(plan, id, (e) => ({
+                ...e,
+                recurrence: defaultRecurrence(recurrences[choice]!),
+              })),
+            )
+          }
+        />
+        {entry.recurrence.kind === 'EveryNYears' && (
+          <NumberField
+            label="Hvert"
+            unit="år"
+            value={entry.recurrence.n}
+            onChange={(n) =>
+              onChange(
+                withEntry(plan, id, (e) =>
+                  e.recurrence.kind === 'EveryNYears'
+                    ? { ...e, recurrence: { kind: 'EveryNYears', n } }
+                    : e,
+                ),
+              )
+            }
+          />
+        )}
         <SelectField
           label="Forfald"
           value={danishTiming(entry.timing)}
@@ -359,13 +462,56 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
             onChange(withEntry(plan, id, (e) => ({ ...e, timing: timings[choice]! })))
           }
         />
+        <NumberField
+          label="Reguleringssats"
+          unit="% p.a."
+          value={asPercent(entry.regulationRate)}
+          onChange={(percent) =>
+            onChange(withEntry(plan, id, (e) => ({ ...e, regulationRate: percent / 100 })))
+          }
+        />
         <Hint>
-          Forankring og gentagelse er låst i denne udgave. Posten løber hele
-          horisonten.
+          Reguleringssatsen er postens egen og adskilt fra planens
+          inflationsantagelse.
         </Hint>
       </Section>
     </>
   )
+}
+
+const anchors: Record<string, Anchor> = {
+  Kalenderår: 'CalendarYear',
+  Alder: 'PersonAge',
+}
+
+const recurrences: Record<string, Recurrence['kind']> = {
+  'Hvert år': 'Annual',
+  'Én gang': 'Once',
+  'Hvert N. år': 'EveryNYears',
+}
+
+/** En ny periode ved skift af forankring: begge endepunkter åbne, altså hele
+    horisonten. Ternæren narrower kun `anchor` til den rette gren af unionen. */
+function defaultPeriod(anchor: Anchor): Period {
+  return anchor === 'CalendarYear' ? { anchor } : { anchor }
+}
+
+function defaultRecurrence(kind: Recurrence['kind']): Recurrence {
+  return kind === 'EveryNYears' ? { kind, n: 2 } : { kind }
+}
+
+/** Den kalenderårsrække, en aldersforankret periode faktisk falder i — samme
+    udledning som motoren selv bruger, jf. `periodBounds`. */
+function resolvedPeriodLabel(plan: Plan, entry: Entry): string {
+  const owner = findPerson(plan, entry.owner)
+  if (!owner) return '–'
+
+  const { from, to } = periodBounds(entry.period, owner)
+  if (from === undefined && to === undefined) return 'Hele horisonten'
+  if (from === undefined) return `til ${to}`
+  if (to === undefined) return `fra ${from}`
+  if (from === to) return String(from)
+  return `${from}–${to}`
 }
 
 function Head({
@@ -459,6 +605,88 @@ function NumberField({
           onChange={(event) => onChange(parseNumber(event.target.value))}
         />
         <span className="enhed">{unit ?? ''}</span>
+      </span>
+    </div>
+  )
+}
+
+/** Et talfelt der kan stå tomt — tomt betyder "ikke sat", altså et åbent
+    periodeendepunkt (fra planens start eller til horisontens slut). */
+function OptionalNumberField({
+  label,
+  unit,
+  value,
+  onChange,
+}: {
+  label: string
+  unit?: string
+  value: number | undefined
+  onChange: (value: number | undefined) => void
+}) {
+  const id = useId()
+  return (
+    <div className="felt">
+      <label htmlFor={id}>{label}</label>
+      <span className="vaerdi">
+        <input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          className="tal"
+          value={value === undefined ? '' : String(value)}
+          onChange={(event) => {
+            const text = event.target.value
+            onChange(text === '' ? undefined : parseNumber(text))
+          }}
+        />
+        <span className="enhed">{unit ?? ''}</span>
+      </span>
+    </div>
+  )
+}
+
+/** Et periodeendepunkt for en aldersforankret post: en fast alder, eller
+    afkrydset, en henvisning til personens erhvervsophør — feltet flytter sig
+    selv, når erhvervsophørsalderen ændres, jf. `AgeBound`. */
+function AgeBoundField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: AgeBound | undefined
+  onChange: (value: AgeBound | undefined) => void
+}) {
+  const id = useId()
+  const followsWorkEnd = value === 'WorkEndAge'
+  return (
+    <div className="felt">
+      <label htmlFor={id}>{label}</label>
+      <span className="vaerdi">
+        <input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          className="tal"
+          disabled={followsWorkEnd}
+          value={followsWorkEnd ? '' : value === undefined ? '' : String(value)}
+          onChange={(event) => {
+            const text = event.target.value
+            onChange(text === '' ? undefined : parseNumber(text))
+          }}
+        />
+        <span className="enhed">
+          <label>
+            <input
+              type="checkbox"
+              checked={followsWorkEnd}
+              onChange={(event) =>
+                onChange(event.target.checked ? 'WorkEndAge' : undefined)
+              }
+            />{' '}
+            erhvervsophør
+          </label>
+        </span>
       </span>
     </div>
   )

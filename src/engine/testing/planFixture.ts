@@ -1,10 +1,18 @@
-import type { Entry, HoldingVariant, Plan, Timing } from '../plan'
+import type {
+  Entry,
+  HoldingVariant,
+  Period,
+  Plan,
+  Recurrence,
+  Timing,
+} from '../plan'
 import type { YearResult } from '../yearResult'
 
 type Options = {
   startYear?: number
   inflationAssumption?: number
   birthYear?: number
+  workEndAge?: number
   horizon?: number
   balance?: number
   variant?: HoldingVariant
@@ -16,6 +24,11 @@ type Options = {
   churchTaxRate?: number
 }
 
+/** Hele horisonten, hvert år — sådan en post løber, med mindre testen
+    angiver noget andet. */
+const wholeHorizon: Period = { anchor: 'CalendarYear' }
+const annually: Recurrence = { kind: 'Annual' }
+
 /** Den tyndeste gyldige plan: én person, én beholdning der er buffer, ingen
     poster. Testene skruer på det, de handler om, og lader resten stå.
 
@@ -26,6 +39,7 @@ export function aPlan(options: Options = {}): Plan {
     startYear = 2026,
     inflationAssumption = 0,
     birthYear = 1973,
+    workEndAge = 58,
     horizon = 90,
     balance = 1_000_000,
     variant = 'CapitalIncome',
@@ -52,6 +66,7 @@ export function aPlan(options: Options = {}): Plan {
           id: 'jesper',
           name: 'Jesper',
           birthYear,
+          workEndAge,
           horizon,
           holdings: [
             {
@@ -75,6 +90,9 @@ export function aPlan(options: Options = {}): Plan {
 export function anExpense(options: {
   amountInRealKroner: number
   timing?: Timing
+  period?: Period
+  recurrence?: Recurrence
+  regulationRate?: number
 }): Entry {
   return {
     id: 'living-costs',
@@ -83,6 +101,9 @@ export function anExpense(options: {
     owner: 'jesper',
     direction: 'Expense',
     timing: options.timing ?? 'Even',
+    period: options.period ?? wholeHorizon,
+    recurrence: options.recurrence ?? annually,
+    regulationRate: options.regulationRate ?? 0,
   }
 }
 
@@ -91,6 +112,9 @@ export function aSalary(options: {
   amountInRealKroner: number
   owner?: string
   timing?: Timing
+  period?: Period
+  recurrence?: Recurrence
+  regulationRate?: number
 }): Entry {
   return {
     id: 'salary',
@@ -100,6 +124,9 @@ export function aSalary(options: {
     direction: 'Income',
     taxTreatment: 'EarnedIncome',
     timing: options.timing ?? 'Even',
+    period: options.period ?? wholeHorizon,
+    recurrence: options.recurrence ?? annually,
+    regulationRate: options.regulationRate ?? 0,
   }
 }
 
@@ -113,6 +140,9 @@ export function bufferBalance(year: YearResult): number {
 export function aTaxFreeIncome(options: {
   amountInRealKroner: number
   timing?: Timing
+  period?: Period
+  recurrence?: Recurrence
+  regulationRate?: number
 }): Entry {
   return {
     id: 'inheritance',
@@ -122,5 +152,8 @@ export function aTaxFreeIncome(options: {
     direction: 'Income',
     taxTreatment: 'TaxFree',
     timing: options.timing ?? 'Even',
+    period: options.period ?? wholeHorizon,
+    recurrence: options.recurrence ?? annually,
+    regulationRate: options.regulationRate ?? 0,
   }
 }

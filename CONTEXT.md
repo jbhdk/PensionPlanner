@@ -150,8 +150,16 @@ Det skattemæssige spor en indtægtspost lander i: `EarnedIncome`, som er AM-pli
 _Avoid_: Skattetype, skattekode, indkomstart
 
 **Forankring** · `Anchor`:
-Om en posts periode er bundet til kalenderår eller til en persons alder. Aldersforankrede poster flytter sig automatisk, når pensioneringstidspunktet ændres.
+Om en posts periode er bundet til kalenderår eller til en persons alder. Aldersforankrede poster flytter sig automatisk, når erhvervsophørsalderen ændres.
 _Avoid_: Tidsbinding, reference
+
+**Periode** · `Period`:
+Den tidsstrækning en post er aktiv i. Formen på dens endepunkter følger `Anchor`: årstal ved kalenderårsforankring, alder ved aldersforankring. Et udeladt endepunkt betyder "fra planens start" henholdsvis "til horisontens slut" — sådan skrives en post, der løber hele forløbet.
+_Avoid_: Interval, tidsrum. Forveksl den ikke med et enkelt `SimulationYear`.
+
+**Aldersendepunkt** · `AgeBound`:
+Et periodeendepunkt ved aldersforankring: enten en fast alder, eller en henvisning til `WorkEndAge`. Sat til erhvervsophør følger endepunktet `Person.workEndAge` og flytter sig automatisk, uden at posten selv redigeres.
+_Avoid_: Aldersgrænse, tidspunkt
 
 **Indbetaling** · `Contribution`:
 En bevægelse af penge fra husstandens pengestrøm ind i en beholdning. Bærer en skattevirkning og et loft — til forskel fra en overførsel, der har ingen af delene.
@@ -168,6 +176,10 @@ _Avoid_: Måned, dato, betalingstidspunkt
 **Gentagelse** · `Recurrence`:
 Hvor ofte en post falder inden for sin periode: hvert år, én gang, eller hvert N. år.
 _Avoid_: Frekvens, interval, kadence
+
+**Reguleringssats** · `RegulationRate`:
+Postens egen fremskrivningssats, uafhængig af planens `inflationAssumption` — to poster med hver sin sats vokser hver sit tempo. Andel pr. år, ikke procent.
+_Avoid_: Inflation brugt om en enkelt post, fremskrivningsprocent
 
 ### Plan og resultat
 
