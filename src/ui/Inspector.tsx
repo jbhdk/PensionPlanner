@@ -685,24 +685,33 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
             onChange(withEntry(plan, id, (e) => ({ ...e, timing: timings[choice]! })))
           }
         />
-        <NumberField
-          label="Reguleringssats"
-          unit="% p.a."
-          value={asPercent(entry.regulationRate)}
-          onChange={(percent) =>
-            onChange(withEntry(plan, id, (e) => ({ ...e, regulationRate: percent / 100 })))
-          }
-        />
+        {entry.direction === 'Income' && (
+          <NumberField
+            label="Reguleringssats"
+            unit="% p.a."
+            value={asPercent(entry.regulationRate)}
+            onChange={(percent) =>
+              onChange(
+                withEntry(plan, id, (e) =>
+                  e.direction === 'Income' ? { ...e, regulationRate: percent / 100 } : e,
+                ),
+              )
+            }
+          />
+        )}
         {onceYear !== undefined && (
           <LockedField
             label={`Beløb i ${onceYear}`}
-            value={kroner(
-              entry.amountInRealKroner * entryProjection(entry, plan.startYear, onceYear),
-            )}
+            value={kroner(entry.amountInRealKroner * entryProjection(entry, plan, onceYear))}
             unit="udledt"
           />
         )}
-        {entry.recurrence.kind === 'Once' ? (
+        {entry.direction === 'Expense' ? (
+          <Hint>
+            Udgiften står i dagens kroner og følger planens inflationsantagelse
+            — kun indtægter har deres egen reguleringssats.
+          </Hint>
+        ) : entry.recurrence.kind === 'Once' ? (
           <Hint>
             Beløbet står i dagens kroner, og satsen er prisudviklingen frem til
             det år, posten falder — ikke en årlig gentagelse. Sat til nul bliver
@@ -710,7 +719,7 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
           </Hint>
         ) : (
           <Hint>
-            Reguleringssatsen er postens egen og adskilt fra planens
+            Reguleringssatsen er indtægtens egen og adskilt fra planens
             inflationsantagelse.
           </Hint>
         )}

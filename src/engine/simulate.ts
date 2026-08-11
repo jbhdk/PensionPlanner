@@ -272,7 +272,7 @@ function entriesInYear(plan: Plan, year: SimulationYear): ActiveEntry[] {
     .filter((entry) => appliesInYear(entry, year, ownerOf(plan, entry)))
     .map((entry) => ({
       entry,
-      amount: entry.amountInRealKroner * entryProjection(entry, plan.startYear, year),
+      amount: entry.amountInRealKroner * entryProjection(entry, plan, year),
     }))
 }
 
@@ -280,18 +280,17 @@ function ownerOf(plan: Plan, entry: Entry): Person {
   return plan.household.persons.find((person) => person.id === entry.owner)!
 }
 
-/** Faktoren der løfter dagens kroner op i årets egne, efter postens egen
-    reguleringssats — uafhængig af planens inflationsantagelse. Startåret er
-    prisniveauet, så faktoren er 1 dér.
+/** Faktoren der løfter dagens kroner op i årets egne. En indtægt følger sin
+    egen reguleringssats, uafhængig af planens inflationsantagelse; en udgift
+    har ingen egen sats og følger inflationen, som en overførsel gør.
+    Startåret er prisniveauet, så faktoren er 1 dér.
 
     Eksporteret så fladen kan vise, hvad en engangspost faktisk koster i det
     år, den falder, med samme udledning som motoren selv bruger. */
-export function entryProjection(
-  entry: Entry,
-  startYear: SimulationYear,
-  year: SimulationYear,
-): number {
-  return (1 + entry.regulationRate) ** (year - startYear)
+export function entryProjection(entry: Entry, plan: Plan, year: SimulationYear): number {
+  const rate =
+    entry.direction === 'Income' ? entry.regulationRate : plan.inflationAssumption
+  return (1 + rate) ** (year - plan.startYear)
 }
 
 /** Om en post falder i det pågældende år: dens periode skal dække året, og

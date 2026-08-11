@@ -21,7 +21,6 @@ export function defaultPlan(): Plan {
         timing: 'Even',
         period: { anchor: 'CalendarYear' },
         recurrence: { kind: 'Annual' },
-        regulationRate: 0.02,
       },
       {
         id: 'salary',

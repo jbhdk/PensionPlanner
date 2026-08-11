@@ -104,16 +104,25 @@ type EntryBase = {
   timing: Timing
   period: Period
   recurrence: Recurrence
-  /** Andel pr. år, ikke procent. Postens egen fremskrivning — uafhængig af
-      `Plan.inflationAssumption`. */
-  regulationRate: number
 }
 
-/** Kun indtægtsposter bærer en skattebehandling. Retningen er diskriminanten
-    frem for et felt ved siden af den: en udgiftspost med en skattebehandling
-    er ikke noget, motoren skal validere sig ud af — den kan ikke skrives. */
+/** Kun indtægtsposter bærer en skattebehandling og en egen reguleringssats.
+    Retningen er diskriminanten frem for felter ved siden af den: en
+    udgiftspost med en skattebehandling er ikke noget, motoren skal validere
+    sig ud af — den kan ikke skrives.
+
+    Reguleringssatsen hører samme sted hen af samme grund. En løn stiger
+    hurtigere end priserne, og den forskel afgør, hvor meget der er lagt til
+    side ved erhvervsophør; en udgift har ikke den slags eget tempo og følger
+    `Plan.inflationAssumption`, som en overførsel allerede gør. */
 export type Entry =
-  | (EntryBase & { direction: 'Income'; taxTreatment: TaxTreatment })
+  | (EntryBase & {
+      direction: 'Income'
+      taxTreatment: TaxTreatment
+      /** Andel pr. år, ikke procent. Indtægtens egen fremskrivning —
+          uafhængig af `Plan.inflationAssumption`. */
+      regulationRate: number
+    })
   | (EntryBase & { direction: 'Expense' })
 
 /** En dateret flytning af penge fra én beholdning til en anden inden for

@@ -87,3 +87,59 @@ describe('v1 → v2: kommune- og kirkeskat flytter fra planen til hver person', 
     }
   })
 })
+
+describe('v2 → v3: reguleringssatsen er kun indtægtens', () => {
+  it('fjerner satsen fra udgiftsposterne og lader indtægternes stå', () => {
+    // En rigtig gemt v2-plan: hver post bar sin egen reguleringssats, også
+    // udgifterne. Udgiften følger nu planens inflationsantagelse, som en
+    // overførsel allerede gjorde, mens indtægten beholder sit eget tempo —
+    // en løn stiger hurtigere end priserne, og den forskel er hele grunden
+    // til, at feltet bliver.
+    const v2: unknown = {
+      name: 'Gammel plan',
+      startYear: 2026,
+      inflationAssumption: 0.02,
+      buffer: 'free-assets',
+      transfers: [],
+      entries: [
+        {
+          id: 'living-costs',
+          name: 'Faste udgifter',
+          amountInRealKroner: 360_000,
+          owner: 'jesper',
+          direction: 'Expense',
+          timing: 'Even',
+          period: { anchor: 'CalendarYear' },
+          recurrence: { kind: 'Annual' },
+          regulationRate: 0.03,
+        },
+        {
+          id: 'salary',
+          name: 'Løn',
+          amountInRealKroner: 600_000,
+          owner: 'jesper',
+          direction: 'Income',
+          taxTreatment: 'EarnedIncome',
+          timing: 'Even',
+          period: { anchor: 'CalendarYear' },
+          recurrence: { kind: 'Annual' },
+          regulationRate: 0.03,
+        },
+      ],
+      household: { persons: [] },
+    }
+
+    const migrated = runMigrations(v2, 2, 3, migrations) as {
+      entries: Array<Record<string, unknown>>
+    }
+
+    const [expense, income] = migrated.entries
+    expect(expense).not.toHaveProperty('regulationRate')
+    expect(income!.regulationRate).toBe(0.03)
+
+    // Resten af udgiften står urørt — migrationen fjerner ét felt, den
+    // bygger ikke posten om.
+    expect(expense!.amountInRealKroner).toBe(360_000)
+    expect(expense!.direction).toBe('Expense')
+  })
+})

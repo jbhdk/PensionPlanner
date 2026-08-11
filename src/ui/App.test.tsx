@@ -80,6 +80,13 @@ async function showYearTable(user: ReturnType<typeof userEvent.setup>) {
 /** En beholdnings navn findes både som navigatorrække og som knap i
     grafens legend — de to skal kunne skelnes, ikke kun den ene fjernes.
     Denne henter navigatorens, som de fleste tests handler om. */
+/** Den udledte "Beløb i {år}"-linje aflæst for sig — beløbet står også i
+    beløbsfeltet og i navigatoren, så en fri tekstsøgning rammer flere. */
+function udledtBeloeb(year: number) {
+  const felt = screen.getByText(`Beløb i ${year}`).closest('.felt') as HTMLElement
+  return felt.querySelector('.laast')!.textContent
+}
+
 function navigatorButton(name: string | RegExp) {
   const navigatorspalte = document.querySelector('.navigatorspalte') as HTMLElement
   return within(navigatorspalte).getByRole('button', { name })
@@ -93,7 +100,7 @@ function aThreeYearPlan() {
     horizon: 55,
     balance: 1_000_000,
     inflationAssumption: 0.02,
-    entries: [anExpense({ amountInRealKroner: 40_000, regulationRate: 0.02 })],
+    entries: [anExpense({ amountInRealKroner: 40_000 })],
   })
 }
 
@@ -467,18 +474,19 @@ describe('fladen', () => {
     // Reguleringssatsen gentager ingenting på en engangspost — den bærer
     // beløbet fra dagens kroner op i det års egne. Uden den linje er
     // forskellen på 2 % og 0 % usynlig, indtil året er nået i årstabellen.
-    // 200.000 × 1,02^10 = 243.799 kr. i 2036.
+    // 200.000 × 1,02^10 = 243.799 kr. i 2036. Udgiften har ingen egen sats
+    // længere, så det er planens inflation, linjen udledes af.
     const user = userEvent.setup()
     render(
       <App
         initialPlan={aPlan({
+          inflationAssumption: 0.02,
           entries: [
             anExpense({
               amountInRealKroner: 200_000,
               timing: 1,
               period: { anchor: 'CalendarYear', from: 2036, to: 2036 },
               recurrence: { kind: 'Once' },
-              regulationRate: 0.02,
             }),
           ],
         })}
@@ -487,14 +495,42 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
 
-    expect(screen.getByText('Beløb i 2036')).toBeTruthy()
-    expect(screen.getByText('243.799')).toBeTruthy()
+    expect(udledtBeloeb(2036)).toBe('243.799')
 
-    // Sat til nul står posten stille i løbende priser — og bliver dermed
-    // billigere, jo længere ude den ligger.
+    // Udgiften har ikke satsfeltet — det er kun indtægter, der har et eget
+    // tempo at skrue på.
+    expect(screen.queryByLabelText(/Reguleringssats/)).toBeNull()
+  })
+
+  it('udleder engangsindtægtens beløb af dens egen sats, ikke af inflationen', async () => {
+    // Modstykket: indtægten har beholdt sit felt, og linjen følger med, når
+    // satsen rettes. 100.000 × 1,05^10 = 162.889 kr. i 2036, mens planens
+    // inflation på 2 % ville have givet 121.899 kr.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          inflationAssumption: 0.02,
+          entries: [
+            aSalary({
+              amountInRealKroner: 100_000,
+              timing: 1,
+              period: { anchor: 'CalendarYear', from: 2036, to: 2036 },
+              recurrence: { kind: 'Once' },
+              regulationRate: 0.05,
+            }),
+          ],
+        })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Løn/ }))
+
+    expect(udledtBeloeb(2036)).toBe('162.889')
+
     await user.clear(screen.getByLabelText(/Reguleringssats/))
 
-    expect(screen.getByText('200.000')).toBeTruthy()
+    expect(udledtBeloeb(2036)).toBe('100.000')
   })
 
   it('viser ingen udledt linje for en post, der gentager sig', async () => {
@@ -502,7 +538,7 @@ describe('fladen', () => {
     render(
       <App
         initialPlan={aPlan({
-          entries: [anExpense({ amountInRealKroner: 200_000, regulationRate: 0.02 })],
+          entries: [anExpense({ amountInRealKroner: 200_000 })],
         })}
       />,
     )
@@ -512,25 +548,25 @@ describe('fladen', () => {
     expect(screen.queryByText(/^Beløb i/)).toBeNull()
   })
 
-  it('lader postens reguleringssats redigeres uafhængigt af planens inflation', async () => {
+  it('lader indtægtens reguleringssats redigeres uafhængigt af planens inflation', async () => {
     const user = userEvent.setup()
     render(
       <App
         initialPlan={aPlan({
           inflationAssumption: 0.02,
-          entries: [anExpense({ amountInRealKroner: 40_000, regulationRate: 0.03 })],
+          entries: [aSalary({ amountInRealKroner: 40_000, regulationRate: 0.03 })],
         })}
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(screen.getByRole('button', { name: /Løn/ }))
     const regulering = screen.getByLabelText(/Reguleringssats/) as HTMLInputElement
     expect(regulering.value).toBe('3')
 
     await user.click(screen.getByRole('button', { name: /Ophør som 58/ }))
     expect((screen.getByLabelText(/Inflation/) as HTMLInputElement).value).toBe('2')
 
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(screen.getByRole('button', { name: /Løn/ }))
     await user.clear(screen.getByLabelText(/Reguleringssats/))
     await user.type(screen.getByLabelText(/Reguleringssats/), '5')
     expect((screen.getByLabelText(/Reguleringssats/) as HTMLInputElement).value).toBe('5')

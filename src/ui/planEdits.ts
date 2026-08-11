@@ -216,11 +216,10 @@ export function addEntry(plan: Plan, direction: Direction): Plan {
     timing: 'Even' as const,
     period: { anchor: 'CalendarYear' as const },
     recurrence: { kind: 'Annual' as const },
-    regulationRate: 0,
   }
   const entry: Entry =
     direction === 'Income'
-      ? { ...base, direction: 'Income', taxTreatment: 'EarnedIncome' }
+      ? { ...base, direction: 'Income', taxTreatment: 'EarnedIncome', regulationRate: 0 }
       : { ...base, direction: 'Expense' }
 
   return { ...plan, entries: [...plan.entries, entry] }
@@ -311,13 +310,13 @@ export function formatNumber(value: number): string {
   return String(value).replace('.', ',')
 }
 
-/** Skifter en posts retning. En indtægtspost bærer en skattebehandling, en
-    udgiftspost har ikke feltet — så retningsskiftet bygger en ny post frem
-    for at sætte et felt. Behandlingen huskes ikke hen over en tur forbi
-    udgift: den findes ikke at huske på. */
+/** Skifter en posts retning. En indtægtspost bærer en skattebehandling og en
+    egen reguleringssats, en udgiftspost har ingen af felterne — så
+    retningsskiftet bygger en ny post frem for at sætte et felt. Hverken
+    behandlingen eller satsen huskes hen over en tur forbi udgift: de findes
+    ikke at huske på, og udgiften følger imens planens inflationsantagelse. */
 export function withDirection(entry: Entry, direction: Direction): Entry {
-  const { id, name, amountInRealKroner, owner, timing, period, recurrence, regulationRate } =
-    entry
+  const { id, name, amountInRealKroner, owner, timing, period, recurrence } = entry
 
   if (direction === 'Expense') {
     return {
@@ -328,7 +327,6 @@ export function withDirection(entry: Entry, direction: Direction): Entry {
       timing,
       period,
       recurrence,
-      regulationRate,
       direction: 'Expense',
     }
   }
@@ -340,8 +338,8 @@ export function withDirection(entry: Entry, direction: Direction): Entry {
     timing,
     period,
     recurrence,
-    regulationRate,
     direction: 'Income',
     taxTreatment: entry.direction === 'Income' ? entry.taxTreatment : 'EarnedIncome',
+    regulationRate: entry.direction === 'Income' ? entry.regulationRate : 0,
   }
 }

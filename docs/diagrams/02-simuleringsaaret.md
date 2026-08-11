@@ -23,7 +23,7 @@ sequenceDiagram
     L-->>E: guaranteed lifelong benefit, bonus-regulated thereafter
     E->>B: ATP and StatePension BasicAmount at startAge
     B-->>E: benefits before taper
-    E->>N: project entries, contributions and transfers by regulationRate and Timing
+    E->>N: project entries, contributions and transfers by regulationRate or inflationAssumption, and Timing
     N-->>E: flows for the year, each with its return weight
 
     Note over E,H: Alle strømme skal være kendt, før afkastet kan beregnes

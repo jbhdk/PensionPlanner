@@ -162,7 +162,7 @@ _Avoid_: Testcase, eksempel, referenceberegning
 ### Pengestrømme
 
 **Post** · `Entry`:
-En navngiven ind- eller udbetaling med beløb i dagens kroner, ejer, periode, gentagelse og egen reguleringssats. Indtægtsposter bærer desuden en skattebehandling; udgiftsposter gør ikke.
+En navngiven ind- eller udbetaling med beløb i dagens kroner, ejer, periode og gentagelse. Indtægtsposter bærer desuden en skattebehandling og en egen reguleringssats; udgiftsposter har ingen af delene og følger planens inflationsantagelse.
 _Avoid_: Linje, række, cashflow, transaktion
 
 **Retning** · `Direction`:
@@ -202,7 +202,7 @@ Hvor ofte en post falder inden for sin periode: hvert år, én gang, eller hvert
 _Avoid_: Frekvens, interval, kadence
 
 **Reguleringssats** · `RegulationRate`:
-Postens egen fremskrivningssats, uafhængig af planens `inflationAssumption` — to poster med hver sin sats vokser hver sit tempo. Andel pr. år, ikke procent.
+En indtægtsposts egen fremskrivningssats, uafhængig af planens `inflationAssumption` — to indtægter med hver sin sats vokser hver sit tempo. Andel pr. år, ikke procent. Kun indtægtsposter har den: en løn stiger hurtigere end priserne, og den forskel afgør, hvor meget der er lagt til side ved erhvervsophør. Udgiftsposter og overførsler følger planens inflationsantagelse og har ikke feltet.
 _Avoid_: Inflation brugt om en enkelt post, fremskrivningsprocent
 
 ### Plan og resultat

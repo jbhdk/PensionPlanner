@@ -227,11 +227,13 @@ describe('simulate', () => {
     expect(sent.find((y) => y.year === 2039)!.income).toBe(0)
   })
 
-  it('fremskriver postens beløb fra dagens kroner til løbende priser efter dens egen reguleringssats', () => {
+  it('fremskriver en udgift fra dagens kroner til løbende priser efter planens inflation', () => {
+    // Udgiften har ingen egen sats — den følger planens inflation, som en
+    // overførsel gør.
     const plan = aPlan({
       startYear: 2026,
-      inflationAssumption: 0,
-      entries: [anExpense({ amountInRealKroner: 40_000, regulationRate: 0.02 })],
+      inflationAssumption: 0.02,
+      entries: [anExpense({ amountInRealKroner: 40_000 })],
     })
 
     const years = simulateChecked(plan)
@@ -239,6 +241,23 @@ describe('simulate', () => {
     expect(years[0]!.expenses).toBeCloseTo(40_000, 6)
     expect(years[1]!.expenses).toBeCloseTo(40_800, 6)
     expect(years[2]!.expenses).toBeCloseTo(41_616, 6)
+  })
+
+  it('fremskriver en indtægt efter dens egen reguleringssats, ikke efter inflationen', () => {
+    // Hele grunden til, at indtægten har beholdt sit eget felt: lønnen stiger
+    // 3 %, mens priserne stiger 2 %, og den forskel er det, der lægges til
+    // side. Fulgte lønnen inflationen, ville forskellen forsvinde.
+    const plan = aPlan({
+      startYear: 2026,
+      inflationAssumption: 0.02,
+      entries: [aSalary({ amountInRealKroner: 500_000, regulationRate: 0.03 })],
+    })
+
+    const years = simulateChecked(plan)
+
+    expect(years[0]!.income).toBeCloseTo(500_000, 6)
+    expect(years[1]!.income).toBeCloseTo(515_000, 6)
+    expect(years[2]!.income).toBeCloseTo(530_450, 6)
   })
 
   it('lader bufferen gå negativt frem for at rette planen', () => {

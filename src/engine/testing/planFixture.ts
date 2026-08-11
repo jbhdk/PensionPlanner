@@ -105,7 +105,6 @@ export function anExpense(options: {
   timing?: Timing
   period?: Period
   recurrence?: Recurrence
-  regulationRate?: number
 }): Entry {
   return {
     id: 'living-costs',
@@ -116,7 +115,6 @@ export function anExpense(options: {
     timing: options.timing ?? 'Even',
     period: options.period ?? wholeHorizon,
     recurrence: options.recurrence ?? annually,
-    regulationRate: options.regulationRate ?? 0,
   }
 }
 

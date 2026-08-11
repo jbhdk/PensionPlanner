@@ -37,6 +37,29 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    // v2 → v3: reguleringssatsen er kun indtægtens. En udgift har ikke
+    // længere sit eget tempo — den følger planens inflationsantagelse, som en
+    // overførsel allerede gør — så satsen fjernes fra udgiftsposterne.
+    // Indtægternes egen sats står urørt: en løn stiger hurtigere end
+    // priserne, og den forskel er hele grunden til, at feltet bliver.
+    from: 2,
+    migrate: (data) => {
+      const plan = data as {
+        entries?: Array<Record<string, unknown>>
+        [key: string]: unknown
+      }
+
+      return {
+        ...plan,
+        entries: (plan.entries ?? []).map((entry) => {
+          if (entry.direction !== 'Expense') return entry
+          const { regulationRate: _regulationRate, ...rest } = entry
+          return rest
+        }),
+      }
+    },
+  },
 ]
 
 /** Kører kæden fra `fromVersion` til `toVersion`, ét led ad gangen. Rent og
