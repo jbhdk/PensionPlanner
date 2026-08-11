@@ -1,8 +1,10 @@
 import type { Holding, Person, Plan } from '../engine/plan'
+import { returnWeight } from '../engine/simulate'
 import type { LayerAmount, TaxLayer } from '../engine/tax/assessTax'
 import { totalTax } from '../engine/tax/assessTax'
 import type { HoldingYear, PersonYear, YearResult } from '../engine/yearResult'
 import { kroner, procent } from './format'
+import { danishTiming } from './Inspector'
 import { inRealKroner } from './real'
 
 /** Rækkefølgen skattelagene vises i: samme rækkefølge som mockuppens
@@ -99,6 +101,52 @@ export function YearExplanation({
       </div>
 
       <HoldingsBlock plan={plan} year={year} display={display} />
+      <EntriesBlock plan={plan} year={year} display={display} />
+    </div>
+  )
+}
+
+/** Årets poster med forfald og afkastvægt, så det tal Modified Dietz lagde
+    til beholdningens primosaldo kan efterregnes i hånden. Forfaldet læses
+    fra `Plan.entries` i stedet for at gentages her — det er en egenskab ved
+    posten selv, ligesom en beholdnings navn. */
+function EntriesBlock({
+  plan,
+  year,
+  display,
+}: {
+  plan: Plan
+  year: YearResult
+  display: (amount: number) => number
+}) {
+  return (
+    <div className="blok bred">
+      <h3>Posterne</h3>
+      <table className="postertabel">
+        <thead>
+          <tr>
+            <th>Post</th>
+            <th>Beløb</th>
+            <th>Forfald</th>
+            <th>Afkastvægt</th>
+          </tr>
+        </thead>
+        <tbody>
+          {year.entries.map((entryYear) => {
+            const entry = plan.entries.find((e) => e.id === entryYear.entry)
+            if (!entry) return null
+            const signed = entry.direction === 'Expense' ? -entryYear.amount : entryYear.amount
+            return (
+              <tr key={entryYear.entry}>
+                <td>{entry.name}</td>
+                <td>{kroner(display(signed))}</td>
+                <td>{danishTiming(entry.timing)}</td>
+                <td>{procent(returnWeight(entry.timing))}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }

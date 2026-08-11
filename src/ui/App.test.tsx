@@ -1010,6 +1010,33 @@ describe('fladen', () => {
     expect(cells('Anden beholdning')).toEqual(['Anden beholdning', '0', '100.000', '0,00 %', '0'])
   })
 
+  it('viser årets poster med forfald og afkastvægt', async () => {
+    const user = userEvent.setup()
+    const plan = aPlan({
+      startYear: 2026,
+      entries: [
+        aSalary({ amountInRealKroner: 600_000 }),
+        anExpense({ amountInRealKroner: 40_000, timing: 6 }),
+      ],
+    })
+    render(<App initialPlan={plan} />)
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2026
+
+    const posterTable = document.querySelector('table.postertabel') as HTMLElement
+    const cells = (name: string) =>
+      within(within(posterTable).getByText(name).closest('tr') as HTMLElement)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent)
+
+    expect(cells('Løn')).toEqual(['Løn', '600.000', 'Jævnt fordelt', '50,00 %'])
+    // Juni-forfald: (12 − 6 + 1) / 12 = 58,33 %. Udgiften vises negativ, som i
+    // navigatoren og balancestriben.
+    expect(cells('Faste udgifter')).toEqual(['Faste udgifter', '-40.000', 'Juni', '58,33 %'])
+  })
+
   it('åbner inspektøren for beholdningen, når der klikkes på grafens legend', async () => {
     const user = userEvent.setup()
     const plan = aPlanWithSecondHolding()

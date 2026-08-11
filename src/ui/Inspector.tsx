@@ -412,7 +412,7 @@ function danish<T extends string>(map: Record<string, T>, value: T): string {
   return Object.keys(map).find((key) => map[key] === value)!
 }
 
-function danishTiming(timing: Timing): string {
+export function danishTiming(timing: Timing): string {
   return Object.keys(timings).find((key) => timings[key] === timing)!
 }
 
