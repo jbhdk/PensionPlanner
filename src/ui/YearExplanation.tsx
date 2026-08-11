@@ -32,14 +32,21 @@ const TAX_LAYER_LABELS: Record<TaxLayer, string> = {
     spaltehoved med en vej tilbage frem for Formuen/Årstabellen-fanerne. */
 export function YearExplanation({
   year,
+  years,
   plan,
+  onSelectYear,
   onBack,
 }: {
   year: YearResult
+  years: YearResult[]
   plan: Plan
+  onSelectYear: (year: number) => void
   onBack: () => void
 }) {
   const display = (amount: number) => inRealKroner(amount, year.year, plan)
+  const index = years.findIndex((y) => y.year === year.year)
+  const previous = years[index - 1]
+  const next = years[index + 1]
 
   return (
     <div className="forklar">
@@ -53,9 +60,21 @@ export function YearExplanation({
           ))}
           <span>Satsår {year.rateYear}</span>
         </span>
-        <button type="button" className="knap primaer" onClick={onBack}>
-          Tilbage til tabellen
-        </button>
+        <span className="hoejre">
+          {previous && (
+            <button type="button" className="knap" onClick={() => onSelectYear(previous.year)}>
+              ‹ {previous.year}
+            </button>
+          )}
+          {next && (
+            <button type="button" className="knap" onClick={() => onSelectYear(next.year)}>
+              {next.year} ›
+            </button>
+          )}
+          <button type="button" className="knap primaer" onClick={onBack}>
+            Tilbage til tabellen
+          </button>
+        </span>
       </div>
 
       {/* Balanceinvarianten som synlig stribe, jf. CLAUDE.md:

@@ -30,6 +30,11 @@ export function App({ initialPlan }: { initialPlan: Plan }) {
   const [unit, setUnit] = useState<AmountUnit>('Real')
   const [explainedYear, setExplainedYear] = useState<number | null>(null)
 
+  function explainYear(year: number) {
+    setExplainedYear(year)
+    setResultView('YearExplanation')
+  }
+
   // Nul eller to buffere er en inputfejl, ikke et resultat: planen kan ikke
   // simuleres, og resultatspalten skal sige hvorfor frem for at stå tom.
   const bufferError = validateBuffer(plan)
@@ -58,7 +63,9 @@ export function App({ initialPlan }: { initialPlan: Plan }) {
           {resultView === 'YearExplanation' && explainedYear !== null ? (
             <YearExplanation
               year={years.find((y) => y.year === explainedYear)!}
+              years={years}
               plan={plan}
+              onSelectYear={explainYear}
               onBack={() => setResultView('YearTable')}
             />
           ) : (
@@ -101,15 +108,7 @@ export function App({ initialPlan }: { initialPlan: Plan }) {
                   onSelect={setSelected}
                 />
               ) : (
-                <YearTable
-                  years={years}
-                  plan={plan}
-                  unit={unit}
-                  onSelectYear={(year) => {
-                    setExplainedYear(year)
-                    setResultView('YearExplanation')
-                  }}
-                />
+                <YearTable years={years} plan={plan} unit={unit} onSelectYear={explainYear} />
               )}
             </>
           )}

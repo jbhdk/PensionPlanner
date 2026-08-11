@@ -891,6 +891,27 @@ describe('fladen', () => {
     expect(document.querySelector('.tabelramme')).toBeTruthy()
   })
 
+  it('skifter år frem og tilbage i forklar-året uden at gå om ad tabellen', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />) // 2026–2028
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2026
+
+    expect(screen.queryByRole('button', { name: /2025/ })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: '2027 ›' }))
+    expect(screen.getByRole('heading', { name: '2027' })).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: '2028 ›' }))
+    expect(screen.getByRole('heading', { name: '2028' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /2029/ })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: '‹ 2027' }))
+    expect(screen.getByRole('heading', { name: '2027' })).toBeTruthy()
+  })
+
   it('viser hver persons alder og satsåret i forklar-årets hoved', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)
