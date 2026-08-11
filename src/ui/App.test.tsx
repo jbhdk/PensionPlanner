@@ -980,6 +980,12 @@ describe('fladen', () => {
     expect(cells('Kommuneskat')).toEqual(['Kommuneskat', '431.500', '25,40 %', '109.601'])
     expect(cells('Kirkeskat')).toEqual(['Kirkeskat', '431.500', '0,74 %', '3.193'])
     expect(cells('Skat i alt')).toEqual(['Skat i alt', '', '', '220.592'])
+
+    // 8 % AM-bidrag + 92 % × (12,01 % bund + 25,40 % kommune + 0,74 % kirke)
+    // — begge fradrag er i loft ved 600.000, og indkomsten ligger under
+    // mellemskattegrænsen, så ingen af dem rører næste krone.
+    expect(within(blok).getByText('Marginalskat')).toBeTruthy()
+    expect(within(blok).getByText('43,10 %')).toBeTruthy()
   })
 
   it('viser primosaldo, vægtet strøm, nettoafkastsats og afkast pr. beholdning', async () => {

@@ -244,6 +244,10 @@ function PersonTaxBlock({
       <h3>{person.name}</h3>
       <StripePost label="Aktieindkomst" amount={display(year.shareIncome)} />
       <StripePost label="Kapitalindkomst" amount={display(year.capitalIncome)} />
+      <div className="stribepost">
+        <span className="m">Marginalskat</span>
+        <span className="v">{procent(year.marginalTaxRate)}</span>
+      </div>
       <table className="lagtabel">
         <thead>
           <tr>
