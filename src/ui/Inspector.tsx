@@ -195,7 +195,9 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
         <SelectField
           label="Kommune"
           value={person.municipality}
-          options={Object.keys(latestRateYear().municipalTax.rates)}
+          options={Object.keys(latestRateYear().municipalTax.rates).sort((a, b) =>
+            a.localeCompare(b, 'da'),
+          )}
           onChange={(municipality) =>
             onChange(withPerson(plan, id, (p) => ({ ...p, municipality })))
           }

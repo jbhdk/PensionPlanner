@@ -242,6 +242,18 @@ describe('fladen', () => {
     expect(skat()).toBe('-208.726')
   })
 
+  it('lister kommunerne alfabetisk i kommunevælgeren', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan()} />)
+    await user.click(screen.getByRole('button', { name: /^Jesper/ }))
+
+    const options = within(screen.getByLabelText(/Kommune/) as HTMLSelectElement)
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+
+    expect(options).toEqual([...options].sort((a, b) => a!.localeCompare(b!, 'da')))
+  })
+
   it('møder brugeren med en skattekolonne, der ikke længere er nul', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={defaultPlan()} />)
