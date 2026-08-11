@@ -294,21 +294,31 @@ body {
   white-space: nowrap;
 }
 
+/* Modsat rækkerne, der bløder ud til kassens kant, sidder tilføj-knappen
+   indrykket i sin egen bund, jf. docs/mockup/navigator.css's `.nav-bund` —
+   og højrestillet, så den aldrig ligger, hvor en hurtig klik på listen
+   ville ramme. Stiplet ramme frem for felternes solide kant og baggrund:
+   formen selv siger "tilføj hér", ikke "tast her". */
+.nav-bund {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 13px;
+}
+
 .nav-tilfoej {
-  width: 100%;
-  padding: 5px 13px 5px 10px;
   font: inherit;
+  font-size: 12px;
   color: var(--label);
   background: none;
-  border: 0;
-  border-left: 3px solid transparent;
-  text-align: left;
+  border: 1px dashed var(--felt-kant);
+  border-radius: 999px;
+  padding: 3px 12px 3px 9px;
   cursor: pointer;
 }
 
 .nav-tilfoej:hover {
-  background: #1d242c;
   color: var(--ink);
+  border-color: var(--muted);
 }
 
 /* ---------- inspektørskuffen ---------- */

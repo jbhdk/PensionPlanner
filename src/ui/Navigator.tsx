@@ -81,9 +81,11 @@ export function Navigator({
                 </button>
               ))}
               {group.addLabel && (
-                <button type="button" className="nav-tilfoej" onClick={group.onAdd}>
-                  {group.addLabel}
-                </button>
+                <div className="nav-bund">
+                  <button type="button" className="nav-tilfoej" onClick={group.onAdd}>
+                    {group.addLabel}
+                  </button>
+                </div>
               )}
             </div>
           )}
