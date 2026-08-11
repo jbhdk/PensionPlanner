@@ -657,6 +657,206 @@ table.aar td.buffer .tilstand {
   white-space: nowrap;
 }
 
+/* ---------- forklar-året ---------- */
+
+.forklarhoved {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 13px 16px;
+  background: var(--top);
+  border-bottom: 1px solid var(--linje);
+}
+
+.forklarhoved h2 {
+  margin: 0;
+  font-family: var(--f-titel);
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.forklarhoved .kontekst {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.forklarhoved .hoejre {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.knap {
+  font: inherit;
+  font-size: 12px;
+  color: var(--label);
+  background: var(--felt-bg);
+  border: 1px solid var(--felt-kant);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.knap:hover {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+
+.knap.primaer {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--paa-accent);
+  font-weight: 600;
+}
+
+/* Balanceinvariantens led som stribe: samme kort-baggrund som resten af
+   fladen, men segmenteret med lodrette streger frem for kortkanter. */
+.balancestribe {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 12px 10px 16px;
+  background: var(--flade);
+  border: 1px solid var(--linje);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.balancestribe .stribepost {
+  flex: 1 1 auto;
+  display: block;
+  padding: 8px 12px;
+  border-right: 1px solid var(--linje);
+}
+
+.balancestribe .stribepost:last-child {
+  border-right: 0;
+}
+
+.balancestribe .stribepost .m {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.balancestribe .stribepost .v {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.blokke {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  margin: 0 10px 16px;
+}
+
+.blok {
+  padding: 13px 15px;
+  background: var(--flade);
+  border: 1px solid var(--linje);
+  border-radius: 6px;
+  margin: 0 10px 16px;
+}
+
+.blokke > .blok {
+  margin: 0;
+}
+
+.blok.bred {
+  grid-column: 1 / -1;
+}
+
+.blok h3 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8e99a6;
+}
+
+/* Stribeposten genbruges inde i en blok som en almindelig etiket/værdi-række
+   i stedet for stribens segmenter, jf. `.balancestribe .stribepost`. */
+.stribepost {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.stribepost .m {
+  color: var(--muted);
+}
+
+.stribepost .v {
+  font-family: var(--f-tal);
+  font-variant-numeric: tabular-nums;
+}
+
+.lagtabel,
+.beholdningstabel,
+.postertabel {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+  font-family: var(--f-tal);
+  font-variant-numeric: tabular-nums;
+}
+
+.lagtabel th,
+.beholdningstabel th,
+.postertabel th {
+  text-align: right;
+  padding: 4px 8px;
+  font-family: var(--f-broed);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--linje);
+  white-space: nowrap;
+}
+
+.lagtabel td,
+.beholdningstabel td,
+.postertabel td {
+  text-align: right;
+  padding: 3px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--linje-svag);
+}
+
+.lagtabel th:first-child,
+.lagtabel td:first-child,
+.beholdningstabel th:first-child,
+.beholdningstabel td:first-child,
+.postertabel th:first-child,
+.postertabel td:first-child {
+  text-align: left;
+  font-family: var(--f-broed);
+}
+
+.lagtabel tr.sum td {
+  border-top: 1px solid var(--felt-kant);
+  border-bottom: 0;
+  padding-top: 6px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
 /* ---------- under omkring 1000 px lægges delene under hinanden ---------- */
 
 @media (max-width: 1000px) {
