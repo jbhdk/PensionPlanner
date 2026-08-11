@@ -463,6 +463,55 @@ describe('fladen', () => {
     expect(forfald.value).toBe('Januar')
   })
 
+  it('viser hvad en engangspost koster i det år, den falder', async () => {
+    // Reguleringssatsen gentager ingenting på en engangspost — den bærer
+    // beløbet fra dagens kroner op i det års egne. Uden den linje er
+    // forskellen på 2 % og 0 % usynlig, indtil året er nået i årstabellen.
+    // 200.000 × 1,02^10 = 243.799 kr. i 2036.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          entries: [
+            anExpense({
+              amountInRealKroner: 200_000,
+              timing: 1,
+              period: { anchor: 'CalendarYear', from: 2036, to: 2036 },
+              recurrence: { kind: 'Once' },
+              regulationRate: 0.02,
+            }),
+          ],
+        })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+
+    expect(screen.getByText('Beløb i 2036')).toBeTruthy()
+    expect(screen.getByText('243.799')).toBeTruthy()
+
+    // Sat til nul står posten stille i løbende priser — og bliver dermed
+    // billigere, jo længere ude den ligger.
+    await user.clear(screen.getByLabelText(/Reguleringssats/))
+
+    expect(screen.getByText('200.000')).toBeTruthy()
+  })
+
+  it('viser ingen udledt linje for en post, der gentager sig', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          entries: [anExpense({ amountInRealKroner: 200_000, regulationRate: 0.02 })],
+        })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+
+    expect(screen.queryByText(/^Beløb i/)).toBeNull()
+  })
+
   it('lader postens reguleringssats redigeres uafhængigt af planens inflation', async () => {
     const user = userEvent.setup()
     render(

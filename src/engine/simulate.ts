@@ -282,8 +282,15 @@ function ownerOf(plan: Plan, entry: Entry): Person {
 
 /** Faktoren der løfter dagens kroner op i årets egne, efter postens egen
     reguleringssats — uafhængig af planens inflationsantagelse. Startåret er
-    prisniveauet, så faktoren er 1 dér. */
-function entryProjection(entry: Entry, startYear: SimulationYear, year: SimulationYear): number {
+    prisniveauet, så faktoren er 1 dér.
+
+    Eksporteret så fladen kan vise, hvad en engangspost faktisk koster i det
+    år, den falder, med samme udledning som motoren selv bruger. */
+export function entryProjection(
+  entry: Entry,
+  startYear: SimulationYear,
+  year: SimulationYear,
+): number {
   return (1 + entry.regulationRate) ** (year - startYear)
 }
 

@@ -13,9 +13,9 @@ import type {
   Timing,
 } from '../engine/plan'
 import { latestRateYear } from '../engine/rates/rates'
-import { periodBounds } from '../engine/simulate'
+import { entryProjection, periodBounds } from '../engine/simulate'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
-import { procent } from './format'
+import { kroner, procent } from './format'
 import {
   findEntry,
   findHolding,
@@ -466,6 +466,12 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
   )
 
   const income = entry.direction === 'Income'
+  // En engangspost falder i ét år, og reguleringssatsen gentager derfor
+  // ingenting — den bærer beløbet fra dagens kroner op i det års egne.
+  // `onceYear` er undefined, indtil året er valgt.
+  const onceBounds =
+    entry.recurrence.kind === 'Once' ? periodBounds(entry.period, owner) : undefined
+  const onceYear = onceBounds ? (onceBounds.from ?? onceBounds.to) : undefined
 
   return (
     <>
@@ -687,10 +693,27 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
             onChange(withEntry(plan, id, (e) => ({ ...e, regulationRate: percent / 100 })))
           }
         />
-        <Hint>
-          Reguleringssatsen er postens egen og adskilt fra planens
-          inflationsantagelse.
-        </Hint>
+        {onceYear !== undefined && (
+          <LockedField
+            label={`Beløb i ${onceYear}`}
+            value={kroner(
+              entry.amountInRealKroner * entryProjection(entry, plan.startYear, onceYear),
+            )}
+            unit="udledt"
+          />
+        )}
+        {entry.recurrence.kind === 'Once' ? (
+          <Hint>
+            Beløbet står i dagens kroner, og satsen er prisudviklingen frem til
+            det år, posten falder — ikke en årlig gentagelse. Sat til nul bliver
+            posten billigere, jo længere ude den ligger.
+          </Hint>
+        ) : (
+          <Hint>
+            Reguleringssatsen er postens egen og adskilt fra planens
+            inflationsantagelse.
+          </Hint>
+        )}
       </Section>
     </>
   )
