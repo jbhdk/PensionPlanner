@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { rateYear2026 } from '../rates/rateYear2026'
-import { assessTax } from './assessTax'
+import { assessTax, marginalTaxRate } from './assessTax'
 import type { TaxAssessmentInput } from './assessTax'
 
 /** Den sekundære testsøm: skatten for ét simuleringsår og én person, kaldbar
@@ -407,5 +407,41 @@ describe('lagenes grundlag og sats', () => {
 
   it('udelader kapitalindkomstens bidrag, når kapitalindkomsten er nul', () => {
     expect(assess({ earnedIncome: 500_000 }).capitalIncomeContribution).toBeUndefined()
+  })
+})
+
+describe('marginalTaxRate', () => {
+  it('regner den sammensatte marginalskat som skatten af én krone mere lønindkomst', () => {
+    // 900.000 kr. i løn ligger over begge fradragslofter (jf. "stopper
+    // beskæftigelsesfradraget/jobfradraget ved sit maksimum" ovenfor) og over
+    // både mellem- og topskattegrænsen, uden at det skrå skatteloft binder
+    // ved 22 % kommuneskat — jf. "lader loftet nedsætte en sats, men aldrig
+    // løfte den". Ingen fradrag eller lofttrin ændrer sig derfor med den
+    // næste krone, og marginalskatten er præcis summen af de nominelle
+    // satser på det, der er tilbage efter AM-bidrag:
+    // 8 % AM-bidrag + 92 % × (12,01 % bund + 7,50 % mellem + 7,50 % top + 22 % kommune)
+    // = 8 % + 92 % × 49,01 % = 53,0892 %.
+    const rate = marginalTaxRate(
+      { earnedIncome: 900_000, municipalTaxRate: 0.22, churchTaxRate: 0 },
+      rateYear2026,
+    )
+
+    expect(rate).toBeCloseTo(0.530892, 6)
+  })
+
+  it('lader marginalskatten stige, når en ekstra krone krydser ind i et nyt progressionslag', () => {
+    // 641.199 kr. i personlig indkomst (697.999,89 i løn) ligger lige under
+    // mellemskattegrænsen; én krone mere krydser den. Marginalskatten skal
+    // derfor være højere end AM-bidraget plus bundskatten alene.
+    const belowThreshold = marginalTaxRate(
+      { earnedIncome: 600_000, municipalTaxRate: 0.254, churchTaxRate: 0.0074 },
+      rateYear2026,
+    )
+    const acrossThreshold = marginalTaxRate(
+      { earnedIncome: 750_000, municipalTaxRate: 0.254, churchTaxRate: 0.0074 },
+      rateYear2026,
+    )
+
+    expect(acrossThreshold).toBeGreaterThan(belowThreshold)
   })
 })

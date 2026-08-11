@@ -211,6 +211,24 @@ export function totalTax(assessment: TaxAssessment): Nominal {
   return fromLayers + fromCapitalIncome
 }
 
+/** Den sammensatte marginalskat af den næste krone lønindkomst: hvad en
+    ekstra krone koster netop denne person i netop dette år. Regnet ved at
+    gentage skatteopgørelsen med `earnedIncome + 1` og tage differencen fra
+    den oprindelige — aldrig ved at udlede den analytisk af satserne, så den
+    ikke kan komme til at sige noget andet end selve opgørelsen ville. Kun
+    lønindkomstens marginal: aktie- og kapitalindkomst beskattes med flade
+    satser, der ikke har en marginal at vise. */
+export function marginalTaxRate(
+  input: TaxAssessmentInput,
+  rates: RateYear,
+): number {
+  const at = totalTax(assessTax(input, rates))
+  const atNextKrone = totalTax(
+    assessTax({ ...input, earnedIncome: input.earnedIncome + 1 }, rates),
+  )
+  return atNextKrone - at
+}
+
 /** Summen af en række beløb, der står hver for sig — brugt til fradragene,
     som (i modsætning til lagene) stadig er rene tal. */
 function sum(amounts: Record<string, Nominal>): Nominal {

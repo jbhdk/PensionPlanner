@@ -43,6 +43,10 @@ export type PersonYear = {
   shareIncome: Nominal
   capitalIncome: Nominal
   tax: TaxAssessment
+  /** Hvad næste krone lønindkomst koster netop denne person i netop dette
+      år — se `marginalTaxRate`. Aktie- og kapitalindkomst har flade satser
+      og har ikke en marginal at vise. */
+  marginalTaxRate: number
 }
 
 /** Motorens fulde output for ét simuleringsår — alle mellemregninger, ikke

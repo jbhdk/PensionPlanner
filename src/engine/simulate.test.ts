@@ -350,6 +350,12 @@ describe('simulate', () => {
       topBracketTax: 0,
       additionalTopBracketTax: 0,
     })
+
+    // Begge fradrag er i loft ved 600.000, og personlig indkomst ligger
+    // under mellemskattegrænsen: næste krone koster kun AM-bidrag, bundskat,
+    // kommune- og kirkeskat, ingen af dem loftbegrænsede ved denne kommunesats.
+    // 8 % + 92 % × (12,01 % + 25,40 % + 0,74 %) = 43,098 %.
+    expect(year.persons[0]!.marginalTaxRate).toBeCloseTo(0.43098, 5)
   })
 
   it('krediterer nettoafkastet på beholdningens primosaldo, når planen ingen strømme har', () => {

@@ -16,7 +16,7 @@ import type {
 } from './plan'
 import { latestRateYear } from './rates/rates'
 import type { RateYear } from './rates/rateYear'
-import { assessTax, totalTax } from './tax/assessTax'
+import { assessTax, marginalTaxRate, totalTax } from './tax/assessTax'
 import type { TaxAssessment } from './tax/assessTax'
 import type { BufferState, HoldingYear, YearResult } from './yearResult'
 
@@ -118,11 +118,12 @@ function simulateYear(
     conversion: 0,
     holdings: holdingYears(opening, balances, returns, flows),
     entries: entries.map(({ entry, amount }) => ({ entry: entry.id, amount })),
-    persons: assessments.map(({ person, tax }) => ({
+    persons: assessments.map(({ person, tax, marginalTaxRate }) => ({
       person,
       shareIncome: shareIncomeByPerson.get(person)!,
       capitalIncome: capitalIncomeByPerson.get(person)!,
       tax,
+      marginalTaxRate,
     })),
     bufferState: bufferState(plan, balances),
   }
@@ -220,7 +221,7 @@ function assess(
   person: Person,
   rates: RateYear,
   capitalIncome: Nominal,
-): { person: string; tax: TaxAssessment } {
+): { person: string; tax: TaxAssessment; marginalTaxRate: number } {
   const earnedIncome = entries
     .filter(
       ({ entry }) =>
@@ -230,17 +231,17 @@ function assess(
     )
     .reduce((sum, { amount }) => sum + amount, 0)
 
+  const input = {
+    earnedIncome,
+    municipalTaxRate: plan.municipalTaxRate,
+    churchTaxRate: plan.churchTax ? plan.churchTaxRate : 0,
+    capitalIncome,
+  }
+
   return {
     person: person.id,
-    tax: assessTax(
-      {
-        earnedIncome,
-        municipalTaxRate: plan.municipalTaxRate,
-        churchTaxRate: plan.churchTax ? plan.churchTaxRate : 0,
-        capitalIncome,
-      },
-      rates,
-    ),
+    tax: assessTax(input, rates),
+    marginalTaxRate: marginalTaxRate(input, rates),
   }
 }
 
