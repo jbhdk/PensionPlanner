@@ -466,12 +466,7 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
   )
 
   const income = entry.direction === 'Income'
-  // En engangspost falder i ét år, og reguleringssatsen gentager derfor
-  // ingenting — den bærer beløbet fra dagens kroner op i det års egne.
-  // `onceYear` er undefined, indtil året er valgt.
-  const onceBounds =
-    entry.recurrence.kind === 'Once' ? periodBounds(entry.period, owner) : undefined
-  const onceYear = onceBounds ? (onceBounds.from ?? onceBounds.to) : undefined
+  const periodNote = derivedPeriodNote(plan, entry)
 
   return (
     <>
@@ -700,17 +695,8 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
             }
           />
         )}
-        {onceYear !== undefined && (
-          <LockedField
-            label={`Beløb i ${onceYear}`}
-            value={kroner(entry.amountInRealKroner * entryProjection(entry, plan, onceYear))}
-            unit="udledt"
-          />
-        )}
         <Hint>
-          {resolvedPeriodSentence(plan, entry) !== undefined && (
-            <>{resolvedPeriodSentence(plan, entry)} </>
-          )}
+          {periodNote !== undefined && <>{periodNote} </>}
           {entry.direction === 'Expense'
             ? 'Udgiften står i dagens kroner og følger planens inflationsantagelse — kun indtægter har deres egen reguleringssats.'
             : entry.recurrence.kind === 'Once'
@@ -745,21 +731,29 @@ function defaultRecurrence(kind: Recurrence['kind']): Recurrence {
 
 /** Den kalenderårsrække, en aldersforankret periode faktisk falder i — samme
     udledning som motoren selv bruger, jf. `periodBounds`. */
-/** Den udledte periode som en sætning til noten. `resolvedPeriodLabel` er
-    skrevet til en værdikolonne og giver fragmenter som "til 2033" — de skal
-    have et verbum, før de kan stå i prosa. Kun ved aldersforankring: ved
-    kalenderår står årstallene allerede i felterne selv. */
-function resolvedPeriodSentence(plan: Plan, entry: Entry): string | undefined {
-  if (entry.period.anchor !== 'PersonAge') return undefined
+/** Det udledte om perioden, som en sætning til noten: hvornår posten løber,
+    og for en engangspost hvad den koster i det år, den falder. Begge dele
+    stod før som egne værdirækker med etiketter som "til 2033" — i prosa skal
+    de have et verbum.
 
+    En gentagende post får kun sætningen ved aldersforankring: ved kalenderår
+    står årstallene allerede i felterne selv, og der er intet udledt at sige.
+    En engangspost får den altid, fordi beløbet i årets egne kroner er udledt
+    uanset forankringen. */
+function derivedPeriodNote(plan: Plan, entry: Entry): string | undefined {
   const owner = findPerson(plan, entry.owner)
   if (!owner) return undefined
 
   const { from, to } = periodBounds(entry.period, owner)
+
   if (entry.recurrence.kind === 'Once') {
     const year = from ?? to
-    return year === undefined ? undefined : `Posten falder i ${year}.`
+    if (year === undefined) return undefined
+    const amount = kroner(entry.amountInRealKroner * entryProjection(entry, plan, year))
+    return `Posten falder i ${year} med ${amount} kr. i det års egne kroner.`
   }
+
+  if (entry.period.anchor !== 'PersonAge') return undefined
   if (from === undefined && to === undefined) return 'Posten løber hele horisonten.'
   if (from === undefined) return `Posten løber til og med ${to}.`
   if (to === undefined) return `Posten løber fra ${from} og horisonten ud.`

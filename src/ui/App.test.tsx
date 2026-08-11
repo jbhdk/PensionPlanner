@@ -80,13 +80,6 @@ async function showYearTable(user: ReturnType<typeof userEvent.setup>) {
 /** En beholdnings navn findes både som navigatorrække og som knap i
     grafens legend — de to skal kunne skelnes, ikke kun den ene fjernes.
     Denne henter navigatorens, som de fleste tests handler om. */
-/** Den udledte "Beløb i {år}"-linje aflæst for sig — beløbet står også i
-    beløbsfeltet og i navigatoren, så en fri tekstsøgning rammer flere. */
-function udledtBeloeb(year: number) {
-  const felt = screen.getByText(`Beløb i ${year}`).closest('.felt') as HTMLElement
-  return felt.querySelector('.laast')!.textContent
-}
-
 function navigatorButton(name: string | RegExp) {
   const navigatorspalte = document.querySelector('.navigatorspalte') as HTMLElement
   return within(navigatorspalte).getByRole('button', { name })
@@ -495,7 +488,9 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
 
-    expect(udledtBeloeb(2036)).toBe('243.799')
+    expect(
+      screen.getByText(/Posten falder i 2036 med 243\.799 kr\. i det års egne kroner\./),
+    ).toBeTruthy()
 
     // Udgiften har ikke satsfeltet — det er kun indtægter, der har et eget
     // tempo at skrue på.
@@ -526,14 +521,14 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: /Løn/ }))
 
-    expect(udledtBeloeb(2036)).toBe('162.889')
+    expect(screen.getByText(/Posten falder i 2036 med 162\.889 kr\./)).toBeTruthy()
 
     await user.clear(screen.getByLabelText(/Reguleringssats/))
 
-    expect(udledtBeloeb(2036)).toBe('100.000')
+    expect(screen.getByText(/Posten falder i 2036 med 100\.000 kr\./)).toBeTruthy()
   })
 
-  it('viser ingen udledt linje for en post, der gentager sig', async () => {
+  it('siger intet udledt i noten for en gentagende post i kalenderår', async () => {
     const user = userEvent.setup()
     render(
       <App
@@ -545,7 +540,7 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
 
-    expect(screen.queryByText(/^Beløb i/)).toBeNull()
+    expect(screen.queryByText(/Posten falder i/)).toBeNull()
   })
 
   it('lader indtægtens reguleringssats redigeres uafhængigt af planens inflation', async () => {
