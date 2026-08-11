@@ -61,6 +61,10 @@ Et satsår er delt referencedata, aldrig en del af en plan ([ADR-0005](./docs/ad
 
 React + TypeScript + Vite, ingen backend. Motoren er rene funktioner uden React-afhængighed. Persistens er localStorage med `schemaVersion` og en migrationskæde, plus JSON-eksport og -import. Beslutninger, der ligger i det gemte skema, kan kun ændres via et nyt led i kæden — nævn det, når du rører dem.
 
+## Refaktorering
+
+Kan en opgaves acceptkriterium opfyldes enten med en mindre, sikker ændring eller med en refaktorering, der arbejder hen mod en korrekt modellering af domænet, foretrækkes refaktoreringen som udgangspunkt. Der er undtagelser, og de afgøres fra sag til sag — derfor skal valget altid bekræftes, før refaktoreringen igangsættes. Kræver beslutningen en grilling, tages den, før koden rører sig.
+
 ## Commits
 
 Dansk, imperativ, én sammenhængende ændring pr. commit ("Afklar aktieindkomstens rolle i aftrapningsgrundlaget"). Commit og push kun når du bliver bedt om det.
