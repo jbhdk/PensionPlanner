@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Plan } from '../engine/plan'
 import { kroner } from './format'
-import { addPerson } from './planEdits'
+import { addHolding, addPerson, addTransfer } from './planEdits'
 import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
 
@@ -99,6 +99,7 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
   const holdingSum = holdings.reduce((sum, h) => sum + h.balance, 0)
   const income = plan.entries.filter((entry) => entry.direction === 'Income')
   const expenses = plan.entries.filter((entry) => entry.direction === 'Expense')
+  const holdingName = (id: string) => holdings.find((h) => h.id === id)?.name ?? id
 
   return [
     {
@@ -132,6 +133,8 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
         value: kroner(holding.balance),
         target: { kind: 'holding', id: holding.id },
       })),
+      addLabel: '+ Beholdning',
+      onAdd: () => onChange(addHolding(plan)),
     },
     {
       id: 'indtaegter',
@@ -159,6 +162,21 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
         value: kroner(-entry.amountInRealKroner),
         target: { kind: 'entry', id: entry.id },
       })),
+    },
+    {
+      id: 'overfoersler',
+      title: 'Overførsler',
+      count: String(plan.transfers.length),
+      summary: '',
+      rows: plan.transfers.map((transfer) => ({
+        name: `${holdingName(transfer.from)} → ${holdingName(transfer.to)}`,
+        value: kroner(transfer.amountInRealKroner),
+        target: { kind: 'transfer', id: transfer.id },
+      })),
+      // En overførsel flytter penge mellem to beholdninger — der skal være
+      // to at vælge mellem, før knappen giver mening.
+      addLabel: holdings.length >= 2 ? '+ Overførsel' : undefined,
+      onAdd: () => onChange(addTransfer(plan)),
     },
   ]
 }

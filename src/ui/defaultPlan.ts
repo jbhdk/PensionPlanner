@@ -11,6 +11,7 @@ export function defaultPlan(): Plan {
     churchTax: true,
     churchTaxRate: 0.0074,
     buffer: 'free-assets',
+    transfers: [],
     entries: [
       {
         id: 'living-costs',

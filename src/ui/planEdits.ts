@@ -1,4 +1,4 @@
-import type { Direction, Entry, Holding, Person, Plan } from '../engine/plan'
+import type { Direction, Entry, Holding, Person, Plan, Transfer } from '../engine/plan'
 
 /** Redigeringerne er rene: de bygger en ny plan frem for at rette i den
     gamle. Motoren er en ren funktion, og en muteret plan ville gøre det
@@ -114,6 +114,38 @@ export function findHolding(plan: Plan, id: string): Holding | undefined {
     .find((holding) => holding.id === id)
 }
 
+/** Den tyndeste beholdning, der kan tilføjes: nul saldo og nul afkast, så den
+    ikke lover en investeringsantagelse, brugeren ikke har tastet. Lander hos
+    husstandens første person — "Ejer"-vælgeren i skuffen flytter den siden. */
+export function addHolding(plan: Plan): Plan {
+  const owner = plan.household.persons[0]
+  if (!owner) return plan
+
+  const count = plan.household.persons.flatMap((person) => person.holdings).length
+  const holding: Holding = {
+    id: freshHoldingId(plan),
+    name: `Beholdning ${count + 1}`,
+    variant: 'CapitalIncome',
+    balance: 0,
+    grossReturn: 0,
+    annualCostRate: 0,
+  }
+
+  return withPerson(plan, owner.id, (person) => ({
+    ...person,
+    holdings: [...person.holdings, holding],
+  }))
+}
+
+function freshHoldingId(plan: Plan): string {
+  const existing = new Set(
+    plan.household.persons.flatMap((person) => person.holdings.map((holding) => holding.id)),
+  )
+  let n = 1
+  while (existing.has(`holding-${n}`)) n++
+  return `holding-${n}`
+}
+
 /** Personen, hvis `holdings` netop nu rummer beholdningen. Ejerskab er
     nesting, ikke et felt på `Holding` — se domænemodellen. */
 export function findHoldingOwner(plan: Plan, holdingId: string): Person | undefined {
@@ -142,6 +174,55 @@ export function withHoldingOwner(plan: Plan, holdingId: string, newOwnerId: stri
 
 export function findEntry(plan: Plan, id: string): Entry | undefined {
   return plan.entries.find((entry) => entry.id === id)
+}
+
+export function findTransfer(plan: Plan, id: string): Transfer | undefined {
+  return plan.transfers.find((transfer) => transfer.id === id)
+}
+
+export function withTransfer(
+  plan: Plan,
+  id: string,
+  change: (transfer: Transfer) => Transfer,
+): Plan {
+  return {
+    ...plan,
+    transfers: plan.transfers.map((transfer) =>
+      transfer.id === id ? change(transfer) : transfer,
+    ),
+  }
+}
+
+/** Den tyndeste overførsel, der kan tilføjes: fra og til de to første
+    beholdninger, hele horisonten, hvert år. Brugeren retter dem i skuffen
+    bagefter. Kræver to beholdninger at flytte penge mellem — knappen der
+    kalder den, er selv skjult ellers. */
+export function addTransfer(plan: Plan): Plan {
+  const holdings = plan.household.persons.flatMap((person) => person.holdings)
+  if (holdings.length < 2) return plan
+
+  return {
+    ...plan,
+    transfers: [
+      ...plan.transfers,
+      {
+        id: freshTransferId(plan),
+        from: holdings[0]!.id,
+        to: holdings[1]!.id,
+        amountInRealKroner: 0,
+        timing: 'Even',
+        period: {},
+        recurrence: { kind: 'Annual' },
+      },
+    ],
+  }
+}
+
+function freshTransferId(plan: Plan): string {
+  const existing = new Set(plan.transfers.map((transfer) => transfer.id))
+  let n = 1
+  while (existing.has(`transfer-${n}`)) n++
+  return `transfer-${n}`
 }
 
 /** Læser et tal, brugeren har tastet. Tusindtalspunktummer tåles, og komma

@@ -33,6 +33,14 @@ _Avoid_: Familie, hjem, bruger
 Et individ i husstanden med egen fødselsdato, egne konti og egen skatteopgørelse.
 _Avoid_: Bruger, ægtefælle, medlem
 
+**Kommune** · `Municipality`:
+Den kommune en person er bosat i. Vælges fra en liste, ikke skrives som et tal — kommune- og kirkeskatteprocenten hører til satsåret og slås op dér for hvert simuleringsår, ikke gemt som et tal på personen selv.
+_Avoid_: Bopælskommune, adresse
+
+**Medlem af folkekirken** · `ChurchMember`:
+Om en person betaler kirkeskat. Uafhængig af `Municipality`: to personer i samme kommune kan have hver sit svar.
+_Avoid_: Kirkeskattepligtig
+
 ### Tid og penge
 
 **Simuleringsår** · `SimulationYear`:
@@ -92,6 +100,10 @@ _Avoid_: Bufferkonto, restpost, kassekredit
 **Holdbar plan** · `Sustainable`:
 En plan hvor bufferen aldrig går negativt inden for horisonten. En negativ buffer med likviditet andetsteds i husstanden er ikke en uholdbar plan, men en ufuldstændig — der mangler en overførsel.
 _Avoid_: Bæredygtig, gyldig, robust
+
+**Bufferens tilstand** · `BufferState`:
+Hvorfor bufferen er negativ i ét simuleringsår: `Incomplete`, når husstanden har likviditet andetsteds og blot mangler en overførsel, eller `Unsustainable`, når husstandens samlede frie midler også er negative. Et resultat på linje med resten af `YearResult`, ikke en valideringsfejl, og afgjort år for år — samme plan kan være `Incomplete` i de tidlige år og `Unsustainable` senere, jf. ADR-0008.
+_Avoid_: Ufuldstændig og uholdbar brugt om hele planen frem for om ét år, fejltilstand, valideringsfejl
 
 **Udbetalingsplan** · `PayoutSchedule`:
 Angivelsen af hvornår en beholdning begynder at blive tømt, over hvor mange år, og efter hvilket beregningsprincip. Brugeren vælger start og varighed — ikke det årlige beløb, som følger af princippet og saldoen.

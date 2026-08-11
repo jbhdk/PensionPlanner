@@ -4,7 +4,9 @@ import type {
   Period,
   Plan,
   Recurrence,
+  SimulationYear,
   Timing,
+  Transfer,
 } from '../plan'
 import type { YearResult } from '../yearResult'
 
@@ -20,6 +22,7 @@ type Options = {
   grossReturn?: number
   annualCostRate?: number
   entries?: Entry[]
+  transfers?: Transfer[]
   municipalTaxRate?: number
   churchTax?: boolean
   churchTaxRate?: number
@@ -48,6 +51,7 @@ export function aPlan(options: Options = {}): Plan {
     grossReturn = 0,
     annualCostRate = 0,
     entries = [],
+    transfers = [],
     municipalTaxRate = 0.254,
     churchTax = true,
     churchTaxRate = 0.0074,
@@ -59,6 +63,7 @@ export function aPlan(options: Options = {}): Plan {
     inflationAssumption,
     buffer: 'free-assets',
     entries,
+    transfers,
     municipalTaxRate,
     churchTax,
     churchTaxRate,
@@ -130,6 +135,26 @@ export function aSalary(options: {
     period: options.period ?? wholeHorizon,
     recurrence: options.recurrence ?? annually,
     regulationRate: options.regulationRate ?? 0,
+  }
+}
+
+/** En overførsel mellem to beholdninger. Perioden er altid kalenderårsforankret. */
+export function aTransfer(options: {
+  from: string
+  to: string
+  amountInRealKroner: number
+  timing?: Timing
+  period?: { from?: SimulationYear; to?: SimulationYear }
+  recurrence?: Recurrence
+}): Transfer {
+  return {
+    id: 'transfer',
+    from: options.from,
+    to: options.to,
+    amountInRealKroner: options.amountInRealKroner,
+    timing: options.timing ?? 'Even',
+    period: options.period ?? {},
+    recurrence: options.recurrence ?? annually,
   }
 }
 

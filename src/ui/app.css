@@ -19,6 +19,7 @@
   --linje-svag: #262e38;
   --accent: #e0a33a;
   --neg: #e2685c;
+  --neg-svag: rgba(226, 104, 92, 0.1);
   --paa-accent: #191204;
   --felt-bg: #141920;
   --felt-kant: #333d49;
@@ -420,6 +421,32 @@ body {
   line-height: 1.5;
 }
 
+/* ---------- besked (planen kan ikke simuleres) ---------- */
+
+.besked {
+  margin: 10px;
+  padding: 13px 15px;
+  background: var(--flade);
+  border: 1px solid var(--linje);
+  border-radius: 6px;
+}
+
+.besked.stop {
+  border-color: var(--neg);
+  background: var(--neg-svag);
+}
+
+.besked h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.besked p {
+  margin: 0;
+  color: var(--label);
+  font-size: 12px;
+}
+
 /* ---------- årstabellen ---------- */
 
 .tabelramme {
@@ -473,6 +500,30 @@ table.aar tbody tr:hover {
 table.aar td.formue {
   color: #fff;
   font-weight: 600;
+}
+
+/* En negativ buffer er et resultat, ikke en valideringsfejl, og markeres i
+   tabellen. Rød er forbeholdt netop den negative buffer — de to tilstande
+   skelnes derfor med ordet i mærkatet, ikke med endnu en farve. */
+table.aar tr.ufuldstaendig,
+table.aar tr.uholdbar {
+  background: var(--neg-svag);
+}
+
+table.aar tr.ufuldstaendig td.buffer,
+table.aar tr.uholdbar td.buffer {
+  color: var(--neg);
+  font-weight: 600;
+}
+
+table.aar td.buffer .tilstand {
+  display: block;
+  font-family: var(--f-broed);
+  font-size: 9.5px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--neg);
+  white-space: nowrap;
 }
 
 /* ---------- under omkring 1000 px lægges delene under hinanden ---------- */

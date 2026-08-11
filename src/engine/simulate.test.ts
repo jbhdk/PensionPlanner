@@ -6,9 +6,39 @@ import {
   aSalary,
   aTaxFreeIncome,
   anExpense,
+  aTransfer,
   bufferBalance,
 } from './testing/planFixture'
 import { simulateChecked } from './testing/simulateChecked'
+import type { YearResult } from './yearResult'
+
+/** Fixturens buffer ("free-assets") plus én beholdning til, med samme
+    bruttoafkast som bufferen, så en overførsel har et sted at flytte penge
+    hen. */
+function aPlanWithSecondHolding(options: Parameters<typeof aPlan>[0] = {}): Plan {
+  const base = aPlan(options)
+  return {
+    ...base,
+    household: {
+      persons: [
+        {
+          ...base.household.persons[0]!,
+          holdings: [
+            ...base.household.persons[0]!.holdings,
+            {
+              id: 'anden-beholdning',
+              name: 'Anden beholdning',
+              variant: 'CapitalIncome',
+              balance: 0,
+              grossReturn: options.grossReturn ?? 0,
+              annualCostRate: options.annualCostRate ?? 0,
+            },
+          ],
+        },
+      ],
+    },
+  }
+}
 
 describe('simulate', () => {
   it('løber fra planens startår til og med personens horisont, ét kalenderår ad gangen', () => {
@@ -536,5 +566,180 @@ describe('simulate', () => {
     // Og de nedsætter den skattepligtige indkomst, ikke den personlige.
     expect(tax.personalIncome).toBeCloseTo(552_000, 2)
     expect(tax.taxableIncome).toBeCloseTo(485_600, 2)
+  })
+})
+
+describe('overførsler', () => {
+  it('flytter beløbet fra afgiverens til modtagerens beholdning, uden at ændre totalformuen', () => {
+    const plan = aPlanWithSecondHolding({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      transfers: [
+        aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 200_000 }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+
+    expect(bufferBalance(years[0]!)).toBe(800_000)
+    expect(
+      years[0]!.holdings.find((h) => h.holding === 'anden-beholdning')!.closingBalance,
+    ).toBe(200_000)
+    expect(years[0]!.closingWealth).toBe(1_000_000)
+  })
+
+  it('udløser ingen skat og optræder hverken som indtægt eller udgift', () => {
+    const plan = aPlanWithSecondHolding({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      transfers: [
+        aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 200_000 }),
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(year.income).toBe(0)
+    expect(year.expenses).toBe(0)
+    expect(year.tax).toBe(0)
+  })
+
+  it('vejer overførslens forfald ind i afkastgrundlaget i begge ender', () => {
+    const early = simulateChecked(
+      aPlanWithSecondHolding({
+        balance: 1_000_000,
+        inflationAssumption: 0,
+        grossReturn: 0.12,
+        transfers: [
+          aTransfer({
+            from: 'free-assets',
+            to: 'anden-beholdning',
+            amountInRealKroner: 600_000,
+            timing: 1,
+          }),
+        ],
+      }),
+    )
+    const late = simulateChecked(
+      aPlanWithSecondHolding({
+        balance: 1_000_000,
+        inflationAssumption: 0,
+        grossReturn: 0.12,
+        transfers: [
+          aTransfer({
+            from: 'free-assets',
+            to: 'anden-beholdning',
+            amountInRealKroner: 600_000,
+            timing: 12,
+          }),
+        ],
+      }),
+    )
+
+    const buffer = (years: YearResult[]) =>
+      years[0]!.holdings.find((h) => h.holding === 'free-assets')!.return
+    const anden = (years: YearResult[]) =>
+      years[0]!.holdings.find((h) => h.holding === 'anden-beholdning')!.return
+
+    // Januar-forfald flytter mest af afkastgrundlaget: afgiveren mister det
+    // meste af sit afkast, og modtageren får det meste af det.
+    expect(buffer(early)).toBeLessThan(buffer(late))
+    expect(anden(early)).toBeGreaterThan(anden(late))
+  })
+
+  it('afviser en plan hvor to beholdninger er udpeget som samme buffer', () => {
+    const base = aPlanWithSecondHolding()
+    const plan: Plan = {
+      ...base,
+      buffer: 'delt-id',
+      household: {
+        persons: [
+          {
+            ...base.household.persons[0]!,
+            holdings: base.household.persons[0]!.holdings.map((holding) => ({
+              ...holding,
+              id: 'delt-id',
+            })),
+          },
+        ],
+      },
+    }
+
+    expect(() => simulate(plan)).toThrow(/buffer/i)
+  })
+
+  it('mærker året ufuldstændig, når bufferen er negativ, men husstanden har likviditet andetsteds', () => {
+    const plan = aPlanWithSecondHolding({
+      balance: 0,
+      inflationAssumption: 0,
+      entries: [anExpense({ amountInRealKroner: 40_000 })],
+      transfers: [],
+    })
+    // Anden beholdning har rigeligt til at dække underskuddet, men ingen
+    // overførsel flytter det derfra.
+    const withLiquidity: Plan = {
+      ...plan,
+      household: {
+        persons: [
+          {
+            ...plan.household.persons[0]!,
+            holdings: plan.household.persons[0]!.holdings.map((holding) =>
+              holding.id === 'anden-beholdning' ? { ...holding, balance: 500_000 } : holding,
+            ),
+          },
+        ],
+      },
+    }
+
+    const year = simulateChecked(withLiquidity)[0]!
+
+    expect(bufferBalance(year)).toBeLessThan(0)
+    expect(year.bufferState).toBe('Incomplete')
+  })
+
+  it('mærker året uholdbar, når husstandens samlede frie midler også er negative', () => {
+    const plan = aPlanWithSecondHolding({
+      balance: 0,
+      inflationAssumption: 0,
+      entries: [anExpense({ amountInRealKroner: 40_000 })],
+      transfers: [],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(bufferBalance(year)).toBeLessThan(0)
+    expect(year.bufferState).toBe('Unsustainable')
+  })
+
+  it('lader bufferState stå udefineret, når bufferen ikke er negativ', () => {
+    const plan = aPlan({ balance: 1_000_000, entries: [] })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(year.bufferState).toBeUndefined()
+  })
+
+  it('lader en overførsel med et afgrænset kalenderårsinterval kun falde i de år, perioden dækker', () => {
+    const plan = aPlanWithSecondHolding({
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      transfers: [
+        aTransfer({
+          from: 'free-assets',
+          to: 'anden-beholdning',
+          amountInRealKroner: 100_000,
+          period: { from: 2028, to: 2028 },
+        }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+    const anden = (year: number) =>
+      years.find((y) => y.year === year)!.holdings.find((h) => h.holding === 'anden-beholdning')!
+        .closingBalance
+
+    expect(anden(2027)).toBe(0)
+    expect(anden(2028)).toBe(100_000)
+    expect(anden(2029)).toBe(100_000)
   })
 })

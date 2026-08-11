@@ -9,6 +9,7 @@ export type Real = number
 
 export type HoldingId = string
 export type PersonId = string
+export type TransferId = string
 
 /** Beskatningsformen er beholdningens akse. Etape 1 kender kun de to frie. */
 export type HoldingVariant = 'ShareIncome' | 'CapitalIncome'
@@ -103,6 +104,21 @@ export type Entry =
   | (EntryBase & { direction: 'Income'; taxTreatment: TaxTreatment })
   | (EntryBase & { direction: 'Expense' })
 
+/** En dateret flytning af penge fra én beholdning til en anden inden for
+    husstanden. Hverken en indtægt eller en udgift, og uden skattevirkning —
+    to modgående `Entry`-poster ville nette til nul på bufferen og flytte
+    ingenting, jf. ADR-0004. Perioden er altid kalenderårsforankret: en
+    overførsel har ingen ejer at binde en alder til. */
+export type Transfer = {
+  id: TransferId
+  from: HoldingId
+  to: HoldingId
+  amountInRealKroner: Real
+  timing: Timing
+  period: { from?: SimulationYear; to?: SimulationYear }
+  recurrence: Recurrence
+}
+
 export type Plan = {
   name: string
   startYear: SimulationYear
@@ -110,6 +126,7 @@ export type Plan = {
   inflationAssumption: number
   household: Household
   entries: Entry[]
+  transfers: Transfer[]
   /** Andel pr. år, ikke procent: 0,254 er 25,40 %. Hører til husstanden og
       ikke til satsåret, fordi den afhænger af, hvor man bor. */
   municipalTaxRate: number

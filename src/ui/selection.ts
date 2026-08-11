@@ -4,6 +4,7 @@ export type Target =
   | { kind: 'person'; id: string }
   | { kind: 'holding'; id: string }
   | { kind: 'entry'; id: string }
+  | { kind: 'transfer'; id: string }
 
 export type Selection = Target | null
 

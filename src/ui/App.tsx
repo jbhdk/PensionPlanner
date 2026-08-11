@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Plan } from '../engine/plan'
-import { simulate } from '../engine/simulate'
+import { simulate, validateBuffer } from '../engine/simulate'
 import { Inspector } from './Inspector'
 import { Navigator } from './Navigator'
 import { YearTable } from './YearTable'
@@ -17,7 +17,10 @@ export function App({ initialPlan }: { initialPlan: Plan }) {
   const [plan, setPlan] = useState(initialPlan)
   const [selected, setSelected] = useState<Selection>(null)
 
-  const years = simulate(plan)
+  // Nul eller to buffere er en inputfejl, ikke et resultat: planen kan ikke
+  // simuleres, og resultatspalten skal sige hvorfor frem for at stå tom.
+  const bufferError = validateBuffer(plan)
+  const years = bufferError ? [] : simulate(plan)
   const period = `${plan.startYear}–${years.at(-1)?.year ?? plan.startYear}`
 
   return (
@@ -43,7 +46,14 @@ export function App({ initialPlan }: { initialPlan: Plan }) {
             <span className="titel">Resultatet</span>
             <span className="enhedsmaerke">dagens kroner</span>
           </div>
-          <YearTable years={years} plan={plan} />
+          {bufferError ? (
+            <div className="besked stop">
+              <h3>Planen kan ikke simuleres</h3>
+              <p>{bufferError}</p>
+            </div>
+          ) : (
+            <YearTable years={years} plan={plan} />
+          )}
         </div>
       </div>
 

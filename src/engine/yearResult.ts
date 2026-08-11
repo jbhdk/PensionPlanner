@@ -1,6 +1,12 @@
 import type { HoldingId, Nominal, PersonId, SimulationYear } from './plan'
 import type { TaxAssessment } from './tax/assessTax'
 
+/** Hvorfor bufferen er negativ i ét simuleringsår, jf. ADR-0008:
+    `Incomplete`, når husstanden har likviditet andetsteds og blot mangler en
+    overførsel, eller `Unsustainable`, når husstandens samlede frie midler
+    også er negative. Fraværende, når bufferen ikke er negativ. */
+export type BufferState = 'Incomplete' | 'Unsustainable'
+
 export type HoldingYear = {
   holding: HoldingId
   openingBalance: Nominal
@@ -43,4 +49,6 @@ export type YearResult = {
   conversion: Nominal
   holdings: HoldingYear[]
   persons: PersonYear[]
+  /** Fraværende, når bufferen ikke er negativ. */
+  bufferState?: BufferState
 }

@@ -9,14 +9,16 @@ import type {
   Person,
   PersonId,
   Plan,
+  Recurrence,
   SimulationYear,
   Timing,
+  Transfer,
 } from './plan'
 import { latestRateYear } from './rates/rates'
 import type { RateYear } from './rates/rateYear'
 import { assessTax, totalTax } from './tax/assessTax'
 import type { TaxAssessment } from './tax/assessTax'
-import type { HoldingYear, YearResult } from './yearResult'
+import type { BufferState, HoldingYear, YearResult } from './yearResult'
 
 type Balances = Map<HoldingId, Nominal>
 
@@ -24,15 +26,17 @@ type Balances = Map<HoldingId, Nominal>
     rent faktisk falder i det pågældende år. */
 type ActiveEntry = { entry: Entry; amount: Nominal }
 
+/** En overførsel sammen med dens beløb i årets løbende priser, for de
+    overførsler der rent faktisk falder i det pågældende år. */
+type ActiveTransfer = { transfer: Transfer; amount: Nominal }
+
 /** Fremskriver planen år for år i løbende priser. Ren funktion: samme plan
     giver altid samme årsrække, og planen røres ikke. */
 export function simulate(plan: Plan): YearResult[] {
+  const bufferError = validateBuffer(plan)
+  if (bufferError) throw new Error(bufferError)
+
   const balances = openingBalances(plan)
-  if (!balances.has(plan.buffer)) {
-    throw new Error(
-      `Planens buffer peger på beholdningen ${plan.buffer}, som ikke findes.`,
-    )
-  }
 
   const rates = latestRateYear()
   const results: YearResult[] = []
@@ -52,6 +56,7 @@ function simulateYear(
 ): YearResult {
   const opening = new Map(balances)
   const entries = entriesInYear(plan, year)
+  const transfers = transfersInYear(plan, year)
 
   const income = sumOf(entries, 'Income')
   const expenses = sumOf(entries, 'Expense')
@@ -59,13 +64,15 @@ function simulateYear(
   // Afkastet regnes først, på primosaldi og årets strømme alene efter
   // Modified Dietz, jf. ADR-0006 — det afhænger aldrig af skatten, kun
   // omvendt: ShareIncome og CapitalIncome beskattes af netop dette afkast.
-  // Kun bufferen modtager poster i denne skive — indbetalinger og
-  // overførsler rammer andre beholdninger i senere etaper.
+  // Kun bufferen modtager poster; en overførsel vejer ind i afkastgrundlaget
+  // i begge ender, jf. ADR-0004.
   const bufferFlow = weightedNetFlow(entries)
   const returns = new Map<HoldingId, Nominal>()
   for (const holding of allHoldings(plan)) {
     const base =
-      opening.get(holding.id)! + (holding.id === plan.buffer ? bufferFlow : 0)
+      opening.get(holding.id)! +
+      (holding.id === plan.buffer ? bufferFlow : 0) +
+      weightedTransferFlow(transfers, holding.id)
     returns.set(holding.id, netReturn(holding) * base)
   }
   const totalReturn = [...returns.values()].reduce((sum, r) => sum + r, 0)
@@ -87,6 +94,12 @@ function simulateYear(
   // underskuddet må samle sig, og den må gerne gå negativt — det er modellens
   // måde at sige, at planen ikke holder, jf. ADR-0002.
   balances.set(plan.buffer, balances.get(plan.buffer)! + income - tax - expenses)
+  // En overførsel flytter sit fulde beløb mellem afgiver og modtager. Den
+  // rammer aldrig skatten eller pengestrømmen, jf. `Transfer`.
+  for (const { transfer, amount } of transfers) {
+    balances.set(transfer.from, balances.get(transfer.from)! - amount)
+    balances.set(transfer.to, balances.get(transfer.to)! + amount)
+  }
   for (const [holding, credited] of returns) {
     balances.set(holding, balances.get(holding)! + credited)
   }
@@ -108,7 +121,23 @@ function simulateYear(
       capitalIncome: capitalIncomeByPerson.get(person)!,
       tax,
     })),
+    bufferState: bufferState(plan, balances),
   }
+}
+
+/** Hvorfor bufferen er negativ ved årets slutning, jf. ADR-0008: `Incomplete`
+    når resten af husstandens beholdninger tilsammen dækker underskuddet —
+    der mangler kun en overførsel — og `Unsustainable` når de ikke gør.
+    Fraværende, når bufferen ikke er negativ. */
+function bufferState(plan: Plan, closing: Balances): BufferState | undefined {
+  const bufferBalance = closing.get(plan.buffer)!
+  if (bufferBalance >= 0) return undefined
+
+  const elsewhere = allHoldings(plan)
+    .filter((holding) => holding.id !== plan.buffer)
+    .reduce((sum, holding) => sum + closing.get(holding.id)!, 0)
+
+  return elsewhere >= -bufferBalance ? 'Incomplete' : 'Unsustainable'
 }
 
 /** Summen af afkastet på en persons beholdninger af én variant — grundlaget
@@ -156,6 +185,18 @@ function weightedNetFlow(entries: ActiveEntry[]): Nominal {
   return entries.reduce((sum, { entry, amount }) => {
     const signed = entry.direction === 'Income' ? amount : -amount
     return sum + signed * returnWeight(entry.timing)
+  }, 0)
+}
+
+/** Overførslens vægtede nettostrøm for netop denne beholdning: positiv som
+    modtager, negativ som afgiver, nul ellers. Tæller med i afkastgrundlaget
+    i begge ender, jf. ADR-0004. */
+function weightedTransferFlow(transfers: ActiveTransfer[], holding: HoldingId): Nominal {
+  return transfers.reduce((sum, { transfer, amount }) => {
+    const weighted = amount * returnWeight(transfer.timing)
+    if (transfer.to === holding) return sum + weighted
+    if (transfer.from === holding) return sum - weighted
+    return sum
   }, 0)
 }
 
@@ -242,16 +283,54 @@ function entryProjection(entry: Entry, startYear: SimulationYear, year: Simulati
     dens gentagelse skal ramme netop det år. */
 function appliesInYear(entry: Entry, year: SimulationYear, owner: Person): boolean {
   const { from, to } = periodBounds(entry.period, owner)
+  return withinPeriod(from, to, year) && matchesRecurrence(entry.recurrence, year, from, to)
+}
+
+/** En overførsel har ingen ejer at binde en alder til, så dens periode er
+    altid rene kalenderår — ingen `periodBounds`-udledning nødvendig. */
+function transfersInYear(plan: Plan, year: SimulationYear): ActiveTransfer[] {
+  return plan.transfers
+    .filter((transfer) => transferAppliesInYear(transfer, year))
+    .map((transfer) => ({
+      transfer,
+      amount: transfer.amountInRealKroner * transferProjection(plan, year),
+    }))
+}
+
+/** Overførsler har ingen egen reguleringssats — de følger planens generelle
+    inflationsantagelse, som enhver anden ureguleret størrelse i planen. */
+function transferProjection(plan: Plan, year: SimulationYear): number {
+  return (1 + plan.inflationAssumption) ** (year - plan.startYear)
+}
+
+function transferAppliesInYear(transfer: Transfer, year: SimulationYear): boolean {
+  const { from, to } = transfer.period
+  return withinPeriod(from, to, year) && matchesRecurrence(transfer.recurrence, year, from, to)
+}
+
+function withinPeriod(
+  from: SimulationYear | undefined,
+  to: SimulationYear | undefined,
+  year: SimulationYear,
+): boolean {
   if (from !== undefined && year < from) return false
   if (to !== undefined && year > to) return false
+  return true
+}
 
-  switch (entry.recurrence.kind) {
+function matchesRecurrence(
+  recurrence: Recurrence,
+  year: SimulationYear,
+  from: SimulationYear | undefined,
+  to: SimulationYear | undefined,
+): boolean {
+  switch (recurrence.kind) {
     case 'Annual':
       return true
     case 'Once':
       return year === (from ?? to)
     case 'EveryNYears':
-      return from !== undefined && (year - from) % entry.recurrence.n === 0
+      return from !== undefined && (year - from) % recurrence.n === 0
   }
 }
 
@@ -284,6 +363,21 @@ function openingBalances(plan: Plan): Balances {
   return new Map(
     allHoldings(plan).map((holding) => [holding.id, holding.balance]),
   )
+}
+
+/** Præcis én beholdning skal være bufferen, jf. ADR-0004. Returnerer en
+    forklarende dansk fejlbesked, hvis planen har nul eller to — ellers intet.
+    Brugt både af `simulate` og af fladen, der viser beskeden i
+    resultatspalten frem for at lade planen fejle tavst. */
+export function validateBuffer(plan: Plan): string | undefined {
+  const matches = allHoldings(plan).filter((holding) => holding.id === plan.buffer)
+  if (matches.length === 0) {
+    return `Planens buffer peger på beholdningen ${plan.buffer}, som ikke findes.`
+  }
+  if (matches.length > 1) {
+    return `Flere beholdninger er udpeget som buffer.`
+  }
+  return undefined
 }
 
 function allHoldings(plan: Plan): Holding[] {

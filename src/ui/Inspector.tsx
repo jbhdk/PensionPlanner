@@ -20,6 +20,7 @@ import {
   findHolding,
   findHoldingOwner,
   findPerson,
+  findTransfer,
   parseNumber,
   removePerson,
   withDirection,
@@ -27,6 +28,7 @@ import {
   withHolding,
   withHoldingOwner,
   withPerson,
+  withTransfer,
 } from './planEdits'
 import type { Selection } from './selection'
 
@@ -70,6 +72,14 @@ export function Inspector({
         )}
         {selected.kind === 'entry' && (
           <EntryFields
+            plan={plan}
+            id={selected.id}
+            onChange={onChange}
+            onClose={onClose}
+          />
+        )}
+        {selected.kind === 'transfer' && (
+          <TransferFields
             plan={plan}
             id={selected.id}
             onChange={onChange}
@@ -406,6 +416,20 @@ function danishTiming(timing: Timing): string {
   return Object.keys(timings).find((key) => timings[key] === timing)!
 }
 
+/** "Jævnt fordelt" står for en strøm af mange små betalinger hen over året —
+    en løn, for eksempel. En engangspost falder i én bestemt måned og kan
+    ikke være jævnt fordelt, så valget udelades, når gentagelsen er "Once". */
+function timingOptions(recurrence: Recurrence): string[] {
+  const all = Object.keys(timings)
+  return recurrence.kind === 'Once' ? all.filter((label) => label !== 'Jævnt fordelt') : all
+}
+
+/** Forfaldet, en engangspost arver, når den skifter væk fra "jævnt fordelt" —
+    den kan ikke længere være det, så et bestemt tidspunkt vælges i stedet. */
+function timingForOnce(timing: Timing): Timing {
+  return timing === 'Even' ? 1 : timing
+}
+
 function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {
   const entry = findEntry(plan, id)
   const owner = findPerson(plan, entry?.owner ?? '')
@@ -485,6 +509,41 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
       </Section>
       <Section title="Perioden">
         <SelectField
+          label="Gentagelse"
+          value={danish(recurrences, entry.recurrence.kind)}
+          options={Object.keys(recurrences)}
+          onChange={(choice) => {
+            const kind = recurrences[choice]!
+            onChange(
+              withEntry(plan, id, (e) =>
+                kind === 'Once'
+                  ? {
+                      ...e,
+                      recurrence: defaultRecurrence(kind),
+                      timing: timingForOnce(e.timing),
+                    }
+                  : { ...e, recurrence: defaultRecurrence(kind) },
+              ),
+            )
+          }}
+        />
+        {entry.recurrence.kind === 'EveryNYears' && (
+          <NumberField
+            label="Hvert"
+            unit="år"
+            value={entry.recurrence.n}
+            onChange={(n) =>
+              onChange(
+                withEntry(plan, id, (e) =>
+                  e.recurrence.kind === 'EveryNYears'
+                    ? { ...e, recurrence: { kind: 'EveryNYears', n } }
+                    : e,
+                ),
+              )
+            }
+          />
+        )}
+        <SelectField
           label="Forankring"
           value={danish(anchors, entry.period.anchor)}
           options={Object.keys(anchors)}
@@ -494,7 +553,41 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
             )
           }
         />
-        {entry.period.anchor === 'CalendarYear' ? (
+        {entry.recurrence.kind === 'Once' ? (
+          entry.period.anchor === 'CalendarYear' ? (
+            <NumberField
+              label="År"
+              unit="år"
+              value={entry.period.from ?? entry.period.to ?? plan.startYear}
+              onChange={(from) =>
+                onChange(
+                  withEntry(plan, id, (e) =>
+                    e.period.anchor === 'CalendarYear'
+                      ? { ...e, period: { anchor: 'CalendarYear', from } }
+                      : e,
+                  ),
+                )
+              }
+            />
+          ) : (
+            <>
+              <AgeBoundField
+                label="Alder"
+                value={entry.period.from ?? entry.period.to}
+                onChange={(from) =>
+                  onChange(
+                    withEntry(plan, id, (e) =>
+                      e.period.anchor === 'PersonAge'
+                        ? { ...e, period: { anchor: 'PersonAge', from } }
+                        : e,
+                    ),
+                  )
+                }
+              />
+              <LockedField label="Falder i" value={resolvedPeriodLabel(plan, entry)} unit="udledt" />
+            </>
+          )
+        ) : entry.period.anchor === 'CalendarYear' ? (
           <>
             <OptionalNumberField
               label="Fra (år)"
@@ -549,38 +642,9 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
           </>
         )}
         <SelectField
-          label="Gentagelse"
-          value={danish(recurrences, entry.recurrence.kind)}
-          options={Object.keys(recurrences)}
-          onChange={(choice) =>
-            onChange(
-              withEntry(plan, id, (e) => ({
-                ...e,
-                recurrence: defaultRecurrence(recurrences[choice]!),
-              })),
-            )
-          }
-        />
-        {entry.recurrence.kind === 'EveryNYears' && (
-          <NumberField
-            label="Hvert"
-            unit="år"
-            value={entry.recurrence.n}
-            onChange={(n) =>
-              onChange(
-                withEntry(plan, id, (e) =>
-                  e.recurrence.kind === 'EveryNYears'
-                    ? { ...e, recurrence: { kind: 'EveryNYears', n } }
-                    : e,
-                ),
-              )
-            }
-          />
-        )}
-        <SelectField
           label="Forfald"
           value={danishTiming(entry.timing)}
-          options={Object.keys(timings)}
+          options={timingOptions(entry.recurrence)}
           onChange={(choice) =>
             onChange(withEntry(plan, id, (e) => ({ ...e, timing: timings[choice]! })))
           }
@@ -635,6 +699,128 @@ function resolvedPeriodLabel(plan: Plan, entry: Entry): string {
   if (to === undefined) return `fra ${from}`
   if (from === to) return String(from)
   return `${from}–${to}`
+}
+
+function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {
+  const transfer = findTransfer(plan, id)
+  if (!transfer) return null
+
+  const holdings = plan.household.persons.flatMap((person) => person.holdings)
+  const holdingByName: Record<string, string> = Object.fromEntries(
+    holdings.map((holding) => [holding.name, holding.id]),
+  )
+  const holdingName = (holdingId: string) =>
+    holdings.find((holding) => holding.id === holdingId)?.name ?? holdingId
+
+  return (
+    <>
+      <Head
+        title={`${holdingName(transfer.from)} → ${holdingName(transfer.to)}`}
+        subtitle="Overførsel"
+        onClose={onClose}
+      />
+      <Section title="Overførslen">
+        <SelectField
+          label="Fra"
+          value={holdingName(transfer.from)}
+          options={holdings.filter((holding) => holding.id !== transfer.to).map((h) => h.name)}
+          onChange={(name) =>
+            onChange(withTransfer(plan, id, (t) => ({ ...t, from: holdingByName[name]! })))
+          }
+        />
+        <SelectField
+          label="Til"
+          value={holdingName(transfer.to)}
+          options={holdings.filter((holding) => holding.id !== transfer.from).map((h) => h.name)}
+          onChange={(name) =>
+            onChange(withTransfer(plan, id, (t) => ({ ...t, to: holdingByName[name]! })))
+          }
+        />
+        <NumberField
+          label="Beløb (dagens kroner)"
+          unit="kr."
+          value={transfer.amountInRealKroner}
+          onChange={(amountInRealKroner) =>
+            onChange(withTransfer(plan, id, (t) => ({ ...t, amountInRealKroner })))
+          }
+        />
+      </Section>
+      <Section title="Perioden">
+        <SelectField
+          label="Gentagelse"
+          value={danish(recurrences, transfer.recurrence.kind)}
+          options={Object.keys(recurrences)}
+          onChange={(choice) => {
+            const kind = recurrences[choice]!
+            onChange(
+              withTransfer(plan, id, (t) =>
+                kind === 'Once'
+                  ? { ...t, recurrence: defaultRecurrence(kind), timing: timingForOnce(t.timing) }
+                  : { ...t, recurrence: defaultRecurrence(kind) },
+              ),
+            )
+          }}
+        />
+        {transfer.recurrence.kind === 'EveryNYears' && (
+          <NumberField
+            label="Hvert"
+            unit="år"
+            value={transfer.recurrence.n}
+            onChange={(n) =>
+              onChange(
+                withTransfer(plan, id, (t) =>
+                  t.recurrence.kind === 'EveryNYears'
+                    ? { ...t, recurrence: { kind: 'EveryNYears', n } }
+                    : t,
+                ),
+              )
+            }
+          />
+        )}
+        {transfer.recurrence.kind === 'Once' ? (
+          <NumberField
+            label="År"
+            unit="år"
+            value={transfer.period.from ?? transfer.period.to ?? plan.startYear}
+            onChange={(from) =>
+              onChange(withTransfer(plan, id, (t) => ({ ...t, period: { from } })))
+            }
+          />
+        ) : (
+          <>
+            <OptionalNumberField
+              label="Fra (år)"
+              unit="år"
+              value={transfer.period.from}
+              onChange={(from) =>
+                onChange(withTransfer(plan, id, (t) => ({ ...t, period: { ...t.period, from } })))
+              }
+            />
+            <OptionalNumberField
+              label="Til (år)"
+              unit="år"
+              value={transfer.period.to}
+              onChange={(to) =>
+                onChange(withTransfer(plan, id, (t) => ({ ...t, period: { ...t.period, to } })))
+              }
+            />
+          </>
+        )}
+        <SelectField
+          label="Forfald"
+          value={danishTiming(transfer.timing)}
+          options={timingOptions(transfer.recurrence)}
+          onChange={(choice) =>
+            onChange(withTransfer(plan, id, (t) => ({ ...t, timing: timings[choice]! })))
+          }
+        />
+        <Hint>
+          Overførslen er altid kalenderårsforankret — den har ingen ejer at
+          binde en alder til.
+        </Hint>
+      </Section>
+    </>
+  )
 }
 
 function Head({

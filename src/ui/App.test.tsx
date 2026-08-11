@@ -1,9 +1,74 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
-import { aPlan, aSalary, anExpense } from '../engine/testing/planFixture'
+import type { Plan } from '../engine/plan'
+import { aPlan, aSalary, aTransfer, anExpense } from '../engine/testing/planFixture'
 import { App } from './App'
 import { defaultPlan } from './defaultPlan'
+
+/** Fixturens buffer plus én beholdning til, så en overførsel har et sted at
+    flytte penge hen. */
+function aPlanWithSecondHolding(): Plan {
+  const base = aPlan()
+  return {
+    ...base,
+    household: {
+      persons: [
+        {
+          ...base.household.persons[0]!,
+          holdings: [
+            ...base.household.persons[0]!.holdings,
+            {
+              id: 'anden-beholdning',
+              name: 'Anden beholdning',
+              variant: 'CapitalIncome' as const,
+              balance: 0,
+              grossReturn: 0,
+              annualCostRate: 0,
+            },
+          ],
+        },
+      ],
+    },
+  }
+}
+
+/** Som ovenfor, men med en tredje beholdning, så "Fra" og "Til" hver har
+    mere end ét lovligt valg tilbage, når den anden er udelukket. */
+function aPlanWithThreeHoldings(): Plan {
+  const base = aPlanWithSecondHolding()
+  return {
+    ...base,
+    household: {
+      persons: [
+        {
+          ...base.household.persons[0]!,
+          holdings: [
+            ...base.household.persons[0]!.holdings,
+            {
+              id: 'tredje-beholdning',
+              name: 'Tredje beholdning',
+              variant: 'CapitalIncome' as const,
+              balance: 0,
+              grossReturn: 0,
+              annualCostRate: 0,
+            },
+          ],
+        },
+      ],
+    },
+  }
+}
+
+/** Etiketten på det første felt i Perioden-afsnittet — til at fastslå
+    rækkefølgen af felter i skuffen. */
+function firstPeriodenFelt(container: HTMLElement): string | null | undefined {
+  const overskrift = Array.from(container.querySelectorAll('h3')).find(
+    (h) => h.textContent === 'Perioden',
+  )
+  const felt = overskrift?.parentElement?.querySelector('.felt label, .felt .etiket')
+  return felt?.textContent
+}
 
 /** Tre simuleringsår, så tabellen kan tælles med det blotte øje. */
 function aThreeYearPlan() {
@@ -41,6 +106,7 @@ describe('fladen', () => {
       'Skat',
       'Udgifter',
       'Nettoresultat',
+      'Buffer',
       'Formue',
     ])
 
@@ -60,7 +126,9 @@ describe('fladen', () => {
     await user.type(balance, '2000000')
 
     const rows = within(screen.getByRole('table')).getAllByRole('row')
-    expect(within(rows[1]!).getByText('1.960.000')).toBeTruthy()
+    // Bufferen er husstandens eneste beholdning her, så Buffer- og
+    // Formue-kolonnen viser samme tal.
+    expect(within(rows[1]!).getAllByText('1.960.000')).toHaveLength(2)
     expect(screen.queryByRole('button', { name: /beregn/i })).toBeNull()
   })
 
@@ -207,6 +275,32 @@ describe('fladen', () => {
     expect(forfald.value).toBe('Juni')
   })
 
+  it('viser Gentagelse som det første felt i Perioden, både for poster og overførsler', async () => {
+    const user = userEvent.setup()
+
+    const entryRender = render(
+      <App initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })} />,
+    )
+    await user.click(entryRender.getByRole('button', { name: /Faste udgifter/ }))
+    expect(firstPeriodenFelt(entryRender.container)).toBe('Gentagelse')
+    entryRender.unmount()
+
+    const transferRender = render(
+      <App
+        initialPlan={{
+          ...aPlanWithSecondHolding(),
+          transfers: [
+            aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 50_000 }),
+          ],
+        }}
+      />,
+    )
+    await user.click(
+      transferRender.getByRole('button', { name: /Frie midler.*Anden beholdning/ }),
+    )
+    expect(firstPeriodenFelt(transferRender.container)).toBe('Gentagelse')
+  })
+
   it('lader forankringen vælges, og periodefelterne skifter mellem årstal og aldre', async () => {
     const user = userEvent.setup()
     render(
@@ -237,6 +331,41 @@ describe('fladen', () => {
 
     await user.selectOptions(screen.getByLabelText(/Gentagelse/), 'Én gang')
     expect(screen.queryByLabelText(/Hvert/)).toBeNull()
+  })
+
+  it('samler en engangsposts periode til ét årsfelt og fjerner "Jævnt fordelt" fra forfald', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          startYear: 2026,
+          entries: [anExpense({ amountInRealKroner: 40_000, timing: 'Even' })],
+        })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    expect(screen.getByLabelText(/Fra \(år\)/)).toBeTruthy()
+    const forfaldFoer = screen.getByLabelText(/Forfald/) as HTMLSelectElement
+    expect(
+      Array.from(forfaldFoer.options).map((option) => option.value),
+    ).toContain('Jævnt fordelt')
+
+    await user.selectOptions(screen.getByLabelText(/Gentagelse/), 'Én gang')
+
+    // Fra/Til er blevet til ét samlet årsfelt.
+    expect(screen.queryByLabelText(/Fra \(år\)/)).toBeNull()
+    expect(screen.queryByLabelText(/Til \(år\)/)).toBeNull()
+    const aar = screen.getByLabelText('År') as HTMLInputElement
+    expect(aar.value).toBe('2026')
+
+    // "Jævnt fordelt" er ikke længere et gyldigt valg, og forfaldet er
+    // rettet til et bestemt tidspunkt i stedet.
+    const forfald = screen.getByLabelText(/Forfald/) as HTMLSelectElement
+    expect(
+      Array.from(forfald.options).map((option) => option.value),
+    ).not.toContain('Jævnt fordelt')
+    expect(forfald.value).toBe('Januar')
   })
 
   it('lader postens reguleringssats redigeres uafhængigt af planens inflation', async () => {
@@ -476,5 +605,199 @@ describe('fladen', () => {
 
     expect(screen.getByRole('button', { name: /Faste udgifter/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Løn/ })).toBeTruthy()
+  })
+
+  it('viser overførsler som sin egen gruppe i navigatoren, med fra- og til-navn i rækken', () => {
+    const plan = aPlanWithSecondHolding()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          transfers: [
+            aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 50_000 }),
+          ],
+        }}
+      />,
+    )
+
+    const gruppe = screen.getByRole('button', { name: /Overførsler/ })
+    expect(within(gruppe).getByText('1')).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }),
+    ).toBeTruthy()
+  })
+
+  it('redigerer en overførsels fra-beholdning, beløb og forfald i skuffen', async () => {
+    const user = userEvent.setup()
+    const plan = aPlanWithSecondHolding()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          transfers: [
+            aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 50_000 }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+
+    expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Frie midler')
+    expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Anden beholdning')
+    expect((screen.getByLabelText(/Beløb/) as HTMLInputElement).value).toBe('50000')
+
+    const beloeb = screen.getByLabelText(/Beløb/)
+    await user.clear(beloeb)
+    await user.type(beloeb, '75000')
+
+    await user.click(screen.getByRole('button', { name: /Luk inspektøren/ }))
+    expect(
+      screen.getByRole('button', { name: /Frie midler.*Anden beholdning.*75.000/ }),
+    ).toBeTruthy()
+  })
+
+  it('mærker en ufuldstændig og en uholdbar buffer forskelligt i årstabellen', () => {
+    const base = aPlanWithSecondHolding()
+    const plan: Plan = {
+      ...base,
+      entries: [anExpense({ amountInRealKroner: 40_000 })],
+      household: {
+        persons: [
+          {
+            ...base.household.persons[0]!,
+            holdings: [
+              // Bufferen tømmes med det samme; ingen renter forstyrrer.
+              { ...base.household.persons[0]!.holdings[0]!, balance: 0 },
+              // Rigelig likviditet andetsteds — men ingen overførsel henter den.
+              { ...base.household.persons[0]!.holdings[1]!, balance: 500_000 },
+            ],
+          },
+        ],
+      },
+    }
+    render(<App initialPlan={plan} />)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    const ufuldstaendigRow = rows[1]!
+    expect(within(ufuldstaendigRow).getByText('Ufuldstændig')).toBeTruthy()
+    expect(ufuldstaendigRow.className).toContain('ufuldstaendig')
+
+    // Anden beholdning tømmes efter to år, hvorefter der intet er at hente.
+    const uholdbarRow = rows.at(-1)!
+    expect(within(uholdbarRow).getByText('Uholdbar')).toBeTruthy()
+    expect(uholdbarRow.className).toContain('uholdbar')
+  })
+
+  it('tilføjer en beholdning via beholdningsgruppen', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan()} />)
+
+    expect(screen.queryByRole('button', { name: /^Beholdning 2/ })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: '+ Beholdning' }))
+
+    expect(screen.getByRole('button', { name: /^Beholdning 2/ })).toBeTruthy()
+    const beholdninger = screen.getByRole('button', { name: /Beholdninger/ })
+    expect(within(beholdninger).getByText('2')).toBeTruthy()
+  })
+
+  it('lader "+ Beholdning" gøre "+ Overførsel" muligt, når husstanden kun havde én beholdning', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan()} />)
+
+    expect(screen.queryByRole('button', { name: '+ Overførsel' })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: '+ Beholdning' }))
+
+    expect(screen.getByRole('button', { name: '+ Overførsel' })).toBeTruthy()
+  })
+
+  it('samler en engangsoverførsels periode til ét årsfelt og fjerner "Jævnt fordelt" fra forfald', async () => {
+    const user = userEvent.setup()
+    const plan = aPlanWithSecondHolding()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          startYear: 2026,
+          transfers: [
+            aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 50_000 }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+    expect(screen.getByLabelText(/Fra \(år\)/)).toBeTruthy()
+
+    await user.selectOptions(screen.getByLabelText(/Gentagelse/), 'Én gang')
+
+    expect(screen.queryByLabelText(/Fra \(år\)/)).toBeNull()
+    expect(screen.queryByLabelText(/Til \(år\)/)).toBeNull()
+    expect((screen.getByLabelText('År') as HTMLInputElement).value).toBe('2026')
+
+    const forfald = screen.getByLabelText(/Forfald/) as HTMLSelectElement
+    expect(
+      Array.from(forfald.options).map((option) => option.value),
+    ).not.toContain('Jævnt fordelt')
+  })
+
+  it('udelukker den valgte fra-beholdning fra til-vælgeren og omvendt', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...aPlanWithThreeHoldings(),
+          transfers: [
+            aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 50_000 }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+
+    const fra = screen.getByLabelText('Fra') as HTMLSelectElement
+    const til = screen.getByLabelText('Til') as HTMLSelectElement
+
+    // "Til" kan ikke vælges til det samme som "Fra" — og omvendt.
+    expect(Array.from(fra.options).map((o) => o.value)).not.toContain('Anden beholdning')
+    expect(Array.from(til.options).map((o) => o.value)).not.toContain('Frie midler')
+    // Men det tredje valg er stadig muligt i begge.
+    expect(Array.from(fra.options).map((o) => o.value)).toContain('Tredje beholdning')
+    expect(Array.from(til.options).map((o) => o.value)).toContain('Tredje beholdning')
+
+    await user.selectOptions(til, 'Tredje beholdning')
+    expect(Array.from(fra.options).map((o) => o.value)).not.toContain('Tredje beholdning')
+    expect(Array.from(fra.options).map((o) => o.value)).toContain('Anden beholdning')
+  })
+
+  it('tilføjer en overførsel via overførselsgruppen, og dens inspektør kan åbnes', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithSecondHolding()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Overførsel' }))
+
+    const raekke = screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ })
+    expect(raekke).toBeTruthy()
+
+    await user.click(raekke)
+    expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Frie midler')
+    expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Anden beholdning')
+  })
+
+  it('skjuler "+ Overførsel", når husstanden kun har én beholdning', () => {
+    render(<App initialPlan={aPlan()} />)
+
+    expect(screen.queryByRole('button', { name: '+ Overførsel' })).toBeNull()
+  })
+
+  it('viser en forklarende besked frem for en tom tabel, når bufferpegeren ikke rammer en beholdning', () => {
+    render(<App initialPlan={{ ...aPlan(), buffer: 'findes-ikke' }} />)
+
+    expect(screen.getByText(/kan ikke simuleres/i)).toBeTruthy()
+    expect(screen.getByText(/findes-ikke/)).toBeTruthy()
+    expect(screen.queryByRole('table')).toBeNull()
   })
 })
