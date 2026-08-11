@@ -104,17 +104,22 @@ Det andet svar er, hvordan navigatoren holdes kort:
 | **B2 · Faner** | Én gruppe ad gangen, valgt i et fanebånd | Fast spalte | 602 px |
 | **B3 · Skuffe** | Som B1 | Skuffe hen over resultatet | 300 px, 656 px når skuffen er åben |
 
-En foldet gruppe må ikke være tavs. Hver gruppe har derfor et resumé, der træder i stedet
-for listen: Beholdninger folder sammen til `11.082.000 kr.`, Poster til
-`−512.000 kr./år fast`, Husstanden til `Jesper · Anne`. Foldet er altså ikke skjult — det
-er sammenfattet, og hele planen kan læses på syv linjer.
+En foldet gruppe må ikke være tavs. De fleste grupper har derfor et resumé, der træder i
+stedet for listen: Beholdninger folder sammen til `11.082.000 kr.`, Husstanden til
+`Jesper · Anne`. Foldet er altså ikke skjult — det er sammenfattet.
 
-**B1** lader alle seks grupper stå, så man altid kan se, hvad planen består af. Med kun
+Indtægter og Udgifter er undtagelsen. Poster kan have en begrænset periode eller en
+gentagelse, der ikke rammer hvert år, så et samlet kronetal i resuméet ville love en
+regelmæssighed, planen ikke har — det var oprindeligt afprøvet som `−512.000 kr./år fast`
+for udgifterne alene, men tallet er droppet igen. De to grupper folder derfor sammen til
+kun deres antal, badge'en de allerede har; de nøjagtige tal står i årstabellen.
+
+**B1** lader alle syv grupper stå, så man altid kan se, hvad planen består af. Med kun
 Beholdninger foldet ud fylder navigatoren godt halvdelen af spaltens højde — der er luft. Prisen er, at man
 selv skal folde: åbner man tre grupper, ruller spalten igen.
 
 **B2** kan aldrig blive for høj, for den viser kun én gruppe. Til gengæld kan man ikke se
-Poster og Beholdninger samtidig, og fanebåndet koster tre linjer i toppen, uanset hvor lidt
+Udgifter og Beholdninger samtidig, og fanebåndet koster tre linjer i toppen, uanset hvor lidt
 man har valgt.
 
 **B3** giver grafen 300 px mere, når intet er valgt, og skuffen skubber resultatet fri af

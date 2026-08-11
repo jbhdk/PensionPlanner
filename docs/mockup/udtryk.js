@@ -61,14 +61,22 @@ function planspalte() {
         '<div class="under">' + under.join(' · ') + '</div></div>';
     }).join('') + '</section>');
 
-  h.push('<section class="afsnit"><h3>Poster<span class="antal">' + POSTER.length + '</span></h3>' +
-    POSTER.slice(0, 4).map(function (p) {
-      return '<div class="rk"><div class="hoved">' +
-        '<span class="ejer">' + (p.ejer ? navn(p.ejer).charAt(0) : '·') + '</span>' +
-        '<span class="navn">' + p.navn + '</span>' +
-        '<span class="tal">' + (p.retning === 'ud' ? '−' : '') + K2(p.beloeb) + '</span></div>' +
-        '<div class="under">' + p.periode + ' · ' + p.gentagelse + '</div></div>';
-    }).join('') + '</section>');
+  var posterRk = function (p) {
+    return '<div class="rk"><div class="hoved">' +
+      '<span class="ejer">' + (p.ejer ? navn(p.ejer).charAt(0) : '·') + '</span>' +
+      '<span class="navn">' + p.navn + '</span>' +
+      '<span class="tal">' + (p.retning === 'ud' ? '−' : '') + K2(p.beloeb) + '</span></div>' +
+      '<div class="under">' + p.periode + ' · ' + p.gentagelse + '</div></div>';
+  };
+  var indtaegter = POSTER.filter(function (p) { return p.retning === 'ind'; });
+  var udgifter = POSTER.filter(function (p) { return p.retning === 'ud'; });
+  // Ingen sum i overskriften — poster kan have begrænset periode eller
+  // gentagelse, så et samlet kronetal ville love en regelmæssighed, planen
+  // ikke har. Antallet i badge'en er nok; de nøjagtige tal står i årstabellen.
+  h.push('<section class="afsnit"><h3>Indtægter<span class="antal">' + indtaegter.length +
+    '</span></h3>' + indtaegter.slice(0, 2).map(posterRk).join('') + '</section>');
+  h.push('<section class="afsnit"><h3>Udgifter<span class="antal">' + udgifter.length +
+    '</span></h3>' + udgifter.slice(0, 2).map(posterRk).join('') + '</section>');
 
   return h.join('');
 }

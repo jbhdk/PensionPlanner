@@ -22,7 +22,7 @@ var N = {
   fane: 'graf',
   gruppe: 'beholdninger',
   valgt: 'b4',
-  foldet: { plan: true, husstand: true, ydelser: true, poster: true, overfoersler: true }
+  foldet: { plan: true, husstand: true, ydelser: true, indtaegter: true, udgifter: true, overfoersler: true }
 };
 
 var FARVER_N = ['#5b7ba6', '#7d92b0', '#96a6bc', '#a3854e', '#b79a6c', '#c5b38d',
@@ -47,11 +47,8 @@ function aarN(a) { return DATA_N.filter(function (r) { return r.aar === a; })[0]
 
 function grupperN() {
   var sumB = BEHOLDNINGER.reduce(function (s, b) { return s + b.saldo; }, 0);
-  /* Resuméet for Poster viser kun det, der løber hele horisonten. Summen af
-     alle udgående poster ville blande engangsbeløb ind i et årstal.        */
-  var fastUd = POSTER.filter(function (p) {
-    return p.retning === 'ud' && p.periode === 'Hele horisonten';
-  }).reduce(function (s, p) { return s + p.beloeb; }, 0);
+  var indtaegter = POSTER.filter(function (p) { return p.retning === 'ind'; });
+  var udgifter = POSTER.filter(function (p) { return p.retning === 'ud'; });
 
   return [
     {
@@ -83,10 +80,20 @@ function grupperN() {
       })
     },
     {
-      id: 'poster', titel: 'Poster', kort: 'Poster', antal: POSTER.length,
-      resume: '−' + KN(fastUd) + ' kr./år fast', tilfoej: '+ Post',
-      raekker: POSTER.map(function (p, i) {
-        return { id: 'p' + i, navn: p.navn, tal: (p.retning === 'ud' ? '−' : '+') + KN(p.beloeb) };
+      // Ingen sum her: poster kan have begrænset periode eller gentagelse,
+      // så et samlet kronetal ville love en regelmæssighed, planen ikke har.
+      // De nøjagtige tal står i årstabellen. Antallet i badge'en er nok.
+      id: 'indtaegter', titel: 'Indtægter', kort: 'Indtægter', antal: indtaegter.length,
+      resume: '', tilfoej: '+ Indtægt',
+      raekker: indtaegter.map(function (p) {
+        return { id: 'p' + POSTER.indexOf(p), navn: p.navn, tal: KN(p.beloeb) };
+      })
+    },
+    {
+      id: 'udgifter', titel: 'Udgifter', kort: 'Udgifter', antal: udgifter.length,
+      resume: '', tilfoej: '+ Udgift',
+      raekker: udgifter.map(function (p) {
+        return { id: 'p' + POSTER.indexOf(p), navn: p.navn, tal: '−' + KN(p.beloeb) };
       })
     },
     {
@@ -186,7 +193,7 @@ function behFelterN(b) {
 
   var grund = felt('Navn', inp(b.navn, 'tekst')) +
     felt('Ejer', vlg([persN(b.ejer).navn])) +
-    felt('Saldo', inp(KN(b.saldo), 'tal'), 'kr.');
+    felt('Saldo (dagens kroner)', inp(KN(b.saldo), 'tal'), 'kr.');
   if (b.type === 'frie') {
     grund += felt('Beskatningsform', vlg(['Aktieindkomst', 'Kapitalindkomst'])) +
       felt('Buffer', '<input type="radio" ' + (b.buffer ? 'checked' : '') + ' style="width:auto">');
