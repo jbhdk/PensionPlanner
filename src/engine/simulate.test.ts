@@ -277,8 +277,8 @@ describe('simulate', () => {
     const medlem = simulateChecked(aPlan({ entries }))
     const udenfor = simulateChecked(aPlan({ entries, churchTax: false }))
 
-    expect(medlem[0]!.persons[0]!.tax.layers.churchTax).toBeCloseTo(3_193.1, 2)
-    expect(udenfor[0]!.persons[0]!.tax.layers.churchTax).toBe(0)
+    expect(medlem[0]!.persons[0]!.tax.layers.churchTax.amount).toBeCloseTo(3_193.1, 2)
+    expect(udenfor[0]!.persons[0]!.tax.layers.churchTax.amount).toBe(0)
     expect(udenfor[0]!.tax).toBeCloseTo(medlem[0]!.tax - 3_193.1, 2)
   })
 
@@ -293,8 +293,8 @@ describe('simulate', () => {
     // Samme lønmodtager som facitcasen, hvor det skrå skatteloft binder:
     // 950.000 kr. brutto, 25,40 % kommuneskat og 0,74 % kirkeskat.
     const { layers } = years[0]!.persons[0]!.tax
-    expect(layers.middleBracketTax).toBeCloseTo(16_668.48, 2)
-    expect(layers.topBracketTax).toBeCloseTo(6_880.76, 2)
+    expect(layers.middleBracketTax.amount).toBeCloseTo(16_668.48, 2)
+    expect(layers.topBracketTax.amount).toBeCloseTo(6_880.76, 2)
     expect(years[0]!.tax).toBeCloseTo(394_984.13, 2)
   })
 
@@ -308,7 +308,13 @@ describe('simulate', () => {
 
     const { tax } = year.persons[0]!
     expect(tax.rateYear).toBe(2026)
-    expect(tax.layers).toEqual({
+    // Beløbet for hvert lag, ikke hele LayerAmount — men stadig hele
+    // objektet, ikke ét felt ad gangen, så et glemt lag stadig ville stå
+    // uden nøgle her og fejle testen.
+    const amounts = Object.fromEntries(
+      Object.entries(tax.layers).map(([layer, { amount }]) => [layer, amount]),
+    )
+    expect(amounts).toEqual({
       labourMarketContribution: expect.closeTo(48_000, 2),
       bottomBracketTax: expect.closeTo(59_797.79, 2),
       municipalTax: expect.closeTo(109_601, 2),

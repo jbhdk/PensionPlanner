@@ -18,10 +18,9 @@ function assess(input: Partial<TaxAssessmentInput>) {
 
 describe('skatteopgørelsen', () => {
   it('beregner AM-bidrag af arbejdsindkomsten', () => {
-    expect(assess({ earnedIncome: 500_000 }).layers.labourMarketContribution).toBeCloseTo(
-      40_000,
-      6,
-    )
+    expect(
+      assess({ earnedIncome: 500_000 }).layers.labourMarketContribution.amount,
+    ).toBeCloseTo(40_000, 6)
   })
 
   it('opgør den personlige indkomst som arbejdsindkomsten efter AM-bidrag', () => {
@@ -34,7 +33,7 @@ describe('skatteopgørelsen', () => {
   it('beregner bundskat af den personlige indkomst efter personfradrag', () => {
     // 500.000 − 8 % = 460.000 i personlig indkomst. Fratrukket personfradraget
     // på 54.100 giver 405.900, og deraf 12,01 %.
-    expect(assess({ earnedIncome: 500_000 }).layers.bottomBracketTax).toBeCloseTo(
+    expect(assess({ earnedIncome: 500_000 }).layers.bottomBracketTax.amount).toBeCloseTo(
       48_748.59,
       2,
     )
@@ -49,13 +48,13 @@ describe('skatteopgørelsen', () => {
     // Efter personfradrag     174.350 − 54.100       = 120.250
     const assessment = assess({ earnedIncome: 220_000, municipalTaxRate: 0.254 })
 
-    expect(assessment.layers.municipalTax).toBeCloseTo(30_543.5, 2)
+    expect(assessment.layers.municipalTax.amount).toBeCloseTo(30_543.5, 2)
   })
 
   it('beregner kirkeskat på samme grundlag som kommuneskatten', () => {
     const assessment = assess({ earnedIncome: 220_000, churchTaxRate: 0.0074 })
 
-    expect(assessment.layers.churchTax).toBeCloseTo(889.85, 2)
+    expect(assessment.layers.churchTax.amount).toBeCloseTo(889.85, 2)
   })
 
   it('lader ikke personfradraget give negativ skat i et lag', () => {
@@ -68,19 +67,19 @@ describe('skatteopgørelsen', () => {
       churchTaxRate: 0.0074,
     })
 
-    expect(assessment.layers.bottomBracketTax).toBe(0)
-    expect(assessment.layers.municipalTax).toBe(0)
-    expect(assessment.layers.churchTax).toBe(0)
+    expect(assessment.layers.bottomBracketTax.amount).toBe(0)
+    expect(assessment.layers.municipalTax.amount).toBe(0)
+    expect(assessment.layers.churchTax.amount).toBe(0)
 
     // AM-bidraget har intet personfradrag — det betales fra første krone.
-    expect(assessment.layers.labourMarketContribution).toBeCloseTo(3_200, 6)
+    expect(assessment.layers.labourMarketContribution.amount).toBeCloseTo(3_200, 6)
   })
 
   it('beregner mellemskat af den personlige indkomst over mellemskattegrænsen', () => {
     // 800.000 − 8 % = 736.000 i personlig indkomst, hvoraf 94.800 ligger over
     // mellemskattegrænsen på 641.200. Progressionslagene har intet
     // personfradrag — det hører til bundskatten og kommuneskatten.
-    expect(assess({ earnedIncome: 800_000 }).layers.middleBracketTax).toBeCloseTo(
+    expect(assess({ earnedIncome: 800_000 }).layers.middleBracketTax.amount).toBeCloseTo(
       7_110,
       2,
     )
@@ -92,8 +91,8 @@ describe('skatteopgørelsen', () => {
     // kronen over topskattegrænsen bærer begge satser.
     const assessment = assess({ earnedIncome: 900_000 })
 
-    expect(assessment.layers.middleBracketTax).toBeCloseTo(14_010, 2)
-    expect(assessment.layers.topBracketTax).toBeCloseTo(3_757.5, 2)
+    expect(assessment.layers.middleBracketTax.amount).toBeCloseTo(14_010, 2)
+    expect(assessment.layers.topBracketTax.amount).toBeCloseTo(3_757.5, 2)
   })
 
   it('lægger top-topskat oven i de to andre over top-topskattegrænsen', () => {
@@ -102,9 +101,9 @@ describe('skatteopgørelsen', () => {
     // 167.300 — hver med sin egen sats, aldrig som én.
     const assessment = assess({ earnedIncome: 3_000_000 })
 
-    expect(assessment.layers.middleBracketTax).toBeCloseTo(158_910, 2)
-    expect(assessment.layers.topBracketTax).toBeCloseTo(148_657.5, 2)
-    expect(assessment.layers.additionalTopBracketTax).toBeCloseTo(8_365, 2)
+    expect(assessment.layers.middleBracketTax.amount).toBeCloseTo(158_910, 2)
+    expect(assessment.layers.topBracketTax.amount).toBeCloseTo(148_657.5, 2)
+    expect(assessment.layers.additionalTopBracketTax.amount).toBeCloseTo(8_365, 2)
   })
 
   it('nedsætter progressionslagets sats, når det skrå skatteloft binder', () => {
@@ -115,8 +114,8 @@ describe('skatteopgørelsen', () => {
     // 50.100 × 7,16 % i topskat.
     const assessment = assess({ earnedIncome: 900_000, municipalTaxRate: 0.254 })
 
-    expect(assessment.layers.middleBracketTax).toBeCloseTo(13_374.88, 2)
-    expect(assessment.layers.topBracketTax).toBeCloseTo(3_587.16, 2)
+    expect(assessment.layers.middleBracketTax.amount).toBeCloseTo(13_374.88, 2)
+    expect(assessment.layers.topBracketTax.amount).toBeCloseTo(3_587.16, 2)
   })
 
   it('regner loftet uden AM-bidrag og kirkeskat', () => {
@@ -134,12 +133,12 @@ describe('skatteopgørelsen', () => {
       churchTaxRate: 0.0074,
     })
 
-    expect(withChurchTax.layers.middleBracketTax).toBeCloseTo(
-      withoutChurchTax.layers.middleBracketTax,
+    expect(withChurchTax.layers.middleBracketTax.amount).toBeCloseTo(
+      withoutChurchTax.layers.middleBracketTax.amount,
       6,
     )
-    expect(withChurchTax.layers.topBracketTax).toBeCloseTo(
-      withoutChurchTax.layers.topBracketTax,
+    expect(withChurchTax.layers.topBracketTax.amount).toBeCloseTo(
+      withoutChurchTax.layers.topBracketTax.amount,
       6,
     )
   })
@@ -149,8 +148,8 @@ describe('skatteopgørelsen', () => {
     // kommune under referencesatsen får de fulde 7,50 % — ikke mere.
     const assessment = assess({ earnedIncome: 900_000, municipalTaxRate: 0.22 })
 
-    expect(assessment.layers.middleBracketTax).toBeCloseTo(14_010, 2)
-    expect(assessment.layers.topBracketTax).toBeCloseTo(3_757.5, 2)
+    expect(assessment.layers.middleBracketTax.amount).toBeCloseTo(14_010, 2)
+    expect(assessment.layers.topBracketTax.amount).toBeCloseTo(3_757.5, 2)
   })
 
   it('måler mellemskattegrænsen på indkomsten efter AM-bidrag', () => {
@@ -158,7 +157,7 @@ describe('skatteopgørelsen', () => {
     // § 20 regulerer. Efter AM-bidrag er den personlige indkomst 634.800, og
     // der er derfor ingen mellemskat overhovedet. Læses grænsen på
     // bruttolønnen i stedet, opstår her en skat på 3.660 kr., der ikke findes.
-    expect(assess({ earnedIncome: 690_000 }).layers.middleBracketTax).toBe(0)
+    expect(assess({ earnedIncome: 690_000 }).layers.middleBracketTax.amount).toBe(0)
   })
 
   it('stempler hvilket satsgrundlag opgørelsen er regnet på', () => {
@@ -180,11 +179,11 @@ describe('skatteopgørelsen', () => {
     expect(assessment.taxableIncome).toBeCloseTo(158_500, 2)
 
     // Kommuneskatten falder med fradraget: (158.500 − 54.100) × 25,40 %.
-    expect(assessment.layers.municipalTax).toBeCloseTo(26_517.6, 2)
+    expect(assessment.layers.municipalTax.amount).toBeCloseTo(26_517.6, 2)
 
     // Bundskatten står urørt. Et ligningsmæssigt fradrag rører kun den
     // skattepligtige indkomst, aldrig den personlige.
-    expect(assessment.layers.bottomBracketTax).toBeCloseTo(15_600.99, 2)
+    expect(assessment.layers.bottomBracketTax.amount).toBeCloseTo(15_600.99, 2)
   })
 
   it('stopper beskæftigelsesfradraget ved sit maksimum', () => {
@@ -238,7 +237,7 @@ describe('skatteopgørelsen', () => {
     expect(assessment.taxableIncome).toBeCloseTo(761_600, 2)
 
     // 7,50 % af (828.000 − 641.200) — målt på den personlige indkomst.
-    expect(assessment.layers.middleBracketTax).toBeCloseTo(14_010, 2)
+    expect(assessment.layers.middleBracketTax.amount).toBeCloseTo(14_010, 2)
   })
 
   it('giver ekstra pensionsfradrag af indbetalingen med den lave sats', () => {
@@ -288,12 +287,17 @@ describe('skatteopgørelsen', () => {
     expect(assess({ earnedIncome: 500_000 }).allowances.extraPensionAllowance).toBe(0)
   })
 
-  it('lægger positiv kapitalindkomst til bundskattens grundlag', () => {
+  it('lægger positiv kapitalindkomst til bundskattens grundlag, som sit eget lag', () => {
     // Ingen arbejdsindkomst isolerer laget: bundskat af personlig indkomst er
-    // nul, så hele beløbet kommer fra kapitalindkomsten. 50.000 kr. ligger
-    // under bundfradraget i topskat, så kun bundskattens sats rammer den.
+    // nul, så hele beløbet kommer fra kapitalindkomsten, som eget lag ved
+    // siden af `layers` — ikke smeltet sammen med den personlige indkomsts
+    // bundskat, jf. `capitalIncomeContribution`. 50.000 kr. ligger under
+    // bundfradraget i topskat, så kun bundskattens sats rammer den.
     // 50.000 × 12,01 % = 6.005.
-    expect(assess({ capitalIncome: 50_000 }).layers.bottomBracketTax).toBeCloseTo(6_005, 2)
+    const assessment = assess({ capitalIncome: 50_000 })
+
+    expect(assessment.layers.bottomBracketTax.amount).toBe(0)
+    expect(assessment.capitalIncomeContribution?.bottomBracketTax?.amount).toBeCloseTo(6_005, 2)
   })
 
   it('lægger topskat på den del af kapitalindkomsten, der overstiger dens egen bundfradragsgrænse', () => {
@@ -303,8 +307,8 @@ describe('skatteopgørelsen', () => {
     // Topskat   25.000 ×  7,50 %       =  1.875,00
     const assessment = assess({ capitalIncome: 80_000 })
 
-    expect(assessment.layers.bottomBracketTax).toBeCloseTo(9_608, 2)
-    expect(assessment.layers.topBracketTax).toBeCloseTo(1_875, 2)
+    expect(assessment.capitalIncomeContribution?.bottomBracketTax?.amount).toBeCloseTo(9_608, 2)
+    expect(assessment.capitalIncomeContribution?.topBracketTax?.amount).toBeCloseTo(1_875, 2)
   })
 
   it('lofter kapitalindkomstens kombinerede sats til 42 %, uafhængigt af det skrå skatteloft', () => {
@@ -316,16 +320,17 @@ describe('skatteopgørelsen', () => {
     // Topskat   145.000 ×  1,99 %  =  2.885,50
     const assessment = assess({ capitalIncome: 200_000, municipalTaxRate: 0.28 })
 
-    expect(assessment.layers.bottomBracketTax).toBeCloseTo(24_020, 2)
-    expect(assessment.layers.topBracketTax).toBeCloseTo(2_885.5, 2)
+    expect(assessment.capitalIncomeContribution?.bottomBracketTax?.amount).toBeCloseTo(24_020, 2)
+    expect(assessment.capitalIncomeContribution?.topBracketTax?.amount).toBeCloseTo(2_885.5, 2)
   })
 
   it('nedsætter skattepligtig indkomst med negativ kapitalindkomst uden at udløse bund- eller topskat', () => {
     const assessment = assess({ earnedIncome: 500_000, capitalIncome: -30_000 })
 
     expect(assessment.taxableIncome).toBeCloseTo(460_000 - 66_400 - 30_000, 2)
-    expect(assessment.layers.bottomBracketTax).toBeCloseTo(
-      assess({ earnedIncome: 500_000 }).layers.bottomBracketTax,
+    expect(assessment.capitalIncomeContribution).toBeUndefined()
+    expect(assessment.layers.bottomBracketTax.amount).toBeCloseTo(
+      assess({ earnedIncome: 500_000 }).layers.bottomBracketTax.amount,
       2,
     )
   })
@@ -347,9 +352,60 @@ describe('skatteopgørelsen', () => {
     })
 
     expect(withCapitalIncome.taxableIncome).toBeCloseTo(without.taxableIncome + 50_000, 2)
-    expect(withCapitalIncome.layers.municipalTax).toBeCloseTo(
-      without.layers.municipalTax + 50_000 * 0.254,
+    expect(withCapitalIncome.layers.municipalTax.amount).toBeCloseTo(
+      without.layers.municipalTax.amount + 50_000 * 0.254,
       2,
     )
+  })
+})
+
+describe('lagenes grundlag og sats', () => {
+  it('lader hvert lag efterregnes som grundlag gange sats', () => {
+    // 500.000 − 8 % = 460.000 i personlig indkomst, fratrukket personfradraget
+    // på 54.100 giver 405.900 i bundskattens grundlag, til 12,01 %.
+    const { base, rate, amount } = assess({ earnedIncome: 500_000 }).layers.bottomBracketTax
+
+    expect(base).toBeCloseTo(405_900, 2)
+    expect(rate).toBeCloseTo(0.1201, 4)
+    expect(amount).toBeCloseTo(base * rate, 6)
+  })
+
+  it('viser progressionslagets nedsatte sats, når det skrå skatteloft binder, uden at bryde grundlag × sats = beløb', () => {
+    // Samme case som "nedsætter progressionslagets sats..." ovenfor: satsen
+    // i lagets egen linje skal være den nedsatte 7,16 %, ikke den nominelle
+    // 7,50 % — ellers stemmer grundlag × sats ikke med beløbet.
+    const { base, rate, amount } = assess({
+      earnedIncome: 900_000,
+      municipalTaxRate: 0.254,
+    }).layers.middleBracketTax
+
+    expect(rate).toBeCloseTo(0.0716, 4)
+    expect(amount).toBeCloseTo(base * rate, 6)
+  })
+
+  it('lader personlig indkomst og kapitalindkomst bidrage til bundskat hver for sig, med hver sin sats', () => {
+    // Ingen af facitcasene blander de to i samme lag — men et år kan sagtens
+    // have begge dele. Kapitalindkomstens loft på 42 % er uafhængigt af det
+    // skrå skatteloft, personlig indkomst måles på, så de to satser må ikke
+    // antages ens, og de to bidrag må derfor stå hver for sig.
+    const assessment = assess({ earnedIncome: 900_000, capitalIncome: 50_000 })
+    const personal = assessment.layers.bottomBracketTax
+    const capital = assessment.capitalIncomeContribution?.bottomBracketTax
+
+    expect(capital).toBeDefined()
+    expect(personal.amount).toBeCloseTo(personal.base * personal.rate, 6)
+    expect(capital!.amount).toBeCloseTo(capital!.base * capital!.rate, 6)
+    expect(capital!.base).toBeCloseTo(50_000, 2)
+
+    // De to lægger sammen til det, én samlet bundskat ville have været, hvis
+    // indkomsterne var regnet hver for sig og lagt sammen bagefter.
+    const combined =
+      assess({ earnedIncome: 900_000 }).layers.bottomBracketTax.amount +
+      assess({ capitalIncome: 50_000 }).capitalIncomeContribution!.bottomBracketTax!.amount
+    expect(personal.amount + capital!.amount).toBeCloseTo(combined, 2)
+  })
+
+  it('udelader kapitalindkomstens bidrag, når kapitalindkomsten er nul', () => {
+    expect(assess({ earnedIncome: 500_000 }).capitalIncomeContribution).toBeUndefined()
   })
 })

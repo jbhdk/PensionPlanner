@@ -25,7 +25,7 @@ describe('facitcase', () => {
       }
       for (const [layer, expected] of Object.entries(layers)) {
         expect(
-          assessment.layers[layer as TaxLayer],
+          assessment.layers[layer as TaxLayer].amount,
           `${layer} i "${example.name}"`,
         ).toBeCloseTo(expected, 2)
       }

@@ -52,6 +52,20 @@ export type TaxLayer =
   | 'churchTax'
   | ProgressionLayer
 
+/** Et lag for sig: grundlaget og satsen, det er regnet af, og beløbet de to
+    giver — altid `base * rate`, så et lag kan efterregnes i hånden alene ud
+    fra sin egen linje. */
+export type LayerAmount = {
+  base: Nominal
+  rate: number
+  amount: Nominal
+}
+
+/** De to progressionslag, kapitalindkomsten selv kan udløse. Ikke en del af
+    `TaxLayer`s egne `bottomBracketTax`/`topBracketTax` — se
+    `TaxAssessment.capitalIncomeContribution`. */
+export type CapitalIncomeLayer = 'bottomBracketTax' | 'topBracketTax'
+
 /** Hvert lag for sig, aldrig som en total. Lagene står samlet i `layers`,
     så summen ikke kan komme til at mangle et af dem — se `totalTax`. */
 export type TaxAssessment = {
@@ -63,7 +77,15 @@ export type TaxAssessment = {
   taxableIncome: Nominal
   /** Hvert fradrag for sig, aldrig som en samlet post. */
   allowances: Record<Allowance, Nominal>
-  layers: Record<TaxLayer, Nominal>
+  /** Bundskat og topskat her er den personlige indkomsts andel alene — se
+      `capitalIncomeContribution` for kapitalindkomstens. */
+  layers: Record<TaxLayer, LayerAmount>
+  /** Kapitalindkomstens eget bidrag til bundskat og topskat. Adskilt fra
+      `layers`, fordi de to indkomstarter kan have hver sin — evt.
+      loftbegrænsede — sats i samme år: lagt sammen i én linje ville
+      `base * rate` ikke længere stemme med beløbet. Et lag er udeladt, når
+      kapitalindkomsten ikke bidrager til det. */
+  capitalIncomeContribution?: Partial<Record<CapitalIncomeLayer, LayerAmount>>
 }
 
 /** Skatteopgørelsen for ét simuleringsår og én person. */
@@ -83,11 +105,14 @@ export function assessTax(
 
   const capitalIncome = input.capitalIncome ?? 0
   const taxableIncome = personalIncome - sum(allowances) + capitalIncome
-  const capitalIncomeContribution = capitalIncomeTax(
+  const capitalIncomeContribution = capitalIncomeLayers(
     capitalIncome,
     input.municipalTaxRate,
     rates,
   )
+
+  const bottomBase = afterPersonalAllowance(personalIncome, rates)
+  const taxableBase = afterPersonalAllowance(taxableIncome, rates)
 
   return {
     rateYear: rates.year,
@@ -95,21 +120,24 @@ export function assessTax(
     taxableIncome,
     allowances,
     layers: {
-      labourMarketContribution,
-      bottomBracketTax:
-        afterPersonalAllowance(personalIncome, rates) *
-          rates.bracketTaxRates.bottomBracketTax +
-        capitalIncomeContribution.bottomBracketTax,
-      municipalTax:
-        afterPersonalAllowance(taxableIncome, rates) * input.municipalTaxRate,
-      churchTax:
-        afterPersonalAllowance(taxableIncome, rates) * input.churchTaxRate,
-      ...addCapitalIncomeToTopBracket(
-        progression(personalIncome, input.municipalTaxRate, rates),
-        capitalIncomeContribution.topBracketTax,
+      labourMarketContribution: layerAmount(
+        input.earnedIncome,
+        rates.taxRates.labourMarketContribution,
       ),
+      bottomBracketTax: layerAmount(bottomBase, rates.bracketTaxRates.bottomBracketTax),
+      municipalTax: layerAmount(taxableBase, input.municipalTaxRate),
+      churchTax: layerAmount(taxableBase, input.churchTaxRate),
+      ...progression(personalIncome, input.municipalTaxRate, rates),
     },
+    ...(Object.keys(capitalIncomeContribution).length > 0
+      ? { capitalIncomeContribution }
+      : {}),
   }
+}
+
+/** Et lag: grundlag og sats ganget sammen til beløbet, jf. `LayerAmount`. */
+function layerAmount(base: Nominal, rate: number): LayerAmount {
+  return { base, rate, amount: base * rate }
 }
 
 /** Beskæftigelsesfradraget, LL § 9 J: en procent af grundlaget for
@@ -164,16 +192,27 @@ function extraPensionAllowance(
   return base * rate
 }
 
-/** Summen af lagene. Totalen er ikke et felt på opgørelsen: gemt ved siden af
+/** Summen af skatten: hvert lag i `layers`, plus kapitalindkomstens eget
+    bidrag, når det er der. Ikke et felt på opgørelsen: gemt ved siden af
     lagene kunne den komme til at sige noget andet end dem, og et nyt lag i en
     senere skive ville kunne blive glemt i summen. */
 export function totalTax(assessment: TaxAssessment): Nominal {
-  return sum(assessment.layers)
+  const fromLayers = Object.values(assessment.layers).reduce(
+    (total, { amount }) => total + amount,
+    0,
+  )
+  const fromCapitalIncome = assessment.capitalIncomeContribution
+    ? Object.values(assessment.capitalIncomeContribution).reduce(
+        (total, layer) => total + (layer?.amount ?? 0),
+        0,
+      )
+    : 0
+
+  return fromLayers + fromCapitalIncome
 }
 
-/** Summen af en række beløb, der står hver for sig. Både lagene og fradragene
-    opgøres enkeltvis, og begge skal kunne lægges sammen uden at nogen af dem
-    kan blive glemt. */
+/** Summen af en række beløb, der står hver for sig — brugt til fradragene,
+    som (i modsætning til lagene) stadig er rene tal. */
 function sum(amounts: Record<string, Nominal>): Nominal {
   return Object.values(amounts).reduce((total, amount) => total + amount, 0)
 }
@@ -193,8 +232,8 @@ function progression(
   personalIncome: Nominal,
   municipalTaxRate: number,
   rates: RateYear,
-): Record<ProgressionLayer, Nominal> {
-  const layers = {} as Record<ProgressionLayer, Nominal>
+): Record<ProgressionLayer, LayerAmount> {
+  const layers = {} as Record<ProgressionLayer, LayerAmount>
 
   // Hverken AM-bidraget eller kirkeskatten indgår i den sats, loftet måles
   // på — ingen af trinene omfatter dem.
@@ -203,27 +242,30 @@ function progression(
   for (const { layer, step } of progressionLayers) {
     combinedRate += rates.bracketTaxRates[layer]
     const aboveCeiling = Math.max(0, combinedRate - rates.taxCeiling[step])
+    const rate = rates.bracketTaxRates[layer] - aboveCeiling
+    const base = Math.max(0, personalIncome - rates.thresholds[layer])
 
-    layers[layer] =
-      Math.max(0, personalIncome - rates.thresholds[layer]) *
-      (rates.bracketTaxRates[layer] - aboveCeiling)
+    layers[layer] = { base, rate, amount: base * rate }
   }
 
   return layers
 }
 
-/** Positiv nettokapitalindkomst tillægges bundskattens grundlag helt uden
-    bundfradrag, og topskattens grundlag kun for den del, der ligger over
-    kapitalindkomstens egen bundfradragsgrænse — aldrig mellem- eller
-    top-topskattens, jf. docs/satser/2026.md. Den kombinerede sats har sit
-    eget loft på 42 %, uafhængigt af det skrå skatteloftets tre trin, og
-    negativ kapitalindkomst rammer hverken laget her eller personfradraget:
-    den nedsætter kun skattepligtig indkomst. */
-function capitalIncomeTax(
+/** Kapitalindkomstens eget bidrag til bundskat og topskat — hver sit
+    grundlag og sin egen, evt. loftbegrænsede sats. Positiv nettokapital-
+    indkomst tillægges bundskattens grundlag helt uden bundfradrag, og
+    topskattens grundlag kun for den del, der ligger over kapitalindkomstens
+    egen bundfradragsgrænse — aldrig mellem- eller top-topskattens, jf.
+    docs/satser/2026.md. Den kombinerede sats har sit eget loft på 42 %,
+    uafhængigt af det skrå skatteloftets tre trin, og negativ kapitalindkomst
+    rammer hverken laget her eller personfradraget: den nedsætter kun
+    skattepligtig indkomst. Et lag er udeladt, når dets eget grundlag er nul,
+    så en linje uden indhold ikke skal vises frem. */
+function capitalIncomeLayers(
   capitalIncome: Nominal,
   municipalTaxRate: number,
   rates: RateYear,
-): { bottomBracketTax: Nominal; topBracketTax: Nominal } {
+): Partial<Record<CapitalIncomeLayer, LayerAmount>> {
   const positive = Math.max(0, capitalIncome)
   const aboveThreshold = Math.max(0, positive - rates.thresholds.capitalIncomeInTopBracket)
 
@@ -235,20 +277,14 @@ function capitalIncomeTax(
   const topRate =
     rates.bracketTaxRates.topBracketTax - Math.max(0, combinedRate - rates.taxCeiling.capitalIncome)
 
-  return {
-    bottomBracketTax: positive * bottomRate,
-    topBracketTax: aboveThreshold * topRate,
+  const contribution: Partial<Record<CapitalIncomeLayer, LayerAmount>> = {}
+  if (positive > 0) {
+    contribution.bottomBracketTax = { base: positive, rate: bottomRate, amount: positive * bottomRate }
   }
-}
-
-/** Kapitalindkomstens topskattebidrag lægges oven i det almindelige
-    topskattelag — de to måles på hver sin grænse og hvert sit loft, men
-    opgørelsen viser kun ét `topBracketTax`, jf. "hvert lag for sig". */
-function addCapitalIncomeToTopBracket(
-  layers: Record<ProgressionLayer, Nominal>,
-  fromCapitalIncome: Nominal,
-): Record<ProgressionLayer, Nominal> {
-  return { ...layers, topBracketTax: layers.topBracketTax + fromCapitalIncome }
+  if (aboveThreshold > 0) {
+    contribution.topBracketTax = { base: aboveThreshold, rate: topRate, amount: aboveThreshold * topRate }
+  }
+  return contribution
 }
 
 /** Personfradraget anvendes i det enkelte lag frem for som en samlet
