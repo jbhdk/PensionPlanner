@@ -1099,36 +1099,40 @@ function AgeBoundField({
 }) {
   const id = useId()
   const followsWorkEnd = value === 'WorkEndAge'
+  // Tilvalget får sin egen linje under aldersfeltet. Proppet ind i
+  // enhedskolonnen sprængte "erhvervsophør" de 56px, alle andre felter deler,
+  // og skubbede inputtet ud af flugt med resten af sektionen.
   return (
-    <div className="felt">
-      <label htmlFor={id}>{label}</label>
-      <span className="vaerdi">
-        <input
-          id={id}
-          type="text"
-          inputMode="decimal"
-          className="tal"
-          disabled={followsWorkEnd}
-          value={followsWorkEnd ? '' : value === undefined ? '' : String(value)}
-          onChange={(event) => {
-            const text = event.target.value
-            onChange(text === '' ? undefined : parseNumber(text))
-          }}
-        />
-        <span className="enhed enhed--erhvervsophoer">
-          <label>
-            <input
-              type="checkbox"
-              checked={followsWorkEnd}
-              onChange={(event) =>
-                onChange(event.target.checked ? 'WorkEndAge' : undefined)
-              }
-            />{' '}
-            erhvervsophør
-          </label>
+    <>
+      <div className="felt">
+        <label htmlFor={id}>{label}</label>
+        <span className="vaerdi">
+          <input
+            id={id}
+            type="text"
+            inputMode="decimal"
+            className="tal"
+            disabled={followsWorkEnd}
+            value={followsWorkEnd ? '' : value === undefined ? '' : String(value)}
+            onChange={(event) => {
+              const text = event.target.value
+              onChange(text === '' ? undefined : parseNumber(text))
+            }}
+          />
+          <span className="enhed">år</span>
         </span>
-      </span>
-    </div>
+      </div>
+      <div className="felt felt--tilvalg">
+        <label>
+          <input
+            type="checkbox"
+            checked={followsWorkEnd}
+            onChange={(event) => onChange(event.target.checked ? 'WorkEndAge' : undefined)}
+          />{' '}
+          Følger erhvervsophør
+        </label>
+      </div>
+    </>
   )
 }
 

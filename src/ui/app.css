@@ -504,11 +504,21 @@ body {
   width: 56px;
 }
 
-/* Erhvervsophør-afkrydsningen er selv enheden på et aldersendepunkt og må
-   ikke klippes af den smalle enhedskolonne. */
-.felt .enhed.enhed--erhvervsophoer {
-  width: auto;
-  white-space: nowrap;
+/* Erhvervsophør-tilvalget hører til aldersfeltet over det, men står på sin
+   egen linje. Proppet ind i enhedskolonnen sprængte det de 56px, alle andre
+   felter deler, og skubbede inputtet ud af flugt med resten af sektionen. */
+.felt--tilvalg {
+  padding-top: 0;
+  margin-top: -3px;
+}
+
+.felt--tilvalg label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
 }
 
 .hint {

@@ -626,6 +626,32 @@ describe('fladen', () => {
     expect(screen.getByText('til 2033')).toBeTruthy()
   })
 
+  it('lægger erhvervsophør-tilvalget på sin egen linje, ikke i enhedskolonnen', async () => {
+    // Enhedskolonnen er 56px og deles af hvert felt i skuffen. Lå
+    // afkrydsningen i den, sprængte "erhvervsophør" bredden, og aldersfeltets
+    // input stod forskudt fra alle andre felter i sektionen.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.selectOptions(screen.getByLabelText(/Forankring/), 'Alder')
+
+    const fra = screen.getByLabelText(/Fra \(alder\)/)
+    const vaerdi = fra.closest('.vaerdi') as HTMLElement
+
+    expect(vaerdi.querySelector('input[type="checkbox"]')).toBeNull()
+    expect(within(vaerdi).getByText('år')).toBeTruthy()
+
+    // Afkrydsningen er der stadig — den er bare flyttet ud af rækken.
+    expect(
+      screen.getAllByRole('checkbox', { name: /erhvervsophør/i }).length,
+    ).toBe(2)
+  })
+
   it('tilføjer person nummer to via husstandsgruppen', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlan()} />)
