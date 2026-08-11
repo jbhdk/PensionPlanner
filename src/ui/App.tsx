@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Plan } from '../engine/plan'
 import { simulate, validateBuffer } from '../engine/simulate'
+import { savePlan } from '../persistence/planStorage'
 import { Inspector } from './Inspector'
 import { Navigator } from './Navigator'
 import type { AmountUnit } from './real'
@@ -23,16 +24,53 @@ type ResultView = 'Wealth' | 'YearTable' | 'YearExplanation'
     Der er ingen beregn-knap. `simulate` er en ren funktion over en håndfuld
     beholdninger og godt tres år, så årsrækken regnes om ved hver ændring —
     resultatspalten er til enhver tid et spejl af navigatoren. */
-export function App({ initialPlan }: { initialPlan: Plan }) {
+export function App({
+  initialPlan,
+  loadError,
+}: {
+  initialPlan: Plan
+  /** Sat når en gemt plan fandtes, men ikke kunne indlæses. Fladen viser da
+      en forklarende besked i stedet for en tom navigator og resultatspalte,
+      jf. issue #15 — `initialPlan` er i det tilfælde blot en tom plan uden
+      betydning, siden intet af den vises eller gemmes ovenpå den fejlede. */
+  loadError?: string
+}) {
   const [plan, setPlan] = useState(initialPlan)
   const [selected, setSelected] = useState<Selection>(null)
   const [resultView, setResultView] = useState<ResultView>('Wealth')
   const [unit, setUnit] = useState<AmountUnit>('Real')
   const [explainedYear, setExplainedYear] = useState<number | null>(null)
 
+  // Ingen gem-knap: planen gemmes ved hver ændring, jf. issue #15. Er
+  // indlæsningen selv fejlet, må vi ikke overskrive det ulæselige gemte data
+  // med den tomme `initialPlan`, før brugeren har haft mulighed for at
+  // reagere på beskeden.
+  useEffect(() => {
+    if (loadError) return
+    savePlan(plan)
+  }, [plan, loadError])
+
   function explainYear(year: number) {
     setExplainedYear(year)
     setResultView('YearExplanation')
+  }
+
+  if (loadError) {
+    return (
+      <div className="app">
+        <header className="topbjaelke">
+          <span className="maerke">Pensionsplanner</span>
+        </header>
+        <div className="spalter">
+          <div className="spalte resultatspalte">
+            <div className="besked stop">
+              <h3>Planen kunne ikke indlæses</h3>
+              <p>{loadError}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // Nul eller to buffere er en inputfejl, ikke et resultat: planen kan ikke

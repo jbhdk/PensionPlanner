@@ -1,8 +1,9 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import type { Plan } from '../engine/plan'
 import { aPlan, aSalary, aTransfer, anExpense } from '../engine/testing/planFixture'
+import { loadPlan } from '../persistence/planStorage'
 import { App } from './App'
 import { defaultPlan } from './defaultPlan'
 
@@ -96,6 +97,27 @@ function aThreeYearPlan() {
 }
 
 describe('fladen', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('gemmer planen automatisk i localStorage ved ændring, uden en gem-knap', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+
+    await user.click(navigatorButton(/Frie midler/))
+    const balance = screen.getByLabelText(/Saldo/)
+    await user.clear(balance)
+    await user.type(balance, '2000000')
+
+    const result = loadPlan()
+    expect(result.kind).toBe('Loaded')
+    expect((result as { plan: Plan }).plan.household.persons[0]!.holdings[0]!.balance).toBe(
+      2_000_000,
+    )
+    expect(screen.queryByRole('button', { name: /gem/i })).toBeNull()
+  })
+
   it('viser én række i årstabellen pr. simuleringsår, i dagens kroner', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)
@@ -834,6 +856,15 @@ describe('fladen', () => {
     expect(screen.getByText(/kan ikke simuleres/i)).toBeTruthy()
     expect(screen.getByText(/findes-ikke/)).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
+  })
+
+  it('viser en forklarende besked frem for en tom flade, når en gemt plan ikke kunne indlæses', () => {
+    render(<App initialPlan={aPlan()} loadError="Den gemte plan er ikke gyldig JSON." />)
+
+    expect(screen.getByText(/ikke indlæses/i)).toBeTruthy()
+    expect(screen.getByText('Den gemte plan er ikke gyldig JSON.')).toBeTruthy()
+    expect(screen.queryByRole('table')).toBeNull()
+    expect(document.querySelector('.navigatorspalte')).toBeNull()
   })
 
   it('slår årstabellen om til løbende priser, uden at røre inputfeltet i skuffen', async () => {
