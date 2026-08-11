@@ -34,6 +34,7 @@ export function App({ initialPlan }: { initialPlan: Plan }) {
             period={period}
             selected={selected}
             onSelect={setSelected}
+            onChange={setPlan}
           />
         </div>
 

@@ -490,6 +490,7 @@ describe('simulate', () => {
             id: 'maria',
             name: 'Maria',
             birthYear: 1973,
+            birthMonth: 6,
             workEndAge: 58,
             horizon: 90,
             holdings: [

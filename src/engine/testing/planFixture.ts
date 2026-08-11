@@ -12,6 +12,7 @@ type Options = {
   startYear?: number
   inflationAssumption?: number
   birthYear?: number
+  birthMonth?: number
   workEndAge?: number
   horizon?: number
   balance?: number
@@ -39,6 +40,7 @@ export function aPlan(options: Options = {}): Plan {
     startYear = 2026,
     inflationAssumption = 0,
     birthYear = 1973,
+    birthMonth = 6,
     workEndAge = 58,
     horizon = 90,
     balance = 1_000_000,
@@ -66,6 +68,7 @@ export function aPlan(options: Options = {}): Plan {
           id: 'jesper',
           name: 'Jesper',
           birthYear,
+          birthMonth,
           workEndAge,
           horizon,
           holdings: [

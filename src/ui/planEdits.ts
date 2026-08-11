@@ -50,6 +50,60 @@ export function withEntry(
   }
 }
 
+/** Den tyndeste person, der kan tilføjes: fødselsåret gættes fyrre år før
+    startåret, resten er de samme standarder som fixturens. Brugeren retter
+    dem i skuffen bagefter. */
+export function addPerson(plan: Plan): Plan {
+  const id = freshPersonId(plan)
+  const name = `Person ${plan.household.persons.length + 1}`
+
+  return {
+    ...plan,
+    household: {
+      persons: [
+        ...plan.household.persons,
+        {
+          id,
+          name,
+          birthYear: plan.startYear - 40,
+          birthMonth: 1,
+          workEndAge: 65,
+          horizon: 90,
+          holdings: [],
+        },
+      ],
+    },
+  }
+}
+
+/** Fjerner personen, dennes beholdninger med (de er nestet under personen),
+    og posterne der peger på personen som ejer — ellers ville motoren støde
+    på en ejer, der ikke findes. Var personens beholdning bufferen, arver den
+    første tilbageværende beholdning rollen, så planen forbliver regnbar. */
+export function removePerson(plan: Plan, id: string): Plan {
+  const persons = plan.household.persons.filter((person) => person.id !== id)
+  const remainingHoldingIds = persons.flatMap((person) =>
+    person.holdings.map((holding) => holding.id),
+  )
+  const buffer = remainingHoldingIds.includes(plan.buffer)
+    ? plan.buffer
+    : (remainingHoldingIds[0] ?? plan.buffer)
+
+  return {
+    ...plan,
+    buffer,
+    household: { persons },
+    entries: plan.entries.filter((entry) => entry.owner !== id),
+  }
+}
+
+function freshPersonId(plan: Plan): string {
+  const existing = new Set(plan.household.persons.map((person) => person.id))
+  let n = 1
+  while (existing.has(`person-${n}`)) n++
+  return `person-${n}`
+}
+
 export function findPerson(plan: Plan, id: string): Person | undefined {
   return plan.household.persons.find((person) => person.id === id)
 }
@@ -58,6 +112,32 @@ export function findHolding(plan: Plan, id: string): Holding | undefined {
   return plan.household.persons
     .flatMap((person) => person.holdings)
     .find((holding) => holding.id === id)
+}
+
+/** Personen, hvis `holdings` netop nu rummer beholdningen. Ejerskab er
+    nesting, ikke et felt på `Holding` — se domænemodellen. */
+export function findHoldingOwner(plan: Plan, holdingId: string): Person | undefined {
+  return plan.household.persons.find((person) =>
+    person.holdings.some((holding) => holding.id === holdingId),
+  )
+}
+
+/** Flytter en beholdning til en anden person: ud af den gamle ejers
+    `holdings`, ind i den nyes. Beholdningen selv rører sig ikke. */
+export function withHoldingOwner(plan: Plan, holdingId: string, newOwnerId: string): Plan {
+  const holding = findHolding(plan, holdingId)
+  if (!holding) return plan
+
+  return {
+    ...plan,
+    household: {
+      persons: plan.household.persons.map((person) =>
+        person.id === newOwnerId
+          ? { ...person, holdings: [...person.holdings, holding] }
+          : { ...person, holdings: person.holdings.filter((h) => h.id !== holdingId) },
+      ),
+    },
+  }
 }
 
 export function findEntry(plan: Plan, id: string): Entry | undefined {

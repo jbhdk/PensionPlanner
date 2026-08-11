@@ -25,8 +25,10 @@ classDiagram
 
     class Person {
         +birthYear
+        +birthMonth
         +workEndAge
-        +statePensionAge
+        +statePensionAgeOverride
+        +statePensionAge()
         +horizon
     }
 
@@ -146,7 +148,8 @@ classDiagram
   `LifeAnnuity` arver `InstalmentPension`-rækken; den er en underklasse, ikke en sjette variant. Varianterne er opkaldt efter skattespanden og ikke efter aktivet — `ShareIncome` er derfor både variantnavn og feltnavn på `YearResult`, og det er med vilje: navnet siger, hvilket felt afkastet lander i.
 - **`FreeAssets` er en kategori, ikke en variant.** Den dækker `ShareIncome` og `CapitalIncome` under ét, og det er den, buffer- og overførselsreglerne taler om. Aktiesparekontoen hører ikke med — den har et indskudsloft.
 - **`PayoutSchedule` hænger på beholdningen, ikke på personen.** Det er dét, der gør motoren plan-drevet — se [ADR-0002](../adr/0002-plan-drevet-motor-med-frie-midler-som-buffer.md).
-- **`payoutAge()` er afledt, ikke indtastet.** Den udledes af `openedOn` via udbetalingsregimet, med `payoutAgeOverride` til overførselstilfælde. Fordi to af de tre regimer er relative til folkepensionsalderen, ændrer den sig, når `Person.statePensionAge` justeres.
+- **`payoutAge()` er afledt, ikke indtastet.** Den udledes af `openedOn` via udbetalingsregimet, med `payoutAgeOverride` til overførselstilfælde. Fordi to af de tre regimer er relative til folkepensionsalderen, ændrer den sig, når `Person.statePensionAge()` justeres.
+- **`Person.statePensionAge()` er afledt efter samme mønster.** Den udledes af `birthYear` og `birthMonth` efter den lovfastsatte fødselsdatotabel i docs/satser/folkepensionsalder.md, med `statePensionAgeOverride` til de fødselsår, hvor tabellen kun har et fremskrevet skøn. Tabellen er ikke et `RateYear` — den ændrer sig ikke fra satsår til satsår, kun når Folketinget vedtager et nyt trin.
 - **`Entry` er én figur for både indtægt og udgift.** Kun indtægtsposter bærer en `taxTreatment`.
 - **`LifeAnnuity` arver `Holding`, indtil den omsættes.** Den modtager indbetalinger og forrentes som alle andre beholdninger; ved udbetalingsstart ganges det fremskrevne depot med `conversionFactor()` og bliver til en fast livsvarig ydelse. Se [ADR-0009](../adr/0009-livrenten-omsaettes-en-gang-ved-udbetalingsstart.md).
 - **`Contribution` er en bevægelse, ikke en udgift, og lønnen er brutto.** Alt andet knækker balanceinvarianten. Lofterne hænger på bidraget, ikke på lønnen, og derfor er det en selvstændig figur. Se [ADR-0007](../adr/0007-indbetalinger-er-bevaegelser-og-loennen-er-brutto.md).

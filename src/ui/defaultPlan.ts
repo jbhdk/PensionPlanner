@@ -42,6 +42,7 @@ export function defaultPlan(): Plan {
           id: 'person-1',
           name: 'Person 1',
           birthYear: 1973,
+          birthMonth: 1,
           workEndAge: 65,
           horizon: 90,
           holdings: [

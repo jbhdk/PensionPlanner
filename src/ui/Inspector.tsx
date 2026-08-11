@@ -13,15 +13,19 @@ import type {
   Timing,
 } from '../engine/plan'
 import { periodBounds } from '../engine/simulate'
+import { deriveStatePensionAge } from '../engine/statePensionAge'
 import { procent } from './format'
 import {
   findEntry,
   findHolding,
+  findHoldingOwner,
   findPerson,
   parseNumber,
+  removePerson,
   withDirection,
   withEntry,
   withHolding,
+  withHoldingOwner,
   withPerson,
 } from './planEdits'
 import type { Selection } from './selection'
@@ -167,6 +171,14 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
           }
         />
         <NumberField
+          label="Fødselsmåned"
+          unit="1–12"
+          value={person.birthMonth}
+          onChange={(birthMonth) =>
+            onChange(withPerson(plan, id, (p) => ({ ...p, birthMonth })))
+          }
+        />
+        <NumberField
           label="Horisont"
           unit="år"
           value={person.horizon}
@@ -176,13 +188,102 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
         />
         <Hint>Simuleringen løber til og med det år, personen fylder så mange år.</Hint>
       </Section>
+      <Section title="Folkepension">
+        <StatePensionAgeFields plan={plan} id={id} onChange={onChange} />
+      </Section>
+      {plan.household.persons.length > 1 && (
+        <Section title="Fjern">
+          <button
+            type="button"
+            className="fjern-person"
+            onClick={() => {
+              onChange(removePerson(plan, id))
+              onClose()
+            }}
+          >
+            Fjern person
+          </button>
+          <Hint>Personens beholdninger og poster fjernes med.</Hint>
+        </Section>
+      )}
     </>
   )
 }
 
+/** Folkepensionsalderen udledt af fødselsdato, med mulighed for at
+    overstyre — se `deriveStatePensionAge` og
+    docs/satser/folkepensionsalder.md. Den udledte værdi står altid, også når
+    overstyret, så overstyringen er synlig som netop en overstyring. */
+function StatePensionAgeFields({
+  plan,
+  id,
+  onChange,
+}: {
+  plan: Plan
+  id: string
+  onChange: (plan: Plan) => void
+}) {
+  const person = findPerson(plan, id)
+  if (!person) return null
+
+  const derived = deriveStatePensionAge(person.birthYear, person.birthMonth)
+  const overridden = person.statePensionAgeOverride !== undefined
+
+  return (
+    <>
+      <LockedField
+        label="Folkepensionsalder"
+        value={`${danishAge(derived.age)} år`}
+        unit="udledt"
+      />
+      {!derived.enacted && (
+        <Hint>
+          Endnu ikke vedtaget af Folketinget for dette fødselsår — et
+          fremskrevet skøn.
+        </Hint>
+      )}
+      <CheckboxField
+        label="Overstyr folkepensionsalderen"
+        checked={overridden}
+        onChange={(checked) =>
+          onChange(
+            withPerson(plan, id, (p) => ({
+              ...p,
+              statePensionAgeOverride: checked ? derived.age : undefined,
+            })),
+          )
+        }
+      />
+      {overridden && (
+        <NumberField
+          label="Overstyret folkepensionsalder"
+          unit="år"
+          value={person.statePensionAgeOverride!}
+          onChange={(value) =>
+            onChange(
+              withPerson(plan, id, (p) => ({ ...p, statePensionAgeOverride: value })),
+            )
+          }
+        />
+      )}
+    </>
+  )
+}
+
+/** 70 → "70", 72,5 → "72,5" — dansk decimalkomma, ingen overflødig nul. */
+function danishAge(age: number): string {
+  return Number.isInteger(age) ? String(age) : String(age).replace('.', ',')
+}
+
 function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {
   const holding = findHolding(plan, id)
-  if (!holding) return null
+  const owner = findHoldingOwner(plan, id)
+  if (!holding || !owner) return null
+
+  const persons = plan.household.persons
+  const ownerByName: Record<string, string> = Object.fromEntries(
+    persons.map((person) => [person.name, person.id]),
+  )
 
   return (
     <>
@@ -193,6 +294,14 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
           value={holding.name}
           onChange={(name) =>
             onChange(withHolding(plan, id, (h) => ({ ...h, name })))
+          }
+        />
+        <SelectField
+          label="Ejer"
+          value={owner.name}
+          options={persons.map((person) => person.name)}
+          onChange={(name) =>
+            onChange(withHoldingOwner(plan, id, ownerByName[name]!))
           }
         />
         <NumberField
@@ -299,7 +408,13 @@ function danishTiming(timing: Timing): string {
 
 function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {
   const entry = findEntry(plan, id)
-  if (!entry) return null
+  const owner = findPerson(plan, entry?.owner ?? '')
+  if (!entry || !owner) return null
+
+  const persons = plan.household.persons
+  const ownerByName: Record<string, string> = Object.fromEntries(
+    persons.map((person) => [person.name, person.id]),
+  )
 
   const income = entry.direction === 'Income'
 
@@ -334,6 +449,14 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
             onChange(
               withEntry(plan, id, (e) => withDirection(e, directions[choice]!)),
             )
+          }
+        />
+        <SelectField
+          label="Ejer"
+          value={owner.name}
+          options={persons.map((person) => person.name)}
+          onChange={(name) =>
+            onChange(withEntry(plan, id, (e) => ({ ...e, owner: ownerByName[name]! })))
           }
         />
         {entry.direction === 'Income' && (

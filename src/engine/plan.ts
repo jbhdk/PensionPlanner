@@ -29,10 +29,15 @@ export type Person = {
   id: PersonId
   name: string
   birthYear: number
+  birthMonth: number
   /** Det år personen holder op med at arbejde. En fri beslutning, ikke en
       lovbestemt alder — se `AgeBound`, som aldersforankrede perioder kan
       binde sig til. */
   workEndAge: number
+  /** Overstyrer den udledte folkepensionsalder, når sat. Udeladt betyder
+      "brug tabellen" — se `deriveStatePensionAge` og
+      docs/satser/folkepensionsalder.md. */
+  statePensionAgeOverride?: number
   /** Alderen simuleringen løber til og med. */
   horizon: number
   holdings: Holding[]

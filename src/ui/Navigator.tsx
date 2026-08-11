@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Plan } from '../engine/plan'
 import { kroner } from './format'
+import { addPerson } from './planEdits'
 import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
 
@@ -11,6 +12,10 @@ type Group = {
   count: string
   summary: string
   rows: Row[]
+  /** Vises som en knap under rækkerne, matcher fladekortets "+ X"-mønster.
+      Udeladt betyder, at gruppen ikke kan udvides herfra. */
+  addLabel?: string
+  onAdd?: () => void
 }
 
 /** Navigatoren viser planen, den redigerer den ikke — felterne står i skuffen.
@@ -23,14 +28,16 @@ export function Navigator({
   period,
   selected,
   onSelect,
+  onChange,
 }: {
   plan: Plan
   period: string
   selected: Selection
   onSelect: (selection: Selection) => void
+  onChange: (plan: Plan) => void
 }) {
   const [folded, setFolded] = useState<Record<string, boolean>>({})
-  const groups = groupsOf(plan, period)
+  const groups = groupsOf(plan, period, onChange)
 
   return (
     <>
@@ -73,6 +80,11 @@ export function Navigator({
                   <span className="tal">{row.value}</span>
                 </button>
               ))}
+              {group.addLabel && (
+                <button type="button" className="nav-tilfoej" onClick={group.onAdd}>
+                  {group.addLabel}
+                </button>
+              )}
             </div>
           )}
         </section>
@@ -81,7 +93,7 @@ export function Navigator({
   )
 }
 
-function groupsOf(plan: Plan, period: string): Group[] {
+function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): Group[] {
   const persons = plan.household.persons
   const holdings = persons.flatMap((person) => person.holdings)
   const holdingSum = holdings.reduce((sum, h) => sum + h.balance, 0)
@@ -106,6 +118,9 @@ function groupsOf(plan: Plan, period: string): Group[] {
         value: `f. ${person.birthYear}`,
         target: { kind: 'person', id: person.id },
       })),
+      // Husstanden er højst to personer, jf. domænemodellen.
+      addLabel: persons.length < 2 ? '+ Person' : undefined,
+      onAdd: () => onChange(addPerson(plan)),
     },
     {
       id: 'beholdninger',

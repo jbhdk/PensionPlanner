@@ -35,6 +35,7 @@ describe('fladen', () => {
     const udgifter = headers.indexOf('Udgifter')
     expect(headers).toEqual([
       'År',
+      'Jesper',
       'Indtægter',
       'Afkast',
       'Skat',
@@ -116,7 +117,7 @@ describe('fladen', () => {
 
     const skat = () =>
       within(within(screen.getByRole('table')).getAllByRole('row')[1]!)
-        .getAllByRole('cell')[3]!.textContent
+        .getAllByRole('cell')[4]!.textContent
 
     expect(skat()).toBe('-220.592')
 
@@ -137,7 +138,7 @@ describe('fladen', () => {
     render(<App initialPlan={defaultPlan()} />)
 
     const rows = within(screen.getByRole('table')).getAllByRole('row')
-    const skat = within(rows[1]!).getAllByRole('cell')[3]!.textContent
+    const skat = within(rows[1]!).getAllByRole('cell')[4]!.textContent
 
     expect(skat).not.toBe('0')
     expect(Number(skat!.replace(/\D/g, ''))).toBeGreaterThan(0)
@@ -314,6 +315,142 @@ describe('fladen', () => {
     expect(til.disabled).toBe(true)
     // Født 1973, erhvervsophør 60 falder i 2033.
     expect(screen.getByText('til 2033')).toBeTruthy()
+  })
+
+  it('tilføjer person nummer to via husstandsgruppen', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan()} />)
+
+    // Navigatorens gruppehoved for Husstanden viser også personnavnene i sit
+    // resumé, så rækken findes med et anker i starten af navnet — ellers
+    // rammer forespørgslen begge knapper.
+    expect(screen.queryByRole('button', { name: /^Person 2/ })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: '+ Person' }))
+
+    expect(screen.getByRole('button', { name: /^Person 2/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '+ Person' })).toBeNull()
+  })
+
+  it('fjerner person nummer to igen fra dennes inspektør', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Person' }))
+    await user.click(screen.getByRole('button', { name: /^Person 2/ }))
+    await user.click(screen.getByRole('button', { name: /Fjern person/ }))
+
+    expect(screen.queryByRole('button', { name: /^Person 2/ })).toBeNull()
+    expect(screen.getByRole('button', { name: '+ Person' })).toBeTruthy()
+    // Skuffen lukker, fordi den viste person ikke findes mere.
+    expect(screen.queryByLabelText(/Fjern person/)).toBeNull()
+  })
+
+  it('kan ikke fjerne den sidste person i husstanden', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan()} />)
+
+    await user.click(screen.getByRole('button', { name: /^Jesper/ }))
+    expect(screen.queryByRole('button', { name: /Fjern person/ })).toBeNull()
+  })
+
+  it('flytter en beholdning til en anden ejer via ejer-vælgeren', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Person' }))
+    await user.click(screen.getByRole('button', { name: /Frie midler/ }))
+
+    const ejer = screen.getByLabelText(/Ejer/) as HTMLSelectElement
+    expect(ejer.value).toBe('Jesper')
+    expect(Array.from(ejer.options).map((option) => option.value)).toEqual([
+      'Jesper',
+      'Person 2',
+    ])
+
+    await user.selectOptions(ejer, 'Person 2')
+
+    expect(ejer.value).toBe('Person 2')
+    // Beholdningen er flyttet, ikke duplikeret.
+    const beholdninger = screen.getByRole('button', { name: /Beholdninger/ })
+    expect(within(beholdninger).getByText('1')).toBeTruthy()
+  })
+
+  it('flytter en post til en anden ejer via ejer-vælgeren', async () => {
+    const user = userEvent.setup()
+    render(
+      <App initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })} />,
+    )
+
+    await user.click(screen.getByRole('button', { name: '+ Person' }))
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+
+    const ejer = screen.getByLabelText(/Ejer/) as HTMLSelectElement
+    expect(ejer.value).toBe('Jesper')
+    expect(Array.from(ejer.options).map((option) => option.value)).toEqual([
+      'Jesper',
+      'Person 2',
+    ])
+
+    await user.selectOptions(ejer, 'Person 2')
+    expect(ejer.value).toBe('Person 2')
+  })
+
+  it('viser folkepensionsalderen udledt af fødselsdatoen, og markerer et skøn som sådan', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan({ birthYear: 1985, birthMonth: 6 })} />)
+
+    await user.click(screen.getByRole('button', { name: /^Jesper/ }))
+
+    expect(screen.getByText('72,5 år')).toBeTruthy()
+    expect(screen.getByText(/skøn/i)).toBeTruthy()
+    expect(screen.queryByLabelText(/Overstyret folkepensionsalder/)).toBeNull()
+  })
+
+  it('lader folkepensionsalderen overstyres, synligt adskilt fra den udledte', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan({ birthYear: 1973, birthMonth: 6 })} />)
+
+    await user.click(screen.getByRole('button', { name: /^Jesper/ }))
+    expect(screen.getByText('70 år')).toBeTruthy()
+
+    await user.click(screen.getByLabelText(/Overstyr folkepensionsalderen/))
+    const override = screen.getByLabelText(/Overstyret folkepensionsalder/) as HTMLInputElement
+    await user.clear(override)
+    await user.type(override, '72')
+
+    expect(override.value).toBe('72')
+    // Den udledte værdi står stadig, adskilt fra overstyringen.
+    expect(screen.getByText('70 år')).toBeTruthy()
+  })
+
+  it('viser hver persons alder i årstabellen, én kolonne pr. person', () => {
+    render(<App initialPlan={aThreeYearPlan()} />)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    const headers = within(rows[0]!)
+      .getAllByRole('columnheader')
+      .map((header) => header.textContent)
+    const alder = headers.indexOf('Jesper')
+
+    // Startår 2026, født 1973.
+    expect(within(rows[1]!).getAllByRole('cell')[alder]!.textContent).toBe('53')
+    expect(within(rows[3]!).getAllByRole('cell')[alder]!.textContent).toBe('55')
+  })
+
+  it('får en ekstra alderskolonne, når husstanden får person nummer to', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Person' }))
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    const headers = within(rows[0]!)
+      .getAllByRole('columnheader')
+      .map((header) => header.textContent)
+
+    expect(headers).toContain('Jesper')
+    expect(headers).toContain('Person 2')
   })
 
   it('deler posterne i Indtægter og Udgifter i navigatoren', () => {

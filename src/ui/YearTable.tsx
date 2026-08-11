@@ -6,12 +6,19 @@ import { inRealKroner } from './real'
 /** Årstabellen: én række pr. simuleringsår. Alle beløb deflateres til dagens
     kroner her — motoren leverer dem i løbende priser. */
 export function YearTable({ years, plan }: { years: YearResult[]; plan: Plan }) {
+  const persons = plan.household.persons
+
   return (
     <div className="tabelramme">
       <table className="aar">
         <thead>
           <tr>
             <th scope="col">År</th>
+            {persons.map((person) => (
+              <th scope="col" key={person.id}>
+                {person.name}
+              </th>
+            ))}
             <th scope="col">Indtægter</th>
             <th scope="col">Afkast</th>
             <th scope="col">Skat</th>
@@ -29,6 +36,9 @@ export function YearTable({ years, plan }: { years: YearResult[]; plan: Plan }) 
             return (
               <tr key={year.year}>
                 <td>{year.year}</td>
+                {persons.map((person) => (
+                  <td key={person.id}>{year.year - person.birthYear}</td>
+                ))}
                 <td>{kroner(real(year.income))}</td>
                 <td>{kroner(real(year.return))}</td>
                 <td>{kroner(real(-year.tax))}</td>

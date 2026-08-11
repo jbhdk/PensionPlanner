@@ -263,6 +263,23 @@ body {
   white-space: nowrap;
 }
 
+.nav-tilfoej {
+  width: 100%;
+  padding: 5px 13px 5px 10px;
+  font: inherit;
+  color: var(--label);
+  background: none;
+  border: 0;
+  border-left: 3px solid transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-tilfoej:hover {
+  background: #1d242c;
+  color: var(--ink);
+}
+
 /* ---------- inspektørskuffen ---------- */
 
 .skuffe {
