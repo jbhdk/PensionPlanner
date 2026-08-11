@@ -11,10 +11,12 @@ export function YearTable({
   years,
   plan,
   unit,
+  onSelectYear,
 }: {
   years: YearResult[]
   plan: Plan
   unit: AmountUnit
+  onSelectYear: (year: number) => void
 }) {
   const persons = plan.household.persons
 
@@ -49,7 +51,11 @@ export function YearTable({
             const state = year.bufferState
 
             return (
-              <tr key={year.year} className={state ? bufferStateClasses[state] : undefined}>
+              <tr
+                key={year.year}
+                className={state ? bufferStateClasses[state] : undefined}
+                onClick={() => onSelectYear(year.year)}
+              >
                 <td>{year.year}</td>
                 {persons.map((person) => (
                   <td key={person.id}>{year.year - person.birthYear}</td>

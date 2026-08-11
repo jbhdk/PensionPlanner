@@ -874,6 +874,57 @@ describe('fladen', () => {
     expect(screen.queryByRole('img', { name: 'Formuegraf' })).toBeNull()
   })
 
+  it('åbner forklar-året ved klik på en årsrække, og fører tilbage til tabellen', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!)
+
+    expect(screen.getByRole('heading', { name: '2026' })).toBeTruthy()
+    expect(screen.queryByRole('table')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Tilbage til tabellen' }))
+
+    expect(screen.getByRole('table')).toBeTruthy()
+  })
+
+  it('viser hver persons alder og satsåret i forklar-årets hoved', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2026
+
+    const hoved = screen.getByRole('heading', { name: '2026' }).closest('.forklarhoved') as HTMLElement
+    expect(within(hoved).getByText('Jesper 53 år')).toBeTruthy()
+    expect(within(hoved).getByText('Satsår 2026')).toBeTruthy()
+  })
+
+  it('viser balancestriben for det valgte år, i dagens kroner', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2026 — startåret, hvor dagens kroner og løbende priser er ét
+
+    const stribe = document.querySelector('.balancestribe') as HTMLElement
+    const post = (label: string) =>
+      Array.from(stribe.querySelectorAll('.stribepost')).find(
+        (el) => el.querySelector('.m')?.textContent === label,
+      )!.querySelector('.v')!.textContent
+
+    expect(post('Formue primo')).toBe('1.000.000')
+    expect(post('Indtægter')).toBe('0')
+    expect(post('Afkast')).toBe('0')
+    expect(post('Skat')).toBe('0')
+    expect(post('Udgifter')).toBe('-40.000')
+    expect(post('Formue ultimo')).toBe('960.000')
+  })
+
   it('åbner inspektøren for beholdningen, når der klikkes på grafens legend', async () => {
     const user = userEvent.setup()
     const plan = aPlanWithSecondHolding()
