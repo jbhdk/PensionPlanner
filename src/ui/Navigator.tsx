@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Direction, Plan } from '../engine/plan'
+import type { Plan } from '../engine/plan'
 import { kroner } from './format'
 import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
@@ -14,8 +14,10 @@ type Group = {
 }
 
 /** Navigatoren viser planen, den redigerer den ikke — felterne står i skuffen.
-    En foldet gruppe er ikke tavs: resuméet træder i stedet for listen, så hele
-    planen kan læses på få linjer. */
+    De fleste foldede grupper er ikke tavse: resuméet træder i stedet for
+    listen. Indtægter og Udgifter er undtagelsen — et samlet kronetal ville
+    love en regelmæssighed, poster med periode eller gentagelse ikke har, så
+    de viser kun deres antal, jf. antallet allerede synligt i badge'en. */
 export function Navigator({
   plan,
   period,
@@ -83,12 +85,8 @@ function groupsOf(plan: Plan, period: string): Group[] {
   const persons = plan.household.persons
   const holdings = persons.flatMap((person) => person.holdings)
   const holdingSum = holdings.reduce((sum, h) => sum + h.balance, 0)
-  // Resuméet er posternes nettovirkning pr. år, ikke udgifterne alene:
-  // en foldet gruppe skal kunne læses som det, den dækker over.
-  const entrySum = plan.entries.reduce(
-    (sum, entry) => sum + signed(entry.amountInRealKroner, entry.direction),
-    0,
-  )
+  const income = plan.entries.filter((entry) => entry.direction === 'Income')
+  const expenses = plan.entries.filter((entry) => entry.direction === 'Expense')
 
   return [
     {
@@ -121,21 +119,31 @@ function groupsOf(plan: Plan, period: string): Group[] {
       })),
     },
     {
-      id: 'poster',
-      title: 'Poster',
-      count: String(plan.entries.length),
-      summary: `${kroner(entrySum)} kr./år`,
-      rows: plan.entries.map((entry) => ({
+      id: 'indtaegter',
+      title: 'Indtægter',
+      count: String(income.length),
+      // Ingen sum her: poster kan have begrænset periode eller gentagelse,
+      // så et samlet kronetal ville love en regelmæssighed, planen ikke har.
+      // De nøjagtige tal står i årstabellen.
+      summary: '',
+      rows: income.map((entry) => ({
         name: entry.name,
-        value: kroner(signed(entry.amountInRealKroner, entry.direction)),
+        value: kroner(entry.amountInRealKroner),
+        target: { kind: 'entry', id: entry.id },
+      })),
+    },
+    {
+      id: 'udgifter',
+      title: 'Udgifter',
+      count: String(expenses.length),
+      summary: '',
+      rows: expenses.map((entry) => ({
+        name: entry.name,
+        // Posten selv er altid positiv; det er først på skærmen, en udgift
+        // bliver til et minus, jf. Indtægter-grenen ovenfor.
+        value: kroner(-entry.amountInRealKroner),
         target: { kind: 'entry', id: entry.id },
       })),
     },
   ]
-}
-
-/** Fortegnet er retningens arbejde, ikke beløbets — posten selv er altid
-    positiv, og det er først på skærmen, en udgift bliver til et minus. */
-function signed(amount: number, direction: Direction): number {
-  return direction === 'Expense' ? -amount : amount
 }

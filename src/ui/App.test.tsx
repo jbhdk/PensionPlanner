@@ -316,7 +316,7 @@ describe('fladen', () => {
     expect(screen.getByText('til 2033')).toBeTruthy()
   })
 
-  it('viser posternes nettovirkning pr. år i navigatorens resumé', () => {
+  it('deler posterne i Indtægter og Udgifter i navigatoren', () => {
     render(
       <App
         initialPlan={aPlan({
@@ -328,6 +328,16 @@ describe('fladen', () => {
       />,
     )
 
-    expect(screen.getByText('240.000 kr./år')).toBeTruthy()
+    const indtaegter = screen.getByRole('button', { name: /Indtægter/ })
+    const udgifter = screen.getByRole('button', { name: /Udgifter/ })
+
+    // Grupperne viser kun deres antal — ikke en sum, der ville blive
+    // misvisende af poster med begrænset periode eller gentagelse. De
+    // nøjagtige tal står i årstabellen i stedet.
+    expect(within(indtaegter).getByText('1')).toBeTruthy()
+    expect(within(udgifter).getByText('1')).toBeTruthy()
+
+    expect(screen.getByRole('button', { name: /Faste udgifter/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Løn/ })).toBeTruthy()
   })
 })
