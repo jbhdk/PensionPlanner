@@ -3,9 +3,16 @@ import type { Plan } from '../engine/plan'
 import { simulate, validateBuffer } from '../engine/simulate'
 import { Inspector } from './Inspector'
 import { Navigator } from './Navigator'
+import type { AmountUnit } from './real'
+import { WealthChart } from './WealthChart'
 import { YearTable } from './YearTable'
 import type { Selection } from './selection'
 import './app.css'
+
+/** Resultatspaltens to faner. Formuen er standardfanen, jf. issue #12 —
+    man justerer i navigatoren og konstaterer visuelt på grafen, om planen
+    holder; tabellen er laget man går ned i bagefter. */
+type ResultView = 'Wealth' | 'YearTable'
 
 /** Fladen: topbjælken, navigatoren til venstre, resultatspalten til højre og
     inspektørskuffen, der glider ind over resultatet, når en linje vælges.
@@ -16,6 +23,8 @@ import './app.css'
 export function App({ initialPlan }: { initialPlan: Plan }) {
   const [plan, setPlan] = useState(initialPlan)
   const [selected, setSelected] = useState<Selection>(null)
+  const [resultView, setResultView] = useState<ResultView>('Wealth')
+  const [unit, setUnit] = useState<AmountUnit>('Real')
 
   // Nul eller to buffere er en inputfejl, ikke et resultat: planen kan ikke
   // simuleres, og resultatspalten skal sige hvorfor frem for at stå tom.
@@ -43,16 +52,44 @@ export function App({ initialPlan }: { initialPlan: Plan }) {
 
         <div className="spalte resultatspalte">
           <div className="resultathoved">
-            <span className="titel">Resultatet</span>
-            <span className="enhedsmaerke">dagens kroner</span>
+            <span className="omskifter">
+              <button
+                aria-pressed={resultView === 'Wealth'}
+                onClick={() => setResultView('Wealth')}
+              >
+                Formuen
+              </button>
+              <button
+                aria-pressed={resultView === 'YearTable'}
+                onClick={() => setResultView('YearTable')}
+              >
+                Årstabellen
+              </button>
+            </span>
+            <span className="omskifter hoejre">
+              <button aria-pressed={unit === 'Real'} onClick={() => setUnit('Real')}>
+                Dagens kroner
+              </button>
+              <button aria-pressed={unit === 'Nominal'} onClick={() => setUnit('Nominal')}>
+                Løbende priser
+              </button>
+            </span>
           </div>
           {bufferError ? (
             <div className="besked stop">
               <h3>Planen kan ikke simuleres</h3>
               <p>{bufferError}</p>
             </div>
+          ) : resultView === 'Wealth' ? (
+            <WealthChart
+              years={years}
+              plan={plan}
+              unit={unit}
+              selected={selected}
+              onSelect={setSelected}
+            />
           ) : (
-            <YearTable years={years} plan={plan} />
+            <YearTable years={years} plan={plan} unit={unit} />
           )}
         </div>
       </div>

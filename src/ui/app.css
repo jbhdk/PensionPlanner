@@ -100,6 +100,14 @@ body {
   padding-right: 356px;
 }
 
+/* Flex-søjle, så formuegrafen kan fylde resten af spalten under
+   resultathovedet — årstabellen bruger ikke det ekstra rum og beholder sin
+   egen indholdshøjde. */
+.resultatspalte {
+  display: flex;
+  flex-direction: column;
+}
+
 /* Spaltehovedet bliver stående, når spalten ruller under det. */
 .spaltehoved,
 .resultathoved {
@@ -132,10 +140,32 @@ body {
   color: var(--muted);
 }
 
-.enhedsmaerke {
+/* Fanebåndet (Formuen · Årstabellen) og kronetype-omskifteren deler samme
+   kappe, jf. docs/mockup/navigator.css. */
+.resultathoved .omskifter {
+  display: inline-flex;
+  border: 1px solid var(--felt-kant);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.resultathoved .omskifter.hoejre {
   margin-left: auto;
-  color: var(--muted);
+}
+
+.resultathoved .omskifter button {
+  font: inherit;
   font-size: 12px;
+  border: 0;
+  background: var(--felt-bg);
+  color: var(--muted);
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.resultathoved .omskifter button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--paa-accent);
 }
 
 /* ---------- navigatoren ---------- */
@@ -445,6 +475,107 @@ body {
   margin: 0;
   color: var(--label);
   font-size: 12px;
+}
+
+/* ---------- formuegrafen ---------- */
+
+.formuegraf {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 10px;
+  padding: 10px 14px;
+  background: var(--flade);
+  border: 1px solid var(--linje);
+  border-radius: 6px;
+}
+
+/* Ingen fast højde: plotcontaineren fylder resten af kortet, og grafen
+   måles efter dens faktiske størrelse — se WealthChart's ResizeObserver.
+   min-height er gulvet, ikke måltallet: under 1000 px lægges spalterne
+   under hinanden og får `height: auto` (se nedenfor), så der ikke er nogen
+   resterende plads at fylde — uden gulvet ville grafen klappe sammen til
+   næsten ingenting. */
+.formuegraf-plot {
+  flex: 1 1 auto;
+  min-height: 300px;
+}
+
+.formuegraf-plot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.formuegraf-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--label);
+}
+
+.formuegraf-legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Valgt matcher navigatorrækkernes .valgt — samme beholdning, samme
+   fremhævning, uanset om man klikker legenden eller navigatoren. */
+.formuegraf-legend button.valgt {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.formuegraf-legend .svatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+
+/* Bufferens to fejltilstande, jf. ADR-0008. Samme røde tone som årstabellen
+   for begge — rød er forbeholdt den negative buffer alene, og de to
+   tilstande skelnes med ordet i mærkatet, ikke med endnu en farve. */
+.formuegraf .bufferstate-spaen rect {
+  fill: var(--neg-svag);
+}
+
+.formuegraf .bufferstate-spaen text {
+  fill: var(--neg);
+  font-size: 9.5px;
+  font-family: var(--f-broed);
+}
+
+/* Aksernes gitterlinjer er tilbagetrukne — data er det, der skal ses, jf.
+   dataviz-skillets "recessive grid/axes". Basislinjen ved 0 er trukket
+   svagt frem, så bunden af stablingen er til at følge. */
+.formuegraf-akse-y .gitterlinje {
+  stroke: var(--linje-svag);
+  stroke-width: 1;
+}
+
+.formuegraf-akse-y .basislinje {
+  stroke: var(--linje);
+  stroke-width: 1;
+}
+
+.formuegraf-akse-y text,
+.formuegraf-akse-x text {
+  fill: var(--muted);
+  font-size: 10px;
+  font-family: var(--f-tal);
 }
 
 /* ---------- årstabellen ---------- */

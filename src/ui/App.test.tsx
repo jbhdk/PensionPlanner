@@ -70,6 +70,19 @@ function firstPeriodenFelt(container: HTMLElement): string | null | undefined {
   return felt?.textContent
 }
 
+/** Årstabellen ligger bag sin egen fane, med Formuen som standardfane. */
+async function showYearTable(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
+}
+
+/** En beholdnings navn findes både som navigatorrække og som knap i
+    grafens legend — de to skal kunne skelnes, ikke kun den ene fjernes.
+    Denne henter navigatorens, som de fleste tests handler om. */
+function navigatorButton(name: string | RegExp) {
+  const navigatorspalte = document.querySelector('.navigatorspalte') as HTMLElement
+  return within(navigatorspalte).getByRole('button', { name })
+}
+
 /** Tre simuleringsår, så tabellen kan tælles med det blotte øje. */
 function aThreeYearPlan() {
   return aPlan({
@@ -83,8 +96,10 @@ function aThreeYearPlan() {
 }
 
 describe('fladen', () => {
-  it('viser én række i årstabellen pr. simuleringsår, i dagens kroner', () => {
+  it('viser én række i årstabellen pr. simuleringsår, i dagens kroner', async () => {
+    const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)
+    await showYearTable(user)
 
     const rows = within(screen.getByRole('table')).getAllByRole('row')
 
@@ -119,8 +134,9 @@ describe('fladen', () => {
   it('regner årstabellen om, når saldoen rettes i skuffen — uden en beregn-knap', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)
+    await showYearTable(user)
 
-    await user.click(screen.getByRole('button', { name: /Frie midler/ }))
+    await user.click(navigatorButton(/Frie midler/))
     const balance = screen.getByLabelText(/Saldo/)
     await user.clear(balance)
     await user.type(balance, '2000000')
@@ -182,6 +198,7 @@ describe('fladen', () => {
         })}
       />,
     )
+    await showYearTable(user)
 
     const skat = () =>
       within(within(screen.getByRole('table')).getAllByRole('row')[1]!)
@@ -202,8 +219,10 @@ describe('fladen', () => {
     expect(skat()).toBe('-194.098')
   })
 
-  it('møder brugeren med en skattekolonne, der ikke længere er nul', () => {
+  it('møder brugeren med en skattekolonne, der ikke længere er nul', async () => {
+    const user = userEvent.setup()
     render(<App initialPlan={defaultPlan()} />)
+    await showYearTable(user)
 
     const rows = within(screen.getByRole('table')).getAllByRole('row')
     const skat = within(rows[1]!).getAllByRole('cell')[4]!.textContent
@@ -220,7 +239,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Frie midler/ }))
+    await user.click(navigatorButton(/Frie midler/))
 
     expect((screen.getByLabelText(/Bruttoafkast/) as HTMLInputElement).value).toBe('7')
     expect((screen.getByLabelText(/ÅOP/) as HTMLInputElement).value).toBe('0.5')
@@ -235,7 +254,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Frie midler/ }))
+    await user.click(navigatorButton(/Frie midler/))
     const bruttoafkast = screen.getByLabelText(/Bruttoafkast/)
     await user.clear(bruttoafkast)
     await user.type(bruttoafkast, '10')
@@ -247,7 +266,7 @@ describe('fladen', () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlan()} />)
 
-    await user.click(screen.getByRole('button', { name: /Frie midler/ }))
+    await user.click(navigatorButton(/Frie midler/))
     const variant = screen.getByLabelText(/Variant/) as HTMLSelectElement
 
     // Fixturens beholdning er CapitalIncome, og etape 1 tilbyder kun de to
@@ -488,7 +507,7 @@ describe('fladen', () => {
     render(<App initialPlan={aPlan()} />)
 
     await user.click(screen.getByRole('button', { name: '+ Person' }))
-    await user.click(screen.getByRole('button', { name: /Frie midler/ }))
+    await user.click(navigatorButton(/Frie midler/))
 
     const ejer = screen.getByLabelText(/Ejer/) as HTMLSelectElement
     expect(ejer.value).toBe('Jesper')
@@ -553,8 +572,10 @@ describe('fladen', () => {
     expect(screen.getByText('70 år')).toBeTruthy()
   })
 
-  it('viser hver persons alder i årstabellen, én kolonne pr. person', () => {
+  it('viser hver persons alder i årstabellen, én kolonne pr. person', async () => {
+    const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)
+    await showYearTable(user)
 
     const rows = within(screen.getByRole('table')).getAllByRole('row')
     const headers = within(rows[0]!)
@@ -570,6 +591,7 @@ describe('fladen', () => {
   it('får en ekstra alderskolonne, når husstanden får person nummer to', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)
+    await showYearTable(user)
 
     await user.click(screen.getByRole('button', { name: '+ Person' }))
 
@@ -657,7 +679,7 @@ describe('fladen', () => {
     ).toBeTruthy()
   })
 
-  it('mærker en ufuldstændig og en uholdbar buffer forskelligt i årstabellen', () => {
+  it('mærker en ufuldstændig og en uholdbar buffer forskelligt i årstabellen', async () => {
     const base = aPlanWithSecondHolding()
     const plan: Plan = {
       ...base,
@@ -676,7 +698,9 @@ describe('fladen', () => {
         ],
       },
     }
+    const user = userEvent.setup()
     render(<App initialPlan={plan} />)
+    await showYearTable(user)
 
     const rows = within(screen.getByRole('table')).getAllByRole('row')
     const ufuldstaendigRow = rows[1]!
@@ -697,7 +721,7 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: '+ Beholdning' }))
 
-    expect(screen.getByRole('button', { name: /^Beholdning 2/ })).toBeTruthy()
+    expect(navigatorButton(/^Beholdning 2/)).toBeTruthy()
     const beholdninger = screen.getByRole('button', { name: /Beholdninger/ })
     expect(within(beholdninger).getByText('2')).toBeTruthy()
   })
@@ -799,5 +823,84 @@ describe('fladen', () => {
     expect(screen.getByText(/kan ikke simuleres/i)).toBeTruthy()
     expect(screen.getByText(/findes-ikke/)).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
+  })
+
+  it('slår årstabellen om til løbende priser, uden at røre inputfeltet i skuffen', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+    await showYearTable(user)
+
+    expect(screen.getByRole('button', { name: 'Dagens kroner', pressed: true })).toBeTruthy()
+    const udgifter2028 = () =>
+      within(within(screen.getByRole('table')).getAllByRole('row')[3]!).getAllByRole('cell')[5]!
+        .textContent
+    expect(udgifter2028()).toBe('-40.000')
+
+    await user.click(screen.getByRole('button', { name: 'Løbende priser' }))
+
+    expect(screen.getByRole('button', { name: 'Løbende priser', pressed: true })).toBeTruthy()
+    // 40.000 kr. fremskrevet to år med 2 % — planens inflation, som posten
+    // her følger 1:1.
+    expect(udgifter2028()).toBe('-41.616')
+
+    // Inputfeltet i skuffen er og bliver i dagens kroner, jf. issue #12.
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    expect((screen.getByLabelText(/Beløb/) as HTMLInputElement).value).toBe('40000')
+  })
+
+  it('viser Formuen som standardfane, og skifter til Årstabellen ved klik', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+
+    expect(screen.getByRole('button', { name: 'Formuen', pressed: true })).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'Formuegraf' })).toBeTruthy()
+    expect(screen.queryByRole('table')).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
+
+    expect(screen.getByRole('button', { name: 'Årstabellen', pressed: true })).toBeTruthy()
+    expect(screen.getByRole('table')).toBeTruthy()
+    expect(screen.queryByRole('img', { name: 'Formuegraf' })).toBeNull()
+  })
+
+  it('åbner inspektøren for beholdningen, når der klikkes på grafens legend', async () => {
+    const user = userEvent.setup()
+    const plan = aPlanWithSecondHolding()
+    render(<App initialPlan={plan} />)
+
+    // "Anden beholdning" findes både i navigatoren og i grafens legend —
+    // afgrænset til grafen, som er den, testen handler om.
+    const graf = screen.getByRole('img', { name: 'Formuegraf' }).closest('.formuegraf')!
+    await user.click(within(graf as HTMLElement).getByRole('button', { name: 'Anden beholdning' }))
+
+    const skuffe = screen.getByRole('complementary', { name: 'Inspektør' })
+    expect(within(skuffe).getByText('Anden beholdning')).toBeTruthy()
+
+    // Den valgte beholdnings bånd holder fuld styrke, mens den anden dæmpes.
+    const andenBaand = graf.querySelector('path[data-holding="anden-beholdning"]')!
+    const bufferBaand = graf.querySelector('path[data-holding="free-assets"]')!
+    expect(andenBaand.getAttribute('fill-opacity')).toBe('1')
+    expect(bufferBaand.getAttribute('fill-opacity')).toBe('0.28')
+  })
+
+  it('lukker inspektøren igen, når der klikkes på den samme legend en gang til', async () => {
+    const user = userEvent.setup()
+    const plan = aPlanWithSecondHolding()
+    render(<App initialPlan={plan} />)
+
+    const graf = screen.getByRole('img', { name: 'Formuegraf' }).closest('.formuegraf')!
+    const legendKnap = within(graf as HTMLElement).getByRole('button', { name: 'Anden beholdning' })
+
+    await user.click(legendKnap)
+    expect(screen.getByRole('complementary', { name: 'Inspektør' })).toBeTruthy()
+
+    await user.click(legendKnap)
+    expect(screen.queryByRole('complementary', { name: 'Inspektør' })).toBeNull()
+
+    // Med intet valgt skal alle bånd stå med samme styrke igen.
+    const andenBaand = graf.querySelector('path[data-holding="anden-beholdning"]')!
+    const bufferBaand = graf.querySelector('path[data-holding="free-assets"]')!
+    expect(andenBaand.getAttribute('fill-opacity')).toBe('1')
+    expect(bufferBaand.getAttribute('fill-opacity')).toBe('1')
   })
 })

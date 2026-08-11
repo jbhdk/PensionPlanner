@@ -1,26 +1,21 @@
 import type { Plan } from '../engine/plan'
-import type { BufferState, YearResult } from '../engine/yearResult'
+import type { YearResult } from '../engine/yearResult'
+import { bufferStateClasses, bufferStateLabels } from './bufferState'
 import { kroner } from './format'
-import { inRealKroner } from './real'
-
-/** Danske mærkater for de to fejltilstande fra ADR-0008. En negativ buffer er
-    et resultat og markeres derfor i tabellen — aldrig som en valideringsfejl
-    ved et inputfelt. */
-const bufferStateLabels: Record<BufferState, string> = {
-  Incomplete: 'Ufuldstændig',
-  Unsustainable: 'Uholdbar',
-}
-
-/** Rækkens CSS-klasse følger tilstanden, så ufuldstændig og uholdbar kan
-    skelnes uden at læse et tal — se app.css. */
-const bufferStateClasses: Record<BufferState, string> = {
-  Incomplete: 'ufuldstaendig',
-  Unsustainable: 'uholdbar',
-}
+import type { AmountUnit } from './real'
+import { toDisplayKroner } from './real'
 
 /** Årstabellen: én række pr. simuleringsår. Alle beløb deflateres til dagens
     kroner her — motoren leverer dem i løbende priser. */
-export function YearTable({ years, plan }: { years: YearResult[]; plan: Plan }) {
+export function YearTable({
+  years,
+  plan,
+  unit,
+}: {
+  years: YearResult[]
+  plan: Plan
+  unit: AmountUnit
+}) {
   const persons = plan.household.persons
 
   return (
@@ -45,7 +40,7 @@ export function YearTable({ years, plan }: { years: YearResult[]; plan: Plan }) 
         </thead>
         <tbody>
           {years.map((year) => {
-            const real = (amount: number) => inRealKroner(amount, year.year, plan)
+            const display = (amount: number) => toDisplayKroner(amount, year.year, plan, unit)
             const result =
               year.income + year.return - year.tax - year.expenses
             const bufferBalance = year.holdings.find(
@@ -59,16 +54,16 @@ export function YearTable({ years, plan }: { years: YearResult[]; plan: Plan }) 
                 {persons.map((person) => (
                   <td key={person.id}>{year.year - person.birthYear}</td>
                 ))}
-                <td>{kroner(real(year.income))}</td>
-                <td>{kroner(real(year.return))}</td>
-                <td>{kroner(real(-year.tax))}</td>
-                <td>{kroner(real(-year.expenses))}</td>
-                <td>{kroner(real(result))}</td>
+                <td>{kroner(display(year.income))}</td>
+                <td>{kroner(display(year.return))}</td>
+                <td>{kroner(display(-year.tax))}</td>
+                <td>{kroner(display(-year.expenses))}</td>
+                <td>{kroner(display(result))}</td>
                 <td className="buffer">
-                  {kroner(real(bufferBalance))}
+                  {kroner(display(bufferBalance))}
                   {state && <span className="tilstand">{bufferStateLabels[state]}</span>}
                 </td>
-                <td className="formue">{kroner(real(year.closingWealth))}</td>
+                <td className="formue">{kroner(display(year.closingWealth))}</td>
               </tr>
             )
           })}
