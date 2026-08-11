@@ -508,8 +508,15 @@ body {
    egen linje. Proppet ind i enhedskolonnen sprængte det de 56px, alle andre
    felter deler, og skubbede inputtet ud af flugt med resten af sektionen. */
 .felt--tilvalg {
+  justify-content: flex-end;
   padding-top: 0;
   margin-top: -3px;
+}
+
+/* Samme bredde som en almindelig værdikolonne — felt 122px + 8px mellemrum +
+   enhed 56px — så afkrydsningen starter præcis under indtastningsfeltet. */
+.felt--tilvalg .vaerdi {
+  width: 186px;
 }
 
 .felt--tilvalg label {
@@ -519,6 +526,14 @@ body {
   color: var(--muted);
   font-size: 11px;
   cursor: pointer;
+}
+
+/* Et aldersendepunkt, der følger erhvervsophøret, viser alderen frem for at
+   stå tomt — men den er læst, ikke tastet, og skal se sådan ud. */
+.felt input[readonly] {
+  color: var(--muted);
+  font-style: italic;
+  cursor: default;
 }
 
 .hint {

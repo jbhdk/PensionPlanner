@@ -609,6 +609,7 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
             <>
               <AgeBoundField
                 label="Alder"
+                workEndAge={owner.workEndAge}
                 value={entry.period.from ?? entry.period.to}
                 onChange={(from) =>
                   onChange(
@@ -620,7 +621,6 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
                   )
                 }
               />
-              <LockedField label="Falder i" value={resolvedPeriodLabel(plan, entry)} unit="udledt" />
             </>
           )
         ) : entry.period.anchor === 'CalendarYear' ? (
@@ -654,6 +654,7 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
           <>
             <AgeBoundField
               label="Fra (alder)"
+              workEndAge={owner.workEndAge}
               value={entry.period.from}
               onChange={(from) =>
                 onChange(
@@ -665,6 +666,7 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
             />
             <AgeBoundField
               label="Til (alder)"
+              workEndAge={owner.workEndAge}
               value={entry.period.to}
               onChange={(to) =>
                 onChange(
@@ -674,7 +676,6 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
                 )
               }
             />
-            <LockedField label="Falder i" value={resolvedPeriodLabel(plan, entry)} unit="udledt" />
           </>
         )}
         <SelectField
@@ -706,23 +707,16 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
             unit="udledt"
           />
         )}
-        {entry.direction === 'Expense' ? (
-          <Hint>
-            Udgiften står i dagens kroner og følger planens inflationsantagelse
-            — kun indtægter har deres egen reguleringssats.
-          </Hint>
-        ) : entry.recurrence.kind === 'Once' ? (
-          <Hint>
-            Beløbet står i dagens kroner, og satsen er prisudviklingen frem til
-            det år, posten falder — ikke en årlig gentagelse. Sat til nul bliver
-            posten billigere, jo længere ude den ligger.
-          </Hint>
-        ) : (
-          <Hint>
-            Reguleringssatsen er indtægtens egen og adskilt fra planens
-            inflationsantagelse.
-          </Hint>
-        )}
+        <Hint>
+          {resolvedPeriodSentence(plan, entry) !== undefined && (
+            <>{resolvedPeriodSentence(plan, entry)} </>
+          )}
+          {entry.direction === 'Expense'
+            ? 'Udgiften står i dagens kroner og følger planens inflationsantagelse — kun indtægter har deres egen reguleringssats.'
+            : entry.recurrence.kind === 'Once'
+              ? 'Beløbet står i dagens kroner, og satsen er prisudviklingen frem til det år, posten falder — ikke en årlig gentagelse. Sat til nul bliver posten billigere, jo længere ude den ligger.'
+              : 'Reguleringssatsen er indtægtens egen og adskilt fra planens inflationsantagelse.'}
+        </Hint>
       </Section>
     </>
   )
@@ -751,16 +745,26 @@ function defaultRecurrence(kind: Recurrence['kind']): Recurrence {
 
 /** Den kalenderårsrække, en aldersforankret periode faktisk falder i — samme
     udledning som motoren selv bruger, jf. `periodBounds`. */
-function resolvedPeriodLabel(plan: Plan, entry: Entry): string {
+/** Den udledte periode som en sætning til noten. `resolvedPeriodLabel` er
+    skrevet til en værdikolonne og giver fragmenter som "til 2033" — de skal
+    have et verbum, før de kan stå i prosa. Kun ved aldersforankring: ved
+    kalenderår står årstallene allerede i felterne selv. */
+function resolvedPeriodSentence(plan: Plan, entry: Entry): string | undefined {
+  if (entry.period.anchor !== 'PersonAge') return undefined
+
   const owner = findPerson(plan, entry.owner)
-  if (!owner) return '–'
+  if (!owner) return undefined
 
   const { from, to } = periodBounds(entry.period, owner)
-  if (from === undefined && to === undefined) return 'Hele horisonten'
-  if (from === undefined) return `til ${to}`
-  if (to === undefined) return `fra ${from}`
-  if (from === to) return String(from)
-  return `${from}–${to}`
+  if (entry.recurrence.kind === 'Once') {
+    const year = from ?? to
+    return year === undefined ? undefined : `Posten falder i ${year}.`
+  }
+  if (from === undefined && to === undefined) return 'Posten løber hele horisonten.'
+  if (from === undefined) return `Posten løber til og med ${to}.`
+  if (to === undefined) return `Posten løber fra ${from} og horisonten ud.`
+  if (from === to) return `Posten falder i ${from}.`
+  return `Posten løber ${from}–${to}.`
 }
 
 function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {
@@ -1091,10 +1095,16 @@ function OptionalNumberField({
 function AgeBoundField({
   label,
   value,
+  workEndAge,
   onChange,
 }: {
   label: string
   value: AgeBound | undefined
+  /** Ejerens erhvervsophørsalder — det tal feltet viser, når endepunktet
+      følger den. Feltet er skrivebeskyttet imens frem for tomt: alderen er
+      det, spørgsmålet handler om, og den skal kunne læses uden at klikke
+      tilvalget fra igen. */
+  workEndAge: number
   onChange: (value: AgeBound | undefined) => void
 }) {
   const id = useId()
@@ -1112,8 +1122,10 @@ function AgeBoundField({
             type="text"
             inputMode="decimal"
             className="tal"
-            disabled={followsWorkEnd}
-            value={followsWorkEnd ? '' : value === undefined ? '' : String(value)}
+            readOnly={followsWorkEnd}
+            value={
+              followsWorkEnd ? String(workEndAge) : value === undefined ? '' : String(value)
+            }
             onChange={(event) => {
               const text = event.target.value
               onChange(text === '' ? undefined : parseNumber(text))
@@ -1123,14 +1135,16 @@ function AgeBoundField({
         </span>
       </div>
       <div className="felt felt--tilvalg">
-        <label>
-          <input
-            type="checkbox"
-            checked={followsWorkEnd}
-            onChange={(event) => onChange(event.target.checked ? 'WorkEndAge' : undefined)}
-          />{' '}
-          Følger erhvervsophør
-        </label>
+        <span className="vaerdi">
+          <label>
+            <input
+              type="checkbox"
+              checked={followsWorkEnd}
+              onChange={(event) => onChange(event.target.checked ? 'WorkEndAge' : undefined)}
+            />{' '}
+            Følger erhvervsophør
+          </label>
+        </span>
       </div>
     </>
   )

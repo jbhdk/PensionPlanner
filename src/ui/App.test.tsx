@@ -594,8 +594,9 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
 
-    // Født 1973: alder 70 falder i 2043, alder 80 i 2053.
-    expect(screen.getByText('2043–2053')).toBeTruthy()
+    // Født 1973: alder 70 falder i 2043, alder 80 i 2053. Perioden står i
+    // noten frem for i en egen værdirække.
+    expect(screen.getByText(/Posten løber 2043–2053\./)).toBeTruthy()
   })
 
   it('lader et periodeendepunkt sættes til erhvervsophør via afkrydsningsfeltet', async () => {
@@ -621,9 +622,14 @@ describe('fladen', () => {
     })
     await user.click(tilErhvervsophoer!)
 
-    expect(til.disabled).toBe(true)
+    // Feltet er skrivebeskyttet og viser erhvervsophørsalderen frem for at
+    // stå tomt — alderen er det, spørgsmålet handler om, og den skal kunne
+    // læses uden at klikke tilvalget fra igen.
+    expect(til.readOnly).toBe(true)
+    expect(til.value).toBe('60')
+
     // Født 1973, erhvervsophør 60 falder i 2033.
-    expect(screen.getByText('til 2033')).toBeTruthy()
+    expect(screen.getByText(/Posten løber til og med 2033\./)).toBeTruthy()
   })
 
   it('lægger erhvervsophør-tilvalget på sin egen linje, ikke i enhedskolonnen', async () => {
