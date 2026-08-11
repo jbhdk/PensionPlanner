@@ -380,11 +380,20 @@ body {
   padding: 3px 8px 2px 0;
 }
 
-/* Enheden står ved hvert felt, så ingen er i tvivl om, hvad der tastes. */
+/* Enheden står ved hvert felt, så ingen er i tvivl om, hvad der tastes.
+   Bred nok til de korte enheder ("kr.", "% p.a.", "udledt") — den lange
+   forklaring hører til i labelen i stedet, jf. `AgeBoundField`. */
 .felt .enhed {
   color: var(--muted);
   font-size: 11px;
-  width: 108px;
+  width: 56px;
+}
+
+/* Erhvervsophør-afkrydsningen er selv enheden på et aldersendepunkt og må
+   ikke klippes af den smalle enhedskolonne. */
+.felt .enhed.enhed--erhvervsophoer {
+  width: auto;
+  white-space: nowrap;
 }
 
 .hint {

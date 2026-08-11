@@ -196,8 +196,8 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
           }
         />
         <NumberField
-          label="Saldo"
-          unit="kr. (dagens kroner)"
+          label="Saldo (dagens kroner)"
+          unit="kr."
           value={holding.balance}
           onChange={(balance) =>
             onChange(withHolding(plan, id, (h) => ({ ...h, balance })))
@@ -319,8 +319,8 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
           }
         />
         <NumberField
-          label="Beløb"
-          unit="kr. (dagens kroner)"
+          label="Beløb (dagens kroner)"
+          unit="kr."
           value={entry.amountInRealKroner}
           onChange={(amountInRealKroner) =>
             onChange(withEntry(plan, id, (e) => ({ ...e, amountInRealKroner })))
@@ -675,7 +675,7 @@ function AgeBoundField({
             onChange(text === '' ? undefined : parseNumber(text))
           }}
         />
-        <span className="enhed">
+        <span className="enhed enhed--erhvervsophoer">
           <label>
             <input
               type="checkbox"
