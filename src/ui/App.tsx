@@ -206,6 +206,7 @@ export function App({
         <aside className="skuffe" aria-label="Inspektør">
           <Inspector
             plan={plan}
+            years={years}
             selected={selected}
             onChange={setPlan}
             onClose={() => setSelected(null)}

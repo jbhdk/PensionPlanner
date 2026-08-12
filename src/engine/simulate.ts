@@ -285,9 +285,9 @@ function ownerOf(plan: Plan, entry: Entry): Person {
     har ingen egen sats og følger inflationen, som en overførsel gør.
     Startåret er prisniveauet, så faktoren er 1 dér.
 
-    Eksporteret så fladen kan vise, hvad en engangspost faktisk koster i det
-    år, den falder, med samme udledning som motoren selv bruger. */
-export function entryProjection(entry: Entry, plan: Plan, year: SimulationYear): number {
+    Intern: fladen viser postens beløb ved at slå året op i motorens egen
+    årsrække frem for at regne fremskrivningen om, jf. ADR-0012. */
+function entryProjection(entry: Entry, plan: Plan, year: SimulationYear): number {
   const rate =
     entry.direction === 'Income' ? entry.regulationRate : plan.inflationAssumption
   return (1 + rate) ** (year - plan.startYear)
@@ -352,9 +352,10 @@ function matchesRecurrence(
     endepunkt sat til `'WorkEndAge'` `owner.workEndAge`, så perioden flytter
     sig, når erhvervsophørsalderen ændres, uden at posten selv redigeres.
 
-    Eksporteret så fladen kan vise en aldersforankret periode som de årstal,
-    den faktisk falder i, med samme udledning som motoren selv bruger. */
-export function periodBounds(
+    Intern: fladen læser de årstal, posten faktisk falder i, af årsrækken —
+    som desuden er klippet mod horisonten, hvilket denne ikke er, jf.
+    ADR-0012. */
+function periodBounds(
   period: Period,
   owner: Person,
 ): { from?: SimulationYear; to?: SimulationYear } {

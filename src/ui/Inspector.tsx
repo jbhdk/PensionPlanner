@@ -4,7 +4,6 @@ import type {
   AgeBound,
   Anchor,
   Direction,
-  Entry,
   HoldingVariant,
   Period,
   Plan,
@@ -13,9 +12,10 @@ import type {
   Timing,
 } from '../engine/plan'
 import { latestRateYear } from '../engine/rates/rates'
-import { entryProjection, periodBounds } from '../engine/simulate'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
-import { kroner, procent } from './format'
+import type { YearResult } from '../engine/yearResult'
+import { entryNote } from './entryNote'
+import { procent } from './format'
 import {
   findEntry,
   findHolding,
@@ -41,11 +41,16 @@ import type { Selection } from './selection'
     viser kun navn og ét tal, så listen kan stå stille, mens skuffen skifter. */
 export function Inspector({
   plan,
+  years,
   selected,
   onChange,
   onClose,
 }: {
   plan: Plan
+  /** Motorens årsrække, som skuffen slår op i frem for at regne om — en note,
+      der udleder selv, kan komme til at sige et år, motoren aldrig regnede,
+      jf. ADR-0012. Tom, når planen ikke kunne simuleres. */
+  years: YearResult[]
   selected: Selection
   onChange: (plan: Plan) => void
   onClose: () => void
@@ -78,6 +83,7 @@ export function Inspector({
         {selected.kind === 'entry' && (
           <EntryFields
             plan={plan}
+            years={years}
             id={selected.id}
             onChange={onChange}
             onClose={onClose}
@@ -455,7 +461,13 @@ function timingForOnce(timing: Timing): Timing {
   return timing === 'Even' ? 1 : timing
 }
 
-function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {
+function EntryFields({
+  plan,
+  years,
+  id,
+  onChange,
+  onClose,
+}: FieldsProps & { id: string; years: YearResult[] }) {
   const entry = findEntry(plan, id)
   const owner = findPerson(plan, entry?.owner ?? '')
   if (!entry || !owner) return null
@@ -466,7 +478,6 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
   )
 
   const income = entry.direction === 'Income'
-  const periodNote = derivedPeriodNote(plan, entry)
 
   return (
     <>
@@ -695,10 +706,7 @@ function EntryFields({ plan, id, onChange, onClose }: FieldsProps & { id: string
             }
           />
         )}
-        <Hint>
-          {periodNote !== undefined && <>{periodNote} </>}
-          {regulationNote(entry)}
-        </Hint>
+        <Hint>{entryNote(years, entry)}</Hint>
       </Section>
     </>
   )
@@ -723,53 +731,6 @@ function defaultPeriod(anchor: Anchor): Period {
 
 function defaultRecurrence(kind: Recurrence['kind']): Recurrence {
   return kind === 'EveryNYears' ? { kind, n: 2 } : { kind }
-}
-
-/** Den kalenderårsrække, en aldersforankret periode faktisk falder i — samme
-    udledning som motoren selv bruger, jf. `periodBounds`. */
-/** Notens anden sætning: hvad beløbet fremskrives med. Ingen af de fire
-    tilfælde gentager året — det har `derivedPeriodNote` allerede sagt — og
-    ingen af dem sætter "dagens kroner" og "det års egne kroner" op mod
-    hinanden uden at forklare forskellen. */
-function regulationNote(entry: Entry): string {
-  if (entry.direction === 'Expense') {
-    return entry.recurrence.kind === 'Once'
-      ? 'Beløbet tastes i dagens kroner og følger planens inflation frem til det år — kun indtægter har deres egen reguleringssats.'
-      : 'Udgiften står i dagens kroner og følger planens inflationsantagelse — kun indtægter har deres egen reguleringssats.'
-  }
-  return entry.recurrence.kind === 'Once'
-    ? 'Beløbet tastes i dagens kroner, og satsen bærer det op til det år — den gentager ingenting. Er satsen nul, følger beløbet ikke priserne og er dermed mindre værd, jo længere ude posten ligger.'
-    : 'Reguleringssatsen er indtægtens egen og adskilt fra planens inflationsantagelse.'
-}
-
-/** Det udledte om perioden, som en sætning til noten: hvornår posten løber,
-    og for en engangspost hvad den koster i det år, den falder. Begge dele
-    stod før som egne værdirækker med etiketter som "til 2033" — i prosa skal
-    de have et verbum.
-
-    En gentagende post får kun sætningen ved aldersforankring: ved kalenderår
-    står årstallene allerede i felterne selv, og der er intet udledt at sige.
-    En engangspost får den altid, fordi beløbet i årets egne kroner er udledt
-    uanset forankringen. */
-function derivedPeriodNote(plan: Plan, entry: Entry): string | undefined {
-  const owner = findPerson(plan, entry.owner)
-  if (!owner) return undefined
-
-  const { from, to } = periodBounds(entry.period, owner)
-
-  if (entry.recurrence.kind === 'Once') {
-    const year = from ?? to
-    if (year === undefined) return undefined
-    const amount = kroner(entry.amountInRealKroner * entryProjection(entry, plan, year))
-    return `Posten falder i ${year} med ${amount} kr.`
-  }
-
-  if (entry.period.anchor !== 'PersonAge') return undefined
-  if (from === undefined && to === undefined) return 'Posten løber hele horisonten.'
-  if (from === undefined) return `Posten løber til og med ${to}.`
-  if (to === undefined) return `Posten løber fra ${from} og horisonten ud.`
-  if (from === to) return `Posten falder i ${from}.`
-  return `Posten løber ${from}–${to}.`
 }
 
 function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {

@@ -463,44 +463,11 @@ describe('fladen', () => {
     expect(forfald.value).toBe('Januar')
   })
 
-  it('viser hvad en engangspost koster i det år, den falder', async () => {
-    // Reguleringssatsen gentager ingenting på en engangspost — den bærer
-    // beløbet fra dagens kroner op i det års egne. Uden den linje er
-    // forskellen på 2 % og 0 % usynlig, indtil året er nået i årstabellen.
-    // 200.000 × 1,02^10 = 243.799 kr. i 2036. Udgiften har ingen egen sats
-    // længere, så det er planens inflation, linjen udledes af.
-    const user = userEvent.setup()
-    render(
-      <App
-        initialPlan={aPlan({
-          inflationAssumption: 0.02,
-          entries: [
-            anExpense({
-              amountInRealKroner: 200_000,
-              timing: 1,
-              period: { anchor: 'CalendarYear', from: 2036, to: 2036 },
-              recurrence: { kind: 'Once' },
-            }),
-          ],
-        })}
-      />,
-    )
-
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
-
-    expect(
-      screen.getByText(/Posten falder i 2036 med 243\.799 kr\./),
-    ).toBeTruthy()
-
-    // Udgiften har ikke satsfeltet — det er kun indtægter, der har et eget
-    // tempo at skrue på.
-    expect(screen.queryByLabelText(/Reguleringssats/)).toBeNull()
-  })
-
-  it('udleder engangsindtægtens beløb af dens egen sats, ikke af inflationen', async () => {
-    // Modstykket: indtægten har beholdt sit felt, og linjen følger med, når
-    // satsen rettes. 100.000 × 1,05^10 = 162.889 kr. i 2036, mens planens
-    // inflation på 2 % ville have givet 121.899 kr.
+  it('regner postens note om, når satsen rettes i skuffen', async () => {
+    // Notens indhold prøves i entryNote.test.ts. Denne prøver koblingen: at
+    // en rettelse i skuffen når hele vejen gennem simuleringen og tilbage til
+    // noten uden en beregn-knap. 100.000 × 1,05^10 = 162.889 kr. i 2036,
+    // mens planens inflation på 2 % ville have givet 121.899 kr.
     const user = userEvent.setup()
     render(
       <App
@@ -528,21 +495,6 @@ describe('fladen', () => {
     expect(screen.getByText(/Posten falder i 2036 med 100\.000 kr\./)).toBeTruthy()
   })
 
-  it('siger intet udledt i noten for en gentagende post i kalenderår', async () => {
-    const user = userEvent.setup()
-    render(
-      <App
-        initialPlan={aPlan({
-          entries: [anExpense({ amountInRealKroner: 200_000 })],
-        })}
-      />,
-    )
-
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
-
-    expect(screen.queryByText(/Posten falder i/)).toBeNull()
-  })
-
   it('lader indtægtens reguleringssats redigeres uafhængigt af planens inflation', async () => {
     const user = userEvent.setup()
     render(
@@ -568,30 +520,6 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: /Ophør som 58/ }))
     expect((screen.getByLabelText(/Inflation/) as HTMLInputElement).value).toBe('2')
-  })
-
-  it('viser en aldersforankret periode som de årstal, den faktisk falder i', async () => {
-    const user = userEvent.setup()
-    render(
-      <App
-        initialPlan={aPlan({
-          startYear: 2026,
-          birthYear: 1973,
-          entries: [
-            anExpense({
-              amountInRealKroner: 40_000,
-              period: { anchor: 'PersonAge', from: 70, to: 80 },
-            }),
-          ],
-        })}
-      />,
-    )
-
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
-
-    // Født 1973: alder 70 falder i 2043, alder 80 i 2053. Perioden står i
-    // noten frem for i en egen værdirække.
-    expect(screen.getByText(/Posten løber 2043–2053\./)).toBeTruthy()
   })
 
   it('lader et periodeendepunkt sættes til erhvervsophør via afkrydsningsfeltet', async () => {
@@ -623,8 +551,9 @@ describe('fladen', () => {
     expect(til.readOnly).toBe(true)
     expect(til.value).toBe('60')
 
-    // Født 1973, erhvervsophør 60 falder i 2033.
-    expect(screen.getByText(/Posten løber til og med 2033\./)).toBeTruthy()
+    // Født 1973, erhvervsophør 60 falder i 2033. Posten har intet fra-endepunkt
+    // og løber derfor fra planens start.
+    expect(screen.getByText(/Posten løber 2026–2033\./)).toBeTruthy()
   })
 
   it('lægger erhvervsophør-tilvalget på sin egen linje, ikke i enhedskolonnen', async () => {
