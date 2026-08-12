@@ -10,12 +10,13 @@ PRD'er og issues ligger på GitHub, ikke i repoet: [hoved-PRD'en](https://github
 
 Hver term har et dansk navn — det vi taler — og et engelsk identifier i backticks, som er det navn koden, typerne og diagrammerne bruger. Parret er bindende begge veje: findes ordet ikke her, findes det heller ikke i koden.
 
-Fire navnefælder, der er lette at falde i:
+Fem navnefælder, der er lette at falde i:
 
 - Dansk **rate** (én årlig udbetaling fra en ratepension) hedder `instalment` på engelsk. Dansk **sats** hedder `rate`. De to må aldrig bytte plads.
 - Dansk **udbetaling** dækker både `payout` (penge ud af en beholdning) og `benefit` (en ydelse uden saldo). Vælg det snævre ord.
 - `Allowance` er de tre ligningsmæssige fradrag under ét. `PersonalAllowance` er ikke et af dem, selv om det deler ordet — personfradraget nedsætter også bundskattens grundlag.
 - `Annuity` optræder i to ubeslægtede sammenhænge: `LifeAnnuity` (livrente, en beholdning der omsættes) og `AnnuityPrinciple` (annuitetsprincippet, en beregningsmåde for en ratepension). De har intet med hinanden at gøre.
+- `Deductibility` (fradragsretten på en indbetaling) er ikke et `Allowance`. Den nedsætter den **personlige** indkomst og dermed alle lag ovenpå, hvor et ligningsmæssigt fradrag kun rører den skattepligtige indkomst. Kaldes begge bare "fradrag", er den forskel væk.
 
 Ordninger og beskatningsformer, der ikke har en egen term herunder, men som koden navngiver:
 `InstalmentPension` (ratepension), `OldAgeSavings` (aldersopsparing), `ShareSavingsAccount` (aktiesparekonto), `ShareIncome` og `CapitalIncome` (de to beskatningsformer for frie midler), `StatePension` (folkepension), `BasicAmount` (grundbeløb), `PensionSupplement` (pensionstillæg), `PalTax` (PAL-skat), `AnnualCostRate` (ÅOP), `BottomBracketTax` / `MiddleBracketTax` / `TopBracketTax` / `AdditionalTopBracketTax` (bund-, mellem-, top- og top-topskat, efter skat.dk's egne engelske betegnelser), `LabourMarketContribution` (AM-bidrag), `PersonalAllowance` (personfradrag), `MunicipalTax` (kommuneskat), `ChurchTax` (kirkeskat), `EarnedIncome` (arbejdsindkomst), `PersonalIncome` (personlig indkomst) og `TaxableIncome` (skattepligtig indkomst).
@@ -151,6 +152,10 @@ _Avoid_: Topskat brugt om de tre, progressionstrin, bracket
 Et fradrag der kun nedsætter den skattepligtige indkomst — grundlaget for kommune- og kirkeskat — og ikke den personlige indkomst. De tre er beskæftigelsesfradraget, jobfradraget og det ekstra pensionsfradrag, og de opgøres hver for sig ligesom skattelagene. Personfradraget er ikke et af dem: det hører til de enkelte lag og nedsætter også bundskattens grundlag.
 _Avoid_: Fradrag, ligningsfradrag, deduction
 
+**Fradragsret** · `Deductibility`:
+Den virkning at en indbetaling holdes uden for den personlige indkomst. Loven har to hjemler for den — bortseelsesret for den arbejdsgiveradministrerede ordning, fradragsret for den private — men de er numerisk identiske, og modellen skelner ikke. Hvorvidt en indbetaling har den, følger af destinationens variant: `InstalmentPension` og `LifeAnnuity` har den, `OldAgeSavings` og `ShareSavingsAccount` har den ikke. Er den loftbelagt, gælder den kun op til loftet; resten af indbetalingen går stadig ind i beholdningen, men uden virkning på skatten.
+_Avoid_: Bortseelse, bortseelsesret brugt som modsætning til fradragsret, fradrag brugt alene
+
 **Skatteopgørelse** · `TaxAssessment`:
 Skatten for ét simuleringsår og én person, opgjort med hvert lag for sig og stemplet med det satsår, den er regnet på. Totalen er summen af lagene, ikke et felt ved siden af dem.
 _Avoid_: Skatteberegning, årsopgørelse, skattetotal
@@ -158,6 +163,10 @@ _Avoid_: Skatteberegning, årsopgørelse, skattetotal
 **Husstandsskatteopgørelse** · `HouseholdTaxAssessment`:
 Husstandens samlede skat for ét simuleringsår: hver persons egen skatteopgørelse og marginalskat, plus aktieindkomstens skat, som er husstandens og ikke nogen enkelt persons — progressionsgrænsen er fælles og overførbar mellem ægtefæller og kan derfor ikke fordeles. Totalen er summen af det hele og aldrig et felt ved siden af delene, ligesom i `TaxAssessment`.
 _Avoid_: Husstandsskat, samlet skatteopgørelse, familieopgørelse
+
+**Beholdningsskat** · `HoldingTax`:
+Skatten på en beholdnings årlige afkast, båret af beholdningen selv og trukket af dens saldo. Den passerer aldrig nogen persons indkomst, og den er dermed den tredje bærer ved siden af `TaxAssessment`, som er personens, og `HouseholdTaxAssessment`, som er husstandens. Satsen følger varianten: `PalTax` for `InstalmentPension`, `OldAgeSavings` og `LifeAnnuity`, og aktiesparekontoens egen for `ShareSavingsAccount`. De to frie varianter har ingen — deres afkast beskattes hos personen eller husstanden i stedet.
+_Avoid_: Lagerskat, afkastskat, depotskat
 
 **Facitcase** · `WorkedExample`:
 Et gennemregnet eksempel med kilde og verifikationsdato, som skatteopgørelsen prøves imod. Tallene står som data frem for som assertions spredt ud i en test, så det kan ses, hvor de kommer fra, og hvornår de sidst er efterset. Bygger casen på et satstal, der endnu ikke er officielt bekræftet, siger den det selv.
@@ -178,7 +187,7 @@ Det skattemæssige spor en indtægtspost lander i: `EarnedIncome`, som er AM-pli
 _Avoid_: Skattetype, skattekode, indkomstart
 
 **Forankring** · `Anchor`:
-Om en posts periode er bundet til kalenderår eller til en persons alder. Aldersforankrede poster flytter sig automatisk, når erhvervsophørsalderen ændres.
+Om en posts periode er bundet til kalenderår eller til en persons alder. Aldersforankrede poster flytter sig automatisk, når en af personens navngivne aldre ændres.
 _Avoid_: Tidsbinding, reference
 
 **Periode** · `Period`:
@@ -186,15 +195,19 @@ Den tidsstrækning en post er aktiv i. Formen på dens endepunkter følger `Anch
 _Avoid_: Interval, tidsrum. Forveksl den ikke med et enkelt `SimulationYear`.
 
 **Aldersendepunkt** · `AgeBound`:
-Et periodeendepunkt ved aldersforankring: enten en fast alder, eller en henvisning til `WorkEndAge`. Sat til erhvervsophør følger endepunktet `Person.workEndAge` og flytter sig automatisk, uden at posten selv redigeres.
-_Avoid_: Aldersgrænse, tidspunkt
+Et periodeendepunkt ved aldersforankring: enten en fast alder, eller en af personens navngivne aldre — `WorkEndAge` eller `StatePensionAge` — med et valgfrit forskud i år. Bundet til en navngiven alder flytter endepunktet sig af sig selv, når den alder ændres, uden at posten redigeres. Forskuddet er det, der gør aldersopsparingens vindue skrivbart: syv år før folkepensionsalderen er ét endepunkt, ikke et tal der skal efterregnes, hver gang skønnet for en ikke-vedtaget folkepensionsalder justeres.
+_Avoid_: Aldersgrænse, tidspunkt, offset brugt som selvstændigt begreb
 
 **Indbetaling** · `Contribution`:
-En bevægelse af penge fra husstandens pengestrøm ind i en beholdning. Bærer en skattevirkning og et loft — til forskel fra en overførsel, der har ingen af delene.
+En bevægelse af penge ind i en beholdning, der ikke er frie midler — altså ind i en ordning med et loft på vejen ind og regler på vejen ud. Kilden er enten en indtægtspost eller en anden beholdning. Hverken skattevirkningen eller loftet er noget, indbetalingen selv bærer: skattevirkningen følger destinationens variant, og AM-behandlingen følger kilden.
 _Avoid_: Bidrag, indskud, præmie, opsparing
 
+**Loft** · `Cap`:
+Den øvre grænse for, hvad der må skydes ind i en ordning. Formen afgør både hvad loftet måler, og hvad der sker når det binder. `PerYear` måler årets samlede indbetaling til ordningen og gælder ratepensionen og aldersopsparingen: pengene afvises ikke, men det overskydende mister sin skattevirkning, og året er markeret. `OnBalance` måler beholdningens saldo ved årets begyndelse og gælder aktiesparekontoen: indbetalingen afvises, det uindskudte beløb bliver liggende, og intet er markeret — der er ikke sket noget ulovligt, planen indskød blot mindre end den bad om. Råderummet under et `OnBalance`-loft er loftet minus saldoen og ånder derfor med afkastet; vokser en saldo over sit loft af afkast alene, er intet loft brudt.
+_Avoid_: Fradragsloft og indskudsloft brugt som fællesbetegnelse — de er lovens navne for hver sin enkelt ordning. Grænse, maksimum
+
 **Overførsel** · `Transfer`:
-En dateret flytning af penge fra én beholdning til en anden inden for husstanden. Hverken en indtægt eller en udgift, og uden skattevirkning — en flytning ind i en pensionsordning er en indbetaling, ikke en overførsel.
+En dateret flytning af penge mellem husstandens frie midler. Hverken en indtægt eller en udgift, og uden skattevirkning. Destinationen er det, der skiller den fra en indbetaling: går pengene ind i en ordning, er det en indbetaling, uanset hvor de kom fra.
 _Avoid_: Flytning, indskud, indbetaling, omplacering
 
 **Forfald** · `Timing`:
@@ -226,6 +239,10 @@ _Avoid_: Beholdningsresultat, saldolinje, kontoudtog
 **Postår** · `EntryYear`:
 Én posts beløb i ét simuleringsår, i årets egne løbende priser — kun for de poster der faktisk falder i året. Forfaldet står ikke her; det er en egenskab ved posten selv.
 _Avoid_: Postresultat, årspost, betaling
+
+**Indbetalingsår** · `ContributionYear`:
+Én indbetalings to beløb i ét simuleringsår, i årets egne løbende priser — kun for de indbetalinger der faktisk falder i året. Det ene er, hvad der forlod kilden; det andet, hvad der landede i beholdningen. Forskellen er AM-bidraget, som allerede står i personens eget skattelag og derfor ikke gentages her.
+_Avoid_: Bidragsår, indbetalingsresultat, indskud
 
 **Personår** · `PersonYear`:
 Én persons skatteopgørelse for ét simuleringsår, sammen med årets aktie- og kapitalindkomst og personens marginalskat. Aktieindkomstens skat står ikke her: den er en husstandsberegning.

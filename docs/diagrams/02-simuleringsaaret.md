@@ -29,8 +29,8 @@ sequenceDiagram
     Note over E,H: Alle strømme skal være kendt, før afkastet kan beregnes
     E->>H: credit return on weighted average balance
     H-->>E: return per holding
-    E->>T: PalTax 15,3 % of that return
-    T-->>H: deduct PalTax from balance
+    E->>T: HoldingTax on that return, rate by variant
+    T-->>H: deduct HoldingTax from balance
 
     Note over E,T: Husstandskobling — kan ikke deles i to uafhængige personberegninger
     E->>T: TaperBase per person, spouse at 54 % disregard
@@ -50,7 +50,7 @@ sequenceDiagram
 
 - **Strømmene først, afkastet bagefter.** Afkastet regnes på den vægtede gennemsnitssaldo, så alle årets bevægelser og deres `timing` skal være kendt, før det kan beregnes. Se [ADR-0006](../adr/0006-maaneden-er-en-afkastvaegt-ikke-et-tidsskridt.md).
 - **Raten regnes altid af primosaldoen.** Det er en lovregel — saldoen ved årets begyndelse divideret med resterende udbetalingsår — ikke en konvention, og den påvirkes derfor ikke af vægtningen.
-- **PAL-skat af årets faktiske afkast.** Når afkastet er vægtet korrekt, er der ikke længere et spørgsmål om, hvad PAL rammer.
+- **`HoldingTax` af årets faktiske afkast.** Når afkastet er vægtet korrekt, er der ikke længere et spørgsmål om, hvad skatten rammer. Afkastet forbliver brutto — skatten trækkes af saldoen og tælles med i årets `tax`, så balanceinvarianten læser som den gør.
 - **Aftrapning før skat.** `PensionSupplement` er skattepligtig indkomst, så det aftrappede beløb — ikke det fulde — skal ind i skatteopgørelsen.
 - **`FreeAssets` til sidst.** Alt, der ikke er placeret et bestemt sted, lander her. Se [ADR-0002](../adr/0002-plan-drevet-motor-med-frie-midler-som-buffer.md).
 

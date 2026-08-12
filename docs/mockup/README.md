@@ -295,5 +295,11 @@ Spiket er [#18](https://github.com/jbhdk/PensionPlanner/issues/18).
   designforslag, og især ikke afprøvet for farveblindhed.
 - **Etape 4's ord** — bolig, lån, restgæld, ejendomsværdiskat, grundskyld, nedsparingslån
   — mangler i glossaret. Afsnittet står tomt og skitsemærket, indtil de er der.
-- **Indbetalinger** (etape 2) er kun en skitsemærket tom rude i detaljeruden. Lofter og
-  fradragsregler har ingen flade endnu.
+- **Indbetalingernes rude** (etape 2) er stadig tom og skal tegnes, men tre ting er
+  afgjort på forhånd og skal holdes. Ruden skifter form efter kilden: et lønkildet
+  bidrag arver periode, gentagelse og forfald fra sin `Entry` og har dem derfor ikke
+  selv, hvor et beholdningskildet bidrag har dem alle. **Loftlinjen hører kun i
+  forklar-året** — skuffen bliver ved med udelukkende at vise planen og aldrig et
+  årsafhængigt resultat. Og ADR-0007's pligt til at sige udtrykkeligt, at lønnen tastes
+  brutto inklusive pension, skal indfries her: taster man nettolønnen og lægger et
+  bidrag oveni, går alle tal op og er alligevel forkerte.
