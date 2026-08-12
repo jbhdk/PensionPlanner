@@ -1,5 +1,6 @@
 import type { Holding, Person, Plan } from '../engine/plan'
 import { returnWeight } from '../engine/simulate'
+import type { ShareIncomeLayer } from '../engine/tax/assessHousehold'
 import type { LayerAmount, TaxLayer } from '../engine/tax/assessTax'
 import { totalTax } from '../engine/tax/assessTax'
 import type { HoldingYear, PersonYear, RateBasis, YearResult } from '../engine/yearResult'
@@ -19,6 +20,18 @@ const TAX_LAYER_ORDER: TaxLayer[] = [
   'municipalTax',
   'churchTax',
 ]
+
+/** Aktieindkomstskattens to lag. Rækkefølgen er stigende som lagenes egen,
+    og etiketterne nævner ikke satsen — den står i sin egen kolonne. */
+const SHARE_INCOME_LAYER_ORDER: ShareIncomeLayer[] = [
+  'shareIncomeBelowThreshold',
+  'shareIncomeAboveThreshold',
+]
+
+const SHARE_INCOME_LAYER_LABELS: Record<ShareIncomeLayer, string> = {
+  shareIncomeBelowThreshold: 'Til progressionsgrænsen',
+  shareIncomeAboveThreshold: 'Over progressionsgrænsen',
+}
 
 const TAX_LAYER_LABELS: Record<TaxLayer, string> = {
   labourMarketContribution: 'AM-bidrag',
@@ -100,8 +113,54 @@ export function YearExplanation({
         })}
       </div>
 
+      <ShareIncomeTaxBlock year={year} display={display} />
+
       <HoldingsBlock plan={plan} year={year} display={display} />
       <EntriesBlock plan={plan} year={year} display={display} />
+    </div>
+  )
+}
+
+/** Aktieindkomstens skat står for sig og ikke i en persons blok: den regnes
+    af husstandens samlede aktieindkomst mod en fælles, overførbar
+    progressionsgrænse, og der findes ingen hjemmel til at fordele den på
+    personer, jf. ADR-0014. Blokken udebliver, når ingen har aktieindkomst. */
+function ShareIncomeTaxBlock({
+  year,
+  display,
+}: {
+  year: YearResult
+  display: (amount: number) => number
+}) {
+  const layers = SHARE_INCOME_LAYER_ORDER.flatMap((layer) => {
+    const amount = year.shareIncomeTax[layer]
+    return amount === undefined ? [] : [{ label: SHARE_INCOME_LAYER_LABELS[layer], layer: amount }]
+  })
+  if (layers.length === 0) return null
+
+  return (
+    <div className="blok">
+      <h3>Husstandens aktieindkomstskat</h3>
+      <table className="lagtabel">
+        <thead>
+          <tr>
+            <th>Lag</th>
+            <th>Grundlag</th>
+            <th>Sats</th>
+            <th>Beløb</th>
+          </tr>
+        </thead>
+        <tbody>
+          {layers.map((row) => (
+            <tr key={row.label}>
+              <td>{row.label}</td>
+              <td>{kroner(display(row.layer.base))}</td>
+              <td>{procent(row.layer.rate)}</td>
+              <td>{kroner(display(row.layer.amount))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

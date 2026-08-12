@@ -24,8 +24,8 @@ import type {
 } from './plan'
 import { rateYearFor } from './rates/rates'
 import type { RateYear } from './rates/rateYear'
-import { assessTax, marginalTaxRate, totalTax } from './tax/assessTax'
-import type { TaxAssessment } from './tax/assessTax'
+import { assessHousehold, totalHouseholdTax } from './tax/assessHousehold'
+import type { TaxAssessmentInput } from './tax/assessTax'
 import { validatePlan } from './validatePlan'
 import type { BufferState, HoldingYear, RateBasis, YearResult } from './yearResult'
 
@@ -88,15 +88,19 @@ function simulateYear(
   const shareIncomeByPerson = incomeByVariant(plan, flowed, 'ShareIncome')
   const capitalIncomeByPerson = incomeByVariant(plan, flowed, 'CapitalIncome')
 
-  const assessments = plan.household.persons.map((person) =>
-    assess(entries, person, rates, capitalIncomeByPerson.get(person.id)!),
-  )
-  const personalTax = assessments.reduce((sum, { tax }) => sum + totalTax(tax), 0)
-  const shareTax = shareIncomeTax(
-    plan.household.persons.map((person) => shareIncomeByPerson.get(person.id)!),
+  // Hele husstandens skat bag ét søm, jf. ADR-0014. Motoren lægger intet
+  // sammen selv: aktieindkomstens skat er husstandens og hører ikke til
+  // nogen enkelt person, og totalen er modulets egen sum af sine dele.
+  const household = assessHousehold(
+    {
+      persons: plan.household.persons.map((person) => ({
+        tax: taxInput(entries, person, rates, capitalIncomeByPerson.get(person.id)!),
+        shareIncome: shareIncomeByPerson.get(person.id)!,
+      })),
+    },
     rates,
   )
-  const tax = personalTax + shareTax
+  const tax = totalHouseholdTax(household)
 
   // Årets restpost lander på bufferen. Den er det ene sted, over- og
   // underskuddet må samle sig, og den må gerne gå negativt — det er modellens
@@ -125,13 +129,14 @@ function simulateYear(
     conversion: 0,
     holdings,
     entries: entries.map(({ entry, amount }) => ({ entry: entry.id, amount })),
-    persons: assessments.map(({ person, tax, marginalTaxRate }) => ({
-      person,
-      shareIncome: shareIncomeByPerson.get(person)!,
-      capitalIncome: capitalIncomeByPerson.get(person)!,
-      tax,
-      marginalTaxRate,
+    persons: plan.household.persons.map((person, index) => ({
+      person: person.id,
+      shareIncome: shareIncomeByPerson.get(person.id)!,
+      capitalIncome: capitalIncomeByPerson.get(person.id)!,
+      tax: household.persons[index]!.tax,
+      marginalTaxRate: household.persons[index]!.marginalTaxRate,
     })),
+    shareIncomeTax: household.shareIncomeTax,
     bufferState: bufferState(plan, holdings),
   }
 }
@@ -172,22 +177,6 @@ function incomeByVariant(
   )
 }
 
-/** Aktieindkomstens progressionsgrænse er fælles og overførbar mellem
-    ægtefæller, så skatten regnes af husstandens samlede aktieindkomst mod
-    husstandens samlede grænse — aldrig person for person, jf. ADR-0010 og
-    docs/satser/2026.md. Summen lagres ikke; den findes kun her. */
-function shareIncomeTax(shareIncomes: Nominal[], rates: RateYear): Nominal {
-  const total = Math.max(0, shareIncomes.reduce((sum, income) => sum + income, 0))
-  const threshold = rates.thresholds.shareIncome * shareIncomes.length
-  const belowThreshold = Math.min(total, threshold)
-  const aboveThreshold = total - belowThreshold
-
-  return (
-    belowThreshold * rates.taxRates.shareIncomeBelowThreshold +
-    aboveThreshold * rates.taxRates.shareIncomeAboveThreshold
-  )
-}
-
 /** Summen af årets strømme, hver vægtet efter sit forfald — grundlaget der
     lægges til primosaldoen i Modified Dietz. */
 function weightedNetFlow(entries: ActiveEntry[]): Nominal {
@@ -205,15 +194,16 @@ export function returnWeight(timing: Timing): number {
   return timing === 'Even' ? 0.5 : (12 - timing + 1) / 12
 }
 
-/** Skatteopgørelsen for én person i ét år. Kommune- og kirkeskatteprocenten
-    slås op i satsåret efter personens bopælskommune. Kirkeskatten slås fra
-    ved at regne med nul, når personen ikke er medlem af folkekirken. */
-function assess(
+/** Det, en persons skat skal regnes af — selve opgørelsen sker bag
+    skattesømmet. Kommune- og kirkeskatteprocenten slås op i satsåret efter
+    personens bopælskommune. Kirkeskatten slås fra ved at regne med nul, når
+    personen ikke er medlem af folkekirken. */
+function taxInput(
   entries: ActiveEntry[],
   person: Person,
   rates: RateYear,
   capitalIncome: Nominal,
-): { person: string; tax: TaxAssessment; marginalTaxRate: number } {
+): TaxAssessmentInput {
   const earnedIncome = entries
     .filter(
       ({ entry }) =>
@@ -224,17 +214,12 @@ function assess(
     .reduce((sum, { amount }) => sum + amount, 0)
 
   const municipalTax = rates.municipalTax.rates[person.municipality]!
-  const input = {
+
+  return {
     earnedIncome,
     municipalTaxRate: municipalTax.municipalTaxRate,
     churchTaxRate: person.churchMember ? municipalTax.churchTaxRate : 0,
     capitalIncome,
-  }
-
-  return {
-    person: person.id,
-    tax: assessTax(input, rates),
-    marginalTaxRate: marginalTaxRate(input, rates),
   }
 }
 

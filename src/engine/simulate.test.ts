@@ -551,6 +551,11 @@ describe('simulate', () => {
     //                    30.090,00
     expect(year.persons[0]!.shareIncome).toBeCloseTo(100_000, 6)
     expect(year.tax).toBeCloseTo(30_090, 2)
+
+    // Skatten bæres som husstandens to lag og ikke kun som en total, så
+    // forklar-året kan vise grundlag og sats, jf. ADR-0014.
+    expect(year.shareIncomeTax.shareIncomeBelowThreshold?.amount).toBeCloseTo(21_438, 2)
+    expect(year.shareIncomeTax.shareIncomeAboveThreshold?.amount).toBeCloseTo(8_652, 2)
   })
 
   it('facitcase: et par deler aktieindkomstens progressionsgrænse på tværs', () => {

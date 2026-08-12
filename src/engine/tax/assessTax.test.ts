@@ -1,19 +1,38 @@
 import { describe, expect, it } from 'vitest'
 import { rateYear2026 } from '../rates/rateYear2026'
-import { assessTax, marginalTaxRate } from './assessTax'
+import { assessHousehold } from './assessHousehold'
 import type { TaxAssessmentInput } from './assessTax'
 
-/** Den sekundære testsøm: skatten for ét simuleringsår og én person, kaldbar
-    uden at bygge en plan. Alt herunder er i løbende priser, jf. ADR-0001. */
+/** Den sekundære testsøm er husstandens skat for ét simuleringsår, jf.
+    ADR-0014. Denne fil prøver de regler, der er den enkelte persons — lagene,
+    fradragene og marginalskatten — og når dem gennem husstandssømmet frem
+    for udenom. Alt herunder er i løbende priser, jf. ADR-0001. */
 
-/** Opgør skatten med kun det sat, som testen handler om. Nul i kommune- og
-    kirkeskat er ikke en realistisk plan, men det holder hvert lag isoleret,
-    indtil det er lagets egen tur. */
-function assess(input: Partial<TaxAssessmentInput>) {
-  return assessTax(
-    { earnedIncome: 0, municipalTaxRate: 0, churchTaxRate: 0, ...input },
+/** En husstand på én person med kun det sat, som testen handler om. Nul i
+    kommune- og kirkeskat er ikke en realistisk plan, men det holder hvert lag
+    isoleret, indtil det er lagets egen tur. */
+function household(input: Partial<TaxAssessmentInput>) {
+  return assessHousehold(
+    {
+      persons: [
+        {
+          tax: { earnedIncome: 0, municipalTaxRate: 0, churchTaxRate: 0, ...input },
+          shareIncome: 0,
+        },
+      ],
+    },
     rateYear2026,
-  )
+  ).persons[0]!
+}
+
+/** Personens egen skatteopgørelse. */
+function assess(input: Partial<TaxAssessmentInput>) {
+  return household(input).tax
+}
+
+/** Personens egen marginalskat. */
+function marginal(input: Partial<TaxAssessmentInput>) {
+  return household(input).marginalTaxRate
 }
 
 describe('skatteopgørelsen', () => {
@@ -421,10 +440,7 @@ describe('marginalTaxRate', () => {
     // satser på det, der er tilbage efter AM-bidrag:
     // 8 % AM-bidrag + 92 % × (12,01 % bund + 7,50 % mellem + 7,50 % top + 22 % kommune)
     // = 8 % + 92 % × 49,01 % = 53,0892 %.
-    const rate = marginalTaxRate(
-      { earnedIncome: 900_000, municipalTaxRate: 0.22, churchTaxRate: 0 },
-      rateYear2026,
-    )
+    const rate = marginal({ earnedIncome: 900_000, municipalTaxRate: 0.22, churchTaxRate: 0 })
 
     expect(rate).toBeCloseTo(0.530892, 6)
   })
@@ -433,14 +449,8 @@ describe('marginalTaxRate', () => {
     // 641.199 kr. i personlig indkomst (697.999,89 i løn) ligger lige under
     // mellemskattegrænsen; én krone mere krydser den. Marginalskatten skal
     // derfor være højere end AM-bidraget plus bundskatten alene.
-    const belowThreshold = marginalTaxRate(
-      { earnedIncome: 600_000, municipalTaxRate: 0.254, churchTaxRate: 0.0074 },
-      rateYear2026,
-    )
-    const acrossThreshold = marginalTaxRate(
-      { earnedIncome: 750_000, municipalTaxRate: 0.254, churchTaxRate: 0.0074 },
-      rateYear2026,
-    )
+    const belowThreshold = marginal({ earnedIncome: 600_000, municipalTaxRate: 0.254, churchTaxRate: 0.0074 })
+    const acrossThreshold = marginal({ earnedIncome: 750_000, municipalTaxRate: 0.254, churchTaxRate: 0.0074 })
 
     expect(acrossThreshold).toBeGreaterThan(belowThreshold)
   })

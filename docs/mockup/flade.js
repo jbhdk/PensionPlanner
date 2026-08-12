@@ -432,13 +432,28 @@ function tegnForklarAaret() {
     skat.push(['Kommuneskat', s.kommuneskat, '', P(PLAN.kommuneskat)]);
     skat.push(['Kirkeskat', s.kirkeskat, '', P(PLAN.kirkeskat)]);
     skat.push(['Personfradrag', s.personfradragVaerdi, '', 'skatteværdi']);
-    if (s.aktieindkomstskat) skat.push(['Aktieindkomstskat', s.aktieindkomstskat, '',
-      '27 % til ' + K(s.aktieindkomstGraense * f) + ', 42 % derover']);
     skat.push(['Skat i alt', s.iAlt, 'sum']);
 
     h.push('<div class="blok"><h3>' + p.navn + ' — indkomstopgørelse</h3>' + regn(rows, f) +
       '<h3 style="margin-top:14px">' + p.navn + ' — skatteberegning</h3>' + regn(skat, f) + '</div>');
   });
+
+  /* Aktieindkomstskatten står for sig og ikke i en persons blok:
+     progressionsgrænsen er husstandens, fælles og overførbar, og der findes
+     ingen hjemmel til at fordele skatten på personer — jf. ADR-0014. */
+  var ak = r.aktieindkomstskat;
+  if (ak && (ak.lavSkat || ak.hoejSkat)) {
+    var akRows = [];
+    if (ak.lavGrundlag) akRows.push(['Til progressionsgrænsen ' + K(ak.graense * f),
+      ak.lavSkat, '', '27 % af ' + K(ak.lavGrundlag * f)]);
+    if (ak.hoejGrundlag) akRows.push(['Over progressionsgrænsen',
+      ak.hoejSkat, '', '42 % af ' + K(ak.hoejGrundlag * f)]);
+    akRows.push(['Aktieindkomstskat i alt', ak.lavSkat + ak.hoejSkat, 'sum']);
+    h.push('<div class="blok"><h3>Husstandens aktieindkomstskat</h3>' + regn(akRows, f) +
+      '<div class="hint">Grænsen er fælles og overførbar mellem ægtefæller, så ' +
+      'husstandens samlede aktieindkomst prøves mod husstandens samlede grænse. ' +
+      'Skatten hører derfor ikke til nogen enkelt person.</div></div>');
+  }
 
   /* folkepension og aftrapning */
   var pens = PERSONER.filter(function (p) { return r.pr[p.id].folkepension > 0; });

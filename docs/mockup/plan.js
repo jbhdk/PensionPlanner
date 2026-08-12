@@ -155,15 +155,9 @@ function personskat(p) {
   l.kirkeskat = Math.max(0, skattepligtig) * PLAN.kirkeskat;
   l.personfradragVaerdi = -Math.min(pf, Math.max(0, skattepligtig)) * (s.bundskat + PLAN.kommuneskat + PLAN.kirkeskat);
 
-  var graense = g('aktieindkomstgraense') * 2;
-  var lav = Math.min(Math.max(0, p.aktieindkomst), graense);
-  l.aktieindkomstskat = lav * s.aktieindkomstLav +
-    Math.max(0, p.aktieindkomst - graense) * s.aktieindkomstHoej;
-  l.aktieindkomstGraense = graense;
-
   var sum = 0;
   ['amBidrag', 'bundskat', 'mellemskat', 'topskat', 'topTopskat', 'kommuneskat',
-    'kirkeskat', 'personfradragVaerdi', 'aktieindkomstskat'].forEach(function (k) { sum += l[k]; });
+    'kirkeskat', 'personfradragVaerdi'].forEach(function (k) { sum += l[k]; });
   l.iAlt = Math.max(0, sum);
   return l;
 }
@@ -322,6 +316,28 @@ function simuler(variant) {
       });
       skatIalt += x.skat.iAlt;
     });
+
+    /* Aktieindkomstskatten er husstandens og ikke den enkelte persons:
+       progressionsgrænsen er fælles og overførbar mellem ægtefæller, så
+       husstandens samlede aktieindkomst prøves mod husstandens samlede
+       grænse — jf. ADR-0014 og docs/satser/2026.md. Regnet pr. person mod
+       den doblede grænse, som denne fil gjorde før, talte de 158.800 kr.
+       to gange. */
+    var aktieF = Math.pow(1 + PLAN.paragraf20, aar - PLAN.startAar);
+    var aktieIalt = 0;
+    PERSONER.forEach(function (p) { aktieIalt += pr[p.id].aktieindkomst; });
+    aktieIalt = Math.max(0, aktieIalt);
+    var aktieGraense = SATSER_2026.aktieindkomstgraense * aktieF * PERSONER.length;
+    var aktieLav = Math.min(aktieIalt, aktieGraense);
+    var aktieHoej = aktieIalt - aktieLav;
+    r.aktieindkomstskat = {
+      graense: aktieGraense,
+      lavGrundlag: aktieLav,
+      lavSkat: aktieLav * SATSER_2026.aktieindkomstLav,
+      hoejGrundlag: aktieHoej,
+      hoejSkat: aktieHoej * SATSER_2026.aktieindkomstHoej
+    };
+    skatIalt += r.aktieindkomstskat.lavSkat + r.aktieindkomstskat.hoejSkat;
 
     /* En livrente er en beholdning indtil omsaetningen og en ydelse bagefter,
        jf. ADR-0009. Efter omsaetningen kommer beloebet ikke fra en saldo og

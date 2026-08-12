@@ -1,5 +1,6 @@
 import type { EntryId, HoldingId, Nominal, PersonId, SimulationYear } from './plan'
-import type { TaxAssessment } from './tax/assessTax'
+import type { ShareIncomeLayer } from './tax/assessHousehold'
+import type { LayerAmount, TaxAssessment } from './tax/assessTax'
 
 /** Hvorfor bufferen er negativ i ét simuleringsår, jf. ADR-0008:
     `Incomplete`, når husstanden har likviditet andetsteds og blot mangler en
@@ -44,8 +45,8 @@ export type HoldingYear = {
     `shareIncome` og `capitalIncome` er afkastet af personens egne
     `ShareIncome`- og `CapitalIncome`-beholdninger — ikke en skat, men
     grundlaget senere etapers aftrapning skal bruge. Aktieindkomstens skat
-    står ikke her: den er en husstandsberegning og indgår kun i
-    `YearResult.tax`, jf. ADR-0010. */
+    står ikke her: den er husstandens og har sit eget felt på `YearResult`,
+    jf. ADR-0010 og ADR-0014. */
 export type PersonYear = {
   person: PersonId
   shareIncome: Nominal
@@ -76,6 +77,11 @@ export type YearResult = {
   conversion: Nominal
   holdings: HoldingYear[]
   persons: PersonYear[]
+  /** Aktieindkomstens skat, opgjort for husstanden under ét — den kan ikke
+      fordeles på personer, for progressionsgrænsen er fælles og
+      overførbar, jf. ADR-0014. Et lag er udeladt, når dets grundlag er nul,
+      og hele feltet er et tomt objekt, når ingen har aktieindkomst. */
+  shareIncomeTax: Partial<Record<ShareIncomeLayer, LayerAmount>>
   entries: EntryYear[]
   /** Fraværende, når bufferen ikke er negativ. */
   bufferState?: BufferState

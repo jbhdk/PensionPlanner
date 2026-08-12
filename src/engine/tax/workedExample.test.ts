@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { rateYear2026 } from '../rates/rateYear2026'
-import { assessTax, totalTax } from './assessTax'
+import { assessHousehold } from './assessHousehold'
+import { totalTax } from './assessTax'
 import type { Allowance, TaxLayer } from './assessTax'
 import { workedExamples } from './testing/workedExamples'
 
@@ -11,7 +12,10 @@ import { workedExamples } from './testing/workedExamples'
 describe('facitcase', () => {
   for (const example of workedExamples) {
     it(example.name, () => {
-      const assessment = assessTax(example.input, rateYear2026)
+      const assessment = assessHousehold(
+        { persons: [{ tax: example.input, shareIncome: 0 }] },
+        rateYear2026,
+      ).persons[0]!.tax
       const { personalIncome, taxableIncome, allowances, layers, total } =
         example.expected
 

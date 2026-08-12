@@ -1340,4 +1340,48 @@ describe('fladen', () => {
       expect(await screen.findByText(/nyere version/i)).toBeTruthy()
     })
   })
+
+  it('viser husstandens aktieindkomstskat som sin egen blok med grundlag og sats', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          startYear: 2026,
+          birthYear: 1973,
+          horizon: 55,
+          balance: 1_000_000,
+          inflationAssumption: 0,
+          variant: 'ShareIncome',
+          grossReturn: 0.1,
+          annualCostRate: 0,
+          entries: [],
+        })}
+      />,
+    )
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2026
+
+    // Ikke i Jespers blok: grænsen er husstandens og kan ikke fordeles på
+    // personer, jf. ADR-0014.
+    const blok = screen
+      .getByRole('heading', { name: 'Husstandens aktieindkomstskat' })
+      .closest('.blok') as HTMLElement
+
+    const lag = within(blok)
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) =>
+        within(row)
+          .getAllByRole('cell')
+          .map((cell) => cell.textContent),
+      )
+
+    // 100.000 kr. i afkast, 79.400 kr. til 27 % og 20.600 kr. til 42 %.
+    expect(lag).toEqual([
+      ['Til progressionsgrænsen', '79.400', '27,00 %', '21.438'],
+      ['Over progressionsgrænsen', '20.600', '42,00 %', '8.652'],
+    ])
+  })
 })

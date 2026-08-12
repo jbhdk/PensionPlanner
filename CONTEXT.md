@@ -140,7 +140,7 @@ Udelukkende det 7,5 %-lag der rammer personlig indkomst over topskattegrænsen. 
 _Avoid_: Topskat brugt om progressionen som helhed
 
 **Skattelag** · `TaxLayer`:
-Ét af de lag, en persons skat falder i — AM-bidrag, bundskat, kommuneskat, kirkeskat og progressionslagene. Lagene opgøres og vises hver for sig; kun summen af dem er skatten.
+Ét af de lag, en persons skat falder i — AM-bidrag, bundskat, kommuneskat, kirkeskat og progressionslagene. Lagene opgøres og vises hver for sig; kun summen af dem er skatten. Aktieindkomstens to lag er ikke blandt dem: de er husstandens og hører til `HouseholdTaxAssessment`.
 _Avoid_: Skattetrin, skatteart, bracket
 
 **Progressionslag** · `ProgressionLayer`:
@@ -154,6 +154,10 @@ _Avoid_: Fradrag, ligningsfradrag, deduction
 **Skatteopgørelse** · `TaxAssessment`:
 Skatten for ét simuleringsår og én person, opgjort med hvert lag for sig og stemplet med det satsår, den er regnet på. Totalen er summen af lagene, ikke et felt ved siden af dem.
 _Avoid_: Skatteberegning, årsopgørelse, skattetotal
+
+**Husstandsskatteopgørelse** · `HouseholdTaxAssessment`:
+Husstandens samlede skat for ét simuleringsår: hver persons egen skatteopgørelse og marginalskat, plus aktieindkomstens skat, som er husstandens og ikke nogen enkelt persons — progressionsgrænsen er fælles og overførbar mellem ægtefæller og kan derfor ikke fordeles. Totalen er summen af det hele og aldrig et felt ved siden af delene, ligesom i `TaxAssessment`.
+_Avoid_: Husstandsskat, samlet skatteopgørelse, familieopgørelse
 
 **Facitcase** · `WorkedExample`:
 Et gennemregnet eksempel med kilde og verifikationsdato, som skatteopgørelsen prøves imod. Tallene står som data frem for som assertions spredt ud i en test, så det kan ses, hvor de kommer fra, og hvornår de sidst er efterset. Bygger casen på et satstal, der endnu ikke er officielt bekræftet, siger den det selv.
