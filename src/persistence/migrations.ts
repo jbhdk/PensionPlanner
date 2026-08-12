@@ -60,6 +60,36 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    // v3 → v4: en peger, der ikke rammer noget, går ikke længere gennem
+    // motoren, jf. ADR-0013. Indtil nu efterlod removePerson overførslerne
+    // mod den slettede persons beholdninger, og motoren regnede videre med
+    // NaN i totalformuen. Kontrollen ved indgangen ville afvise sådan en
+    // gemt plan helt, så kæden rydder skaden op i stedet: overførslen
+    // uden begge ender og posten uden ejer forsvinder, resten står urørt.
+    from: 3,
+    migrate: (data) => {
+      const plan = data as {
+        household?: { persons?: Array<{ id?: unknown; holdings?: Array<{ id?: unknown }> }> }
+        transfers?: Array<Record<string, unknown>>
+        entries?: Array<Record<string, unknown>>
+        [key: string]: unknown
+      }
+      const persons = plan.household?.persons ?? []
+      const holdings = new Set(
+        persons.flatMap((person) => (person.holdings ?? []).map((holding) => holding.id)),
+      )
+      const owners = new Set(persons.map((person) => person.id))
+
+      return {
+        ...plan,
+        transfers: (plan.transfers ?? []).filter(
+          (transfer) => holdings.has(transfer.from) && holdings.has(transfer.to),
+        ),
+        entries: (plan.entries ?? []).filter((entry) => owners.has(entry.owner)),
+      }
+    },
+  },
 ]
 
 /** Kører kæden fra `fromVersion` til `toVersion`, ét led ad gangen. Rent og

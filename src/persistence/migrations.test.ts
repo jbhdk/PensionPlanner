@@ -143,3 +143,41 @@ describe('v2 → v3: reguleringssatsen er kun indtægtens', () => {
     expect(expense!.direction).toBe('Expense')
   })
 })
+
+describe('v3 → v4: pegere, der ikke rammer noget, ryddes op', () => {
+  it('dropper overførslen mod en beholdning, der ikke findes, og posten uden ejer', () => {
+    // removePerson efterlod indtil nu overførslerne mod den slettede persons
+    // beholdninger, og motoren regnede videre med NaN. Den afviser nu sådan
+    // en plan, jf. ADR-0013 — og en plan, der allerede er gemt med skaden,
+    // skal renses ved indlæsningen frem for at blive uindlæselig.
+    const v3: unknown = {
+      name: 'Gammel plan',
+      startYear: 2026,
+      buffer: 'free-assets',
+      household: {
+        persons: [
+          {
+            id: 'jesper',
+            holdings: [{ id: 'free-assets' }, { id: 'depot' }],
+          },
+        ],
+      },
+      transfers: [
+        { id: 'god', from: 'free-assets', to: 'depot' },
+        { id: 'haengende', from: 'free-assets', to: 'marias-konto' },
+      ],
+      entries: [
+        { id: 'loen', owner: 'jesper' },
+        { id: 'marias-loen', owner: 'maria' },
+      ],
+    }
+
+    const migrated = runMigrations(v3, 3, 4, migrations) as {
+      transfers: Array<{ id: string }>
+      entries: Array<{ id: string }>
+    }
+
+    expect(migrated.transfers.map((transfer) => transfer.id)).toEqual(['god'])
+    expect(migrated.entries.map((entry) => entry.id)).toEqual(['loen'])
+  })
+})

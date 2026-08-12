@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { aPlan } from '../engine/testing/planFixture'
+import { aPlan, aTransfer } from '../engine/testing/planFixture'
 import type { Plan } from '../engine/plan'
+import { validatePlan } from '../engine/validatePlan'
 import { addEntry, removePerson } from './planEdits'
 
 /** Et to-personers udgangspunkt: fixturens Jesper har bufferen
@@ -80,6 +81,23 @@ describe('removePerson', () => {
     const result = removePerson(withEntry, 'maria')
 
     expect(result.entries).toEqual([])
+  })
+
+  it('fjerner overførslerne, der peger på den fjernede persons beholdninger', () => {
+    // removeHolding ryddede allerede op efter sig; removePerson gjorde ikke,
+    // og overførslen blev stående og flyttede penge ud i et ingenting.
+    const plan = aTwoPersonPlan()
+    const withTransfer: Plan = {
+      ...plan,
+      transfers: [
+        aTransfer({ from: 'free-assets', to: 'marias-konto', amountInRealKroner: 50_000 }),
+      ],
+    }
+
+    const result = removePerson(withTransfer, 'maria')
+
+    expect(result.transfers).toEqual([])
+    expect(validatePlan(result)).toBeUndefined()
   })
 })
 

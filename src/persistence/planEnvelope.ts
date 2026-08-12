@@ -1,11 +1,11 @@
 import type { Plan } from '../engine/plan'
-import { validateBuffer } from '../engine/simulate'
+import { validatePlan } from '../engine/validatePlan'
 import { migrations, runMigrations } from './migrations'
 
 /** Skemaversionen data gemmes under, både i localStorage og i en eksporteret
     fil — kæden i migrations.ts løfter en gemt plan fra sin egen version og
     frem til denne, jf. issue #15. */
-export const CURRENT_SCHEMA_VERSION = 3
+export const CURRENT_SCHEMA_VERSION = 4
 
 export type ParseResult =
   | { kind: 'Loaded'; plan: Plan }
@@ -50,9 +50,9 @@ export function parsePlanEnvelope(raw: string): ParseResult {
       migrations,
     )
     const plan = migrated as Plan
-    const bufferError = validateBuffer(plan)
-    if (bufferError) {
-      return { kind: 'Failed', reason: bufferError }
+    const planError = validatePlan(plan)
+    if (planError) {
+      return { kind: 'Failed', reason: planError }
     }
     return { kind: 'Loaded', plan }
   } catch (error) {

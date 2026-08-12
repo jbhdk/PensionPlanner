@@ -288,6 +288,17 @@ describe('simulate', () => {
     expect(() => simulate(plan)).toThrow(/buffer/i)
   })
 
+  it('afviser en plan, hvor en post peger på en ejer, der ikke findes', () => {
+    // Posten talte med i årets indtægter, men ingen persons skatteopgørelse
+    // så den — beløbet gik ubeskattet ind i formuen. Var perioden forankret
+    // til en alder i stedet, styrtede motoren på ejerens fødselsår.
+    const plan = aPlan({
+      entries: [aSalary({ amountInRealKroner: 400_000, owner: 'findes-ikke' })],
+    })
+
+    expect(() => simulate(plan)).toThrow(/findes-ikke/)
+  })
+
   it('lægger lønnen til årets indtægter og trækker årets skat af den', () => {
     const plan = aPlan({
       inflationAssumption: 0,
@@ -864,6 +875,19 @@ describe('overførsler', () => {
     }
 
     expect(() => simulate(plan)).toThrow(/buffer/i)
+  })
+
+  it('afviser en plan, hvor en overførsel peger på en beholdning, der ikke findes', () => {
+    // Slettede man personen bag modtagerbeholdningen, blev overførslen
+    // stående og flyttede penge ud i et ingenting: bufferen faldt, og
+    // totalformuen blev NaN resten af årsrækken, uden et ord fra motoren.
+    const plan = aPlan({
+      transfers: [
+        aTransfer({ from: 'free-assets', to: 'findes-ikke', amountInRealKroner: 10_000 }),
+      ],
+    })
+
+    expect(() => simulate(plan)).toThrow(/findes-ikke/)
   })
 
   it('mærker året ufuldstændig, når bufferen er negativ, men husstanden har likviditet andetsteds', () => {

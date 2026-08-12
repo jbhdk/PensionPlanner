@@ -79,8 +79,9 @@ export function addPerson(plan: Plan): Plan {
 }
 
 /** Fjerner personen, dennes beholdninger med (de er nestet under personen),
-    og posterne der peger på personen som ejer — ellers ville motoren støde
-    på en ejer, der ikke findes. Var personens beholdning bufferen, arver den
+    posterne der peger på personen som ejer, og overførslerne der peger på
+    personens beholdninger — ellers ville motoren støde på en peger, der ikke
+    rammer noget, jf. ADR-0013. Var personens beholdning bufferen, arver den
     første tilbageværende beholdning rollen, så planen forbliver regnbar. */
 export function removePerson(plan: Plan, id: string): Plan {
   const persons = plan.household.persons.filter((person) => person.id !== id)
@@ -91,11 +92,20 @@ export function removePerson(plan: Plan, id: string): Plan {
     ? plan.buffer
     : (remainingHoldingIds[0] ?? plan.buffer)
 
+  const gone = new Set(
+    (plan.household.persons.find((person) => person.id === id)?.holdings ?? []).map(
+      (holding) => holding.id,
+    ),
+  )
+
   return {
     ...plan,
     buffer,
     household: { persons },
     entries: plan.entries.filter((entry) => entry.owner !== id),
+    transfers: plan.transfers.filter(
+      (transfer) => !gone.has(transfer.from) && !gone.has(transfer.to),
+    ),
   }
 }
 

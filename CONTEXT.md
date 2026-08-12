@@ -215,6 +215,18 @@ _Avoid_: Scenarie, opsætning, konfiguration, model
 Motorens fulde output for ét simuleringsår, inklusive alle mellemregninger og hvilket satsgrundlag de er regnet på — ikke kun totaler. Grundlaget for både tabel, graf og forklaring af et enkelt år.
 _Avoid_: Række, resultat, output, snapshot
 
+**Beholdningsår** · `HoldingYear`:
+Én beholdnings tal for ét simuleringsår: primo- og ultimosaldo, årets afkast, og den vægtede strøm afkastet blev regnet af. Beholdningens navn og satser står i planen og gentages ikke her.
+_Avoid_: Beholdningsresultat, saldolinje, kontoudtog
+
+**Postår** · `EntryYear`:
+Én posts beløb i ét simuleringsår, i årets egne løbende priser — kun for de poster der faktisk falder i året. Forfaldet står ikke her; det er en egenskab ved posten selv.
+_Avoid_: Postresultat, årspost, betaling
+
+**Personår** · `PersonYear`:
+Én persons skatteopgørelse for ét simuleringsår, sammen med årets aktie- og kapitalindkomst og personens marginalskat. Aktieindkomstens skat står ikke her: den er en husstandsberegning.
+_Avoid_: Personresultat, skatteår, opgørelse
+
 **Aftrapningsgrundlag** · `TaperBase`:
 Den indkomst der reducerer pensionstillægget. Omfatter ATP, livrente- og ratepensionsudbetalinger, positiv kapitalindkomst og aktieindkomst — men hverken arbejdsindkomst, udbetalinger fra aldersopsparing eller afkast på en aktiesparekonto. Kapitalindkomsten tæller kun når den er positiv: en negativ nettokapitalindkomst lemper ikke grundlaget. Ægtefællens indkomst indgår med 54 % bortseelse, og ægtefællens arbejdsindkomst indgår slet ikke.
 _Avoid_: Modregningsgrundlag, indtægtsgrundlag

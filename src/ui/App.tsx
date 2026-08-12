@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import type { Plan } from '../engine/plan'
-import { simulate, validateBuffer } from '../engine/simulate'
+import { simulate } from '../engine/simulate'
+import { validatePlan } from '../engine/validatePlan'
 import { exportPlan, importPlan } from '../persistence/planFile'
 import { savePlan } from '../persistence/planStorage'
 import { Inspector } from './Inspector'
@@ -101,10 +102,11 @@ export function App({
     )
   }
 
-  // Nul eller to buffere er en inputfejl, ikke et resultat: planen kan ikke
-  // simuleres, og resultatspalten skal sige hvorfor frem for at stå tom.
-  const bufferError = validateBuffer(plan)
-  const years = bufferError ? [] : simulate(plan)
+  // En peger, der ikke rammer noget — bufferen, en overførsels ende, en posts
+  // ejer — er en inputfejl, ikke et resultat: planen kan ikke simuleres, og
+  // resultatspalten skal sige hvorfor frem for at stå tom, jf. ADR-0013.
+  const planError = validatePlan(plan)
+  const years = planError ? [] : simulate(plan)
   const period = `${plan.startYear}–${years.at(-1)?.year ?? plan.startYear}`
 
   return (
@@ -181,10 +183,10 @@ export function App({
                   </button>
                 </span>
               </div>
-              {bufferError ? (
+              {planError ? (
                 <div className="besked stop">
                   <h3>Planen kan ikke simuleres</h3>
-                  <p>{bufferError}</p>
+                  <p>{planError}</p>
                 </div>
               ) : resultView === 'Wealth' ? (
                 <WealthChart
