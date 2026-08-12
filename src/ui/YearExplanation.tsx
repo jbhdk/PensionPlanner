@@ -5,7 +5,7 @@ import type { LayerAmount, TaxLayer } from '../engine/tax/assessTax'
 import { totalTax } from '../engine/tax/assessTax'
 import type { HoldingYear, PersonYear, RateBasis, YearResult } from '../engine/yearResult'
 import { kroner, procent } from './format'
-import { danishTiming } from './Inspector'
+import { danishTiming } from './danish'
 import { inRealKroner } from './real'
 
 /** Rækkefølgen skattelagene vises i: samme rækkefølge som mockuppens

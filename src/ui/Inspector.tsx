@@ -1,16 +1,19 @@
-import type {
-  Anchor,
-  Direction,
-  HoldingVariant,
-  Period,
-  Plan,
-  Recurrence,
-  TaxTreatment,
-  Timing,
-} from '../engine/plan'
+import type { Anchor, Period, Plan, Recurrence } from '../engine/plan'
 import { latestRateYear } from '../engine/rates/rates'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
 import type { YearResult } from '../engine/yearResult'
+import {
+  anchors,
+  danish,
+  danishTiming,
+  directions,
+  recurrences,
+  timingForOnce,
+  timingOptions,
+  timings,
+  treatments,
+  variants,
+} from './danish'
 import { entryNote } from './entryNote'
 import {
   AgeBoundField,
@@ -405,65 +408,6 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
   )
 }
 
-/** Retningen og skattebehandlingen står på skærmen med deres danske navne;
-    kortene herunder er det ene sted, de to sprog møder hinanden. */
-const directions: Record<string, Direction> = {
-  Indtægt: 'Income',
-  Udgift: 'Expense',
-}
-
-/** Etape 1 kender kun de to varianter for frie midler — de tre øvrige findes
-    ikke i fladen, før de findes i motoren, jf. ADR-0010. */
-const variants: Record<string, HoldingVariant> = {
-  Aktieindkomst: 'ShareIncome',
-  Kapitalindkomst: 'CapitalIncome',
-}
-
-const treatments: Record<string, TaxTreatment> = {
-  Arbejdsindkomst: 'EarnedIncome',
-  Skattefri: 'TaxFree',
-}
-
-/** De danske månedsnavne er koden helt uvedkommende — kun tallet 1–12
-    forlader dette kort. */
-const timings: Record<string, Timing> = {
-  'Jævnt fordelt': 'Even',
-  Januar: 1,
-  Februar: 2,
-  Marts: 3,
-  April: 4,
-  Maj: 5,
-  Juni: 6,
-  Juli: 7,
-  August: 8,
-  September: 9,
-  Oktober: 10,
-  November: 11,
-  December: 12,
-}
-
-function danish<T extends string>(map: Record<string, T>, value: T): string {
-  return Object.keys(map).find((key) => map[key] === value)!
-}
-
-export function danishTiming(timing: Timing): string {
-  return Object.keys(timings).find((key) => timings[key] === timing)!
-}
-
-/** "Jævnt fordelt" står for en strøm af mange små betalinger hen over året —
-    en løn, for eksempel. En engangspost falder i én bestemt måned og kan
-    ikke være jævnt fordelt, så valget udelades, når gentagelsen er "Once". */
-function timingOptions(recurrence: Recurrence): string[] {
-  const all = Object.keys(timings)
-  return recurrence.kind === 'Once' ? all.filter((label) => label !== 'Jævnt fordelt') : all
-}
-
-/** Forfaldet, en engangspost arver, når den skifter væk fra "jævnt fordelt" —
-    den kan ikke længere være det, så et bestemt tidspunkt vælges i stedet. */
-function timingForOnce(timing: Timing): Timing {
-  return timing === 'Even' ? 1 : timing
-}
-
 function EntryFields({
   plan,
   years,
@@ -713,17 +657,6 @@ function EntryFields({
       </Section>
     </>
   )
-}
-
-const anchors: Record<string, Anchor> = {
-  Kalenderår: 'CalendarYear',
-  Alder: 'PersonAge',
-}
-
-const recurrences: Record<string, Recurrence['kind']> = {
-  'Hvert år': 'Annual',
-  'Én gang': 'Once',
-  'Hvert N. år': 'EveryNYears',
 }
 
 /** En ny periode ved skift af forankring: begge endepunkter åbne, altså hele
