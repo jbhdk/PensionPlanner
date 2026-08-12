@@ -40,6 +40,16 @@ Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog 
 
 **Konsekvens:** Beholdninger designes med en udbetalingsstrategi, så en prioriteret dækningsrækkefølge kan slås til pr. beholdning senere.
 
+## Aktieindkomstgrænsen for ugifte samlevende
+
+**Status:** Udskudt. Motoren deler progressionsgrænsen ud fra antallet af personer i husstanden og spørger ikke, om de er gift.
+
+**Hvorfor det betyder noget:** Grænsen på 79.400 kr. er fælles og overførbar **mellem ægtefæller** ([satsår 2026](./satser/2026.md)), men en husstand er defineret som "én eller to personer der er gift **eller samlevende**" ([CONTEXT.md](../CONTEXT.md)). For et ugift samlevende par har hver person sin egen grænse, og den ubrugte del kan ikke overføres. Med 40.000 kr. hos den ene og 140.000 kr. hos den anden regner motoren 51.780 kr. i skat, hvor de rigtige tal er 10.800 + 46.890 = 57.690 kr. — knap 6.000 kr. for lidt om året, og forskellen vokser, jo skævere aktieindkomsten er fordelt.
+
+Asymmetrien er værd at bemærke, for den går kun den ene vej: pensionstillæggets 54 % bortseelse gælder efter § 49 både en ægtefælle **og** en samlever, så aftrapningen er rigtig i begge tilfælde. Det er alene aktieindkomstens grænse, der kræver en vielsesattest.
+
+**Hvad der skal bygges, når det tages op:** Et civilstandsbegreb på husstanden — ikke `CivilStatus` fra satsåret, som er pensionstillæggets aftrapningsakse (`Single` / `WithNonPensioner` / `WithPensioner`) og siger noget helt andet. Grænsen i `assessHousehold` bliver da husstandens egen frem for `persons.length`, jf. [ADR-0014](./adr/0014-skattesoemmet-er-husstandens-ikke-personens.md). Feltet lander i det gemte skema og kræver et led i migrationskæden.
+
 ## Sammenligning af flere planer side om side
 
 **Status:** Afvist, ikke udskudt. Tegnet i fladekortets `#sammenlign` og forkastet dér.
