@@ -1,7 +1,4 @@
-import type { ChangeEvent, ReactNode } from 'react'
-import { useId, useState } from 'react'
 import type {
-  AgeBound,
   Anchor,
   Direction,
   HoldingVariant,
@@ -15,6 +12,18 @@ import { latestRateYear } from '../engine/rates/rates'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
 import type { YearResult } from '../engine/yearResult'
 import { entryNote } from './entryNote'
+import {
+  AgeBoundField,
+  CheckboxField,
+  Hint,
+  LockedField,
+  NumberField,
+  OptionalNumberField,
+  RadioField,
+  Section,
+  SelectField,
+  TextField,
+} from './fields'
 import { procent } from './format'
 import {
   findEntry,
@@ -23,7 +32,6 @@ import {
   findPerson,
   findTransfer,
   formatNumber,
-  parseNumber,
   removeEntry,
   removeHolding,
   removePerson,
@@ -264,7 +272,7 @@ function StatePensionAgeFields({
     <>
       <LockedField
         label="Folkepensionsalder"
-        value={`${danishAge(derived.age)} år`}
+        value={`${formatNumber(derived.age)} år`}
         unit="udledt"
       />
       {!derived.enacted && (
@@ -299,11 +307,6 @@ function StatePensionAgeFields({
       )}
     </>
   )
-}
-
-/** 70 → "70", 72,5 → "72,5" — dansk decimalkomma, ingen overflødig nul. */
-function danishAge(age: number): string {
-  return Number.isInteger(age) ? String(age) : String(age).replace('.', ',')
 }
 
 function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {
@@ -930,326 +933,6 @@ function TrashIcon() {
       <path d="M6.5 7v4" />
       <path d="M9.5 7v4" />
     </svg>
-  )
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="afsnit">
-      <h3>{title}</h3>
-      {children}
-    </section>
-  )
-}
-
-function Hint({ children }: { children: ReactNode }) {
-  return <p className="hint">{children}</p>
-}
-
-function TextField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-}) {
-  const id = useId()
-  return (
-    <div className="felt">
-      <label htmlFor={id}>{label}</label>
-      <span className="vaerdi">
-        <input
-          id={id}
-          type="text"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-        <span className="enhed" />
-      </span>
-    </div>
-  )
-}
-
-/** Teksten i et talfelt, mens der tastes i det.
-
-    Feltets tekst er sandheden, så længe feltet har fokus. Et halvskrevet tal
-    som "7," eller "-" parser til noget andet end det, der står, og skrev
-    feltet sig selv tilbage til den parsede værdi ved hvert tastetryk, ville
-    decimaltegnet blive ædt, før decimalen nåede at blive tastet: "7,5" endte
-    som 75.
-
-    Ved blur er "halvskrevet" ikke længere en mulighed, og teksten skrives om
-    fra værdien — ellers kunne feltet blive stående med "7," over en plan, der
-    siger 7. Kommer værdien udefra — en anden beholdning valgt i navigatoren,
-    en import, en fortrydelse — viger teksten på samme måde.
-
-    Krogen hviler på, at `parse(format(v))` er `v`; se `formatNumber`. Den
-    modsatte vej gælder ikke og skal ikke gælde: `format(parse("7,"))` er
-    netop den omskrivning, feltet ikke må lave, mens der tastes. */
-function useNumberText<T>(
-  value: T,
-  format: (value: T) => string,
-  parse: (text: string) => T,
-  onChange: (value: T) => void,
-): {
-  value: string
-  onChange: (event: ChangeEvent<HTMLInputElement>) => void
-  onBlur: () => void
-} {
-  const [text, setText] = useState(() => format(value))
-  const [lastValue, setLastValue] = useState(value)
-
-  if (!Object.is(value, lastValue)) {
-    setLastValue(value)
-    if (parse(text) !== value) setText(format(value))
-  }
-
-  return {
-    value: text,
-    onChange: (event) => {
-      setText(event.target.value)
-      onChange(parse(event.target.value))
-    },
-    onBlur: () => setText(format(value)),
-  }
-}
-
-/** Tomt betyder "ikke sat" — et åbent periodeendepunkt, altså fra planens
-    start eller til horisontens slut. Modstykket til `formatNumber`, hvor tomt
-    ville have parset til 0. */
-function formatOptional(value: number | undefined): string {
-  return value === undefined ? '' : formatNumber(value)
-}
-
-function parseOptional(text: string): number | undefined {
-  return text === '' ? undefined : parseNumber(text)
-}
-
-function NumberField({
-  label,
-  unit,
-  value,
-  onChange,
-}: {
-  label: string
-  unit?: string
-  value: number
-  onChange: (value: number) => void
-}) {
-  const id = useId()
-  const tal = useNumberText(value, formatNumber, parseNumber, onChange)
-
-  return (
-    <div className="felt">
-      <label htmlFor={id}>{label}</label>
-      <span className="vaerdi">
-        <input id={id} type="text" inputMode="decimal" className="tal" {...tal} />
-        <span className="enhed">{unit ?? ''}</span>
-      </span>
-    </div>
-  )
-}
-
-/** Et talfelt der kan stå tomt — se `formatOptional`. */
-function OptionalNumberField({
-  label,
-  unit,
-  value,
-  onChange,
-}: {
-  label: string
-  unit?: string
-  value: number | undefined
-  onChange: (value: number | undefined) => void
-}) {
-  const id = useId()
-  const tal = useNumberText(value, formatOptional, parseOptional, onChange)
-
-  return (
-    <div className="felt">
-      <label htmlFor={id}>{label}</label>
-      <span className="vaerdi">
-        <input id={id} type="text" inputMode="decimal" className="tal" {...tal} />
-        <span className="enhed">{unit ?? ''}</span>
-      </span>
-    </div>
-  )
-}
-
-/** Et periodeendepunkt for en aldersforankret post: en fast alder, tomt, eller
-    afkrydset, en henvisning til personens erhvervsophør — feltet flytter sig
-    selv, når erhvervsophørsalderen ændres, jf. `AgeBound`. Den tredje slags
-    værdi er grunden til, at `useNumberText` er generisk: henvisningen er ikke
-    et tal, men den skal vises som ét. */
-function AgeBoundField({
-  label,
-  value,
-  workEndAge,
-  onChange,
-}: {
-  label: string
-  value: AgeBound | undefined
-  /** Ejerens erhvervsophørsalder — det tal feltet viser, når endepunktet
-      følger den. Feltet er skrivebeskyttet imens frem for tomt: alderen er
-      det, spørgsmålet handler om, og den skal kunne læses uden at klikke
-      tilvalget fra igen. */
-  workEndAge: number
-  onChange: (value: AgeBound | undefined) => void
-}) {
-  const id = useId()
-  const followsWorkEnd = value === 'WorkEndAge'
-  const tal = useNumberText<AgeBound | undefined>(
-    value,
-    (bound) => (bound === 'WorkEndAge' ? formatNumber(workEndAge) : formatOptional(bound)),
-    parseOptional,
-    onChange,
-  )
-
-  // Tilvalget får sin egen linje under aldersfeltet. Proppet ind i
-  // enhedskolonnen sprængte "erhvervsophør" de 56px, alle andre felter deler,
-  // og skubbede inputtet ud af flugt med resten af sektionen.
-  return (
-    <>
-      <div className="felt">
-        <label htmlFor={id}>{label}</label>
-        <span className="vaerdi">
-          <input
-            id={id}
-            type="text"
-            inputMode="decimal"
-            className="tal"
-            readOnly={followsWorkEnd}
-            {...tal}
-            // Følger endepunktet erhvervsophøret, er feltet en aflæsning og
-            // ikke et talfelt: teksten kommer fra ejeren og skal følge med,
-            // hvis alderen flytter sig, hvor krogens tekst først viger, når
-            // endepunktet selv skifter.
-            value={followsWorkEnd ? formatNumber(workEndAge) : tal.value}
-          />
-          <span className="enhed">år</span>
-        </span>
-      </div>
-      <div className="felt felt--tilvalg">
-        <span className="vaerdi">
-          <label>
-            <input
-              type="checkbox"
-              checked={followsWorkEnd}
-              onChange={(event) => onChange(event.target.checked ? 'WorkEndAge' : undefined)}
-            />{' '}
-            Følger erhvervsophør
-          </label>
-        </span>
-      </div>
-    </>
-  )
-}
-
-function RadioField({
-  label,
-  checked,
-  onSelect,
-}: {
-  label: string
-  checked: boolean
-  onSelect: () => void
-}) {
-  const id = useId()
-  return (
-    <div className="felt">
-      <label htmlFor={id}>{label}</label>
-      <span className="vaerdi">
-        <input
-          id={id}
-          type="radio"
-          name="buffer"
-          checked={checked}
-          onChange={onSelect}
-        />
-        <span className="enhed" />
-      </span>
-    </div>
-  )
-}
-
-function CheckboxField({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string
-  checked: boolean
-  onChange: (checked: boolean) => void
-}) {
-  const id = useId()
-  return (
-    <div className="felt">
-      <label htmlFor={id}>{label}</label>
-      <span className="vaerdi">
-        <input
-          id={id}
-          type="checkbox"
-          checked={checked}
-          onChange={(event) => onChange(event.target.checked)}
-        />
-        <span className="enhed" />
-      </span>
-    </div>
-  )
-}
-
-/** Et valg mellem få faste muligheder. Værdierne er de danske navne — intet
-    engelsk identifier når skærmen. */
-function SelectField({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string
-  value: string
-  options: string[]
-  onChange: (value: string) => void
-}) {
-  const id = useId()
-  return (
-    <div className="felt">
-      <label htmlFor={id}>{label}</label>
-      <span className="vaerdi">
-        <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
-          {options.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-        <span className="enhed" />
-      </span>
-    </div>
-  )
-}
-
-/** Et felt der ikke kan tastes i — enten fordi det først bliver redigerbart i
-    en senere skive ("låst"), eller fordi det er udledt af andre felter. */
-function LockedField({
-  label,
-  value,
-  unit = 'låst',
-}: {
-  label: string
-  value: string
-  unit?: string
-}) {
-  return (
-    <div className="felt">
-      <span className="etiket">{label}</span>
-      <span className="vaerdi">
-        <span className="laast">{value}</span>
-        <span className="enhed">{unit}</span>
-      </span>
-    </div>
   )
 }
 
