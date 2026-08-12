@@ -321,6 +321,25 @@ describe('fladen', () => {
     expect(screen.getByText('7,25 %')).toBeTruthy()
   })
 
+  it('skriver talfeltet rent, når det forlades', async () => {
+    // Teksten er kun sandheden, mens feltet har fokus. "7," parser til 7, og
+    // bliver feltet stående med kommaet, viser skuffen noget andet end det,
+    // planen indeholder.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan({ grossReturn: 0.07 })} />)
+
+    await user.click(navigatorButton(/Frie midler/))
+    const bruttoafkast = screen.getByLabelText(/Bruttoafkast/) as HTMLInputElement
+    await user.clear(bruttoafkast)
+    await user.type(bruttoafkast, '7,')
+
+    expect(bruttoafkast.value).toBe('7,')
+
+    await user.tab()
+
+    expect(bruttoafkast.value).toBe('7')
+  })
+
   it('viser den nye beholdnings sats, når en anden beholdning vælges', async () => {
     // Modstykket til testen ovenfor: talfeltet holder på sin egen tekst, mens
     // der tastes, og må derfor ikke blive stående med den forrige beholdnings
@@ -463,6 +482,31 @@ describe('fladen', () => {
     expect(forfald.value).toBe('Januar')
   })
 
+  it('lader et halvskrevet tal stå i et periodefelt og skriver det rent ved blur', async () => {
+    // Samme regel som i bruttoafkast. Periodefelterne rummer heltal, så et
+    // komma er nonsens dér — men reglen om, hvornår teksten er sandheden, må
+    // ikke afhænge af, hvilket af skuffens talfelter man står i.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          startYear: 2026,
+          entries: [anExpense({ amountInRealKroner: 40_000 })],
+        })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    const til = screen.getByLabelText(/Til \(år\)/) as HTMLInputElement
+    await user.type(til, '2035,')
+
+    expect(til.value).toBe('2035,')
+
+    await user.tab()
+
+    expect(til.value).toBe('2035')
+  })
+
   it('regner postens note om, når satsen rettes i skuffen', async () => {
     // Notens indhold prøves i entryNote.test.ts. Denne prøver koblingen: at
     // en rettelse i skuffen når hele vejen gennem simuleringen og tilbage til
@@ -580,6 +624,39 @@ describe('fladen', () => {
     expect(
       screen.getAllByRole('checkbox', { name: /erhvervsophør/i }).length,
     ).toBe(2)
+  })
+
+  it('lader et halvskrevet tal stå i et aldersfelt og viser erhvervsophøret ved tilvalg', async () => {
+    // Aldersfeltet er den tredje slags værdi: en alder, ingenting, eller en
+    // henvisning til erhvervsophøret. Reglen om teksten er den samme, og
+    // henvisningen er ikke et tal, brugeren har tastet — den vises som
+    // ejerens alder og viger, når tilvalget fjernes igen.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.selectOptions(screen.getByLabelText(/Forankring/), 'Alder')
+
+    const fra = () => screen.getByLabelText(/Fra \(alder\)/) as HTMLInputElement
+    await user.type(fra(), '62,')
+
+    expect(fra().value).toBe('62,')
+
+    await user.tab()
+
+    expect(fra().value).toBe('62')
+
+    // Fixturens ejer ophører som 58-årig.
+    const tilvalg = () => screen.getAllByRole('checkbox', { name: /erhvervsophør/i })[0]!
+    await user.click(tilvalg())
+    expect(fra().value).toBe('58')
+
+    await user.click(tilvalg())
+    expect(fra().value).toBe('')
   })
 
   it('tilføjer person nummer to via husstandsgruppen', async () => {

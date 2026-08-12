@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ChangeEvent, ReactNode } from 'react'
 import { useId, useState } from 'react'
 import type {
   AgeBound,
@@ -972,6 +972,61 @@ function TextField({
   )
 }
 
+/** Teksten i et talfelt, mens der tastes i det.
+
+    Feltets tekst er sandheden, så længe feltet har fokus. Et halvskrevet tal
+    som "7," eller "-" parser til noget andet end det, der står, og skrev
+    feltet sig selv tilbage til den parsede værdi ved hvert tastetryk, ville
+    decimaltegnet blive ædt, før decimalen nåede at blive tastet: "7,5" endte
+    som 75.
+
+    Ved blur er "halvskrevet" ikke længere en mulighed, og teksten skrives om
+    fra værdien — ellers kunne feltet blive stående med "7," over en plan, der
+    siger 7. Kommer værdien udefra — en anden beholdning valgt i navigatoren,
+    en import, en fortrydelse — viger teksten på samme måde.
+
+    Krogen hviler på, at `parse(format(v))` er `v`; se `formatNumber`. Den
+    modsatte vej gælder ikke og skal ikke gælde: `format(parse("7,"))` er
+    netop den omskrivning, feltet ikke må lave, mens der tastes. */
+function useNumberText<T>(
+  value: T,
+  format: (value: T) => string,
+  parse: (text: string) => T,
+  onChange: (value: T) => void,
+): {
+  value: string
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void
+  onBlur: () => void
+} {
+  const [text, setText] = useState(() => format(value))
+  const [lastValue, setLastValue] = useState(value)
+
+  if (!Object.is(value, lastValue)) {
+    setLastValue(value)
+    if (parse(text) !== value) setText(format(value))
+  }
+
+  return {
+    value: text,
+    onChange: (event) => {
+      setText(event.target.value)
+      onChange(parse(event.target.value))
+    },
+    onBlur: () => setText(format(value)),
+  }
+}
+
+/** Tomt betyder "ikke sat" — et åbent periodeendepunkt, altså fra planens
+    start eller til horisontens slut. Modstykket til `formatNumber`, hvor tomt
+    ville have parset til 0. */
+function formatOptional(value: number | undefined): string {
+  return value === undefined ? '' : formatNumber(value)
+}
+
+function parseOptional(text: string): number | undefined {
+  return text === '' ? undefined : parseNumber(text)
+}
+
 function NumberField({
   label,
   unit,
@@ -984,44 +1039,20 @@ function NumberField({
   onChange: (value: number) => void
 }) {
   const id = useId()
-  const [text, setText] = useState(() => formatNumber(value))
-  const [lastValue, setLastValue] = useState(value)
-
-  // Teksten er sandheden, mens der tastes. Et halvskrevet tal som "7," eller
-  // "-" parser til noget andet end det, der står, og skrev feltet sig selv
-  // tilbage til den parsede værdi ved hvert tastetryk, ville decimaltegnet
-  // blive ædt, før decimalen nåede at blive tastet: "7,5" endte som 75.
-  // Kommer værdien derimod udefra — en anden beholdning valgt i navigatoren,
-  // en import, en fortrydelse — svarer teksten ikke længere til den, og så er
-  // det teksten, der viger.
-  if (!Object.is(value, lastValue)) {
-    setLastValue(value)
-    if (parseNumber(text) !== value) setText(formatNumber(value))
-  }
+  const tal = useNumberText(value, formatNumber, parseNumber, onChange)
 
   return (
     <div className="felt">
       <label htmlFor={id}>{label}</label>
       <span className="vaerdi">
-        <input
-          id={id}
-          type="text"
-          inputMode="decimal"
-          className="tal"
-          value={text}
-          onChange={(event) => {
-            setText(event.target.value)
-            onChange(parseNumber(event.target.value))
-          }}
-        />
+        <input id={id} type="text" inputMode="decimal" className="tal" {...tal} />
         <span className="enhed">{unit ?? ''}</span>
       </span>
     </div>
   )
 }
 
-/** Et talfelt der kan stå tomt — tomt betyder "ikke sat", altså et åbent
-    periodeendepunkt (fra planens start eller til horisontens slut). */
+/** Et talfelt der kan stå tomt — se `formatOptional`. */
 function OptionalNumberField({
   label,
   unit,
@@ -1034,30 +1065,24 @@ function OptionalNumberField({
   onChange: (value: number | undefined) => void
 }) {
   const id = useId()
+  const tal = useNumberText(value, formatOptional, parseOptional, onChange)
+
   return (
     <div className="felt">
       <label htmlFor={id}>{label}</label>
       <span className="vaerdi">
-        <input
-          id={id}
-          type="text"
-          inputMode="decimal"
-          className="tal"
-          value={value === undefined ? '' : String(value)}
-          onChange={(event) => {
-            const text = event.target.value
-            onChange(text === '' ? undefined : parseNumber(text))
-          }}
-        />
+        <input id={id} type="text" inputMode="decimal" className="tal" {...tal} />
         <span className="enhed">{unit ?? ''}</span>
       </span>
     </div>
   )
 }
 
-/** Et periodeendepunkt for en aldersforankret post: en fast alder, eller
+/** Et periodeendepunkt for en aldersforankret post: en fast alder, tomt, eller
     afkrydset, en henvisning til personens erhvervsophør — feltet flytter sig
-    selv, når erhvervsophørsalderen ændres, jf. `AgeBound`. */
+    selv, når erhvervsophørsalderen ændres, jf. `AgeBound`. Den tredje slags
+    værdi er grunden til, at `useNumberText` er generisk: henvisningen er ikke
+    et tal, men den skal vises som ét. */
 function AgeBoundField({
   label,
   value,
@@ -1075,6 +1100,13 @@ function AgeBoundField({
 }) {
   const id = useId()
   const followsWorkEnd = value === 'WorkEndAge'
+  const tal = useNumberText<AgeBound | undefined>(
+    value,
+    (bound) => (bound === 'WorkEndAge' ? formatNumber(workEndAge) : formatOptional(bound)),
+    parseOptional,
+    onChange,
+  )
+
   // Tilvalget får sin egen linje under aldersfeltet. Proppet ind i
   // enhedskolonnen sprængte "erhvervsophør" de 56px, alle andre felter deler,
   // og skubbede inputtet ud af flugt med resten af sektionen.
@@ -1089,13 +1121,12 @@ function AgeBoundField({
             inputMode="decimal"
             className="tal"
             readOnly={followsWorkEnd}
-            value={
-              followsWorkEnd ? String(workEndAge) : value === undefined ? '' : String(value)
-            }
-            onChange={(event) => {
-              const text = event.target.value
-              onChange(text === '' ? undefined : parseNumber(text))
-            }}
+            {...tal}
+            // Følger endepunktet erhvervsophøret, er feltet en aflæsning og
+            // ikke et talfelt: teksten kommer fra ejeren og skal følge med,
+            // hvis alderen flytter sig, hvor krogens tekst først viger, når
+            // endepunktet selv skifter.
+            value={followsWorkEnd ? formatNumber(workEndAge) : tal.value}
           />
           <span className="enhed">år</span>
         </span>
