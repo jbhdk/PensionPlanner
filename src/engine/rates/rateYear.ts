@@ -21,13 +21,20 @@ export type BracketTaxRates = {
   additionalTopBracketTax: number
 }
 
-/** AM-bidraget og satserne på afkast. */
+/** AM-bidraget og satserne på afkast.
+
+    Et satsfelt beholder lagets navn, når det slås op med lagets nøgle;
+    ellers siger det, hvad det er. `labourMarketContribution`,
+    `shareIncomeBelowThreshold` og `shareIncomeAboveThreshold` er bærende
+    nøgler — lagene slår deres egen sats op med `rates.taxRates[layer]`, og
+    et omdøbt felt ville knække opslaget. De to sidste slås ikke op af et
+    lag, og de hedder derfor det, de er: satser. */
 export type TaxRates = {
   labourMarketContribution: number
   shareIncomeBelowThreshold: number
   shareIncomeAboveThreshold: number
-  palTax: number
-  shareSavingsAccount: number
+  palTaxRate: number
+  shareSavingsAccountTaxRate: number
 }
 
 /** Det skrå skatteloft, trappet fra 2026. Alle tre ekskl. AM-bidrag og

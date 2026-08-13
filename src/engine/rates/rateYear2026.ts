@@ -22,8 +22,8 @@ export const rateYear2026: RateYear = {
     labourMarketContribution: 0.08,
     shareIncomeBelowThreshold: 0.27,
     shareIncomeAboveThreshold: 0.42,
-    palTax: 0.153,
-    shareSavingsAccount: 0.17,
+    palTaxRate: 0.153,
+    shareSavingsAccountTaxRate: 0.17,
   },
 
   taxCeiling: {
