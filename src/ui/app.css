@@ -1001,3 +1001,42 @@ table.aar td .fremskrevet {
     border-top: 1px solid var(--linje);
   }
 }
+
+/* Det, et lønkildet bidrag arver fra sin post. Ikke felter, og ikke grå
+   felter — én linje, der siger, hvad bidraget følger. */
+.afsnit.arvet .arvelinje {
+  font-family: var(--f-tal);
+  font-size: 11.5px;
+  color: var(--label);
+  line-height: 1.6;
+}
+
+/* Segmenteret kontakt: to former af det samme felt. Begge står synlige, så
+   valget kan ses uden at åbne noget. Kontakten står kun, hvor begge former er
+   mulige — et slukket segment ville vise et valg, der aldrig kan træffes. */
+.kontakt {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.kontakt button {
+  background: transparent;
+  border: 1px solid var(--felt-kant);
+  color: var(--label);
+  border-radius: 3px;
+  padding: 3px 9px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.kontakt button:hover {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+
+.kontakt button[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--paa-accent);
+}

@@ -264,6 +264,46 @@ export function RadioField({
   )
 }
 
+/** En segmenteret kontakt: alle valg synlige på én gang, det valgte trykket
+    ned. Bruges hvor en vælger ville skjule den ene mulighed bag et klik, og
+    hvor der kun er to eller tre af dem — se indbetalingens beløbsform i
+    fladekortet.
+
+    Etiketten er en `span` og ikke et `<label htmlFor>`: kontakten er flere
+    knapper og ikke én kontrol at pege på, ligesom i `LockedField`. */
+export function ToggleField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+}) {
+  return (
+    <div className="felt">
+      <span className="etiket">{label}</span>
+      <span className="vaerdi">
+        <span className="kontakt">
+          {options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={option === value}
+              onClick={() => onChange(option)}
+            >
+              {option}
+            </button>
+          ))}
+        </span>
+        <span className="enhed"></span>
+      </span>
+    </div>
+  )
+}
+
 export function CheckboxField({
   label,
   checked,

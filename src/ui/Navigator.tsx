@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import type { Plan } from '../engine/plan'
-import { kroner } from './format'
-import { addEntry, addHolding, addPerson, addTransfer } from './planEdits'
+import { kroner, procent } from './format'
+import {
+  addContribution,
+  addEntry,
+  addHolding,
+  addPerson,
+  addTransfer,
+  firstContributionPair,
+} from './planEdits'
 import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
 
@@ -102,6 +109,7 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
   const income = plan.entries.filter((entry) => entry.direction === 'Income')
   const expenses = plan.entries.filter((entry) => entry.direction === 'Expense')
   const holdingName = (id: string) => holdings.find((h) => h.id === id)?.name ?? id
+  const entryName = (id: string) => plan.entries.find((entry) => entry.id === id)?.name ?? id
 
   return [
     {
@@ -168,6 +176,28 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
       })),
       addLabel: '+ Udgift',
       onAdd: () => onChange(addEntry(plan, 'Expense')),
+    },
+    {
+      // Ingen sum her heller. En procent af en lønpost har intet kronebeløb,
+      // før året er regnet, og et samlet tal ville være et årsafhængigt
+      // resultat i en spalte, der kun viser planen. Antallet er nok.
+      id: 'indbetalinger',
+      title: 'Indbetalinger',
+      count: String(plan.contributions.length),
+      summary: '',
+      rows: plan.contributions.map((contribution) => ({
+        name: `${entryName(contribution.source)} → ${holdingName(contribution.to)}`,
+        value:
+          'percentageOfEntry' in contribution
+            ? procent(contribution.percentageOfEntry)
+            : kroner(contribution.amountInRealKroner),
+        target: { kind: 'contribution', id: contribution.id },
+      })),
+      // Et bidrag kræver en lønpost at komme fra og en af samme persons
+      // ordninger at gå til. Er der intet sådant par, er der ikke noget at
+      // tilføje, jf. ADR-0016.
+      addLabel: firstContributionPair(plan) ? '+ Indbetaling' : undefined,
+      onAdd: () => onChange(addContribution(plan)),
     },
     {
       id: 'overfoersler',

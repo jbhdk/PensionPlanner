@@ -117,6 +117,7 @@ export function YearExplanation({
 
       <HoldingsBlock plan={plan} year={year} display={display} />
       <EntriesBlock plan={plan} year={year} display={display} />
+      <ContributionsBlock plan={plan} year={year} display={display} />
     </div>
   )
 }
@@ -210,6 +211,57 @@ function EntriesBlock({
               </tr>
             )
           })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** Årets indbetalinger med begge deres beløb: hvad der forlod kilden, og hvad
+    der landede i beholdningen. Forskellen er AM-bidraget, og den står ikke i
+    en tredje kolonne — den er allerede personens eget AM-lag ovenfor, og to
+    steder kunne komme til at sige hver sit.
+
+    Blokken udebliver, når året ingen indbetalinger har. */
+function ContributionsBlock({
+  plan,
+  year,
+  display,
+}: {
+  plan: Plan
+  year: YearResult
+  display: (amount: number) => number
+}) {
+  if (year.contributions.length === 0) return null
+
+  const holdings = plan.household.persons.flatMap((person) => person.holdings)
+  const name = (contributionId: string) => {
+    const contribution = plan.contributions.find((c) => c.id === contributionId)
+    if (!contribution) return contributionId
+    const source = plan.entries.find((entry) => entry.id === contribution.source)
+    const to = holdings.find((holding) => holding.id === contribution.to)
+    return `${source?.name ?? contribution.source} → ${to?.name ?? contribution.to}`
+  }
+
+  return (
+    <div className="blok bred">
+      <h3>Indbetalingerne</h3>
+      <table className="indbetalingstabel">
+        <thead>
+          <tr>
+            <th>Indbetaling</th>
+            <th>Forlod kilden</th>
+            <th>Landede</th>
+          </tr>
+        </thead>
+        <tbody>
+          {year.contributions.map((contribution) => (
+            <tr key={contribution.contribution}>
+              <td>{name(contribution.contribution)}</td>
+              <td>{kroner(display(contribution.fromSource))}</td>
+              <td>{kroner(display(contribution.intoHolding))}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

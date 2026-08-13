@@ -1,5 +1,13 @@
 import { isFreeAssets } from '../engine/holdingVariant'
-import type { Direction, Entry, Holding, Person, Plan, Transfer } from '../engine/plan'
+import type {
+  Contribution,
+  Direction,
+  Entry,
+  Holding,
+  Person,
+  Plan,
+  Transfer,
+} from '../engine/plan'
 
 /** Redigeringerne er rene: de bygger en ny plan frem for at rette i den
     gamle. Motoren er en ren funktion, og en muteret plan ville gøre det
@@ -81,8 +89,8 @@ export function addPerson(plan: Plan): Plan {
 
 /** Fjerner personen, dennes beholdninger med (de er nestet under personen),
     posterne der peger på personen som ejer, og overførslerne der peger på
-    personens beholdninger — ellers ville motoren støde på en peger, der ikke
-    rammer noget, jf. ADR-0013. Var personens beholdning bufferen, arver den
+    personens beholdninger, og indbetalingerne i begge ender — ellers ville
+    motoren støde på en peger, der ikke rammer noget, jf. ADR-0013. Var personens beholdning bufferen, arver den
     første tilbageværende beholdning rollen, så planen forbliver regnbar. */
 export function removePerson(plan: Plan, id: string): Plan {
   const persons = plan.household.persons.filter((person) => person.id !== id)
@@ -93,6 +101,9 @@ export function removePerson(plan: Plan, id: string): Plan {
       (holding) => holding.id,
     ),
   )
+  const goneEntries = new Set(
+    plan.entries.filter((entry) => entry.owner === id).map((entry) => entry.id),
+  )
 
   return {
     ...plan,
@@ -101,6 +112,10 @@ export function removePerson(plan: Plan, id: string): Plan {
     entries: plan.entries.filter((entry) => entry.owner !== id),
     transfers: plan.transfers.filter(
       (transfer) => !gone.has(transfer.from) && !gone.has(transfer.to),
+    ),
+    contributions: plan.contributions.filter(
+      (contribution) =>
+        !gone.has(contribution.to) && !goneEntries.has(contribution.source),
     ),
   }
 }
@@ -145,8 +160,9 @@ export function addHolding(plan: Plan): Plan {
   }))
 }
 
-/** Fjerner beholdningen og overførslerne, der peger på den (en overførsel
-    uden begge ender ville flytte penge fra eller til et ingenting). Var
+/** Fjerner beholdningen, overførslerne der peger på den (en overførsel uden
+    begge ender ville flytte penge fra eller til et ingenting), og
+    indbetalingerne der havde den som destination. Var
     beholdningen bufferen, arver den første tilbageværende beholdning rollen,
     ligesom ved `removePerson` — findes ingen, peger bufferen videre på et
     tomrum, og resultatspalten viser det som en simuleringsfejl frem for at
@@ -163,6 +179,7 @@ export function removeHolding(plan: Plan, id: string): Plan {
     buffer,
     household: { persons },
     transfers: plan.transfers.filter((transfer) => transfer.from !== id && transfer.to !== id),
+    contributions: plan.contributions.filter((contribution) => contribution.to !== id),
   }
 }
 
@@ -249,8 +266,15 @@ export function findEntry(plan: Plan, id: string): Entry | undefined {
   return plan.entries.find((entry) => entry.id === id)
 }
 
+/** Fjerner posten og indbetalingerne, der havde den som kilde. Et lønkildet
+    bidrag uden sin post ville ikke bare udeblive — planen kunne slet ikke
+    regnes, og resultatspalten ville gå i stå, jf. ADR-0013. */
 export function removeEntry(plan: Plan, id: string): Plan {
-  return { ...plan, entries: plan.entries.filter((entry) => entry.id !== id) }
+  return {
+    ...plan,
+    entries: plan.entries.filter((entry) => entry.id !== id),
+    contributions: plan.contributions.filter((contribution) => contribution.source !== id),
+  }
 }
 
 export function findTransfer(plan: Plan, id: string): Transfer | undefined {
@@ -354,5 +378,77 @@ export function withDirection(entry: Entry, direction: Direction): Entry {
     direction: 'Income',
     taxTreatment: entry.direction === 'Income' ? entry.taxTreatment : 'EarnedIncome',
     regulationRate: entry.direction === 'Income' ? entry.regulationRate : 0,
+  }
+}
+
+/** Den tyndeste indbetaling, der kan tilføjes: nul procent, fra den første
+    indtægtspost til den første af ejerens ordninger. Kilde og destination
+    skal tilhøre samme person, og destinationen må ikke være frie midler, jf.
+    ADR-0016 — findes intet sådant par, er der ingenting at tilføje, og
+    knappen der kalder her, er selv skjult.
+
+    Formen er procent frem for et fast beløb: det er den, der følger lønnen
+    op af sig selv, og den brugeren skal skulle vælge sig væk fra. */
+export function addContribution(plan: Plan): Plan {
+  const pair = firstContributionPair(plan)
+  if (!pair) return plan
+
+  return {
+    ...plan,
+    contributions: [
+      ...plan.contributions,
+      {
+        id: freshContributionId(plan),
+        kind: 'EntrySourced',
+        source: pair.source,
+        to: pair.to,
+        percentageOfEntry: 0,
+      },
+    ],
+  }
+}
+
+/** Det første lovlige par af lønpost og ordning — og dermed også svaret på,
+    om en indbetaling overhovedet kan tilføjes. */
+export function firstContributionPair(
+  plan: Plan,
+): { source: string; to: string } | undefined {
+  for (const entry of plan.entries) {
+    if (entry.direction !== 'Income') continue
+    const owner = plan.household.persons.find((person) => person.id === entry.owner)
+    const to = (owner?.holdings ?? []).find((holding) => !isFreeAssets(holding))
+    if (to) return { source: entry.id, to: to.id }
+  }
+  return undefined
+}
+
+function freshContributionId(plan: Plan): string {
+  const existing = new Set(plan.contributions.map((contribution) => contribution.id))
+  let n = 1
+  while (existing.has(`contribution-${n}`)) n++
+  return `contribution-${n}`
+}
+
+export function findContribution(plan: Plan, id: string): Contribution | undefined {
+  return plan.contributions.find((contribution) => contribution.id === id)
+}
+
+export function withContribution(
+  plan: Plan,
+  id: string,
+  change: (contribution: Contribution) => Contribution,
+): Plan {
+  return {
+    ...plan,
+    contributions: plan.contributions.map((contribution) =>
+      contribution.id === id ? change(contribution) : contribution,
+    ),
+  }
+}
+
+export function removeContribution(plan: Plan, id: string): Plan {
+  return {
+    ...plan,
+    contributions: plan.contributions.filter((contribution) => contribution.id !== id),
   }
 }

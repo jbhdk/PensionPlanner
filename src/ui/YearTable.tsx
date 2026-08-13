@@ -32,6 +32,12 @@ export function YearTable({
               </th>
             ))}
             <th scope="col">Indtægter</th>
+            {/* Det, der landede i ordningerne — altså hvad året lagde til
+                side. Bruttobeløbet ved kilden og AM-delen imellem dem står i
+                forklar-året; her er der plads til ét tal. Indbetalingen er en
+                bevægelse og indgår derfor ikke i nettoresultatet, som står
+                længere til højre. */}
+            <th scope="col">Indbetalinger</th>
             <th scope="col">Afkast</th>
             <th scope="col">Skat</th>
             <th scope="col">Udgifter</th>
@@ -71,6 +77,16 @@ export function YearTable({
                   <td key={person.id}>{year.year - person.birthYear}</td>
                 ))}
                 <td>{kroner(display(year.income))}</td>
+                <td>
+                  {kroner(
+                    display(
+                      year.contributions.reduce(
+                        (sum, contribution) => sum + contribution.intoHolding,
+                        0,
+                      ),
+                    ),
+                  )}
+                </td>
                 <td>{kroner(display(year.return))}</td>
                 <td>{kroner(display(-year.tax))}</td>
                 <td>{kroner(display(-year.expenses))}</td>

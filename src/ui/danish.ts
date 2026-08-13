@@ -83,3 +83,11 @@ export function timingOptions(recurrence: Recurrence): string[] {
 export function timingForOnce(timing: Timing): Timing {
   return timing === 'Even' ? 1 : timing
 }
+
+/** De to måder et lønkildet bidrags beløb kan angives på. Kortet peger på
+    selve feltet frem for på et navn ved siden af det: formen *er* felterne,
+    og et tredje ord for dem kunne komme til at sige noget andet end de to. */
+export const contributionAmounts: Record<string, 'percentageOfEntry' | 'amountInRealKroner'> = {
+  'Procent af posten': 'percentageOfEntry',
+  'Fast beløb': 'amountInRealKroner',
+}

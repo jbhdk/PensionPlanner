@@ -21,10 +21,7 @@ export function entryNote(years: YearResult[], entry: Entry): string {
 function periodSentence(years: YearResult[], entry: Entry): string | undefined {
   if (years.length === 0) return undefined
 
-  const falling = years.flatMap((year) => {
-    const found = year.entries.find(({ entry: id }) => id === entry.id)
-    return found === undefined ? [] : [{ year: year.year, amount: found.amount }]
-  })
+  const falling = fallingYears(years, entry)
 
   const first = falling[0]
   const last = falling.at(-1)
@@ -37,6 +34,29 @@ function periodSentence(years: YearResult[], entry: Entry): string | undefined {
   }
 
   return `Posten løber ${first.year}–${last.year}.`
+}
+
+/** De år, posten faktisk falder i, med sit beløb — motorens eget svar, ikke
+    en udledning ved siden af den, jf. ADR-0012. */
+function fallingYears(
+  years: YearResult[],
+  entry: Entry,
+): { year: number; amount: number }[] {
+  return years.flatMap((year) => {
+    const found = year.entries.find(({ entry: id }) => id === entry.id)
+    return found === undefined ? [] : [{ year: year.year, amount: found.amount }]
+  })
+}
+
+/** Årene posten løber i, som ét kort udtryk — "2026–2031", "2029", eller
+    intet, når der ikke er noget at slå op i. Bruges af den rude, der skal
+    sige, hvad et lønkildet bidrag arver af sin post. */
+export function entryPeriodLabel(years: YearResult[], entry: Entry): string | undefined {
+  const falling = fallingYears(years, entry)
+  const first = falling[0]
+  const last = falling.at(-1)
+  if (first === undefined || last === undefined) return undefined
+  return first === last ? String(first.year) : `${first.year}–${last.year}`
 }
 
 /** Hvad beløbet fremskrives med. Ingen af tilfældene gentager året — det har

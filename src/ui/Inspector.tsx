@@ -1,5 +1,5 @@
 import { isFreeAssets } from '../engine/holdingVariant'
-import type { Anchor, Period, Plan, Recurrence } from '../engine/plan'
+import type { Anchor, Contribution, Entry, Period, Plan, Recurrence } from '../engine/plan'
 import { latestRateYear } from '../engine/rates/rates'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
 import type { YearResult } from '../engine/yearResult'
@@ -10,12 +10,13 @@ import {
   directions,
   recurrences,
   timingForOnce,
+  contributionAmounts,
   timingOptions,
   timings,
   treatments,
   variants,
 } from './danish'
-import { entryNote } from './entryNote'
+import { entryNote, entryPeriodLabel } from './entryNote'
 import {
   AgeBoundField,
   CheckboxField,
@@ -27,19 +28,23 @@ import {
   Section,
   SelectField,
   TextField,
+  ToggleField,
 } from './fields'
 import { procent } from './format'
 import {
+  findContribution,
   findEntry,
   findHolding,
   findHoldingOwner,
   findPerson,
   findTransfer,
   formatNumber,
+  removeContribution,
   removeEntry,
   removeHolding,
   removePerson,
   removeTransfer,
+  withContribution,
   withDirection,
   withEntry,
   withHolding,
@@ -94,6 +99,15 @@ export function Inspector({
         )}
         {selected.kind === 'entry' && (
           <EntryFields
+            plan={plan}
+            years={years}
+            id={selected.id}
+            onChange={onChange}
+            onClose={onClose}
+          />
+        )}
+        {selected.kind === 'contribution' && (
+          <ContributionFields
             plan={plan}
             years={years}
             id={selected.id}
@@ -417,7 +431,15 @@ function EntryFields({
           }
         />
         <NumberField
-          label="Beløb (dagens kroner)"
+          /* Ordet står på etiketten og ikke kun i noten nedenfor: taster
+             brugeren nettolønnen og lægger et bidrag oveni, går alle tal op
+             og er alligevel over 100.000 kr. forkerte om året, og ingen
+             invariant fanger det, jf. ADR-0007. */
+          label={
+            income && entry.taxTreatment === 'EarnedIncome'
+              ? 'Beløb, brutto (dagens kroner)'
+              : 'Beløb (dagens kroner)'
+          }
           unit="kr."
           value={entry.amountInRealKroner}
           onChange={(amountInRealKroner) =>
@@ -637,6 +659,173 @@ function defaultPeriod(anchor: Anchor): Period {
 
 function defaultRecurrence(kind: Recurrence['kind']): Recurrence {
   return kind === 'EveryNYears' ? { kind, n: 2 } : { kind }
+}
+
+/** Indbetalingens rude. Kilden er ét spørgsmål og ikke to, og ruden skifter
+    form efter svaret: er kilden en lønpost, står periode, forankring,
+    gentagelse og forfald slet ikke her — hverken som felter eller som grå
+    felter — men som én linje, der siger, hvad bidraget følger.
+
+    Fradragsretten og loftet står heller ikke her, men af en anden grund: de
+    følger destinationens variant og er ikke noget, brugeren svarer på, jf.
+    ADR-0016. */
+function ContributionFields({
+  plan,
+  years,
+  id,
+  onChange,
+  onClose,
+}: FieldsProps & { id: string; years: YearResult[] }) {
+  const contribution = findContribution(plan, id)
+  const source = findEntry(plan, contribution?.source ?? '')
+  if (!contribution || !source) return null
+
+  const holdings = plan.household.persons.flatMap((person) => person.holdings)
+  const holdingName = (holdingId: string) =>
+    holdings.find((holding) => holding.id === holdingId)?.name ?? holdingId
+
+  // En indbetaling går aldrig til frie midler — så er det en overførsel — og
+  // kilde og destination skal tilhøre samme person, jf. ADR-0016. Vælgerne
+  // tilbyder kun det, der kan vælges, frem for at lade motoren afvise planen
+  // bagefter.
+  const owner = plan.household.persons.find((person) => person.id === source.owner)
+  const destinations = (owner?.holdings ?? []).filter((holding) => !isFreeAssets(holding))
+  const sources = plan.entries.filter((entry) => entry.direction === 'Income')
+  const percentage = 'percentageOfEntry' in contribution
+
+  return (
+    <>
+      <Head
+        title={`${source.name} → ${holdingName(contribution.to)}`}
+        subtitle="Indbetaling"
+        onClose={onClose}
+        onDelete={() => {
+          onChange(removeContribution(plan, id))
+          onClose()
+        }}
+        deleteLabel="Fjern indbetaling"
+      />
+      <Section title="Indbetalingen">
+        <SelectField
+          label="Kilde"
+          value={source.name}
+          options={sources.map((entry) => entry.name)}
+          onChange={(name) =>
+            onChange(
+              withContribution(plan, id, (c) => ({
+                ...c,
+                source: sources.find((entry) => entry.name === name)!.id,
+              })),
+            )
+          }
+        />
+        <SelectField
+          label="Destination"
+          value={holdingName(contribution.to)}
+          options={destinations.map((holding) => holding.name)}
+          onChange={(name) =>
+            onChange(
+              withContribution(plan, id, (c) => ({
+                ...c,
+                to: destinations.find((holding) => holding.name === name)!.id,
+              })),
+            )
+          }
+        />
+        <Hint>
+          {source.direction === 'Income' && source.taxTreatment === 'EarnedIncome'
+            ? 'Kilden er en AM-pligtig post, så AM-bidraget trækkes på vejen ind — der lander 92 % i beholdningen.'
+            : 'Kilden har aldrig båret AM-bidrag, så hele beløbet går ind.'}{' '}
+          Begge dele følger kilden og tastes ikke.
+        </Hint>
+      </Section>
+      <Section title="Beløb">
+        {/* Begge former står synlige: en vælger ville skjule den ene bag et
+            klik, og der er kun to. */}
+        <ToggleField
+          label="Angives som"
+          value={danish(
+            contributionAmounts,
+            percentage ? 'percentageOfEntry' : 'amountInRealKroner',
+          )}
+          options={Object.keys(contributionAmounts)}
+          onChange={(choice) =>
+            onChange(
+              withContribution(plan, id, (c) => withAmountForm(c, contributionAmounts[choice]!)),
+            )
+          }
+        />
+        {'percentageOfEntry' in contribution ? (
+          <NumberField
+            label="Procent"
+            unit="%"
+            value={asPercent(contribution.percentageOfEntry)}
+            onChange={(percent) =>
+              onChange(
+                withContribution(plan, id, (c) =>
+                  'percentageOfEntry' in c ? { ...c, percentageOfEntry: percent / 100 } : c,
+                ),
+              )
+            }
+          />
+        ) : (
+          <NumberField
+            label="Fast beløb (dagens kroner)"
+            unit="kr."
+            value={contribution.amountInRealKroner}
+            onChange={(amountInRealKroner) =>
+              onChange(
+                withContribution(plan, id, (c) =>
+                  'amountInRealKroner' in c ? { ...c, amountInRealKroner } : c,
+                ),
+              )
+            }
+          />
+        )}
+        {percentage && (
+          <Hint>
+            Måles af {source.name}, så bidraget følger lønnen op uden at blive rettet.
+          </Hint>
+        )}
+      </Section>
+      <section className="afsnit arvet">
+        <h3>Følger {source.name}</h3>
+        <div className="arvelinje">{inheritedLine(years, source)}</div>
+        <Hint>
+          Periode, forankring, gentagelse og forfald hører til posten. Bidraget
+          har dem ikke selv og ophører derfor af sig selv ved erhvervsophøret.
+        </Hint>
+      </section>
+    </>
+  )
+}
+
+/** Det, bidraget arver af sin post, som én linje. Årene er motorens eget svar
+    og ikke en udledning ved siden af den, jf. ADR-0012 — de er derfor også
+    klippet mod horisonten, som postens egen periode ikke er. */
+function inheritedLine(years: YearResult[], source: Entry): string {
+  return [
+    entryPeriodLabel(years, source),
+    danish(recurrences, source.recurrence.kind).toLowerCase(),
+    danishTiming(source.timing).toLowerCase(),
+  ]
+    .filter((part) => part !== undefined)
+    .join(' · ')
+}
+
+/** Skifter beløbsangivelsens form. De to former er hvert sit felt og ikke to
+    værdier i ét, så skiftet bygger et nyt bidrag frem for at sætte et felt —
+    som `withDirection` gør for posten. Det gamle tal huskes ikke: det findes
+    ikke at huske på, og en procent og et kronebeløb er alligevel ikke
+    hinandens omregning. */
+function withAmountForm(
+  contribution: Contribution,
+  field: 'percentageOfEntry' | 'amountInRealKroner',
+): Contribution {
+  const { id, kind, source, to } = contribution
+  return field === 'percentageOfEntry'
+    ? { id, kind, source, to, percentageOfEntry: 0 }
+    : { id, kind, source, to, amountInRealKroner: 0 }
 }
 
 function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {

@@ -2,7 +2,13 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Holding, Plan } from '../engine/plan'
-import { aPlan, aSalary, aTransfer, anExpense } from '../engine/testing/planFixture'
+import {
+  aContribution,
+  aPlan,
+  aSalary,
+  aTransfer,
+  anExpense,
+} from '../engine/testing/planFixture'
 import { exportPlan } from '../persistence/planFile'
 import { loadPlan } from '../persistence/planStorage'
 import { App } from './App'
@@ -77,6 +83,17 @@ function firstPeriodenFelt(container: HTMLElement): string | null | undefined {
   return felt?.textContent
 }
 
+/** Cellen under en navngiven kolonne i en årstabelrække. Kolonnen slås op på
+    sin overskrift frem for på et indekstal — tabellen får flere kolonner hen
+    ad etaperne, og et tal ville pege på noget andet, hver gang den gør. */
+function yearCell(rowIndex: number, column: string): string | null {
+  const rows = within(screen.getByRole('table')).getAllByRole('row')
+  const headers = within(rows[0]!)
+    .getAllByRole('columnheader')
+    .map((header) => header.textContent)
+  return within(rows[rowIndex]!).getAllByRole('cell')[headers.indexOf(column)]!.textContent
+}
+
 /** Årstabellen ligger bag sin egen fane, med Formuen som standardfane. */
 async function showYearTable(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
@@ -145,6 +162,7 @@ describe('fladen', () => {
       'År',
       'Jesper',
       'Indtægter',
+      'Indbetalinger',
       'Afkast',
       'Skat',
       'Udgifter',
@@ -196,8 +214,16 @@ describe('fladen', () => {
     expect(screen.getByLabelText(/Skattebehandling/)).toBeTruthy()
 
     // Bruttolønnen er ikke det tal, folk kalder deres løn — feltet må sige
-    // det selv, jf. ADR-0007.
+    // det selv, jf. ADR-0007. Ordet står på selve etiketten og ikke kun i
+    // noten: taster brugeren nettolønnen og lægger et bidrag oveni, går alle
+    // tal op og er alligevel forkerte, og ingen invariant fanger det.
     expect(screen.getByText(/brutto inklusive arbejdsgiverbidrag/i)).toBeTruthy()
+    expect(screen.getByLabelText('Beløb, brutto (dagens kroner)')).toBeTruthy()
+
+    // En skattefri indtægt har intet arbejdsgiverbidrag i sig, og etiketten
+    // lover det ikke.
+    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    expect(screen.getByLabelText('Beløb (dagens kroner)')).toBeTruthy()
   })
 
   it('gør en udgiftspost til en indtægtspost, og skattebehandlingen følger med', async () => {
@@ -228,9 +254,7 @@ describe('fladen', () => {
     )
     await showYearTable(user)
 
-    const skat = () =>
-      within(within(screen.getByRole('table')).getAllByRole('row')[1]!)
-        .getAllByRole('cell')[4]!.textContent
+    const skat = () => yearCell(1, 'Skat')
 
     // Fixturens Jesper bor i Hvidovre og er medlem af folkekirken.
     expect(skat()).toBe('-220.506')
@@ -264,8 +288,7 @@ describe('fladen', () => {
     render(<App initialPlan={defaultPlan()} />)
     await showYearTable(user)
 
-    const rows = within(screen.getByRole('table')).getAllByRole('row')
-    const skat = within(rows[1]!).getAllByRole('cell')[4]!.textContent
+    const skat = yearCell(1, 'Skat')
 
     expect(skat).not.toBe('0')
     expect(Number(skat!.replace(/\D/g, ''))).toBeGreaterThan(0)
@@ -937,6 +960,141 @@ describe('fladen', () => {
     ).toBeTruthy()
   })
 
+  it('viser indbetalinger som sin egen gruppe i navigatoren, med kilde → destination i rækken', () => {
+    const plan = aPlanWithPension()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          entries: [aSalary({ amountInRealKroner: 600_000 })],
+          contributions: [
+            aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+          ],
+        }}
+      />,
+    )
+
+    const gruppe = screen.getByRole('button', { name: /Indbetalinger/ })
+    expect(within(gruppe).getByText('1')).toBeTruthy()
+    // Ingen sum i gruppen: en procent af en lønpost har intet kronebeløb, før
+    // året er regnet, og navigatoren viser kun planen.
+    expect(navigatorButton(/Løn.*Ratepension/)).toBeTruthy()
+    expect(within(navigatorButton(/Løn.*Ratepension/)).getByText('8,00 %')).toBeTruthy()
+  })
+
+  it('viser i indbetalingens skuffe destination og beløb, og ikke de felter bidraget ikke har', async () => {
+    const user = userEvent.setup()
+    const plan = aPlanWithPension()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          entries: [aSalary({ amountInRealKroner: 600_000 })],
+          contributions: [
+            aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(navigatorButton(/Løn.*Ratepension/))
+
+    expect(sectionLabels('Indbetalingen')).toEqual(['Kilde', 'Destination'])
+    expect(sectionLabels('Beløb')).toEqual(['Angives som', 'Procent'])
+
+    // Begge former er synlige uden at åbne noget, jf. fladekortet — en vælger
+    // ville skjule den ene bag et klik.
+    expect(screen.getByRole('button', { name: 'Procent af posten', pressed: true })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Fast beløb', pressed: false })).toBeTruthy()
+
+    // Periode, forankring, gentagelse og forfald hører til lønposten. Bidraget
+    // har dem ikke — hverken som felter eller som grå felter — og ruden siger
+    // i stedet, hvorfra de arves.
+    expect(screen.queryByLabelText('Forankring')).toBeNull()
+    expect(screen.queryByLabelText('Gentagelse')).toBeNull()
+    expect(screen.queryByLabelText('Forfald')).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Følger Løn' })).toBeTruthy()
+  })
+
+  it('tilføjer en indbetaling via indbetalingsgruppen, og dens inspektør kan åbnes', async () => {
+    const user = userEvent.setup()
+    const plan = aPlanWithPension()
+    render(
+      <App
+        initialPlan={{ ...plan, entries: [aSalary({ amountInRealKroner: 600_000 })] }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: '+ Indbetaling' }))
+
+    await user.click(navigatorButton(/Løn.*Ratepension/))
+    expect(screen.getByRole('heading', { name: 'Følger Løn' })).toBeTruthy()
+  })
+
+  it('skjuler "+ Indbetaling", når husstanden ingen ordning har at betale ind i', () => {
+    // Alle beholdninger er frie midler: der er ikke noget, en indbetaling kan
+    // gå til — så ville det være en overførsel, jf. ADR-0016.
+    render(
+      <App
+        initialPlan={aPlan({ entries: [aSalary({ amountInRealKroner: 600_000 })] })}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: '+ Indbetaling' })).toBeNull()
+  })
+
+  it('viser årets indbetalinger som sin egen kolonne i årstabellen', async () => {
+    const user = userEvent.setup()
+    const plan = aPlanWithPension()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          startYear: 2026,
+          household: {
+            persons: [{ ...plan.household.persons[0]!, birthYear: 1973, horizon: 53 }],
+          },
+          entries: [aSalary({ amountInRealKroner: 600_000 })],
+          contributions: [
+            aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+          ],
+        }}
+      />,
+    )
+    await showYearTable(user)
+
+    // Kolonnen er, hvad der landede i ordningerne — det, der faktisk blev lagt
+    // til side. Bruttobeløbet og AM-delen står i forklar-året.
+    expect(screen.getByRole('columnheader', { name: 'Indbetalinger' })).toBeTruthy()
+    const rows = screen.getAllByRole('row')
+    expect(within(rows[1]!).getByText('44.160')).toBeTruthy()
+  })
+
+  it('skifter indbetalingens beløbsform mellem procent og fast beløb', async () => {
+    const user = userEvent.setup()
+    const plan = aPlanWithPension()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          entries: [aSalary({ amountInRealKroner: 600_000 })],
+          contributions: [
+            aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+          ],
+        }}
+      />,
+    )
+    await user.click(navigatorButton(/Løn.*Ratepension/))
+
+    await user.click(screen.getByRole('button', { name: 'Fast beløb' }))
+
+    // De to former er hvert sit felt, ikke to værdier i ét: procenten er væk,
+    // og der spørges nu om kroner.
+    expect(sectionLabels('Beløb')).toEqual(['Angives som', 'Fast beløb (dagens kroner)'])
+    expect(screen.getByLabelText('Fast beløb (dagens kroner)')).toBeTruthy()
+    expect(screen.queryByLabelText('Procent')).toBeNull()
+  })
+
   it('redigerer en overførsels fra-beholdning, beløb og forfald i skuffen', async () => {
     const user = userEvent.setup()
     const plan = aPlanWithSecondHolding()
@@ -1139,9 +1297,7 @@ describe('fladen', () => {
     await showYearTable(user)
 
     expect(screen.getByRole('button', { name: 'Dagens kroner', pressed: true })).toBeTruthy()
-    const udgifter2028 = () =>
-      within(within(screen.getByRole('table')).getAllByRole('row')[3]!).getAllByRole('cell')[5]!
-        .textContent
+    const udgifter2028 = () => yearCell(3, 'Udgifter')
     expect(udgifter2028()).toBe('-40.000')
 
     await user.click(screen.getByRole('button', { name: 'Løbende priser' }))
@@ -1398,6 +1554,36 @@ describe('fladen', () => {
     // Juni-forfald: (12 − 6 + 1) / 12 = 58,33 %. Udgiften vises negativ, som i
     // navigatoren og balancestriben.
     expect(cells('Faste udgifter')).toEqual(['Faste udgifter', '-40.000', 'Juni', '58,33 %'])
+  })
+
+  it('viser indbetalingens to beløb i forklar-året', async () => {
+    const user = userEvent.setup()
+    const plan = aPlanWithPension()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          startYear: 2026,
+          entries: [aSalary({ amountInRealKroner: 600_000 })],
+          contributions: [
+            aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+          ],
+        }}
+      />,
+    )
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2026
+
+    const table = document.querySelector('table.indbetalingstabel') as HTMLElement
+    const cells = within(within(table).getByText(/Løn.*Ratepension/).closest('tr') as HTMLElement)
+      .getAllByRole('cell')
+      .map((cell) => cell.textContent)
+
+    // Begge beløb, så det kan ses, hvor AM-bidraget blev af. Differencen står
+    // ikke i sin egen kolonne — den er allerede personens AM-lag ovenfor.
+    expect(cells).toEqual(['Løn → Ratepension', '48.000', '44.160'])
   })
 
   it('opdaterer forklar-året med det samme, når noget rettes i skuffen, mens forklaringen er åben', async () => {

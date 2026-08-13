@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { aPlan, aTransfer } from '../engine/testing/planFixture'
+import { aContribution, aPlan, aSalary, aTransfer } from '../engine/testing/planFixture'
 import type { Plan } from '../engine/plan'
 import { validatePlan } from '../engine/validatePlan'
-import { addEntry, removeHolding, removePerson } from './planEdits'
+import { addEntry, removeEntry, removeHolding, removePerson } from './planEdits'
 
 /** Et to-personers udgangspunkt: fixturens Jesper har bufferen
     ("free-assets"), Maria har en anden beholdning ved siden af. */
@@ -203,3 +203,80 @@ describe('removeHolding', () => {
   })
 })
 
+
+describe('indbetalingens pegere overlever ikke det, de peger på', () => {
+  /** Fixturens Jesper med en lønpost og en ratepension, og et bidrag imellem
+      dem. Bufferen er stadig "free-assets". */
+  function aPlanWithContribution(): Plan {
+    return aPlan({
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+      contributions: [
+        aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+      ],
+    })
+  }
+
+  it('fjerner indbetalingen, når dens lønpost fjernes', () => {
+    // Et bidrag uden sin post ville ikke bare udeblive: planen kan slet ikke
+    // regnes, og hele resultatspalten går i stå, jf. ADR-0013.
+    const result = removeEntry(aPlanWithContribution(), 'salary')
+
+    expect(result.contributions).toEqual([])
+    expect(validatePlan(result)).toBeUndefined()
+  })
+
+  it('fjerner indbetalingen, når dens destination fjernes', () => {
+    const result = removeHolding(aPlanWithContribution(), 'ratepension')
+
+    expect(result.contributions).toEqual([])
+    expect(validatePlan(result)).toBeUndefined()
+  })
+
+  it('fjerner indbetalingen, når personen bag begge ender fjernes', () => {
+    const base = aPlanWithContribution()
+    const plan: Plan = {
+      ...base,
+      buffer: 'marias-konto',
+      household: {
+        persons: [
+          ...base.household.persons,
+          {
+            id: 'maria',
+            name: 'Maria',
+            birthYear: 1975,
+            birthMonth: 1,
+            workEndAge: 65,
+            horizon: 90,
+            municipality: 'Hvidovre',
+            churchMember: true,
+            holdings: [
+              {
+                id: 'marias-konto',
+                name: 'Marias frie midler',
+                variant: 'SavingsAccount',
+                balance: 500_000,
+                grossReturn: 0,
+                annualCostRate: 0,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const result = removePerson(plan, 'jesper')
+
+    expect(result.contributions).toEqual([])
+    expect(validatePlan(result)).toBeUndefined()
+  })
+})
