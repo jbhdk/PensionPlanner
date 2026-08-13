@@ -260,12 +260,15 @@ export const workedExamples: readonly WorkedExample[] = [
     source:
       'docs/satser/2026.md — beløbsgrænser efter PSL § 20 (skm.dk), de fire ' +
       'lag på personlig indkomst (skat.dk), fradragsprocenterne (skat.dk) og ' +
-      'det ekstra pensionsfradrags satser og 15-årsgrænse (LL § 9 L, stk. 3)',
-    verifiedOn: '2026-08-10',
+      'det ekstra pensionsfradrags satser og 15-årsgrænse (LL § 9 L, stk. 3) ' +
+      'samt fradragsgrundlagets måleform efter AM-bidrag (LL § 9 L, stk. 1)',
+    verifiedOn: '2026-08-13',
     dependsOnUnconfirmed: [],
 
-    // Lønmodtageren fra ADR-0007: 700.000 kr. brutto, hvoraf 105.000 kr. er
-    // arbejdsgiverbidrag, der flyttes ind på ordningen. Tolv år til
+    // Lønmodtageren fra ADR-0007: 700.000 kr. brutto, hvoraf 105.000 kr.
+    // forlader lønnen som arbejdsgiverbidrag. Der lander 105.000 × 0,92 =
+    // 96.600 kr. på ordningen, og det er dét beløb, fradragsgrundlaget måler
+    // på — se docs/satser/2026.md. Tolv indkomstår til det år, personen når
     // folkepensionsalderen, altså den høje sats.
     //
     // Casen dækker fradragene alene. Indbetalingens bortseelsesret er ikke
@@ -289,7 +292,7 @@ export const workedExamples: readonly WorkedExample[] = [
       earnedIncome: 700_000,
       municipalTaxRate: 0.254,
       churchTaxRate: 0.0074,
-      contribution: { amount: 105_000, yearsToStatePensionAge: 12 },
+      contribution: { amount: 96_600, yearsToStatePensionAge: 12 },
     },
     expected: {
       personalIncome: 644_000,

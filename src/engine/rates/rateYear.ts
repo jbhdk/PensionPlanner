@@ -55,10 +55,20 @@ export type Thresholds = {
   jobAllowanceFloor: Nominal
   /** Loftet over den indbetaling, procenten regnes af — ikke over fradraget.
       § 20-tabellen kalder linjen "Maksimalt grundlag for ekstra
-      pensionsfradrag (§ 9 L, stk. 1)". */
+      pensionsfradrag (§ 9 L, stk. 1)". Måler på indbetalingen **efter**
+      AM-bidrag, jf. LL § 9 L, stk. 1, 3. og 4. pkt. */
   extraPensionAllowanceBaseMax: Nominal
+  /** PBL § 16, stk. 1, 1. pkt. Måler på indbetalingen **efter** AM-bidrag,
+      jf. stk. 3. */
   oldAgeSavingsCap: Nominal
+  /** PBL § 16, stk. 1, 2. pkt.: gælder fra og med det syvende indkomstår før
+      det indkomstår, hvor personen når folkepensionsalderen, og alle år
+      derefter. Måler på indbetalingen **efter** AM-bidrag, jf. stk. 3. */
   oldAgeSavingsCapNearStatePensionAge: Nominal
+  /** PBL § 16, stk. 2. Bæres af `InstalmentPension`, ikke af `LifeAnnuity`:
+      opremsningen dækker ratepension og *ophørende* livrenter, og den
+      livsvarige ordning er uden årligt loft. Måler på indbetalingen **efter**
+      AM-bidrag, jf. stk. 3. */
   instalmentPensionCap: Nominal
   shareSavingsAccountCap: Nominal
 }

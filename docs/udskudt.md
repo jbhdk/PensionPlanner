@@ -10,6 +10,16 @@ Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog 
 
 **Hvad der skal bygges, når det tages op:** `Contribution` som figur på planen, jf. [ADR-0007](./adr/0007-indbetalinger-er-bevaegelser-og-loennen-er-brutto.md), bortseelsesretten i skatteopgørelsen, og ratepensionens fradragsloft på 68.700 kr. med behandling af det overskydende. Facitcasen *pensionsindbetalende arbejdsår* i `src/engine/tax/testing/workedExamples.ts` siger selv, at den kun dækker fradragene, og skal regnes om samtidig.
 
+## Den privattegnede livrentes tiårsfordeling
+
+**Status:** Fravalgt til v1, undersøgt og belagt i [satsår 2026](./satser/2026.md). Den arbejdsgiveradministrerede livrente er uden årligt loft, og det er den form, husstandens livrenter har.
+
+**Hvorfor det betyder noget:** Hvor ratepensionen har et loft, har den privattegnede livrente en fordelingsregel. Fradraget for et engangsindskud, og for en indbetalingsperiode kortere end 10 år, skal fordeles med 1/10 om året over ti år ([PBL § 18, stk. 3 og 4](https://danskelove.dk/pensionsbeskatningsloven/18)). Alternativet er opfyldningsfradraget i stk. 5 — 63.200 kr. i 2026 — som lader hele indskuddet komme til fradrag hurtigere, når 1/10 er mindre end det beløb. Reglen bider kun to steder: ved et engangsindskud, og ved en aftalt indbetalingsperiode under ti år. Løbende indbetaling over mindst ti år efter bindende aftale giver fuldt fradrag i indbetalingsåret.
+
+**Prisen ved at lade den ligge:** Motoren regner et år ad gangen ud fra planen. En fordelingsregel bryder med det: fradraget for årets indbetaling ville skulle huskes ni år frem, og valget mellem de to fordelinger er brugerens og ikke en konsekvens af planen. Det er et flerårigt fradragsregnskab i skatteopgørelsen, ikke en parameter — og det er hele prisen ved at bygge det.
+
+**Hvad der skal bygges, når det tages op:** Et fradragsregnskab pr. indbetaling med restsaldo og valgt fordeling, opfyldningsfradraget som satstal i `RateYear`, og et felt på livrenten der skiller den privattegnede fra den arbejdsgiveradministrerede. Så længe kun den arbejdsgiveradministrerede findes, findes den skelnen ikke, og det er den billige del af fravalget.
+
 ## Efterladtescenarie (dødsfald)
 
 **Status:** Udskudt til efter v1. `Person` har et slutår fra dag ét, så mekanikken kan slås til uden at rive domænemodellen op.

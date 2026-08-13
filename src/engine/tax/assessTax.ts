@@ -13,7 +13,13 @@ export type TaxAssessmentInput = {
       pensionsfradrag kræver. Uden en indbetaling er der intet fradrag, og
       feltet udelades. */
   contribution?: {
+    /** Det beløb, der landede i beholdningen — altså **efter** AM-bidrag, og
+        ikke det, der forlod kilden. LL § 9 L, stk. 1, måler på det, og
+        `Contribution.amount` er brutto; de to er ikke samme tal. */
     amount: Nominal
+    /** Antal indkomstår frem til det indkomstår, hvor personen når
+        folkepensionsalderen — nul i selve det år, negativt bagefter. Det er
+        den differens, LL § 9 L, stk. 3, tæller på. */
     yearsToStatePensionAge: number
   }
   /** Nettokapitalindkomst, positiv eller negativ. Lægges til skattepligtig
@@ -169,7 +175,10 @@ function jobAllowance(input: TaxAssessmentInput, rates: RateYear): Nominal {
 
 /** Det år, hvor den høje sats begynder: fra og med det 15. indkomstår før
     det år, personen når folkepensionsalderen, jf. LL § 9 L, stk. 3. Grænsen
-    står i loven og ikke i § 20-tabellen, og den hører derfor ikke i satsåret. */
+    står i loven og ikke i § 20-tabellen, og den hører derfor ikke i satsåret.
+    Den har ingen øvre ende — satsen bliver ved med at være den høje efter
+    folkepensionsalderen, og sammenligningen er derfor `<=` og ikke et
+    interval. */
 const extraPensionAllowanceLateFrom = 15
 
 /** Det ekstra pensionsfradrag, LL § 9 L: en procent af årets indbetaling. */
