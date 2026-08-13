@@ -47,14 +47,13 @@ export function deriveStatePensionAge(
   return { age: step.age, enacted: step.enacted }
 }
 
-/** Personens folkepensionsalder: overstyringen, hvis sat, ellers den
-    udledte. En overstyring kender ikke til `enacted` — den er brugerens
-    eget ansvar, jf. CONTEXT.md. */
+/** Personens folkepensionsalder. Tabellen er eneste kilde, også for de
+    årgange hvor trinnet kun er fremskrevet: det tal er det bedste, der
+    findes, og bruges som det er. Vedtager Folketinget noget andet, rettes
+    docs/satser/folkepensionsalder.md, og enhver plan følger med — `enacted`
+    siger imens på skærmen, at tallet er et skøn. */
 export function statePensionAge(person: Person): number {
-  return (
-    person.statePensionAgeOverride ??
-    deriveStatePensionAge(person.birthYear, person.birthMonth).age
-  )
+  return deriveStatePensionAge(person.birthYear, person.birthMonth).age
 }
 
 /** Det kalenderår personen når folkepensionsalderen. Motorens eneste vej til

@@ -247,30 +247,21 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
         </Hint>
       </Section>
       <Section title="Folkepension">
-        <StatePensionAgeFields plan={plan} id={id} onChange={onChange} />
+        <StatePensionAgeFields plan={plan} id={id} />
       </Section>
     </>
   )
 }
 
-/** Folkepensionsalderen udledt af fødselsdato, med mulighed for at
-    overstyre — se `deriveStatePensionAge` og
-    docs/satser/folkepensionsalder.md. Den udledte værdi står altid, også når
-    overstyret, så overstyringen er synlig som netop en overstyring. */
-function StatePensionAgeFields({
-  plan,
-  id,
-  onChange,
-}: {
-  plan: Plan
-  id: string
-  onChange: (plan: Plan) => void
-}) {
+/** Folkepensionsalderen udledt af fødselsdato — se `deriveStatePensionAge`
+    og docs/satser/folkepensionsalder.md. Tabellen er eneste kilde: et trin,
+    Folketinget endnu ikke har vedtaget, står som det fremskrevne skøn det
+    er, og rettes i datagrundlaget frem for på den enkelte person. */
+function StatePensionAgeFields({ plan, id }: { plan: Plan; id: string }) {
   const person = findPerson(plan, id)
   if (!person) return null
 
   const derived = deriveStatePensionAge(person.birthYear, person.birthMonth)
-  const overridden = person.statePensionAgeOverride !== undefined
 
   return (
     <>
@@ -284,30 +275,6 @@ function StatePensionAgeFields({
           Endnu ikke vedtaget af Folketinget for dette fødselsår — et
           fremskrevet skøn.
         </Hint>
-      )}
-      <CheckboxField
-        label="Overstyr folkepensionsalderen"
-        checked={overridden}
-        onChange={(checked) =>
-          onChange(
-            withPerson(plan, id, (p) => ({
-              ...p,
-              statePensionAgeOverride: checked ? derived.age : undefined,
-            })),
-          )
-        }
-      />
-      {overridden && (
-        <NumberField
-          label="Overstyret folkepensionsalder"
-          unit="år"
-          value={person.statePensionAgeOverride!}
-          onChange={(value) =>
-            onChange(
-              withPerson(plan, id, (p) => ({ ...p, statePensionAgeOverride: value })),
-            )
-          }
-        />
       )}
     </>
   )

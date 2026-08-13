@@ -224,3 +224,48 @@ describe('v4 → v5: de frie varianter hedder ikke længere en indkomst', () => 
   })
 })
 
+
+describe('v5 → v6: folkepensionsalderen kan ikke længere overstyres', () => {
+  it('fjerner statePensionAgeOverride fra hver person og lader resten stå', () => {
+    // Tabellen er eneste kilde til alderen. Et fremskrevet trin bruges, som
+    // det står — ændrer Folketinget det, rettes datagrundlaget, og planen
+    // følger med af sig selv.
+    const v5: unknown = {
+      name: 'Gammel plan',
+      startYear: 2026,
+      buffer: 'free-assets',
+      transfers: [],
+      entries: [],
+      household: {
+        persons: [
+          {
+            id: 'jesper',
+            name: 'Jesper',
+            birthYear: 1973,
+            birthMonth: 6,
+            workEndAge: 58,
+            statePensionAgeOverride: 68,
+            holdings: [],
+          },
+          {
+            id: 'maria',
+            name: 'Maria',
+            birthYear: 1975,
+            birthMonth: 1,
+            workEndAge: 62,
+            holdings: [],
+          },
+        ],
+      },
+    }
+
+    const migrated = runMigrations(v5, 5, 6, migrations) as {
+      household: { persons: Array<Record<string, unknown>> }
+    }
+
+    const [jesper, maria] = migrated.household.persons
+    expect(jesper).not.toHaveProperty('statePensionAgeOverride')
+    expect(jesper!.workEndAge).toBe(58)
+    expect(maria!.workEndAge).toBe(62)
+  })
+})

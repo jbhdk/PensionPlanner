@@ -62,7 +62,11 @@ describe('planFile', () => {
     const result = importPlan(exportPlan(plan))
 
     expect(result).toEqual({ kind: 'Loaded', plan })
-    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(5)
+    // Tallet er hårdkodet med vilje: flytter det sig, skal det være, fordi
+    // noget faktisk krævede et led i kæden. De tre varianter gjorde det ikke
+    // — det gjorde derimod v5 → v6, hvor overstyringen af
+    // folkepensionsalderen forsvandt.
+    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(6)
   })
 })
 

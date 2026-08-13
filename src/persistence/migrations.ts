@@ -123,6 +123,31 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    // v5 → v6: folkepensionsalderen kan ikke længere overstyres. Tabellen i
+    // docs/satser/folkepensionsalder.md er eneste kilde, også for de årgange
+    // hvor trinnet kun er fremskrevet og ikke vedtaget — det tal er det
+    // bedste, der findes, og et håndtag ved siden af det var et greb, ingen
+    // ville bruge. Vedtager Folketinget noget andet, rettes datagrundlaget,
+    // og enhver plan følger med af sig selv.
+    from: 5,
+    migrate: (data) => {
+      const plan = data as {
+        household?: { persons?: Array<Record<string, unknown>> }
+        [key: string]: unknown
+      }
+
+      return {
+        ...plan,
+        household: {
+          persons: (plan.household?.persons ?? []).map((person) => {
+            const { statePensionAgeOverride: _statePensionAgeOverride, ...rest } = person
+            return rest
+          }),
+        },
+      }
+    },
+  },
 ]
 
 /** Kører kæden fra `fromVersion` til `toVersion`, ét led ad gangen. Rent og

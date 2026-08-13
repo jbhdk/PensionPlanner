@@ -267,7 +267,7 @@ Det regelsæt der fastlægger en ordnings pensionsudbetalingsalder, afgjort af o
 _Avoid_: Overgangsregel, aldersgrænse, grandfathering
 
 **Folkepensionsalder** · `StatePensionAge`:
-Den lovbestemte alder hvor folkepensionen begynder, fastsat efter fødselsår. For fødselsår hvor den endnu ikke er vedtaget, er den et fremskrevet skøn der kan overstyres.
+Den lovbestemte alder hvor folkepensionen begynder, fastsat efter fødselsår. For fødselsår hvor den endnu ikke er vedtaget, er den et fremskrevet skøn, som bruges som det står — ændres skønnet, er det tabellen der rettes, ikke den enkelte person.
 _Avoid_: Pensionsalder, officiel pensionsalder
 
 **Broperiode** · `BridgePeriod`:

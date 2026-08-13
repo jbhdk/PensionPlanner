@@ -22,14 +22,16 @@ describe('deriveStatePensionAge', () => {
 })
 
 describe('statePensionAge', () => {
-  it('bruger den udledte alder, når personen ikke har en overstyring', () => {
+  it('bruger tabellens alder for personens fødselsdato', () => {
     const [person] = aPlan({ birthYear: 1973 }).household.persons
     expect(statePensionAge(person!)).toBe(70)
   })
 
-  it('lader en overstyring vinde over den udledte alder', () => {
+  it('bruger også tabellen, når trinnet kun er fremskrevet og ikke vedtaget', () => {
+    // Skønnet er det bedste tal, der findes, og personen har intet håndtag
+    // at sætte ved siden af det.
     const [person] = aPlan({ birthYear: 1985 }).household.persons
-    expect(statePensionAge({ ...person!, statePensionAgeOverride: 72 })).toBe(72)
+    expect(statePensionAge(person!)).toBe(72.5)
   })
 })
 

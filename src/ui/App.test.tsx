@@ -845,24 +845,19 @@ describe('fladen', () => {
 
     expect(screen.getByText('72,5 år')).toBeTruthy()
     expect(screen.getByText(/skøn/i)).toBeTruthy()
-    expect(screen.queryByLabelText(/Overstyret folkepensionsalder/)).toBeNull()
   })
 
-  it('lader folkepensionsalderen overstyres, synligt adskilt fra den udledte', async () => {
+  it('tilbyder ingen overstyring af folkepensionsalderen — tabellen er eneste kilde', async () => {
+    // Skønnet for et ikke-vedtaget trin er det bedste tal, der findes, og
+    // det bruges som det er. Vedtager Folketinget noget andet, rettes
+    // datagrundlaget, og alderen flytter sig i enhver plan af sig selv.
     const user = userEvent.setup()
-    render(<App initialPlan={aPlan({ birthYear: 1973, birthMonth: 6 })} />)
+    render(<App initialPlan={aPlan({ birthYear: 1985, birthMonth: 6 })} />)
 
     await user.click(screen.getByRole('button', { name: /^Jesper/ }))
-    expect(screen.getByText('70 år')).toBeTruthy()
 
-    await user.click(screen.getByLabelText(/Overstyr folkepensionsalderen/))
-    const override = screen.getByLabelText(/Overstyret folkepensionsalder/) as HTMLInputElement
-    await user.clear(override)
-    await user.type(override, '72')
-
-    expect(override.value).toBe('72')
-    // Den udledte værdi står stadig, adskilt fra overstyringen.
-    expect(screen.getByText('70 år')).toBeTruthy()
+    expect(screen.queryByLabelText(/Overstyr/i)).toBeNull()
+    expect(screen.getByText('72,5 år')).toBeTruthy()
   })
 
   it('viser hver persons alder i årstabellen, én kolonne pr. person', async () => {

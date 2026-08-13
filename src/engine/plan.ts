@@ -58,10 +58,6 @@ export type Person = {
       lovbestemt alder — se `AgeBound`, som aldersforankrede perioder kan
       binde sig til. */
   workEndAge: number
-  /** Overstyrer den udledte folkepensionsalder, når sat. Udeladt betyder
-      "brug tabellen" — se `deriveStatePensionAge` og
-      docs/satser/folkepensionsalder.md. */
-  statePensionAgeOverride?: number
   /** Alderen simuleringen løber til og med. */
   horizon: number
   /** Bopælskommunen. Kommune- og kirkeskatteprocenten hører til satsåret og

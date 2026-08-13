@@ -24,7 +24,6 @@ classDiagram
         +birthYear
         +birthMonth
         +workEndAge
-        +statePensionAgeOverride
         +statePensionAge()
         +horizon
         +municipality
@@ -151,7 +150,7 @@ classDiagram
 - **`FreeAssets` er en kategori, ikke en variant.** Den dækker `ShareDepot` og `SavingsAccount` under ét, og det er den, buffer- og overførselsreglerne taler om. Aktiesparekontoen hører ikke med — den har et indskudsloft.
 - **`PayoutSchedule` hænger på beholdningen, ikke på personen.** Det er dét, der gør motoren plan-drevet — se [ADR-0002](../adr/0002-plan-drevet-motor-med-frie-midler-som-buffer.md).
 - **`payoutAge()` er afledt, ikke indtastet.** Den udledes af `openedOn` via udbetalingsregimet, med `payoutAgeOverride` til overførselstilfælde. Fordi to af de tre regimer er relative til folkepensionsalderen, ændrer den sig, når `Person.statePensionAge()` justeres.
-- **`Person.statePensionAge()` er afledt efter samme mønster.** Den udledes af `birthYear` og `birthMonth` efter den lovfastsatte fødselsdatotabel i docs/satser/folkepensionsalder.md, med `statePensionAgeOverride` til de fødselsår, hvor tabellen kun har et fremskrevet skøn. Tabellen er ikke et `RateYear` — den ændrer sig ikke fra satsår til satsår, kun når Folketinget vedtager et nyt trin. Fordi alderen er en brøk for de fleste årgange, er året, den nås, `birthYear + floor(alder + (birthMonth − 1) / 12)` og ikke `birthYear + alder`.
+- **`Person.statePensionAge()` er afledt, og tabellen er eneste kilde.** Den udledes af `birthYear` og `birthMonth` efter den lovfastsatte fødselsdatotabel i docs/satser/folkepensionsalder.md, også for de fødselsår hvor trinnet kun er fremskrevet — det tal er det bedste, der findes, og der er intet håndtag ved siden af det. Tabellen er ikke et `RateYear` — den ændrer sig ikke fra satsår til satsår, kun når Folketinget vedtager et nyt trin, og så rettes datagrundlaget. Fordi alderen er en brøk for de fleste årgange, er året, den nås, `birthYear + floor(alder + (birthMonth − 1) / 12)` og ikke `birthYear + alder`.
 - **`Entry` er én figur for både indtægt og udgift.** Kun indtægtsposter bærer en `taxTreatment` og en `regulationRate`. En udgift har intet eget tempo og følger planens `inflationAssumption`, som en `Transfer` gør.
 - **`LifeAnnuity` er en `Holding`, indtil den omsættes.** Den modtager indbetalinger og forrentes som alle andre beholdninger; ved udbetalingsstart ganges det fremskrevne depot med `conversionFactor()` og bliver til en fast livsvarig ydelse. Se [ADR-0009](../adr/0009-livrenten-omsaettes-en-gang-ved-udbetalingsstart.md).
 - **`Contribution` er en bevægelse, ikke en udgift, og lønnen er brutto.** Alt andet knækker balanceinvarianten. Lofterne hænger på bidraget, ikke på lønnen, og derfor er det en selvstændig figur. Se [ADR-0007](../adr/0007-indbetalinger-er-bevaegelser-og-loennen-er-brutto.md).
