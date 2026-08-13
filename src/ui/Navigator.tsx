@@ -186,7 +186,14 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
       count: String(plan.contributions.length),
       summary: '',
       rows: plan.contributions.map((contribution) => ({
-        name: `${entryName(contribution.source)} → ${holdingName(contribution.to)}`,
+        // Kilde → destination i begge udgaver, så de læses som ét slags
+        // objekt i listen — og kilden siger selv, hvilken udgave rækken er:
+        // et postnavn i den ene, et beholdningsnavn i den anden.
+        name: `${
+          contribution.kind === 'EntrySourced'
+            ? entryName(contribution.source)
+            : holdingName(contribution.source)
+        } → ${holdingName(contribution.to)}`,
         value:
           'percentageOfEntry' in contribution
             ? procent(contribution.percentageOfEntry)

@@ -1,5 +1,17 @@
+import type { ReactNode } from 'react'
 import { isFreeAssets } from '../engine/holdingVariant'
-import type { Anchor, Contribution, Entry, Period, Plan, Recurrence } from '../engine/plan'
+import type {
+  Anchor,
+  Contribution,
+  Entry,
+  EntryId,
+  HoldingId,
+  Period,
+  Person,
+  Plan,
+  Recurrence,
+  Timing,
+} from '../engine/plan'
 import { latestRateYear } from '../engine/rates/rates'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
 import type { YearResult } from '../engine/yearResult'
@@ -488,149 +500,12 @@ function EntryFields({
           </Hint>
         )}
       </Section>
-      <Section title="Perioden">
-        <SelectField
-          label="Gentagelse"
-          value={danish(recurrences, entry.recurrence.kind)}
-          options={Object.keys(recurrences)}
-          onChange={(choice) => {
-            const kind = recurrences[choice]!
-            onChange(
-              withEntry(plan, id, (e) =>
-                kind === 'Once'
-                  ? {
-                      ...e,
-                      recurrence: defaultRecurrence(kind),
-                      timing: timingForOnce(e.timing),
-                    }
-                  : { ...e, recurrence: defaultRecurrence(kind) },
-              ),
-            )
-          }}
-        />
-        {entry.recurrence.kind === 'EveryNYears' && (
-          <NumberField
-            label="Hvert"
-            unit="år"
-            value={entry.recurrence.n}
-            onChange={(n) =>
-              onChange(
-                withEntry(plan, id, (e) =>
-                  e.recurrence.kind === 'EveryNYears'
-                    ? { ...e, recurrence: { kind: 'EveryNYears', n } }
-                    : e,
-                ),
-              )
-            }
-          />
-        )}
-        <SelectField
-          label="Forankring"
-          value={danish(anchors, entry.period.anchor)}
-          options={Object.keys(anchors)}
-          onChange={(choice) =>
-            onChange(
-              withEntry(plan, id, (e) => ({ ...e, period: defaultPeriod(anchors[choice]!) })),
-            )
-          }
-        />
-        {entry.recurrence.kind === 'Once' ? (
-          entry.period.anchor === 'CalendarYear' ? (
-            <NumberField
-              label="År"
-              unit="år"
-              value={entry.period.from ?? entry.period.to ?? plan.startYear}
-              onChange={(from) =>
-                onChange(
-                  withEntry(plan, id, (e) =>
-                    e.period.anchor === 'CalendarYear'
-                      ? { ...e, period: { anchor: 'CalendarYear', from } }
-                      : e,
-                  ),
-                )
-              }
-            />
-          ) : (
-            <>
-              <AgeBoundField
-                label="Alder"
-                workEndAge={owner.workEndAge}
-                value={entry.period.from ?? entry.period.to}
-                onChange={(from) =>
-                  onChange(
-                    withEntry(plan, id, (e) =>
-                      e.period.anchor === 'PersonAge'
-                        ? { ...e, period: { anchor: 'PersonAge', from } }
-                        : e,
-                    ),
-                  )
-                }
-              />
-            </>
-          )
-        ) : entry.period.anchor === 'CalendarYear' ? (
-          <>
-            <OptionalNumberField
-              label="Fra (år)"
-              unit="år"
-              value={entry.period.from}
-              onChange={(from) =>
-                onChange(
-                  withEntry(plan, id, (e) =>
-                    e.period.anchor === 'CalendarYear' ? { ...e, period: { ...e.period, from } } : e,
-                  ),
-                )
-              }
-            />
-            <OptionalNumberField
-              label="Til (år)"
-              unit="år"
-              value={entry.period.to}
-              onChange={(to) =>
-                onChange(
-                  withEntry(plan, id, (e) =>
-                    e.period.anchor === 'CalendarYear' ? { ...e, period: { ...e.period, to } } : e,
-                  ),
-                )
-              }
-            />
-          </>
-        ) : (
-          <>
-            <AgeBoundField
-              label="Fra (alder)"
-              workEndAge={owner.workEndAge}
-              value={entry.period.from}
-              onChange={(from) =>
-                onChange(
-                  withEntry(plan, id, (e) =>
-                    e.period.anchor === 'PersonAge' ? { ...e, period: { ...e.period, from } } : e,
-                  ),
-                )
-              }
-            />
-            <AgeBoundField
-              label="Til (alder)"
-              workEndAge={owner.workEndAge}
-              value={entry.period.to}
-              onChange={(to) =>
-                onChange(
-                  withEntry(plan, id, (e) =>
-                    e.period.anchor === 'PersonAge' ? { ...e, period: { ...e.period, to } } : e,
-                  ),
-                )
-              }
-            />
-          </>
-        )}
-        <SelectField
-          label="Forfald"
-          value={danishTiming(entry.timing)}
-          options={timingOptions(entry.recurrence)}
-          onChange={(choice) =>
-            onChange(withEntry(plan, id, (e) => ({ ...e, timing: timings[choice]! })))
-          }
-        />
+      <PeriodSection
+        value={entry}
+        owner={owner}
+        startYear={plan.startYear}
+        onChange={(next) => onChange(withEntry(plan, id, (e) => ({ ...e, ...next })))}
+      >
         {entry.direction === 'Income' && (
           <NumberField
             label="Reguleringssats"
@@ -646,8 +521,130 @@ function EntryFields({
           />
         )}
         <Hint>{entryNote(years, entry)}</Hint>
-      </Section>
+      </PeriodSection>
     </>
+  )
+}
+
+/** Trioen enhver periodisk pengestrøm bærer: periode, gentagelse og forfald.
+    Posten og det beholdningskildede bidrag har den med den samme betydning,
+    og reglerne imellem dem er små nok til at drive fra hinanden, hvis de
+    skrives to gange — `Én gang` bytter både endepunktsfeltet og forfaldets
+    muligheder ud, og et aldersendepunkt har sit eget felt med sin egen
+    henvisning til erhvervsophøret.
+
+    Overførslen står udenfor. Dens periode er kalenderår alene og bærer ingen
+    `anchor` at skifte på — den har ingen ejer at binde en alder til, jf.
+    `Transfer` — og den kunne kun komme med her ved at ændre det gemte skema.
+
+    `children` er de felter, der hører til netop denne figurs periode og
+    ingen andens: postens reguleringssats og dens note. */
+type Periodic = { period: Period; recurrence: Recurrence; timing: Timing }
+
+function PeriodSection({
+  value,
+  owner,
+  startYear,
+  onChange,
+  children,
+}: {
+  value: Periodic
+  /** Personen, et aldersendepunkt måles fra. */
+  owner: Person
+  /** Året et `Én gang`-felt falder tilbage på, når intet endepunkt er sat. */
+  startYear: number
+  onChange: (next: Periodic) => void
+  children?: ReactNode
+}) {
+  // Hentet ud som konstanter, så narrowingen på `anchor` og `kind` holder
+  // hele vejen ind i felternes onChange.
+  const { period, recurrence, timing } = value
+  const change = (part: Partial<Periodic>) => onChange({ ...value, ...part })
+
+  return (
+    <Section title="Perioden">
+      <SelectField
+        label="Gentagelse"
+        value={danish(recurrences, recurrence.kind)}
+        options={Object.keys(recurrences)}
+        onChange={(choice) => {
+          const kind = recurrences[choice]!
+          change(
+            kind === 'Once'
+              ? { recurrence: defaultRecurrence(kind), timing: timingForOnce(timing) }
+              : { recurrence: defaultRecurrence(kind) },
+          )
+        }}
+      />
+      {recurrence.kind === 'EveryNYears' && (
+        <NumberField
+          label="Hvert"
+          unit="år"
+          value={recurrence.n}
+          onChange={(n) => change({ recurrence: { kind: 'EveryNYears', n } })}
+        />
+      )}
+      <SelectField
+        label="Forankring"
+        value={danish(anchors, period.anchor)}
+        options={Object.keys(anchors)}
+        onChange={(choice) => change({ period: defaultPeriod(anchors[choice]!) })}
+      />
+      {recurrence.kind === 'Once' ? (
+        period.anchor === 'CalendarYear' ? (
+          <NumberField
+            label="År"
+            unit="år"
+            value={period.from ?? period.to ?? startYear}
+            onChange={(from) => change({ period: { anchor: 'CalendarYear', from } })}
+          />
+        ) : (
+          <AgeBoundField
+            label="Alder"
+            workEndAge={owner.workEndAge}
+            value={period.from ?? period.to}
+            onChange={(from) => change({ period: { anchor: 'PersonAge', from } })}
+          />
+        )
+      ) : period.anchor === 'CalendarYear' ? (
+        <>
+          <OptionalNumberField
+            label="Fra (år)"
+            unit="år"
+            value={period.from}
+            onChange={(from) => change({ period: { ...period, from } })}
+          />
+          <OptionalNumberField
+            label="Til (år)"
+            unit="år"
+            value={period.to}
+            onChange={(to) => change({ period: { ...period, to } })}
+          />
+        </>
+      ) : (
+        <>
+          <AgeBoundField
+            label="Fra (alder)"
+            workEndAge={owner.workEndAge}
+            value={period.from}
+            onChange={(from) => change({ period: { ...period, from } })}
+          />
+          <AgeBoundField
+            label="Til (alder)"
+            workEndAge={owner.workEndAge}
+            value={period.to}
+            onChange={(to) => change({ period: { ...period, to } })}
+          />
+        </>
+      )}
+      <SelectField
+        label="Forfald"
+        value={danishTiming(timing)}
+        options={timingOptions(recurrence)}
+        onChange={(choice) => change({ timing: timings[choice]! })}
+      />
+      {children}
+    </Section>
   )
 }
 
@@ -661,14 +658,16 @@ function defaultRecurrence(kind: Recurrence['kind']): Recurrence {
   return kind === 'EveryNYears' ? { kind, n: 2 } : { kind }
 }
 
-/** Indbetalingens rude. Kilden er ét spørgsmål og ikke to, og ruden skifter
-    form efter svaret: er kilden en lønpost, står periode, forankring,
-    gentagelse og forfald slet ikke her — hverken som felter eller som grå
-    felter — men som én linje, der siger, hvad bidraget følger.
+/** Indbetalingens rude — ét objekt i to udgaver, ikke to slags. Kilden er ét
+    spørgsmål og ikke to, og ruden skifter form efter svaret: er kilden en
+    lønpost, står periode, forankring, gentagelse og forfald slet ikke her —
+    hverken som felter eller som grå felter — men som én linje, der siger,
+    hvad bidraget følger. Er kilden en beholdning, er der ingen post at arve
+    fra, og bidraget bærer dem selv.
 
-    Fradragsretten og loftet står heller ikke her, men af en anden grund: de
-    følger destinationens variant og er ikke noget, brugeren svarer på, jf.
-    ADR-0016. */
+    Fradragsretten og loftet står ikke her i nogen af udgaverne, men af en
+    anden grund: de følger destinationens variant og er ikke noget, brugeren
+    svarer på, jf. ADR-0016. */
 function ContributionFields({
   plan,
   years,
@@ -677,26 +676,54 @@ function ContributionFields({
   onClose,
 }: FieldsProps & { id: string; years: YearResult[] }) {
   const contribution = findContribution(plan, id)
-  const source = findEntry(plan, contribution?.source ?? '')
-  if (!contribution || !source) return null
+  if (!contribution) return null
 
   const holdings = plan.household.persons.flatMap((person) => person.holdings)
   const holdingName = (holdingId: string) =>
     holdings.find((holding) => holding.id === holdingId)?.name ?? holdingId
+  const ownerOfHolding = new Map(
+    plan.household.persons.flatMap((person) =>
+      person.holdings.map((holding) => [holding.id, person] as const),
+    ),
+  )
+
+  const sourceEntry =
+    contribution.kind === 'EntrySourced' ? findEntry(plan, contribution.source) : undefined
+  // Kilde og destination tilhører samme person, jf. ADR-0016, så der er kun
+  // én ejer at måle et aldersendepunkt fra — og den findes i begge udgaver.
+  const owner =
+    contribution.kind === 'EntrySourced'
+      ? plan.household.persons.find((person) => person.id === sourceEntry?.owner)
+      : ownerOfHolding.get(contribution.source)
+  if (!owner) return null
+
+  // Kilden er ét felt med to grupper. Navnet bærer personen med, så to ens
+  // navne i husstanden kan skelnes fra hinanden i listen.
+  const named = (name: string, person: string) => `${name} · ${person}`
+  const entrySources = plan.entries.filter((entry) => entry.direction === 'Income')
+  const holdingSources = holdings.filter(isFreeAssets)
+  const entryLabel = (entry: Entry) =>
+    named(
+      entry.name,
+      plan.household.persons.find((person) => person.id === entry.owner)?.name ?? entry.owner,
+    )
+  const holdingLabel = (holdingId: string) =>
+    named(holdingName(holdingId), ownerOfHolding.get(holdingId)?.name ?? '')
 
   // En indbetaling går aldrig til frie midler — så er det en overførsel — og
   // kilde og destination skal tilhøre samme person, jf. ADR-0016. Vælgerne
   // tilbyder kun det, der kan vælges, frem for at lade motoren afvise planen
   // bagefter.
-  const owner = plan.household.persons.find((person) => person.id === source.owner)
-  const destinations = (owner?.holdings ?? []).filter((holding) => !isFreeAssets(holding))
-  const sources = plan.entries.filter((entry) => entry.direction === 'Income')
-  const percentage = 'percentageOfEntry' in contribution
+  const destinations = owner.holdings.filter((holding) => !isFreeAssets(holding))
+  const sourceName =
+    contribution.kind === 'EntrySourced'
+      ? (sourceEntry?.name ?? contribution.source)
+      : holdingName(contribution.source)
 
   return (
     <>
       <Head
-        title={`${source.name} → ${holdingName(contribution.to)}`}
+        title={`${sourceName} → ${holdingName(contribution.to)}`}
         subtitle="Indbetaling"
         onClose={onClose}
         onDelete={() => {
@@ -708,16 +735,29 @@ function ContributionFields({
       <Section title="Indbetalingen">
         <SelectField
           label="Kilde"
-          value={source.name}
-          options={sources.map((entry) => entry.name)}
-          onChange={(name) =>
-            onChange(
-              withContribution(plan, id, (c) => ({
-                ...c,
-                source: sources.find((entry) => entry.name === name)!.id,
-              })),
-            )
+          value={
+            contribution.kind === 'EntrySourced' && sourceEntry
+              ? entryLabel(sourceEntry)
+              : holdingLabel(contribution.source)
           }
+          options={[
+            { label: 'Lønposter', options: entrySources.map(entryLabel) },
+            {
+              label: 'Beholdninger',
+              options: holdingSources.map((holding) => holdingLabel(holding.id)),
+            },
+          ]}
+          onChange={(choice) => {
+            const entry = entrySources.find((source) => entryLabel(source) === choice)
+            const holding = holdingSources.find((source) => holdingLabel(source.id) === choice)
+            onChange(
+              withContribution(plan, id, (c) =>
+                entry
+                  ? withSource(c, { kind: 'EntrySourced', source: entry.id })
+                  : withSource(c, { kind: 'HoldingSourced', source: holding!.id }),
+              ),
+            )
+          }}
         />
         <SelectField
           label="Destination"
@@ -733,69 +773,124 @@ function ContributionFields({
           }
         />
         <Hint>
-          {source.direction === 'Income' && source.taxTreatment === 'EarnedIncome'
-            ? 'Kilden er en AM-pligtig post, så AM-bidraget trækkes på vejen ind — der lander 92 % i beholdningen.'
-            : 'Kilden har aldrig båret AM-bidrag, så hele beløbet går ind.'}{' '}
+          {contribution.kind === 'HoldingSourced'
+            ? 'Kilden er en beholdning, så der trækkes intet AM-bidrag — pengene er beskattet, og der lander 100 % i ordningen.'
+            : sourceEntry?.direction === 'Income' && sourceEntry.taxTreatment === 'EarnedIncome'
+              ? 'Kilden er en AM-pligtig post, så AM-bidraget trækkes på vejen ind — der lander 92 % i beholdningen.'
+              : 'Kilden har aldrig båret AM-bidrag, så hele beløbet går ind.'}{' '}
           Begge dele følger kilden og tastes ikke.
         </Hint>
       </Section>
       <Section title="Beløb">
-        {/* Begge former står synlige: en vælger ville skjule den ene bag et
-            klik, og der er kun to. */}
-        <ToggleField
-          label="Angives som"
-          value={danish(
-            contributionAmounts,
-            percentage ? 'percentageOfEntry' : 'amountInRealKroner',
-          )}
-          options={Object.keys(contributionAmounts)}
-          onChange={(choice) =>
-            onChange(
-              withContribution(plan, id, (c) => withAmountForm(c, contributionAmounts[choice]!)),
-            )
-          }
-        />
-        {'percentageOfEntry' in contribution ? (
-          <NumberField
-            label="Procent"
-            unit="%"
-            value={asPercent(contribution.percentageOfEntry)}
-            onChange={(percent) =>
-              onChange(
-                withContribution(plan, id, (c) =>
-                  'percentageOfEntry' in c ? { ...c, percentageOfEntry: percent / 100 } : c,
-                ),
-              )
-            }
-          />
+        {contribution.kind === 'EntrySourced' ? (
+          <>
+            {/* Begge former står synlige: en vælger ville skjule den ene bag
+                et klik, og der er kun to. */}
+            <ToggleField
+              label="Angives som"
+              value={danish(
+                contributionAmounts,
+                'percentageOfEntry' in contribution ? 'percentageOfEntry' : 'amountInRealKroner',
+              )}
+              options={Object.keys(contributionAmounts)}
+              onChange={(choice) =>
+                onChange(
+                  withContribution(plan, id, (c) => withAmountForm(c, contributionAmounts[choice]!)),
+                )
+              }
+            />
+            {'percentageOfEntry' in contribution ? (
+              <NumberField
+                label="Procent"
+                unit="%"
+                value={asPercent(contribution.percentageOfEntry)}
+                onChange={(percent) =>
+                  onChange(
+                    withContribution(plan, id, (c) =>
+                      'percentageOfEntry' in c ? { ...c, percentageOfEntry: percent / 100 } : c,
+                    ),
+                  )
+                }
+              />
+            ) : (
+              <NumberField
+                label="Fast beløb (dagens kroner)"
+                unit="kr."
+                value={contribution.amountInRealKroner}
+                onChange={(amountInRealKroner) =>
+                  onChange(
+                    withContribution(plan, id, (c) =>
+                      c.kind === 'EntrySourced' && 'amountInRealKroner' in c
+                        ? { ...c, amountInRealKroner }
+                        : c,
+                    ),
+                  )
+                }
+              />
+            )}
+            {'percentageOfEntry' in contribution && sourceEntry && (
+              <Hint>
+                Måles af {sourceEntry.name}, så bidraget følger lønnen op uden at blive
+                rettet.
+              </Hint>
+            )}
+          </>
         ) : (
-          <NumberField
-            label="Fast beløb (dagens kroner)"
-            unit="kr."
-            value={contribution.amountInRealKroner}
-            onChange={(amountInRealKroner) =>
-              onChange(
-                withContribution(plan, id, (c) =>
-                  'amountInRealKroner' in c ? { ...c, amountInRealKroner } : c,
-                ),
-              )
-            }
-          />
-        )}
-        {percentage && (
-          <Hint>
-            Måles af {source.name}, så bidraget følger lønnen op uden at blive rettet.
-          </Hint>
+          <>
+            <NumberField
+              label="Fast beløb (dagens kroner)"
+              unit="kr."
+              value={contribution.amountInRealKroner}
+              onChange={(amountInRealKroner) =>
+                onChange(
+                  withContribution(plan, id, (c) =>
+                    c.kind === 'HoldingSourced' ? { ...c, amountInRealKroner } : c,
+                  ),
+                )
+              }
+            />
+            {/* Kontakten "Angives som" står slet ikke: en procent skal have en
+                post at måle af, og et valg, der aldrig kan træffes, er værre
+                end intet valg. */}
+            <Hint>
+              En procent skal have en post at måle af, og kilden er en beholdning — derfor
+              kun kronebeløbet. Det er tastet i dagens kroner og følger planens
+              inflationsantagelse, som en overførsel gør.
+            </Hint>
+          </>
         )}
       </Section>
-      <section className="afsnit arvet">
-        <h3>Følger {source.name}</h3>
-        <div className="arvelinje">{inheritedLine(years, source)}</div>
-        <Hint>
-          Periode, forankring, gentagelse og forfald hører til posten. Bidraget
-          har dem ikke selv og ophører derfor af sig selv ved erhvervsophøret.
-        </Hint>
-      </section>
+      {contribution.kind === 'EntrySourced' ? (
+        sourceEntry && (
+          <section className="afsnit arvet">
+            <h3>Følger {sourceEntry.name}</h3>
+            <div className="arvelinje">{inheritedLine(years, sourceEntry)}</div>
+            <Hint>
+              Periode, forankring, gentagelse og forfald hører til posten. Bidraget har
+              dem ikke selv og ophører derfor af sig selv ved erhvervsophøret.
+            </Hint>
+          </section>
+        )
+      ) : (
+        <PeriodSection
+          value={contribution}
+          owner={owner}
+          startYear={plan.startYear}
+          onChange={(next) =>
+            onChange(
+              withContribution(plan, id, (c) =>
+                c.kind === 'HoldingSourced' ? { ...c, ...next } : c,
+              ),
+            )
+          }
+        >
+          <Hint>
+            Kilden er en beholdning og har ingen periode at låne ud. Til gengæld kan
+            bidraget aldersforankres: destinationen har en ejer og dermed en alder at
+            måle fra.
+          </Hint>
+        </PeriodSection>
+      )}
     </>
   )
 }
@@ -813,15 +908,50 @@ function inheritedLine(years: YearResult[], source: Entry): string {
     .join(' · ')
 }
 
-/** Skifter beløbsangivelsens form. De to former er hvert sit felt og ikke to
-    værdier i ét, så skiftet bygger et nyt bidrag frem for at sætte et felt —
-    som `withDirection` gør for posten. Det gamle tal huskes ikke: det findes
-    ikke at huske på, og en procent og et kronebeløb er alligevel ikke
-    hinandens omregning. */
+/** Skifter bidragets kilde — og dermed dets udgave. De to bærer hvert sit sæt
+    felter, så skiftet bygger et nyt bidrag frem for at sætte et felt, som
+    `withAmountForm` gør for beløbet.
+
+    Kronebeløbet overlever skiftet: det er det samme tal i begge udgaver.
+    Procenten gør ikke — den findes kun, hvor der er en post at måle af — og
+    perioden heller ikke, for den findes kun, hvor der ingen post er at arve
+    den fra. */
+function withSource(
+  contribution: Contribution,
+  source:
+    | { kind: 'EntrySourced'; source: EntryId }
+    | { kind: 'HoldingSourced'; source: HoldingId },
+): Contribution {
+  const { id, to } = contribution
+  const amountInRealKroner =
+    'amountInRealKroner' in contribution ? contribution.amountInRealKroner : undefined
+
+  if (source.kind === 'EntrySourced') {
+    return amountInRealKroner === undefined
+      ? { id, to, ...source, percentageOfEntry: 0 }
+      : { id, to, ...source, amountInRealKroner }
+  }
+  return {
+    id,
+    to,
+    ...source,
+    amountInRealKroner: amountInRealKroner ?? 0,
+    timing: 'Even',
+    period: { anchor: 'CalendarYear' },
+    recurrence: { kind: 'Annual' },
+  }
+}
+
+/** Skifter beløbsangivelsens form på et lønkildet bidrag. De to former er
+    hvert sit felt og ikke to værdier i ét, så skiftet bygger et nyt bidrag
+    frem for at sætte et felt — som `withDirection` gør for posten. Det gamle
+    tal huskes ikke: det findes ikke at huske på, og en procent og et
+    kronebeløb er alligevel ikke hinandens omregning. */
 function withAmountForm(
   contribution: Contribution,
   field: 'percentageOfEntry' | 'amountInRealKroner',
 ): Contribution {
+  if (contribution.kind !== 'EntrySourced') return contribution
   const { id, kind, source, to } = contribution
   return field === 'percentageOfEntry'
     ? { id, kind, source, to, percentageOfEntry: 0 }

@@ -329,6 +329,11 @@ export function CheckboxField({
 
 /** Et valg mellem få faste muligheder. Værdierne er de danske navne — intet
     engelsk identifier når skærmen. */
+/** Valgene, eventuelt delt i navngivne grupper. Grupperne findes for
+    indbetalingens kildevælger: kilden er ét spørgsmål og ikke to, men de to
+    slags svar skal kunne kendes fra hinanden i listen. */
+export type Options = string[] | { label: string; options: string[] }[]
+
 export function SelectField({
   label,
   value,
@@ -337,18 +342,28 @@ export function SelectField({
 }: {
   label: string
   value: string
-  options: string[]
+  options: Options
   onChange: (value: string) => void
 }) {
   return (
     <Field label={label}>
       {(id) => (
         <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
-          {options.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
+          {options.map((option) =>
+            typeof option === 'string' ? (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ) : (
+              <optgroup key={option.label} label={option.label}>
+                {option.options.map((inner) => (
+                  <option key={inner} value={inner}>
+                    {inner}
+                  </option>
+                ))}
+              </optgroup>
+            ),
+          )}
         </select>
       )}
     </Field>

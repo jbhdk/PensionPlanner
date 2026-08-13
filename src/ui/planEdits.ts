@@ -381,43 +381,62 @@ export function withDirection(entry: Entry, direction: Direction): Entry {
   }
 }
 
-/** Den tyndeste indbetaling, der kan tilføjes: nul procent, fra den første
-    indtægtspost til den første af ejerens ordninger. Kilde og destination
-    skal tilhøre samme person, og destinationen må ikke være frie midler, jf.
-    ADR-0016 — findes intet sådant par, er der ingenting at tilføje, og
-    knappen der kalder her, er selv skjult.
+/** Den tyndeste indbetaling, der kan tilføjes: nul kroner eller nul procent,
+    fra den første lovlige kilde til den første af ejerens ordninger. Kilde og
+    destination skal tilhøre samme person, og destinationen må ikke være frie
+    midler, jf. ADR-0016 — findes intet sådant par, er der ingenting at
+    tilføje, og knappen der kalder her, er selv skjult.
 
-    Formen er procent frem for et fast beløb: det er den, der følger lønnen
-    op af sig selv, og den brugeren skal skulle vælge sig væk fra. */
+    Er kilden en lønpost, er formen procent frem for et fast beløb: det er
+    den, der følger lønnen op af sig selv, og den brugeren skal skulle vælge
+    sig væk fra. Et beholdningskildet bidrag har ingen post at måle en procent
+    af og kan kun være et kronebeløb. */
 export function addContribution(plan: Plan): Plan {
   const pair = firstContributionPair(plan)
   if (!pair) return plan
 
+  const id = freshContributionId(plan)
   return {
     ...plan,
     contributions: [
       ...plan.contributions,
-      {
-        id: freshContributionId(plan),
-        kind: 'EntrySourced',
-        source: pair.source,
-        to: pair.to,
-        percentageOfEntry: 0,
-      },
+      pair.kind === 'EntrySourced'
+        ? { id, kind: pair.kind, source: pair.source, to: pair.to, percentageOfEntry: 0 }
+        : {
+            id,
+            kind: pair.kind,
+            source: pair.source,
+            to: pair.to,
+            amountInRealKroner: 0,
+            timing: 'Even',
+            period: { anchor: 'CalendarYear' },
+            recurrence: { kind: 'Annual' },
+          },
     ],
   }
 }
 
-/** Det første lovlige par af lønpost og ordning — og dermed også svaret på,
-    om en indbetaling overhovedet kan tilføjes. */
+/** Det første lovlige par af kilde og ordning — og dermed også svaret på, om
+    en indbetaling overhovedet kan tilføjes.
+
+    Lønposten kommer først: de fleste bidrag er en procent af en løn. Har
+    husstanden ingen indtægtspost, er der stadig en indbetaling at skrive fra
+    de frie midler — det er hele grunden til, at den beholdningskildede form
+    findes, og var knappen skjult her, kunne aldersopsparingens vindue efter
+    erhvervsophør ikke tastes. */
 export function firstContributionPair(
   plan: Plan,
-): { source: string; to: string } | undefined {
+): { kind: Contribution['kind']; source: string; to: string } | undefined {
   for (const entry of plan.entries) {
     if (entry.direction !== 'Income') continue
     const owner = plan.household.persons.find((person) => person.id === entry.owner)
     const to = (owner?.holdings ?? []).find((holding) => !isFreeAssets(holding))
-    if (to) return { source: entry.id, to: to.id }
+    if (to) return { kind: 'EntrySourced', source: entry.id, to: to.id }
+  }
+  for (const person of plan.household.persons) {
+    const source = person.holdings.find(isFreeAssets)
+    const to = person.holdings.find((holding) => !isFreeAssets(holding))
+    if (source && to) return { kind: 'HoldingSourced', source: source.id, to: to.id }
   }
   return undefined
 }

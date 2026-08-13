@@ -3,6 +3,7 @@ import type { Contribution, HoldingVariant, Plan } from './plan'
 import { simulate } from './simulate'
 import {
   aContribution,
+  aHoldingContribution,
   aPlan,
   aSalary,
   aTaxFreeIncome,
@@ -36,6 +37,13 @@ function aPlanWithSecondHolding(options: Parameters<typeof aPlan>[0] = {}): Plan
     er valideret, og rækkerne er åbnet på planens egne beholdninger. */
 function holding(year: YearResult, id: string) {
   return year.holdings.find((h) => h.holding === id)!
+}
+
+/** De år, hvor der overhovedet faldt en indbetaling. Årsrækken er motorens
+    eget svar på, hvornår et bidrag falder, jf. ADR-0012 — testene spørger
+    den frem for at regne perioden om. */
+function yearsWithContribution(years: YearResult[]): number[] {
+  return years.filter((year) => year.contributions.length > 0).map((year) => year.year)
 }
 
 describe('simulate', () => {
@@ -1590,6 +1598,195 @@ describe('indbetalinger', () => {
       intoHolding: 48_000,
     })
   })
+
+  describe('beholdningskildede', () => {
+    it('flytter hele beløbet fra de frie midler ind i ordningen', () => {
+      // Der er ingen løn i året — det er hele grunden til, at formen findes.
+      // Pengene er beskattet, da de kom ind på de frie midler, så der er
+      // intet AM-bidrag at trække på vejen videre: brutto er lig netto.
+      const plan = aPlanWithPension({
+        balance: 1_000_000,
+        contributions: [
+          aHoldingContribution({
+            source: 'free-assets',
+            to: 'ratepension',
+            amountInRealKroner: 50_000,
+          }),
+        ],
+      })
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(holding(year, 'ratepension').closingBalance).toBeCloseTo(50_000, 6)
+      expect(bufferBalance(year)).toBeCloseTo(950_000, 6)
+      expect(year.contributions).toEqual([
+        { contribution: 'contribution', fromSource: 50_000, intoHolding: 50_000 },
+      ])
+    })
+
+    it('lander med 100 %, hvor det lønkildede af samme beløb lander med 92 %', () => {
+      // Kontrasten er hele grunden til, at `ContributionYear` bærer to beløb
+      // og ikke ét: for den ene form er de forskellige, for den anden ens.
+      const plan = aPlanWithPension({
+        balance: 1_000_000,
+        entries: [aSalary({ amountInRealKroner: 600_000 })],
+        contributions: [
+          aContribution({
+            source: 'salary',
+            to: 'ratepension',
+            amountInRealKroner: 50_000,
+          }),
+          {
+            ...aHoldingContribution({
+              source: 'free-assets',
+              to: 'ratepension',
+              amountInRealKroner: 50_000,
+            }),
+            id: 'fra-frie-midler',
+          },
+        ],
+      })
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(year.contributions).toEqual([
+        { contribution: 'contribution', fromSource: 50_000, intoHolding: 46_000 },
+        { contribution: 'fra-frie-midler', fromSource: 50_000, intoHolding: 50_000 },
+      ])
+    })
+
+    it('falder kun i de år, dets egen periode dækker', () => {
+      const plan = aPlanWithPension({
+        balance: 1_000_000,
+        contributions: [
+          aHoldingContribution({
+            source: 'free-assets',
+            to: 'ratepension',
+            amountInRealKroner: 50_000,
+            period: { anchor: 'CalendarYear', from: 2028, to: 2029 },
+          }),
+        ],
+      })
+
+      const years = simulateChecked(plan)
+
+      expect(yearsWithContribution(years)).toEqual([2028, 2029])
+    })
+
+    it('bærer sin egen gentagelse', () => {
+      const plan = aPlanWithPension({
+        balance: 1_000_000,
+        contributions: [
+          aHoldingContribution({
+            source: 'free-assets',
+            to: 'ratepension',
+            amountInRealKroner: 50_000,
+            period: { anchor: 'CalendarYear', from: 2026, to: 2032 },
+            recurrence: { kind: 'EveryNYears', n: 3 },
+          }),
+        ],
+      })
+
+      const years = simulateChecked(plan)
+
+      expect(yearsWithContribution(years)).toEqual([2026, 2029, 2032])
+    })
+
+    it('kan aldersforankres og flytter sig, når erhvervsophørsalderen ændres', () => {
+      // Aldersopsparingens vindue ligger efter sidste lønkrone, og uden en
+      // kilde, der er en beholdning, kan det slet ikke skrives. Forankringen
+      // er formens egen: en overførsel har ingen ejer at måle en alder fra,
+      // men destinationen har.
+      const stoppingAt = (workEndAge: number) =>
+        aPlanWithScheme(oldAgeSavings, {
+          balance: 1_000_000,
+          workEndAge,
+          contributions: [
+            aHoldingContribution({
+              source: 'free-assets',
+              to: 'aldersopsparing',
+              amountInRealKroner: 50_000,
+              period: { anchor: 'PersonAge', from: 'WorkEndAge', to: 'WorkEndAge' },
+            }),
+          ],
+        })
+
+      // Jesper er født i juni 1973, så han fylder 58 i 2031 og 60 i 2033.
+      expect(yearsWithContribution(simulateChecked(stoppingAt(58)))).toEqual([2031])
+      // Bidraget er ikke rørt — kun alderen er.
+      expect(yearsWithContribution(simulateChecked(stoppingAt(60)))).toEqual([2033])
+    })
+
+    it('løfter beløbet med planens inflationsantagelse, som en overførsel gør', () => {
+      // Bidraget er ikke en indtægt og har derfor ingen reguleringssats at
+      // følge. Beløbet er tastet i dagens kroner og løftes til årets egne.
+      const plan = aPlanWithPension({
+        balance: 1_000_000,
+        inflationAssumption: 0.02,
+        contributions: [
+          aHoldingContribution({
+            source: 'free-assets',
+            to: 'ratepension',
+            amountInRealKroner: 50_000,
+          }),
+        ],
+      })
+
+      const years = simulateChecked(plan)
+
+      expect(years[2]!.contributions[0]!.fromSource).toBeCloseTo(50_000 * 1.02 ** 2, 6)
+    })
+
+    it('vejer sit eget forfald ind i afkastgrundlaget i begge ender', () => {
+      // Forfaldet er bidragets eget her — der er ingen post at arve det fra.
+      // April vejer ni tolvtedele: pengene er ude af kilden og inde i
+      // ordningen resten af året.
+      const plan = aPlanWithPension({
+        balance: 1_000_000,
+        grossReturn: 0.05,
+        contributions: [
+          aHoldingContribution({
+            source: 'free-assets',
+            to: 'ratepension',
+            amountInRealKroner: 100_000,
+            timing: 4,
+          }),
+        ],
+      })
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(holding(year, 'free-assets').weightedFlow).toBeCloseTo(-75_000, 6)
+      expect(holding(year, 'ratepension').weightedFlow).toBeCloseTo(75_000, 6)
+    })
+
+    it('lader fradragsretten følge destinationen, uanset at kilden er en beholdning', () => {
+      // Samme kilde, samme beløb, to destinationer. Ratepensionen har
+      // fradragsret, aldersopsparingen har ingen — og kilden siger intet om
+      // det, jf. ADR-0016. Lønnen står her kun, så der er en personlig
+      // indkomst at nedsætte.
+      const payingInto = (scheme: { id: string; name: string; variant: HoldingVariant }) =>
+        aPlanWithScheme(scheme, {
+          balance: 1_000_000,
+          entries: [aSalary({ amountInRealKroner: 700_000 })],
+          contributions: [
+            aHoldingContribution({
+              source: 'free-assets',
+              to: scheme.id,
+              amountInRealKroner: 50_000,
+            }),
+          ],
+        })
+
+      const intoPension = simulateChecked(payingInto(instalmentPension))[0]!.persons[0]!
+      const intoOldAge = simulateChecked(payingInto(oldAgeSavings))[0]!.persons[0]!
+
+      // 700.000 − 56.000 = 644.000 uden fradragsret; hele det indbetalte
+      // beløb går fra, når destinationen har den.
+      expect(intoPension.tax.personalIncome).toBeCloseTo(594_000, 6)
+      expect(intoOldAge.tax.personalIncome).toBeCloseTo(644_000, 6)
+    })
+  })
 })
 
 describe('indbetalingens pegere', () => {
@@ -1656,6 +1853,98 @@ describe('indbetalingens pegere', () => {
     // hører hos den, der har ordningen.
     const base = aPlanWith(
       aContribution({ source: 'salary', to: 'marias-ratepension', percentageOfEntry: 0.08 }),
+    )
+    const plan: Plan = {
+      ...base,
+      household: {
+        persons: [
+          ...base.household.persons,
+          {
+            id: 'maria',
+            name: 'Maria',
+            birthYear: 1973,
+            birthMonth: 6,
+            workEndAge: 58,
+            horizon: 90,
+            municipality: 'København',
+            churchMember: true,
+            holdings: [
+              {
+                id: 'marias-ratepension',
+                name: 'Marias ratepension',
+                variant: 'InstalmentPension',
+                balance: 0,
+                grossReturn: 0,
+                annualCostRate: 0,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    expect(() => simulate(plan)).toThrow(/samme person/i)
+  })
+
+  it('afviser en beholdningskilde, der ikke findes', () => {
+    const plan = aPlanWith(
+      aHoldingContribution({
+        source: 'findes-ikke',
+        to: 'ratepension',
+        amountInRealKroner: 50_000,
+      }),
+    )
+
+    expect(() => simulate(plan)).toThrow(/findes-ikke.*ikke findes/i)
+  })
+
+  it('afviser en beholdningskilde, der ikke er frie midler', () => {
+    // En flytning mellem to ordninger er ikke en indbetaling. Loven har sine
+    // egne regler om overførsel mellem ordninger, og de er ikke i domænet —
+    // planen skal afvises frem for at blive regnet efter en regel, der ikke
+    // gælder.
+    const base = aPlanWith(
+      aHoldingContribution({
+        source: 'ratepension',
+        to: 'aldersopsparing',
+        amountInRealKroner: 50_000,
+      }),
+    )
+    const person = base.household.persons[0]!
+    const plan: Plan = {
+      ...base,
+      household: {
+        persons: [
+          {
+            ...person,
+            holdings: [
+              ...person.holdings,
+              {
+                id: 'aldersopsparing',
+                name: 'Aldersopsparing',
+                variant: 'OldAgeSavings',
+                balance: 0,
+                grossReturn: 0,
+                annualCostRate: 0,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    expect(() => simulate(plan)).toThrow(/ratepension.*ikke er frie midler/i)
+  })
+
+  it('afviser et beholdningskildet bidrag, hvor kilde og destination ikke er samme persons', () => {
+    // Samme regel som for lønkilden, og af samme grund: fradragsretten hører
+    // hos den, der ejer ordningen.
+    const base = aPlanWith(
+      aHoldingContribution({
+        source: 'free-assets',
+        to: 'marias-ratepension',
+        amountInRealKroner: 50_000,
+      }),
     )
     const plan: Plan = {
       ...base,

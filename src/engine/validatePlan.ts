@@ -20,7 +20,13 @@ export function validatePlan(plan: Plan): string | undefined {
 }
 
 /** Indbetalingens to ender. Destinationen skal findes og må ikke være frie
-    midler — så er det en overførsel, jf. ADR-0016. */
+    midler — så er det en overførsel, jf. ADR-0016 — og kilden skal findes i
+    den bog, dens form peger ind i.
+
+    Kilde og destination skal tilhøre samme person i begge former:
+    fradragsretten nedsætter den personlige indkomst, og den hører hos den,
+    der ejer ordningen. En indbetaling til ægtefællens ordning ville placere
+    skattevirkningen hos den forkerte. */
 function contributionEnds(plan: Plan): string | undefined {
   const byId = new Map(holdings(plan).map((holding) => [holding.id, holding]))
   const entries = new Map(plan.entries.map((entry) => [entry.id, entry]))
@@ -44,28 +50,49 @@ function contributionEnds(plan: Plan): string | undefined {
         `som er frie midler. En flytning mellem frie midler er en overførsel.`
       )
     }
+
     // En kilde, der ikke rammer noget, ville få bidraget til tavst at udeblive
     // hvert eneste år frem for at fejle — netop den slags løgn, ADR-0013 er
     // til for.
-    const source = entries.get(contribution.source)
-    if (!source) {
-      return (
-        `Indbetalingen ${contribution.id} kommer fra posten ${contribution.source}, ` +
-        `som ikke findes.`
-      )
+    let owner: string | undefined
+    if (contribution.kind === 'EntrySourced') {
+      const source = entries.get(contribution.source)
+      if (!source) {
+        return (
+          `Indbetalingen ${contribution.id} kommer fra posten ${contribution.source}, ` +
+          `som ikke findes.`
+        )
+      }
+      if (source.direction !== 'Income') {
+        return (
+          `Indbetalingen ${contribution.id} kommer fra posten ${contribution.source}, ` +
+          `som er en udgiftspost. En lønkilde er en indtægtspost.`
+        )
+      }
+      owner = source.owner
+    } else {
+      const source = byId.get(contribution.source)
+      if (!source) {
+        return (
+          `Indbetalingen ${contribution.id} kommer fra beholdningen ${contribution.source}, ` +
+          `som ikke findes.`
+        )
+      }
+      // En flytning mellem to ordninger er ikke en indbetaling. Loven har
+      // sine egne regler om overførsel mellem ordninger, og de er ikke i
+      // domænet — den plan skal afvises frem for at blive regnet forkert.
+      if (!isFreeAssets(source)) {
+        return (
+          `Indbetalingen ${contribution.id} kommer fra beholdningen ${contribution.source}, ` +
+          `som ikke er frie midler. En flytning mellem to ordninger er ikke en indbetaling.`
+        )
+      }
+      owner = ownerOf.get(contribution.source)
     }
-    if (source.direction !== 'Income') {
+
+    if (owner !== ownerOf.get(contribution.to)) {
       return (
-        `Indbetalingen ${contribution.id} kommer fra posten ${contribution.source}, ` +
-        `som er en udgiftspost. En lønkilde er en indtægtspost.`
-      )
-    }
-    // Fradragsretten nedsætter den personlige indkomst, og den hører hos den,
-    // der ejer ordningen. En indbetaling til ægtefællens ordning ville
-    // placere skattevirkningen hos den forkerte.
-    if (source.owner !== ownerOf.get(contribution.to)) {
-      return (
-        `Indbetalingen ${contribution.id} går fra posten ${contribution.source} til ` +
+        `Indbetalingen ${contribution.id} går fra ${contribution.source} til ` +
         `beholdningen ${contribution.to}, som ikke tilhører samme person.`
       )
     }

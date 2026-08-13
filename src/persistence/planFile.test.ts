@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { simulate } from '../engine/simulate'
-import { aContribution, aPlan } from '../engine/testing/planFixture'
+import {
+  aContribution,
+  aHoldingContribution,
+  aPlan,
+} from '../engine/testing/planFixture'
 import { exportPlan, importPlan } from './planFile'
 
 describe('planFile', () => {
@@ -100,6 +104,40 @@ describe('planFile', () => {
       ],
       contributions: [
         aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+      ],
+    })
+
+    const result = importPlan(exportPlan(plan))
+
+    expect(result).toEqual({ kind: 'Loaded', plan })
+    expect(simulate((result as { plan: typeof plan }).plan)).toEqual(simulate(plan))
+  })
+
+  it('bærer et beholdningskildet bidrags egen periode og forfald med over', () => {
+    // Den beholdningskildede udgave bærer felter, den lønkildede ikke har.
+    // De ligger i det gemte skema og skal derfor krydse en maskine ligesom
+    // resten — en aldersforankret periode, der tabte sin forankring undervejs,
+    // ville flytte indbetalingen uden at nogen kunne se hvorfor.
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'aldersopsparing',
+          name: 'Aldersopsparing',
+          variant: 'OldAgeSavings',
+          balance: 0,
+          grossReturn: 0.04,
+          annualCostRate: 0.004,
+        },
+      ],
+      contributions: [
+        aHoldingContribution({
+          source: 'free-assets',
+          to: 'aldersopsparing',
+          amountInRealKroner: 64_200,
+          timing: 1,
+          period: { anchor: 'PersonAge', from: 'WorkEndAge', to: 69 },
+          recurrence: { kind: 'EveryNYears', n: 2 },
+        }),
       ],
     })
 

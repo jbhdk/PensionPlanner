@@ -238,7 +238,12 @@ function ContributionsBlock({
   const name = (contributionId: string) => {
     const contribution = plan.contributions.find((c) => c.id === contributionId)
     if (!contribution) return contributionId
-    const source = plan.entries.find((entry) => entry.id === contribution.source)
+    // Kilden slås op i den bog, dens udgave peger ind i: et lønkildet bidrag
+    // kommer fra en post, et beholdningskildet fra en beholdning.
+    const source =
+      contribution.kind === 'EntrySourced'
+        ? plan.entries.find((entry) => entry.id === contribution.source)
+        : holdings.find((holding) => holding.id === contribution.source)
     const to = holdings.find((holding) => holding.id === contribution.to)
     return `${source?.name ?? contribution.source} → ${to?.name ?? contribution.to}`
   }

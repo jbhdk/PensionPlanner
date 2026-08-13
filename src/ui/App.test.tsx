@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Holding, Plan } from '../engine/plan'
 import {
   aContribution,
+  aHoldingContribution,
   aPlan,
   aSalary,
   aTransfer,
@@ -1016,6 +1017,134 @@ describe('fladen', () => {
     expect(screen.getByRole('heading', { name: 'Følger Løn' })).toBeTruthy()
   })
 
+  it('viser i det beholdningskildede bidrags skuffe de felter, det bærer selv', async () => {
+    // Samme figur i to udgaver, ikke to slags: kilden er det eneste, der
+    // skiller dem. En beholdning har ingen periode at låne ud, så bidraget
+    // bærer den selv — og kan til gengæld aldersforankres, hvor overførslen
+    // ikke kan, fordi destinationen har en ejer.
+    const user = userEvent.setup()
+    const plan = aPlanWithPension()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          contributions: [
+            aHoldingContribution({
+              source: 'free-assets',
+              to: 'ratepension',
+              amountInRealKroner: 50_000,
+            }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(navigatorButton(/Frie midler.*Ratepension/))
+
+    expect(sectionLabels('Indbetalingen')).toEqual(['Kilde', 'Destination'])
+    // Kun den ene beløbsform: en procent skal have en post at måle af, og
+    // kontakten "Angives som" ville være et valg, der aldrig kan træffes.
+    expect(sectionLabels('Beløb')).toEqual(['Fast beløb (dagens kroner)'])
+    expect(sectionLabels('Perioden')).toEqual([
+      'Gentagelse',
+      'Forankring',
+      'Fra (år)',
+      'Til (år)',
+      'Forfald',
+    ])
+    // Der er ingen post at følge — arvelinjen hører til den anden udgave.
+    expect(screen.queryByRole('heading', { name: /^Følger/ })).toBeNull()
+  })
+
+  it('skifter indbetalingens rude, når kilden skifter fra en lønpost til en beholdning', async () => {
+    // Kilden er ét spørgsmål, og ruden skifter form efter svaret. Arvelinjen
+    // forsvinder sammen med posten, og felterne, bidraget nu bærer selv,
+    // træder frem i stedet — samme figur i to udgaver, ikke to dialoger.
+    const user = userEvent.setup()
+    const plan = aPlanWithPension()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          entries: [aSalary({ amountInRealKroner: 600_000 })],
+          contributions: [
+            aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+          ],
+        }}
+      />,
+    )
+    await user.click(navigatorButton(/Løn.*Ratepension/))
+    expect(screen.getByRole('heading', { name: 'Følger Løn' })).toBeTruthy()
+
+    // Vælgeren har begge slags kilder at tilbyde, i hver sin gruppe.
+    const kilde = screen.getByLabelText('Kilde')
+    expect(within(kilde).getByRole('group', { name: 'Lønposter' })).toBeTruthy()
+    expect(within(kilde).getByRole('group', { name: 'Beholdninger' })).toBeTruthy()
+
+    await user.selectOptions(kilde, 'Frie midler · Jesper')
+
+    expect(screen.queryByRole('heading', { name: /^Følger/ })).toBeNull()
+    expect(sectionLabels('Beløb')).toEqual(['Fast beløb (dagens kroner)'])
+    expect(sectionLabels('Perioden')).toEqual([
+      'Gentagelse',
+      'Forankring',
+      'Fra (år)',
+      'Til (år)',
+      'Forfald',
+    ])
+  })
+
+  it('viser begge indbetalingsformer i navigatorens gruppe, kendelige på kilden', () => {
+    // Læseren skal kunne se, hvilken udgave en række er, uden at åbne den.
+    // Navnet er kilde → destination i begge, og kilden siger det selv.
+    const plan = aPlanWithPension()
+    const person = plan.household.persons[0]!
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          household: {
+            persons: [
+              {
+                ...person,
+                holdings: [
+                  ...person.holdings,
+                  {
+                    id: 'aldersopsparing',
+                    name: 'Aldersopsparing',
+                    variant: 'OldAgeSavings',
+                    balance: 0,
+                    grossReturn: 0,
+                    annualCostRate: 0,
+                  },
+                ],
+              },
+            ],
+          },
+          entries: [aSalary({ amountInRealKroner: 600_000 })],
+          contributions: [
+            aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+            {
+              ...aHoldingContribution({
+                source: 'free-assets',
+                to: 'aldersopsparing',
+                amountInRealKroner: 64_200,
+              }),
+              id: 'fra-frie-midler',
+            },
+          ],
+        }}
+      />,
+    )
+
+    const gruppe = screen.getByRole('button', { name: /Indbetalinger/ })
+    expect(within(gruppe).getByText('2')).toBeTruthy()
+    expect(within(navigatorButton(/Løn.*Ratepension/)).getByText('8,00 %')).toBeTruthy()
+    expect(
+      within(navigatorButton(/Frie midler.*Aldersopsparing/)).getByText('64.200'),
+    ).toBeTruthy()
+  })
+
   it('tilføjer en indbetaling via indbetalingsgruppen, og dens inspektør kan åbnes', async () => {
     const user = userEvent.setup()
     const plan = aPlanWithPension()
@@ -1029,6 +1158,19 @@ describe('fladen', () => {
 
     await user.click(navigatorButton(/Løn.*Ratepension/))
     expect(screen.getByRole('heading', { name: 'Følger Løn' })).toBeTruthy()
+  })
+
+  it('tilføjer en indbetaling i en husstand uden lønpost — kilden er så en beholdning', async () => {
+    // Formen findes netop for de år, hvor der ingen løn er. Var knappen
+    // skjult uden en lønpost, kunne aldersopsparingens vindue efter
+    // erhvervsophør slet ikke skrives, jf. ADR-0016.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithPension()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Indbetaling' }))
+
+    await user.click(navigatorButton(/Frie midler.*Ratepension/))
+    expect(sectionLabels('Beløb')).toEqual(['Fast beløb (dagens kroner)'])
   })
 
   it('skjuler "+ Indbetaling", når husstanden ingen ordning har at betale ind i', () => {

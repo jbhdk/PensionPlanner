@@ -15,6 +15,7 @@ import type {
   HoldingVariant,
   Nominal,
   Period,
+  HoldingId,
   Person,
   PersonId,
   Plan,
@@ -42,11 +43,17 @@ type ActiveEntry = { entry: Entry; amount: Nominal }
     overførsler der rent faktisk falder i det pågældende år. */
 type ActiveTransfer = { transfer: Transfer; amount: Nominal }
 
-/** En indbetaling sammen med dens to beløb i årets løbende priser og det
-    forfald, den arvede fra sin kilde — for de indbetalinger der rent faktisk
-    falder i det pågældende år. */
+/** En indbetaling sammen med dens to beløb i årets løbende priser, dens
+    forfald og den beholdning, pengene forlader — for de indbetalinger der
+    rent faktisk falder i det pågældende år.
+
+    Afgiverenden står her frem for at blive udledt, hvor pengene flyttes: et
+    lønkildet bidrag forlader bufferen, hvor lønnen landede, og et
+    beholdningskildet forlader sin egen kilde. Formen er dermed afgjort ét
+    sted, og de to bevægelsesløkker længere nede kender kun `from`. */
 type ActiveContribution = {
   contribution: Contribution
+  from: HoldingId
   fromSource: Nominal
   intoHolding: Nominal
   timing: Timing
@@ -107,9 +114,9 @@ function simulateYear(
   // penge, der gik videre til ordningen, forrente sig to steder på én gang.
   // Det er nettobeløbet, der vejes: AM-delen forlader bufferen som skat, og
   // skat rører aldrig afkastgrundlaget.
-  const flowed = contributions.reduce((years, { contribution, intoHolding, timing }) => {
+  const flowed = contributions.reduce((years, { contribution, from, intoHolding, timing }) => {
     const weighted = intoHolding * returnWeight(timing)
-    return withFlow(withFlow(years, plan.buffer, -weighted), contribution.to, weighted)
+    return withFlow(withFlow(years, from, -weighted), contribution.to, weighted)
   }, afterTransfers)
 
   const shareIncomeByPerson = incomeByVariant(plan, flowed, 'ShareDepot')
@@ -158,12 +165,8 @@ function simulateYear(
   // bruttobeløbet ud og lagde nettobeløbet ind, ville AM-delen forsvinde to
   // gange, og invarianten knække.
   const contributed = contributions.reduce(
-    (years, { contribution, intoHolding }) =>
-      withMovement(
-        withMovement(years, plan.buffer, -intoHolding),
-        contribution.to,
-        intoHolding,
-      ),
+    (years, { contribution, from, intoHolding }) =>
+      withMovement(withMovement(years, from, -intoHolding), contribution.to, intoHolding),
     moved,
   )
 
@@ -376,48 +379,107 @@ function appliesInYear(entry: Entry, year: SimulationYear, owner: Person): boole
   return withinPeriod(from, to, year) && matchesRecurrence(entry.recurrence, year, from, to)
 }
 
-/** Årets indbetalinger med deres to beløb. Et lønkildet bidrag har ingen
-    periode at prøve: det falder præcis de år, dets lønpost falder, og
-    ophører derfor af sig selv, når lønnen gør — det er hele pointen med at
-    lade det pege på posten frem for at give det en periode, der kan komme ud
-    af trit, jf. ADR-0016.
+/** Årets indbetalinger med deres to beløb, deres forfald og den beholdning,
+    pengene forlader. De to former svarer forskelligt på hvert af de tre
+    spørgsmål — hvornår falder bidraget, hvor stort er det, og hvad koster
+    vejen ind — og det er dét, formen er til for.
+
+    Et lønkildet bidrag har ingen periode at prøve: det falder præcis de år,
+    dets lønpost falder, og ophører derfor af sig selv, når lønnen gør — det
+    er hele pointen med at lade det pege på posten frem for at give det en
+    periode, der kan komme ud af trit, jf. ADR-0016. Et beholdningskildet
+    bidrag har ingen post at arve fra og prøver sin egen periode og
+    gentagelse, som en overførsel gør.
 
     Det, der forlader kilden, er brutto. AM-behandlingen følger kilden: er
     lønposten AM-pligtig, er AM-bidraget af de penge allerede betalt i
-    personens eget skattelag, og der lander 92 % i beholdningen. */
+    personens eget skattelag, og der lander 92 % i beholdningen. Kommer
+    pengene fra en beholdning, har de aldrig båret AM-bidrag, og brutto er
+    lig netto. */
 function contributionsInYear(
   plan: Plan,
   year: SimulationYear,
   entries: ActiveEntry[],
   rates: RateYear,
 ): ActiveContribution[] {
-  return plan.contributions.flatMap((contribution) => {
-    const source = entries.find(({ entry }) => entry.id === contribution.source)
-    if (source === undefined) return []
+  return plan.contributions.flatMap((contribution) =>
+    contribution.kind === 'EntrySourced'
+      ? entrySourcedInYear(contribution, plan, year, entries, rates)
+      : holdingSourcedInYear(contribution, plan, year),
+  )
+}
 
-    const fromSource =
-      'percentageOfEntry' in contribution
-        ? source.amount * contribution.percentageOfEntry
-        : contribution.amountInRealKroner * entryProjection(source.entry, plan, year)
+function entrySourcedInYear(
+  contribution: Contribution & { kind: 'EntrySourced' },
+  plan: Plan,
+  year: SimulationYear,
+  entries: ActiveEntry[],
+  rates: RateYear,
+): ActiveContribution[] {
+  const source = entries.find(({ entry }) => entry.id === contribution.source)
+  if (source === undefined) return []
 
-    // AM-behandlingen følger kilden. En AM-pligtig lønpost har allerede
-    // betalt bidraget af hele sit bruttobeløb i personens eget skattelag, og
-    // der lander derfor 92 %; en skattefri indtægt har aldrig båret AM, og
-    // hele beløbet går ind.
-    const labourMarketContribution =
-      source.entry.direction === 'Income' && source.entry.taxTreatment === 'EarnedIncome'
-        ? rates.taxRates.labourMarketContribution
-        : 0
+  const fromSource =
+    'percentageOfEntry' in contribution
+      ? source.amount * contribution.percentageOfEntry
+      : contribution.amountInRealKroner * entryProjection(source.entry, plan, year)
 
-    return [
-      {
-        contribution,
-        fromSource,
-        intoHolding: fromSource * (1 - labourMarketContribution),
-        timing: source.entry.timing,
-      },
-    ]
-  })
+  // AM-behandlingen følger kilden. En AM-pligtig lønpost har allerede
+  // betalt bidraget af hele sit bruttobeløb i personens eget skattelag, og
+  // der lander derfor 92 %; en skattefri indtægt har aldrig båret AM, og
+  // hele beløbet går ind.
+  const labourMarketContribution =
+    source.entry.direction === 'Income' && source.entry.taxTreatment === 'EarnedIncome'
+      ? rates.taxRates.labourMarketContribution
+      : 0
+
+  return [
+    {
+      contribution,
+      // Lønnen landede på bufferen med hele sit bruttobeløb; det er derfra,
+      // bidraget går videre.
+      from: plan.buffer,
+      fromSource,
+      intoHolding: fromSource * (1 - labourMarketContribution),
+      timing: source.entry.timing,
+    },
+  ]
+}
+
+/** Et beholdningskildet bidrag bærer sin egen periode, gentagelse og forfald
+    og løftes af planens inflationsantagelse, som en overførsel gør — det er
+    ikke en indtægt og har derfor ingen reguleringssats at følge.
+
+    Aldersforankringen måler fra destinationens ejer. Kilde og destination
+    tilhører samme person, jf. `validatePlan`, så der er kun én alder at måle
+    fra — og det er dén, der gør formen aldersforankringsdygtig, hvor en
+    overførsel ikke er det. */
+function holdingSourcedInYear(
+  contribution: Contribution & { kind: 'HoldingSourced' },
+  plan: Plan,
+  year: SimulationYear,
+): ActiveContribution[] {
+  const owner = ownerOfHolding(plan, contribution.to)
+  const { from, to } = periodBounds(contribution.period, owner)
+  if (!withinPeriod(from, to, year)) return []
+  if (!matchesRecurrence(contribution.recurrence, year, from, to)) return []
+
+  const amount = contribution.amountInRealKroner * transferProjection(plan, year)
+  return [
+    {
+      contribution,
+      from: contribution.source,
+      fromSource: amount,
+      intoHolding: amount,
+      timing: contribution.timing,
+    },
+  ]
+}
+
+function ownerOfHolding(plan: Plan, holding: HoldingId): Person {
+  return plan.household.persons.find((person) =>
+    person.holdings.some((owned) => owned.id === holding),
+  )!
 }
 
 /** En overførsel har ingen ejer at binde en alder til, så dens periode er

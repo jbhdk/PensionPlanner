@@ -154,11 +154,17 @@ export type Transfer = {
   recurrence: Recurrence
 }
 
-/** Beløbsangivelsen på et bidrag: enten en procent af lønposten, eller et
-    fast kronebeløb i dagens kroner. Formen er felterne selv — der er ikke et
-    tredje felt ved siden af dem, der siger hvilken af de to der gælder, og
-    et bidrag kan derfor ikke bære begge tal på én gang. */
+/** Beløbsangivelsen på et lønkildet bidrag: enten en procent af lønposten,
+    eller et fast kronebeløb i dagens kroner. Formen er felterne selv — der er
+    ikke et tredje felt ved siden af dem, der siger hvilken af de to der
+    gælder, og et bidrag kan derfor ikke bære begge tal på én gang. */
 type ContributionAmount = { percentageOfEntry: number } | { amountInRealKroner: Real }
+
+type ContributionBase = {
+  id: ContributionId
+  /** Destinationen. Aldrig frie midler — så er det en overførsel. */
+  to: HoldingId
+}
 
 /** En bevægelse af penge ind i en beholdning, der ikke er frie midler, jf.
     ADR-0016. Destinationen er hele skellet mod `Transfer`: hverken
@@ -170,18 +176,32 @@ type ContributionAmount = { percentageOfEntry: number } | { amountInRealKroner: 
     Det er dét, der får bidraget til at ophøre af sig selv, når lønnen
     ophører ved erhvervsophør, og som gør, at de to aldrig kan komme ud af
     trit. Det beholdningskildede medlem har ingen post at arve fra og bærer
-    dem alle selv — det hører i en senere skive og står ikke her endnu.
+    dem alle selv, som en `Transfer` gør — det er den form, der kan skrives i
+    år, hvor der ingen løn er. Modsat overførslen kan det aldersforankres:
+    destinationen har en ejer og dermed en alder at måle fra.
+
+    Beløbet er et fast kronebeløb i den beholdningskildede form og har ingen
+    procentvariant: en procent skal have en post at måle af.
 
     Hverken fradragsretten eller AM-behandlingen er felter: den første følger
-    destinationens variant, den anden kilden. */
-export type Contribution = {
-  id: ContributionId
-  kind: 'EntrySourced'
-  /** Lønposten, bidraget måles af og arver sin periode fra. */
-  source: EntryId
-  /** Destinationen. Aldrig frie midler — så er det en overførsel. */
-  to: HoldingId
-} & ContributionAmount
+    destinationens variant, den anden kilden — og en beholdningskilde har
+    aldrig båret AM-bidrag, så dér er brutto lig netto. */
+export type Contribution =
+  | (ContributionBase & {
+      kind: 'EntrySourced'
+      /** Lønposten, bidraget måles af og arver sin periode fra. */
+      source: EntryId
+    } & ContributionAmount)
+  | (ContributionBase & {
+      kind: 'HoldingSourced'
+      /** Beholdningen, pengene kommer fra. Altid frie midler: en flytning
+          mellem to ordninger er ikke en indbetaling. */
+      source: HoldingId
+      amountInRealKroner: Real
+      timing: Timing
+      period: Period
+      recurrence: Recurrence
+    })
 
 export type Plan = {
   name: string

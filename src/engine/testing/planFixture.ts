@@ -209,3 +209,27 @@ export function aContribution(
 ): Contribution {
   return { id: 'contribution', kind: 'EntrySourced', ...options }
 }
+
+/** Et beholdningskildet bidrag. Det har ingen post at arve fra og bærer
+    derfor periode, forankring, gentagelse og forfald selv, som en `Transfer`
+    gør. Beløbet er altid et fast kronebeløb: en procent skal have en post at
+    måle af, og den har det her ikke. */
+export function aHoldingContribution(options: {
+  source: string
+  to: string
+  amountInRealKroner: number
+  timing?: Timing
+  period?: Period
+  recurrence?: Recurrence
+}): Contribution {
+  return {
+    id: 'contribution',
+    kind: 'HoldingSourced',
+    source: options.source,
+    to: options.to,
+    amountInRealKroner: options.amountInRealKroner,
+    timing: options.timing ?? 'Even',
+    period: options.period ?? wholeHorizon,
+    recurrence: options.recurrence ?? annually,
+  }
+}
