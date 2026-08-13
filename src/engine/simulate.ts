@@ -77,7 +77,8 @@ function simulateYear(
 
   // Afkastet regnes først, på primosaldi og årets strømme alene efter
   // Modified Dietz, jf. ADR-0006 — det afhænger aldrig af skatten, kun
-  // omvendt: ShareIncome og CapitalIncome beskattes af netop dette afkast.
+  // omvendt: aktiedepotets og opsparingskontoens afkast beskattes hos
+  // personen som netop dette afkast.
   // Kun bufferen modtager poster; en overførsel vejer ind i afkastgrundlaget
   // i begge ender, jf. ADR-0004.
   const flowed = transfers.reduce((years, { transfer, amount }) => {
@@ -85,8 +86,8 @@ function simulateYear(
     return withFlow(withFlow(years, transfer.from, -weighted), transfer.to, weighted)
   }, withFlow(opening, plan.buffer, weightedNetFlow(entries)))
 
-  const shareIncomeByPerson = incomeByVariant(plan, flowed, 'ShareIncome')
-  const capitalIncomeByPerson = incomeByVariant(plan, flowed, 'CapitalIncome')
+  const shareIncomeByPerson = incomeByVariant(plan, flowed, 'ShareDepot')
+  const capitalIncomeByPerson = incomeByVariant(plan, flowed, 'SavingsAccount')
 
   // Hele husstandens skat bag ét søm, jf. ADR-0014. Motoren lægger intet
   // sammen selv: aktieindkomstens skat er husstandens og hører ikke til

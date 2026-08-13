@@ -26,7 +26,7 @@ function aPlanWithThreeHoldings(): Plan {
 }
 
 function aFreeHolding(id: string, name: string): Holding {
-  return { id, name, variant: 'CapitalIncome', balance: 0, grossReturn: 0, annualCostRate: 0 }
+  return { id, name, variant: 'SavingsAccount', balance: 0, grossReturn: 0, annualCostRate: 0 }
 }
 
 /** Fixturens buffer plus en ratepension, så skuffen har en pensionsbeholdning
@@ -44,6 +44,17 @@ function aPlanWithPension(): Plan {
       },
     ],
   })
+}
+
+/** Etiketterne i et afsnit i skuffen, i den rækkefølge de står. */
+function sectionLabels(title: string): string[] {
+  const section = Array.from(document.querySelectorAll('.afsnit')).find(
+    (element) => element.querySelector('h3')?.textContent === title,
+  )
+  if (!section) throw new Error(`Skuffen har intet afsnit med overskriften ${title}.`)
+  return Array.from(section.querySelectorAll('.felt')).map(
+    (felt) => felt.querySelector('label, .etiket')?.textContent ?? '',
+  )
 }
 
 /** Et udledt eller låst felt i skuffen. Det har ingen kontrol at pege på og
@@ -351,27 +362,43 @@ describe('fladen', () => {
     expect(bruttoafkast().value).toBe('0')
   })
 
-  it('lader en beholdnings variant vælges mellem de fem, med deres danske navne', async () => {
+  it('lader en beholdnings type vælges mellem de fem, med deres danske navne', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithSecondHolding()} />)
 
     await user.click(navigatorButton(/Anden beholdning/))
-    const variant = screen.getByLabelText(/Variant/) as HTMLSelectElement
+    const type = screen.getByLabelText(/Type/) as HTMLSelectElement
 
-    // Fixturens beholdning er CapitalIncome. Aktiesparekontoen står ikke i
-    // listen — den findes først i etape 3 — og intet engelsk identifier når
+    // Fixturens beholdning er en opsparingskonto. Aktiesparekontoen står ikke
+    // i listen — den findes først i etape 3 — og intet engelsk identifier når
     // skærmen.
-    expect(variant.value).toBe('Kapitalindkomst')
-    expect(Array.from(variant.options).map((option) => option.value)).toEqual([
+    expect(type.value).toBe('Opsparingskonto')
+    expect(Array.from(type.options).map((option) => option.value)).toEqual([
       'Ratepension',
       'Livrente',
       'Aldersopsparing',
-      'Aktieindkomst',
-      'Kapitalindkomst',
+      'Aktiedepot',
+      'Opsparingskonto',
     ])
 
-    await user.selectOptions(variant, 'Ratepension')
-    expect(variant.value).toBe('Ratepension')
+    await user.selectOptions(type, 'Ratepension')
+    expect(type.value).toBe('Ratepension')
+  })
+
+  it('stiller typen øverst i beholdningens skuffe, lige under navnet', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithSecondHolding()} />)
+
+    await user.click(navigatorButton(/Anden beholdning/))
+
+    // Typen afgør, hvad resten af felterne betyder, og står derfor før dem.
+    expect(sectionLabels('Beholdningen')).toEqual([
+      'Navn',
+      'Type',
+      'Ejer',
+      'Saldo (dagens kroner)',
+      'Buffer',
+    ])
   })
 
   it('viser nettoafkastet udledt af bruttoafkast og ÅOP også for en pensionsbeholdning', async () => {
@@ -1458,7 +1485,7 @@ describe('fladen', () => {
           horizon: 55,
           balance: 1_000_000,
           inflationAssumption: 0,
-          variant: 'ShareIncome',
+          variant: 'ShareDepot',
           grossReturn: 0.1,
           annualCostRate: 0,
           entries: [],

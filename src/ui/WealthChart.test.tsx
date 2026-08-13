@@ -15,7 +15,7 @@ function aPlanWithSecondHolding(): Plan {
       {
         id: 'anden-beholdning',
         name: 'Anden beholdning',
-        variant: 'CapitalIncome',
+        variant: 'SavingsAccount',
         balance: 500_000,
         grossReturn: 0,
         annualCostRate: 0,
@@ -253,7 +253,7 @@ describe('WealthChart', () => {
         {
           id: 'anden-beholdning',
           name: 'Anden beholdning',
-          variant: 'CapitalIncome',
+          variant: 'SavingsAccount',
           balance: 500_000,
           grossReturn: 0,
           annualCostRate: 0,

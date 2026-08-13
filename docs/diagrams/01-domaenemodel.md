@@ -126,7 +126,7 @@ classDiagram
     Transfer --> "1" Holding : from
     Transfer --> "1" Holding : to
 
-    note for Holding "Seks varianter: InstalmentPension, LifeAnnuity, OldAgeSavings, ShareSavingsAccount, ShareIncome og CapitalIncome. De adskiller sig ved beskatning og ved loft."
+    note for Holding "Seks varianter: InstalmentPension, LifeAnnuity, OldAgeSavings, ShareSavingsAccount, ShareDepot og SavingsAccount. De adskiller sig ved beskatning og ved loft."
     note for Property "Skitse: tegnet efter PRD'en, ikke efter glossaret. Afgøres i etape 4."
     note for Contribution "To former efter kilden, og felterne er tegnet som fællesmængden af dem. Lønkildet peger på en Entry og arver dens periode, anchor, recurrence og timing; det bærer kun percentageOfEntry eller amountInRealKroner. Beholdningskildet peger på en Holding og bærer selv det hele. Lønposter angives brutto inkl. arbejdsgiverbidrag."
     note for Transfer "Skattefri flytning mellem to holdings. I v1 kun FreeAssets til FreeAssets — en flytning ind i en pensionsordning er en indbetaling, ikke en Transfer."
@@ -144,11 +144,11 @@ classDiagram
   | `LifeAnnuity` | `HoldingTax`, PAL-satsen | personlig indkomst | ja | ja | intet ved arbejdsgiverordning |
   | `OldAgeSavings` | `HoldingTax`, PAL-satsen | skattefri | nej | nej | `PerYear`, med trappe |
   | `ShareSavingsAccount` | `HoldingTax`, aktiesparekontoens sats | skattefri | nej | nej | `OnBalance` |
-  | `ShareIncome` | 27/42 % lager, fælles overførbar grænse | skattefri | ja | — | intet |
-  | `CapitalIncome` | kapitalindkomst | skattefri | ja, kun når positiv | — | intet |
+  | `ShareDepot` | 27/42 % lager, fælles overførbar grænse | skattefri | ja | — | intet |
+  | `SavingsAccount` | kapitalindkomst | skattefri | ja, kun når positiv | — | intet |
 
-  `LifeAnnuity` deler `InstalmentPension`s beskatning fuldstændigt og har sin egen række alligevel, fordi loftet skiller dem, jf. [ADR-0015](../adr/0015-livrenten-er-en-sjette-variant-ikke-en-underklasse.md). Varianterne er opkaldt efter skattespanden og ikke efter aktivet — `ShareIncome` er derfor både variantnavn og feltnavn på `YearResult`, og det er med vilje: navnet siger, hvilket felt afkastet lander i.
-- **`FreeAssets` er en kategori, ikke en variant.** Den dækker `ShareIncome` og `CapitalIncome` under ét, og det er den, buffer- og overførselsreglerne taler om. Aktiesparekontoen hører ikke med — den har et indskudsloft.
+  `LifeAnnuity` deler `InstalmentPension`s beskatning fuldstændigt og har sin egen række alligevel, fordi loftet skiller dem, jf. [ADR-0015](../adr/0015-livrenten-er-en-sjette-variant-ikke-en-underklasse.md). Varianten hedder det, beholdningen er, og ikke det, dens afkast bliver til: et aktiedepot er ikke en aktieindkomst, jf. [ADR-0017](../adr/0017-beholdningen-hedder-hvad-den-er-ikke-hvad-dens-afkast-bliver-til.md). Hvilket felt afkastet lander i, står derfor i `simulate` og ikke i navnet.
+- **`FreeAssets` er en kategori, ikke en variant.** Den dækker `ShareDepot` og `SavingsAccount` under ét, og det er den, buffer- og overførselsreglerne taler om. Aktiesparekontoen hører ikke med — den har et indskudsloft.
 - **`PayoutSchedule` hænger på beholdningen, ikke på personen.** Det er dét, der gør motoren plan-drevet — se [ADR-0002](../adr/0002-plan-drevet-motor-med-frie-midler-som-buffer.md).
 - **`payoutAge()` er afledt, ikke indtastet.** Den udledes af `openedOn` via udbetalingsregimet, med `payoutAgeOverride` til overførselstilfælde. Fordi to af de tre regimer er relative til folkepensionsalderen, ændrer den sig, når `Person.statePensionAge()` justeres.
 - **`Person.statePensionAge()` er afledt efter samme mønster.** Den udledes af `birthYear` og `birthMonth` efter den lovfastsatte fødselsdatotabel i docs/satser/folkepensionsalder.md, med `statePensionAgeOverride` til de fødselsår, hvor tabellen kun har et fremskrevet skøn. Tabellen er ikke et `RateYear` — den ændrer sig ikke fra satsår til satsår, kun når Folketinget vedtager et nyt trin.

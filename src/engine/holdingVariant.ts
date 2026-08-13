@@ -12,12 +12,12 @@ const table: Record<HoldingVariant, { freeAssets: boolean }> = {
   InstalmentPension: { freeAssets: false },
   LifeAnnuity: { freeAssets: false },
   OldAgeSavings: { freeAssets: false },
-  ShareIncome: { freeAssets: true },
-  CapitalIncome: { freeAssets: true },
+  ShareDepot: { freeAssets: true },
+  SavingsAccount: { freeAssets: true },
 }
 
 /** Om beholdningen er frie midler. `FreeAssets` er en kategori og ikke en
-    variant, jf. ADR-0010: den dækker `ShareIncome` og `CapitalIncome` under
+    variant, jf. ADR-0010: den dækker `ShareDepot` og `SavingsAccount` under
     ét, og det er den, buffer- og overførselsreglerne taler om. */
 export function isFreeAssets(holding: Holding): boolean {
   return table[holding.variant].freeAssets

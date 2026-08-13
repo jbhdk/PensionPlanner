@@ -345,6 +345,14 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
           }
         />
         <SelectField
+          label="Type"
+          value={danish(variants, holding.variant)}
+          options={Object.keys(variants)}
+          onChange={(choice) =>
+            onChange(withHolding(plan, id, (h) => ({ ...h, variant: variants[choice]! })))
+          }
+        />
+        <SelectField
           label="Ejer"
           value={owner.name}
           options={persons.map((person) => person.name)}
@@ -358,14 +366,6 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
           value={holding.balance}
           onChange={(balance) =>
             onChange(withHolding(plan, id, (h) => ({ ...h, balance })))
-          }
-        />
-        <SelectField
-          label="Variant"
-          value={danish(variants, holding.variant)}
-          options={Object.keys(variants)}
-          onChange={(choice) =>
-            onChange(withHolding(plan, id, (h) => ({ ...h, variant: variants[choice]! })))
           }
         />
         <RadioField

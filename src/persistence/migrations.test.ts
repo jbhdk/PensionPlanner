@@ -181,3 +181,46 @@ describe('v3 → v4: pegere, der ikke rammer noget, ryddes op', () => {
     expect(migrated.entries.map((entry) => entry.id)).toEqual(['loen'])
   })
 })
+
+describe('v4 → v5: de frie varianter hedder ikke længere en indkomst', () => {
+  it('omdøber ShareIncome og CapitalIncome i beholdningerne og lader resten stå', () => {
+    // En beholdning er ikke en indkomst — den er en konto, du ejer, og dens
+    // afkast bliver til en indkomst hos personen. De to variantnavne sagde
+    // det modsatte og er skiftet til det, kontoen er. Personens felter
+    // `shareIncome` og `capitalIncome` er urørte: dér er det indkomster.
+    const v4: unknown = {
+      name: 'Gammel plan',
+      startYear: 2026,
+      buffer: 'free-assets',
+      transfers: [],
+      entries: [],
+      household: {
+        persons: [
+          {
+            id: 'jesper',
+            holdings: [
+              { id: 'free-assets', name: 'Frie midler', variant: 'CapitalIncome', balance: 100 },
+              { id: 'aktier', name: 'Aktier', variant: 'ShareIncome', balance: 200 },
+              { id: 'ratepension', name: 'Ratepension', variant: 'InstalmentPension', balance: 300 },
+            ],
+          },
+        ],
+      },
+    }
+
+    const migrated = runMigrations(v4, 4, 5, migrations) as {
+      household: { persons: Array<{ holdings: Array<Record<string, unknown>> }> }
+    }
+
+    const holdings = migrated.household.persons[0]!.holdings
+    expect(holdings.map((holding) => holding.variant)).toEqual([
+      'SavingsAccount',
+      'ShareDepot',
+      'InstalmentPension',
+    ])
+    // Migrationen skifter ét felt og bygger ikke beholdningen om.
+    expect(holdings[0]!.balance).toBe(100)
+    expect(holdings[0]!.name).toBe('Frie midler')
+  })
+})
+

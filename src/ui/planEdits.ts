@@ -133,7 +133,7 @@ export function addHolding(plan: Plan): Plan {
   const holding: Holding = {
     id: freshHoldingId(plan),
     name: `Beholdning ${count + 1}`,
-    variant: 'CapitalIncome',
+    variant: 'SavingsAccount',
     balance: 0,
     grossReturn: 0,
     annualCostRate: 0,

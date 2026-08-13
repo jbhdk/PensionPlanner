@@ -50,7 +50,7 @@ export function defaultPlan(): Plan {
             {
               id: 'free-assets',
               name: 'Frie midler',
-              variant: 'CapitalIncome',
+              variant: 'SavingsAccount',
               balance: 8_000_000,
               grossReturn: 0.07,
               annualCostRate: 0.005,

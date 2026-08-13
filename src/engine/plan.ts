@@ -24,8 +24,8 @@ export type HoldingVariant =
   | 'InstalmentPension'
   | 'LifeAnnuity'
   | 'OldAgeSavings'
-  | 'ShareIncome'
-  | 'CapitalIncome'
+  | 'ShareDepot'
+  | 'SavingsAccount'
 
 type HoldingBase = {
   id: HoldingId
@@ -46,8 +46,8 @@ export type Holding =
   | (HoldingBase & { variant: 'InstalmentPension' })
   | (HoldingBase & { variant: 'LifeAnnuity' })
   | (HoldingBase & { variant: 'OldAgeSavings' })
-  | (HoldingBase & { variant: 'ShareIncome' })
-  | (HoldingBase & { variant: 'CapitalIncome' })
+  | (HoldingBase & { variant: 'ShareDepot' })
+  | (HoldingBase & { variant: 'SavingsAccount' })
 
 export type Person = {
   id: PersonId

@@ -24,8 +24,8 @@ export const variants: Record<string, HoldingVariant> = {
   Ratepension: 'InstalmentPension',
   Livrente: 'LifeAnnuity',
   Aldersopsparing: 'OldAgeSavings',
-  Aktieindkomst: 'ShareIncome',
-  Kapitalindkomst: 'CapitalIncome',
+  Aktiedepot: 'ShareDepot',
+  Opsparingskonto: 'SavingsAccount',
 }
 
 export const treatments: Record<string, TaxTreatment> = {

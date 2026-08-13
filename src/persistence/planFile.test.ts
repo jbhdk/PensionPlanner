@@ -62,7 +62,7 @@ describe('planFile', () => {
     const result = importPlan(exportPlan(plan))
 
     expect(result).toEqual({ kind: 'Loaded', plan })
-    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(4)
+    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(5)
   })
 })
 

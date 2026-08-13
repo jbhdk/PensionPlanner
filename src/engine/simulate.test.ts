@@ -22,7 +22,7 @@ function aPlanWithSecondHolding(options: Parameters<typeof aPlan>[0] = {}): Plan
       {
         id: 'anden-beholdning',
         name: 'Anden beholdning',
-        variant: 'CapitalIncome',
+        variant: 'SavingsAccount',
         balance: 0,
         grossReturn: options.grossReturn ?? 0,
         annualCostRate: options.annualCostRate ?? 0,
@@ -501,7 +501,7 @@ describe('simulate', () => {
               {
                 id: 'anden-beholdning',
                 name: 'Anden beholdning',
-                variant: 'CapitalIncome',
+                variant: 'SavingsAccount',
                 balance: 500_000,
                 grossReturn: 0.04,
                 annualCostRate: 0.005,
@@ -526,7 +526,7 @@ describe('simulate', () => {
     const plan = aPlan({
       balance: 1_000_000,
       inflationAssumption: 0,
-      variant: 'ShareIncome',
+      variant: 'ShareDepot',
       grossReturn: 0.1,
       annualCostRate: 0,
       entries: [],
@@ -568,7 +568,7 @@ describe('simulate', () => {
     const base = aPlan({
       balance: 1_000_000,
       inflationAssumption: 0,
-      variant: 'ShareIncome',
+      variant: 'ShareDepot',
       grossReturn: 0.04,
       annualCostRate: 0,
       entries: [],
@@ -591,7 +591,7 @@ describe('simulate', () => {
               {
                 id: 'marias-aktier',
                 name: 'Marias frie midler',
-                variant: 'ShareIncome',
+                variant: 'ShareDepot',
                 balance: 2_000_000,
                 grossReturn: 0.07,
                 annualCostRate: 0,
@@ -1003,7 +1003,7 @@ describe('pensionsbeholdninger', () => {
     const first = (variant: HoldingVariant) =>
       simulateChecked(aPlan({ balance: 0, holdings: [{ ...holding, variant }] }))[0]!
 
-    const fri = first('CapitalIncome')
+    const fri = first('SavingsAccount')
     const ratepension = first('InstalmentPension')
 
     expect(fri.persons[0]!.capitalIncome).toBeCloseTo(65_000, 6)

@@ -43,7 +43,7 @@ export type HoldingYear = {
     aftrapningen bruger persongrundlaget, og en gemt sum kan ikke splittes.
 
     `shareIncome` og `capitalIncome` er afkastet af personens egne
-    `ShareIncome`- og `CapitalIncome`-beholdninger — ikke en skat, men
+    `ShareDepot`- og `SavingsAccount`-beholdninger — ikke en skat, men
     grundlaget senere etapers aftrapning skal bruge. Aktieindkomstens skat
     står ikke her: den er husstandens og har sit eget felt på `YearResult`,
     jf. ADR-0010 og ADR-0014. */

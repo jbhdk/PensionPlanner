@@ -19,7 +19,7 @@ Fem navnefælder, der er lette at falde i:
 - `Deductibility` (fradragsretten på en indbetaling) er ikke et `Allowance`. Den nedsætter den **personlige** indkomst og dermed alle lag ovenpå, hvor et ligningsmæssigt fradrag kun rører den skattepligtige indkomst. Kaldes begge bare "fradrag", er den forskel væk.
 
 Ordninger og beskatningsformer, der ikke har en egen term herunder, men som koden navngiver:
-`InstalmentPension` (ratepension), `OldAgeSavings` (aldersopsparing), `ShareSavingsAccount` (aktiesparekonto), `ShareIncome` og `CapitalIncome` (de to beskatningsformer for frie midler), `StatePension` (folkepension), `BasicAmount` (grundbeløb), `PensionSupplement` (pensionstillæg), `PalTax` (PAL-skat), `AnnualCostRate` (ÅOP), `BottomBracketTax` / `MiddleBracketTax` / `TopBracketTax` / `AdditionalTopBracketTax` (bund-, mellem-, top- og top-topskat, efter skat.dk's egne engelske betegnelser), `LabourMarketContribution` (AM-bidrag), `PersonalAllowance` (personfradrag), `MunicipalTax` (kommuneskat), `ChurchTax` (kirkeskat), `EarnedIncome` (arbejdsindkomst), `PersonalIncome` (personlig indkomst) og `TaxableIncome` (skattepligtig indkomst).
+`InstalmentPension` (ratepension), `OldAgeSavings` (aldersopsparing), `ShareSavingsAccount` (aktiesparekonto), `ShareDepot` (aktiedepot) og `SavingsAccount` (opsparingskonto), `StatePension` (folkepension), `BasicAmount` (grundbeløb), `PensionSupplement` (pensionstillæg), `PalTax` (PAL-skat), `AnnualCostRate` (ÅOP), `BottomBracketTax` / `MiddleBracketTax` / `TopBracketTax` / `AdditionalTopBracketTax` (bund-, mellem-, top- og top-topskat, efter skat.dk's egne engelske betegnelser), `LabourMarketContribution` (AM-bidrag), `PersonalAllowance` (personfradrag), `MunicipalTax` (kommuneskat), `ChurchTax` (kirkeskat), `EarnedIncome` (arbejdsindkomst), `PersonalIncome` (personlig indkomst) og `TaxableIncome` (skattepligtig indkomst).
 
 Fradrag, lofter og øvrige satsbegreber, som koden navngiver:
 `TaxCeiling` (skråt skatteloft), `EmploymentAllowance` (beskæftigelsesfradrag), `JobAllowance` (jobfradrag), `ExtraPensionAllowance` (ekstra pensionsfradrag), `Taper` (aftrapningen af pensionstillægget) og `CivilStatus` (civilstand).
@@ -60,7 +60,7 @@ _Avoid_: Reale kroner, faste priser, nutidskroner
 
 **Beholdning** · `Holding`:
 En pensions- eller opsparingspost med en saldo, du ejer: den forrentes, beskattes løbende og tømmes af en udbetalingsplan. Ratepension, aldersopsparing, aktiesparekonto og frie midler er beholdninger.
-_Avoid_: Konto, depot, opsparing
+_Avoid_: Konto, depot, opsparing brugt som samlebetegnelse for dem alle. De to ord er derimod de rigtige i `ShareDepot` og `SavingsAccount`, som er navne på hver sin variant.
 
 **Afkast** · `Return`:
 Årets forrentning af en beholdnings saldo. Tilskrives saldoen som en sidesløjfe og passerer aldrig årets pengestrøm — det bliver først til penge, husstanden kan bruge, når der hæves.
@@ -91,7 +91,7 @@ Forholdet mellem selskabets oplyste årlige ydelse og dets oplyste depot ved udb
 _Avoid_: Annuitetsdivisor, annuitetsfaktor, kapitaliseringsfaktor
 
 **Frie midler** · `FreeAssets`:
-En persons beskattede opsparing uden bindinger, i to former efter beskatning: lagerbeskattet aktieindkomst og kapitalindkomst. Husstanden kan have flere sæt, ét pr. person, og de beskattes hver for sig. Aktiesparekontoen er ikke frie midler — den har et indskudsloft.
+En persons beskattede opsparing uden bindinger, i to varianter efter beskatning: `ShareDepot`, hvis afkast er lagerbeskattet aktieindkomst, og `SavingsAccount`, hvis afkast er kapitalindkomst. Varianterne hedder det, de er, og ikke det, deres afkast bliver til, jf. [ADR-0017](./docs/adr/0017-beholdningen-hedder-hvad-den-er-ikke-hvad-dens-afkast-bliver-til.md). Husstanden kan have flere sæt, ét pr. person, og de beskattes hver for sig. Aktiesparekontoen er ikke frie midler — den har et indskudsloft.
 _Avoid_: Kontanter, bankkonto, opsparing, likvider
 
 **Buffer** · `Buffer`:

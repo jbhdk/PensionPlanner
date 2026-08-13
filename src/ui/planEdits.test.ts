@@ -26,7 +26,7 @@ function aTwoPersonPlan(): Plan {
             {
               id: 'marias-konto',
               name: 'Marias frie midler',
-              variant: 'CapitalIncome',
+              variant: 'SavingsAccount',
               balance: 500_000,
               grossReturn: 0,
               annualCostRate: 0,
@@ -184,7 +184,7 @@ describe('removeHolding', () => {
         {
           id: 'anden-frie',
           name: 'Andre frie midler',
-          variant: 'CapitalIncome',
+          variant: 'SavingsAccount',
           balance: 200_000,
           grossReturn: 0,
           annualCostRate: 0,

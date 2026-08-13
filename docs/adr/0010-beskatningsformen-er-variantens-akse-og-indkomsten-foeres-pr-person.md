@@ -19,3 +19,4 @@ Begge dele sidder i det gemte skema. Ændres de senere, kræver det et led i mig
 - [Diagram: Domænemodellen](../diagrams/01-domaenemodel.md) — `variant`-feltet og hele varianttabellen.
 - [ADR-0004](./0004-frie-midler-pr-person-med-udpeget-buffer.md) — hvorfor frie midler i forvejen ejes pr. person.
 - [ADR-0015](./0015-livrenten-er-en-sjette-variant-ikke-en-underklasse.md) — afløser denne på antallet af varianter; aksen og persongrundlaget står uændret.
+- [ADR-0017](./0017-beholdningen-hedder-hvad-den-er-ikke-hvad-dens-afkast-bliver-til.md) — afløser denne på de to frie varianters navne; aksen og persongrundlaget står uændret.

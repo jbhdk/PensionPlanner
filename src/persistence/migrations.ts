@@ -90,6 +90,39 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    // v4 → v5: de to frie varianter hed en indkomst, og det er de ikke. En
+    // beholdning er en konto, du ejer; indkomsten er det, dens afkast bliver
+    // til hos personen. `ShareIncome` er nu `ShareDepot` og `CapitalIncome`
+    // `SavingsAccount`, jf. ADR-0017 — personens `shareIncome` og
+    // `capitalIncome` er urørte, for dér er det stadig indkomster.
+    from: 4,
+    migrate: (data) => {
+      const renamed: Record<string, string> = {
+        ShareIncome: 'ShareDepot',
+        CapitalIncome: 'SavingsAccount',
+      }
+      const plan = data as {
+        household?: { persons?: Array<Record<string, unknown>> }
+        [key: string]: unknown
+      }
+
+      return {
+        ...plan,
+        household: {
+          persons: (plan.household?.persons ?? []).map((person) => ({
+            ...person,
+            holdings: ((person.holdings ?? []) as Array<Record<string, unknown>>).map(
+              (holding) => ({
+                ...holding,
+                variant: renamed[holding.variant as string] ?? holding.variant,
+              }),
+            ),
+          })),
+        },
+      }
+    },
+  },
 ]
 
 /** Kører kæden fra `fromVersion` til `toVersion`, ét led ad gangen. Rent og
