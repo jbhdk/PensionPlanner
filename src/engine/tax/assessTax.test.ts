@@ -259,12 +259,88 @@ describe('skatteopgørelsen', () => {
     expect(assessment.layers.middleBracketTax.amount).toBeCloseTo(14_010, 2)
   })
 
+  it('holder indbetalingen med fradragsret uden for den personlige indkomst, men ikke uden for AM-bidraget', () => {
+    // Lønmodtageren fra ADR-0007: 700.000 kr. brutto, hvoraf 105.000 kr.
+    // forlader lønnen som arbejdsgiverbidrag, så der lander 105.000 × 0,92 =
+    // 96.600 kr. på ordningen. Loven måler AM-bidraget af hele bruttolønnen
+    // og fradragsretten af det, der landede — de to former må ikke bytte
+    // plads, jf. docs/satser/2026.md.
+    //   AM-bidrag           8,00 % af 700.000 = 56.000
+    //   Personlig indkomst  644.000 − 96.600  = 547.400
+    const assessment = assess({
+      earnedIncome: 700_000,
+      contribution: { withDeductibility: 96_600, yearsToStatePensionAge: 12 },
+    })
+
+    expect(assessment.layers.labourMarketContribution.base).toBeCloseTo(700_000, 2)
+    expect(assessment.layers.labourMarketContribution.amount).toBeCloseTo(56_000, 2)
+    expect(assessment.personalIncome).toBeCloseTo(547_400, 2)
+  })
+
+  it('lader fradragsretten slå igennem i hvert lag oven på den personlige indkomst', () => {
+    // Samme løn to gange, kun indbetalingen skiftet til og fra. Hvert lag,
+    // der måler på den personlige indkomst, får sit grundlag sænket med
+    // præcis indbetalingen — det er dét, der skiller fradragsretten fra et
+    // ligningsmæssigt fradrag, som kun ville ramme kommune- og kirkeskatten.
+    // Lønnen er valgt så høj, at alle tre progressionslag er i brug.
+    const without = assess({ earnedIncome: 3_000_000 })
+    const withContribution = assess({
+      earnedIncome: 3_000_000,
+      contribution: { withDeductibility: 100_000, yearsToStatePensionAge: 20 },
+    })
+
+    const above = [
+      'bottomBracketTax',
+      'middleBracketTax',
+      'topBracketTax',
+      'additionalTopBracketTax',
+    ] as const
+    for (const layer of above) {
+      expect(
+        without.layers[layer].base - withContribution.layers[layer].base,
+        layer,
+      ).toBeCloseTo(100_000, 2)
+    }
+
+    // AM-bidraget måler på bruttolønnen og rører sig ikke.
+    expect(withContribution.layers.labourMarketContribution.base).toBeCloseTo(
+      without.layers.labourMarketContribution.base,
+      2,
+    )
+  })
+
+  it('lader beskæftigelses- og jobfradragets grundlag være upåvirket af indbetalingen', () => {
+    // De to måler på grundlaget for arbejdsmarkedsbidrag — arbejdsindkomsten
+    // **før** AM-bidrag, jf. LL § 9 J og § 9 K — og indbetalingen rører den
+    // form slet ikke. Lønnen er 300.000 kr., under begge lofter — 12,75 % af
+    // 300.000 = 38.250 og 4,50 % af (300.000 − 235.200) = 2.916 — så et fald
+    // ville kunne ses; i loft ville de stå stille uanset. Trak vi
+    // indbetalingen fra to gange, var det her, det ville vise sig.
+    const without = assess({ earnedIncome: 300_000 })
+    const withContribution = assess({
+      earnedIncome: 300_000,
+      contribution: { withDeductibility: 50_000, yearsToStatePensionAge: 20 },
+    })
+
+    expect(withContribution.allowances.employmentAllowance).toBeCloseTo(
+      without.allowances.employmentAllowance,
+      2,
+    )
+    expect(withContribution.allowances.jobAllowance).toBeCloseTo(
+      without.allowances.jobAllowance,
+      2,
+    )
+    // Og de er ikke bare ens fordi de begge står i loft.
+    expect(withContribution.allowances.employmentAllowance).toBeLessThan(63_300)
+    expect(withContribution.allowances.jobAllowance).toBeLessThan(3_100)
+  })
+
   it('giver ekstra pensionsfradrag af indbetalingen med den lave sats', () => {
     // LL § 9 L: 12 % indtil det 15. indkomstår før det år, personen når
     // folkepensionsalderen. 12 % af 50.000 = 6.000.
     const assessment = assess({
       earnedIncome: 500_000,
-      contribution: { amount: 50_000, yearsToStatePensionAge: 20 },
+      contribution: { withDeductibility: 50_000, yearsToStatePensionAge: 20 },
     })
 
     expect(assessment.allowances.extraPensionAllowance).toBeCloseTo(6_000, 2)
@@ -277,7 +353,7 @@ describe('skatteopgørelsen', () => {
     const pension = (yearsToStatePensionAge: number) =>
       assess({
         earnedIncome: 500_000,
-        contribution: { amount: 50_000, yearsToStatePensionAge },
+        contribution: { withDeductibility: 50_000, yearsToStatePensionAge },
       }).allowances.extraPensionAllowance
 
     expect(pension(16)).toBeCloseTo(6_000, 2)
@@ -293,7 +369,7 @@ describe('skatteopgørelsen', () => {
     const pension = (yearsToStatePensionAge: number) =>
       assess({
         earnedIncome: 900_000,
-        contribution: { amount: 120_000, yearsToStatePensionAge },
+        contribution: { withDeductibility: 120_000, yearsToStatePensionAge },
       }).allowances.extraPensionAllowance
 
     expect(pension(20)).toBeCloseTo(10_536, 2)

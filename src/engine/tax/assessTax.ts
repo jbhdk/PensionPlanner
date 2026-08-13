@@ -8,15 +8,32 @@ export type TaxAssessmentInput = {
   earnedIncome: Nominal
   municipalTaxRate: number
   churchTaxRate: number
-  /** Årets fradragsberettigede indbetaling til pension, og hvor langt
-      personen er fra folkepensionsalderen — de to tal, det ekstra
-      pensionsfradrag kræver. Uden en indbetaling er der intet fradrag, og
-      feltet udelades. */
+  /** Årets indbetaling med `Deductibility`, og hvor langt personen er fra
+      folkepensionsalderen. Uden en indbetaling udelades feltet.
+
+      Det er den tax-relevante gruppering og ikke beholdningsmodellen, der
+      krydser sømmet: skattereglen hedder ikke "ratepension giver
+      fradragsret", men "indbetalinger til ordninger, hvis udbetaling er
+      personlig indkomst, giver fradragsret". Hvilke varianter det så er,
+      afgøres i `simulate` — opgørelsen her ser aldrig en `HoldingVariant`. */
   contribution?: {
-    /** Det beløb, der landede i beholdningen — altså **efter** AM-bidrag, og
-        ikke det, der forlod kilden. LL § 9 L, stk. 1, måler på det, og
-        `Contribution.amount` er brutto; de to er ikke samme tal. */
-    amount: Nominal
+    /** Summen af årets indbetalinger til ordninger med `Deductibility`,
+        målt **efter** AM-bidrag — altså det, der landede i beholdningerne, og
+        ikke det, der forlod kilden. Både fradragsretten og det ekstra
+        pensionsfradrags grundlag måler på den form, jf. LL § 9 L, stk. 1, og
+        docs/satser/2026.md.
+
+        Ét tal og ikke to: det ekstra pensionsfradrags grundlag er netop de
+        indbetalinger, fradragsretten omfatter. Den juridiske vejledning
+        C.A.4.3.9 måler grundlaget som "indbetalinger til pensionsordninger,
+        der er fradragsberettigede efter PBL § 18 eller bortseelsesberettigede
+        efter PBL § 19", og aldersopsparingen er ingen af delene. En
+        indbetaling til en `OldAgeSavings` giver derfor hverken det ene eller
+        det andet — se docs/satser/2026.md, som også skriver fælden ud.
+
+        Grundlaget nedsættes efter § 9 L, stk. 2, med årets skattepligtige
+        pensionsudbetalinger. Det led er ikke bygget, jf. docs/udskudt.md. */
+    withDeductibility: Nominal
     /** Antal indkomstår frem til det indkomstår, hvor personen når
         folkepensionsalderen — nul i selve det år, negativt bagefter. Det er
         den differens, LL § 9 L, stk. 3, tæller på. */
@@ -78,6 +95,12 @@ export type TaxAssessment = {
   /** Satsåret, opgørelsen er regnet på, jf. ADR-0005. */
   rateYear: SimulationYear
   personalIncome: Nominal
+  /** Den del af årets indbetaling, der blev holdt uden for den personlige
+      indkomst. Står ved siden af `personalIncome`, så vejen fra bruttolønnen
+      dertil kan efterregnes i hånden — bruttoløn − AM-bidrag − denne — frem
+      for at fladen skal udlede den som en difference, jf. ADR-0012. Nul i et
+      år uden en indbetaling med `Deductibility`. */
+  contributionWithDeductibility: Nominal
   /** Personlig indkomst efter de ligningsmæssige fradrag. Grundlaget for
       kommune- og kirkeskat alene. */
   taxableIncome: Nominal
@@ -101,7 +124,14 @@ export function assessTax(
 ): TaxAssessment {
   const labourMarketContribution =
     input.earnedIncome * rates.taxRates.labourMarketContribution
-  const personalIncome = input.earnedIncome - labourMarketContribution
+  // Fradragsretten er ikke et `Allowance`: den holder indbetalingen uden for
+  // den **personlige** indkomst og virker dermed på alle lag ovenpå, hvor et
+  // ligningsmæssigt fradrag kun rører den skattepligtige. AM-bidraget er
+  // allerede regnet af hele bruttolønnen ovenfor og rører sig ikke — det er
+  // sådan loven måler, og det er derfor de to tal ikke er det samme.
+  const contributionWithDeductibility = input.contribution?.withDeductibility ?? 0
+  const personalIncome =
+    input.earnedIncome - labourMarketContribution - contributionWithDeductibility
 
   const allowances = {
     employmentAllowance: employmentAllowance(input, rates),
@@ -123,6 +153,7 @@ export function assessTax(
   return {
     rateYear: rates.year,
     personalIncome,
+    contributionWithDeductibility,
     taxableIncome,
     allowances,
     layers: {
@@ -194,7 +225,7 @@ function extraPensionAllowance(
       : rates.allowanceRates.extraPensionAllowanceEarly
 
   const base = Math.min(
-    input.contribution.amount,
+    input.contribution.withDeductibility,
     rates.thresholds.extraPensionAllowanceBaseMax,
   )
 

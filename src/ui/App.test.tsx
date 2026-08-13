@@ -1441,6 +1441,70 @@ describe('fladen', () => {
     expect(within(blok).getByText('43,08 %')).toBeTruthy()
   })
 
+  it('viser hvordan den personlige indkomst kommer fra bruttolønnen og indbetalingen', async () => {
+    // Uden linjen kan brugeren ikke se forskel på et år, hvor indbetalingen
+    // virkede, og et år, hvor den ikke gjorde. Fradragsretten står her og
+    // ikke nede ved de ligningsmæssige fradrag, fordi den nedsætter den
+    // personlige indkomst og dermed alle lag ovenpå — samme opstilling som
+    // docs/mockup/flade.js.
+    const user = userEvent.setup()
+    const plan = aPlanWithPension()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          startYear: 2026,
+          entries: [aSalary({ amountInRealKroner: 700_000 })],
+          contributions: [
+            aContribution({
+              source: 'salary',
+              to: 'ratepension',
+              amountInRealKroner: 105_000,
+            }),
+          ],
+        }}
+      />,
+    )
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2026
+
+    const blok = screen.getByRole('heading', { name: 'Jesper', level: 3 }).closest('.blok') as HTMLElement
+    const post = (label: string) =>
+      within(blok).getByText(label).closest('.stribepost')!.querySelector('.v')!.textContent
+
+    // 700.000 − 56.000 − 96.600 = 547.400. Det er de 96.600, der landede, og
+    // ikke de 105.000, der forlod lønnen: AM-bidraget måles af bruttolønnen.
+    expect(post('Løn og skattepligtige poster')).toBe('700.000')
+    expect(post('AM-bidrag, 8,00 %')).toBe('-56.000')
+    expect(post('Indbetaling med fradragsret')).toBe('-96.600')
+    expect(post('Personlig indkomst')).toBe('547.400')
+  })
+
+  it('udelader linjen om fradragsret i et år uden en indbetaling, der har den', async () => {
+    // En linje på nul ville sige, at der var en indbetaling uden virkning.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...aPlan({ startYear: 2026, entries: [aSalary({ amountInRealKroner: 700_000 })] }),
+        }}
+      />,
+    )
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2026
+
+    const blok = screen.getByRole('heading', { name: 'Jesper', level: 3 }).closest('.blok') as HTMLElement
+    expect(within(blok).queryByText('Indbetaling med fradragsret')).toBeNull()
+    expect(
+      within(blok).getByText('Personlig indkomst').closest('.stribepost')!.querySelector('.v')!
+        .textContent,
+    ).toBe('644.000')
+  })
+
   it('viser primosaldo, vægtet strøm, nettoafkastsats og afkast pr. beholdning', async () => {
     const user = userEvent.setup()
     const plan: Plan = {

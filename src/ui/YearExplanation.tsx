@@ -365,9 +365,33 @@ function PersonTaxBlock({
     }
   }
 
+  const { labourMarketContribution } = year.tax.layers
+
   return (
     <div className="blok">
       <h3>{person.name}</h3>
+      {/* Vejen fra bruttolønnen til den personlige indkomst, som den er
+          tegnet i docs/mockup/flade.js. Fradragsretten står her og ikke nede
+          blandt de ligningsmæssige fradrag, fordi den nedsætter den
+          personlige indkomst og dermed hvert lag ovenpå — og fordi et år,
+          hvor indbetalingen virkede, ellers ville se ud som et, hvor den
+          ikke gjorde. Linjen udebliver, når året ingen indbetaling har med
+          `Deductibility`: en linje på nul ville påstå det modsatte. */}
+      <StripePost
+        label="Løn og skattepligtige poster"
+        amount={display(labourMarketContribution.base)}
+      />
+      <StripePost
+        label={`AM-bidrag, ${procent(labourMarketContribution.rate)}`}
+        amount={display(-labourMarketContribution.amount)}
+      />
+      {year.tax.contributionWithDeductibility > 0 && (
+        <StripePost
+          label="Indbetaling med fradragsret"
+          amount={display(-year.tax.contributionWithDeductibility)}
+        />
+      )}
+      <StripePost label="Personlig indkomst" amount={display(year.tax.personalIncome)} />
       <StripePost label="Aktieindkomst" amount={display(year.shareIncome)} />
       <StripePost label="Kapitalindkomst" amount={display(year.capitalIncome)} />
       <div className="stribepost">

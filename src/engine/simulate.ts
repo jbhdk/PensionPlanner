@@ -24,8 +24,10 @@ import type {
   Transfer,
 } from './plan'
 import { yearAtAge } from './age'
+import { hasDeductibility } from './holdingVariant'
 import { rateYearFor } from './rates/rates'
 import type { RateYear } from './rates/rateYear'
+import { statePensionYear } from './statePensionAge'
 import { assessHousehold, totalHouseholdTax } from './tax/assessHousehold'
 import type { TaxAssessmentInput } from './tax/assessTax'
 import { validatePlan } from './validatePlan'
@@ -112,6 +114,7 @@ function simulateYear(
 
   const shareIncomeByPerson = incomeByVariant(plan, flowed, 'ShareDepot')
   const capitalIncomeByPerson = incomeByVariant(plan, flowed, 'SavingsAccount')
+  const withDeductibilityByPerson = contributionsWithDeductibility(plan, contributions)
 
   // Hele husstandens skat bag ét søm, jf. ADR-0014. Motoren lægger intet
   // sammen selv: aktieindkomstens skat er husstandens og hører ikke til
@@ -119,7 +122,10 @@ function simulateYear(
   const household = assessHousehold(
     {
       persons: plan.household.persons.map((person) => ({
-        tax: taxInput(entries, person, rates, capitalIncomeByPerson.get(person.id)!),
+        tax: taxInput(entries, person, rates, year, {
+          capitalIncome: capitalIncomeByPerson.get(person.id)!,
+          withDeductibility: withDeductibilityByPerson.get(person.id)!,
+        }),
         shareIncome: shareIncomeByPerson.get(person.id)!,
       })),
     },
@@ -249,15 +255,60 @@ export function returnWeight(timing: Timing): number {
   return timing === 'Even' ? 0.5 : (12 - timing + 1) / 12
 }
 
+/** Summen af det, der landede i hver persons ordninger med `Deductibility`.
+    Det er denne gruppering — og aldrig en `HoldingVariant` — der krydser
+    skattesømmet: skattereglen hedder ikke "ratepension giver fradragsret",
+    men "indbetalinger til ordninger, hvis udbetaling er personlig indkomst,
+    giver fradragsret", og hvilke varianter det så er, er varianttabellens
+    viden og ikke skattens, jf. ADR-0016 og ADR-0014. Det er det samme greb
+    som `capitalIncome`, der også krydser som et tal.
+
+    Det er beløbet, der **landede**, og ikke det, der forlod kilden: både
+    fradragsretten og det ekstra pensionsfradrags grundlag måler efter
+    AM-bidrag, jf. docs/satser/2026.md. */
+function contributionsWithDeductibility(
+  plan: Plan,
+  contributions: ActiveContribution[],
+): Map<PersonId, Nominal> {
+  return new Map(
+    plan.household.persons.map((person) => [
+      person.id,
+      person.holdings
+        .filter(hasDeductibility)
+        .reduce(
+          (sum, holding) =>
+            sum +
+            contributions
+              .filter(({ contribution }) => contribution.to === holding.id)
+              .reduce((into, { intoHolding }) => into + intoHolding, 0),
+          0,
+        ),
+    ]),
+  )
+}
+
 /** Det, en persons skat skal regnes af — selve opgørelsen sker bag
     skattesømmet. Kommune- og kirkeskatteprocenten slås op i satsåret efter
     personens bopælskommune. Kirkeskatten slås fra ved at regne med nul, når
-    personen ikke er medlem af folkekirken. */
+    personen ikke er medlem af folkekirken.
+
+    Årets indbetaling med `Deductibility` går med som ét tal og udelades, når
+    den er nul — så står året uden indbetaling, og fradraget følger
+    indbetalingen frem for personen. Årstællingen frem til
+    folkepensionsalderen går gennem `statePensionYear`, motorens eneste vej
+    til det årstal, så det ekstra pensionsfradrags 15-årsgrænse og
+    folkepensionens egen start ikke kan skille sig i det halve år.
+
+    De to tal, `simulateYear` allerede har regnet pr. person, står i ét
+    argument frem for som to `Nominal` ved siden af hinanden: to bare tal i
+    træk kan byttes om uden at compileren siger fra, og det er præcis den
+    slags fejl, der ikke viser sig som andet end en forkert skat. */
 function taxInput(
   entries: ActiveEntry[],
   person: Person,
   rates: RateYear,
-  capitalIncome: Nominal,
+  year: SimulationYear,
+  ofPerson: { capitalIncome: Nominal; withDeductibility: Nominal },
 ): TaxAssessmentInput {
   const earnedIncome = entries
     .filter(
@@ -274,7 +325,15 @@ function taxInput(
     earnedIncome,
     municipalTaxRate: municipalTax.municipalTaxRate,
     churchTaxRate: person.churchMember ? municipalTax.churchTaxRate : 0,
-    capitalIncome,
+    capitalIncome: ofPerson.capitalIncome,
+    ...(ofPerson.withDeductibility > 0
+      ? {
+          contribution: {
+            withDeductibility: ofPerson.withDeductibility,
+            yearsToStatePensionAge: statePensionYear(person) - year,
+          },
+        }
+      : {}),
   }
 }
 

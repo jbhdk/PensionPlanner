@@ -1248,22 +1248,43 @@ describe('beholdningsskat', () => {
 
 
 describe('indbetalinger', () => {
-  /** Fixturens buffer plus en ratepension at betale ind i. Uden afkast, med
+  /** De tre ordninger, en indbetaling kan gå til. De to første deler
+      `Deductibility`, den tredje har den ikke — det er hele skellet, testene
+      herunder måler på. */
+  const instalmentPension = {
+    id: 'ratepension',
+    name: 'Ratepension',
+    variant: 'InstalmentPension',
+  } as const
+  const lifeAnnuity = { id: 'livrente', name: 'Livrente', variant: 'LifeAnnuity' } as const
+  const oldAgeSavings = {
+    id: 'aldersopsparing',
+    name: 'Aldersopsparing',
+    variant: 'OldAgeSavings',
+  } as const
+
+  /** Fixturens buffer plus én ordning at betale ind i. Uden afkast, med
       mindre testen beder om det — så står bevægelsen alene. */
-  function aPlanWithPension(options: Parameters<typeof aPlan>[0] = {}): Plan {
+  function aPlanWithScheme(
+    scheme: { id: string; name: string; variant: HoldingVariant },
+    options: Parameters<typeof aPlan>[0] = {},
+  ): Plan {
     return aPlan({
       ...options,
       holdings: [
         {
-          id: 'ratepension',
-          name: 'Ratepension',
-          variant: 'InstalmentPension',
+          ...scheme,
           balance: 0,
           grossReturn: options.grossReturn ?? 0,
           annualCostRate: options.annualCostRate ?? 0,
         },
       ],
     })
+  }
+
+  /** Ordningen de fleste af testene herunder bruger. */
+  function aPlanWithPension(options: Parameters<typeof aPlan>[0] = {}): Plan {
+    return aPlanWithScheme(instalmentPension, options)
   }
 
   it('flytter et fast bidrag fra bufferen ind i ordningen', () => {
@@ -1330,21 +1351,26 @@ describe('indbetalinger', () => {
   })
 
   it('belaster bufferen nettobeløbet og lader AM-delen ligge i årets skat', () => {
-    // Samme plan to gange, kun bidraget skiftet til og fra. Skatten er den
-    // samme i begge: AM-bidraget er af hele bruttolønnen og rører sig ikke af,
-    // at en del af den flyttes videre — fradragsretten bygges ikke i denne
-    // skive. Bufferen mister derfor præcis nettobeløbet og ikke bruttoet;
-    // trak den bruttoet, ville AM-delen være betalt to gange.
+    // Samme plan to gange, kun bidraget skiftet til og fra. Destinationen er
+    // en aldersopsparing, som ingen `Deductibility` har, så skatten står
+    // stille og bevægelsen kan ses alene: AM-bidraget er af hele bruttolønnen
+    // og rører sig ikke af, at en del af den flyttes videre. Bufferen mister
+    // derfor præcis nettobeløbet og ikke bruttoet; trak den bruttoet, ville
+    // AM-delen være betalt to gange.
     const options = {
       balance: 1_000_000,
       entries: [aSalary({ amountInRealKroner: 600_000 })],
     }
-    const without = simulateChecked(aPlanWithPension(options))[0]!
+    const without = simulateChecked(aPlanWithScheme(oldAgeSavings, options))[0]!
     const withContribution = simulateChecked(
-      aPlanWithPension({
+      aPlanWithScheme(oldAgeSavings, {
         ...options,
         contributions: [
-          aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 48_000 }),
+          aContribution({
+            source: 'salary',
+            to: 'aldersopsparing',
+            amountInRealKroner: 48_000,
+          }),
         ],
       }),
     )[0]!
@@ -1354,6 +1380,137 @@ describe('indbetalinger', () => {
     // Intet nyt led i balanceinvarianten: bevægelsen flytter formue mellem to
     // beholdninger og ændrer ikke husstandens samlede.
     expect(withContribution.closingWealth).toBeCloseTo(without.closingWealth, 6)
+  })
+
+  it('lader en indbetaling til aldersopsparingen stå uden for den personlige indkomst', () => {
+    // Samme løn og samme beløb som ratepensionscasen ovenfor, men en ordning
+    // uden `Deductibility`: den personlige indkomst er hele bruttolønnen efter
+    // AM-bidrag, 700.000 − 56.000 = 644.000, og indbetalingen nedsætter
+    // ingenting. Det er hele grunden til, at brugeren skal kunne sammenligne
+    // de to slags ordning.
+    const plan = aPlanWithScheme(oldAgeSavings, {
+      balance: 1_000_000,
+      entries: [aSalary({ amountInRealKroner: 700_000 })],
+      contributions: [
+        aContribution({
+          source: 'salary',
+          to: 'aldersopsparing',
+          amountInRealKroner: 105_000,
+        }),
+      ],
+    })
+
+    const { tax } = simulateChecked(plan)[0]!.persons[0]!
+
+    expect(tax.personalIncome).toBeCloseTo(644_000, 6)
+    // Og fradraget følger indbetalingen med fradragsret, ikke indbetalingen:
+    // en aldersopsparing giver heller ikke det ekstra pensionsfradrag.
+    expect(tax.allowances.extraPensionAllowance).toBe(0)
+  })
+
+  it('giver samme beløb til de to slags ordning hver sin skat', () => {
+    // Forskellen skal kunne efterregnes: de 96.600 kr., der landede, er ude
+    // af den personlige indkomst i den ene plan og med i den anden, og
+    // derudover giver de 12 % i ekstra pensionsfradrag af grundlaget i loft.
+    const options = {
+      balance: 1_000_000,
+      entries: [aSalary({ amountInRealKroner: 700_000 })],
+    }
+    const contribution = (to: string) => [
+      aContribution({ source: 'salary', to, amountInRealKroner: 105_000 }),
+    ]
+    const pension = simulateChecked(
+      aPlanWithScheme(instalmentPension, {
+        ...options,
+        contributions: contribution('ratepension'),
+      }),
+    )[0]!
+    const savings = simulateChecked(
+      aPlanWithScheme(oldAgeSavings, {
+        ...options,
+        contributions: contribution('aldersopsparing'),
+      }),
+    )[0]!
+
+    expect(pension.tax).toBeLessThan(savings.tax)
+
+    // Hvidovre 2026: 25,40 % kommuneskat og 0,72 % kirkeskat. De 96.600 kr.
+    // går ud af den personlige indkomst, og oven i dem giver de 12 % i ekstra
+    // pensionsfradrag af grundlaget i loft — 12 % af 87.800 = 10.536, den
+    // lave sats fordi der er 17 indkomstår til folkepensionsalderen. Det
+    // fradrag er ligningsmæssigt og rører kun kommune- og kirkeskatten, hvor
+    // fradragsretten rører alle lag ovenpå den personlige indkomst.
+    //
+    //   Bundskat    12,01 % af  96.600           = 11.601,6600
+    //   Kommuneskat 25,40 % af (96.600 + 10.536) = 27.212,5440
+    //   Kirkeskat    0,72 % af (96.600 + 10.536) =    771,3792
+    //   Mellemskat   7,16 % af   2.800           =    200,4800
+    //                                              ────────────
+    //                                              39.786,0632
+    //
+    // Mellemskatten er fradragsrettens virkning på et lag ovenpå, gjort til
+    // et tal: 644.000 lå over grænsen på 641.200, 547.400 ligger under, så
+    // laget forsvinder helt. Satsen er 7,16 % og ikke 7,50 %, fordi det skrå
+    // skatteloft binder ved Hvidovres kommunesats.
+    expect(savings.tax - pension.tax).toBeCloseTo(39_786.0632, 4)
+  })
+
+  it('giver livrenten samme fradragsret som ratepensionen', () => {
+    // De to varianter deler beskatning fuldstændigt og skilles kun af loftet,
+    // jf. ADR-0015 — fradragsretten er den samme.
+    const options = {
+      balance: 1_000_000,
+      entries: [aSalary({ amountInRealKroner: 700_000 })],
+    }
+    const annuity = simulateChecked(
+      aPlanWithScheme(lifeAnnuity, {
+        ...options,
+        contributions: [
+          aContribution({ source: 'salary', to: 'livrente', amountInRealKroner: 105_000 }),
+        ],
+      }),
+    )[0]!
+
+    expect(annuity.persons[0]!.tax.personalIncome).toBeCloseTo(547_400, 6)
+  })
+
+  it('regner det ekstra pensionsfradrag af årets faktiske indbetaling', () => {
+    // Fradraget stod som nul gennem hele etape 1, fordi planen ingen
+    // indbetalinger havde at regne det af. Nu har den: 12 % af de 96.600 kr.,
+    // der landede — den lave sats, fordi der er 17 indkomstår til
+    // folkepensionsalderen, jf. LL § 9 L, stk. 3.
+    const plan = aPlanWithPension({
+      balance: 1_000_000,
+      entries: [aSalary({ amountInRealKroner: 700_000 })],
+      contributions: [
+        aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 105_000 }),
+      ],
+    })
+
+    const { tax } = simulateChecked(plan)[0]!.persons[0]!
+
+    // Grundlaget er i loft ved 87.800 kr.: 12 % af 87.800 = 10.536.
+    expect(tax.allowances.extraPensionAllowance).toBeCloseTo(10_536, 6)
+  })
+
+  it('holder en indbetaling til ratepensionen uden for den personlige indkomst', () => {
+    // Lønmodtageren fra ADR-0007: 700.000 kr. brutto, hvoraf 105.000 kr. går
+    // videre som arbejdsgiverbidrag. Der lander 96.600 kr. på ordningen, og
+    // det er dét beløb, fradragsretten holder uden for indkomsten:
+    // 700.000 − 56.000 − 96.600 = 547.400.
+    const plan = aPlanWithPension({
+      balance: 1_000_000,
+      entries: [aSalary({ amountInRealKroner: 700_000 })],
+      contributions: [
+        aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 105_000 }),
+      ],
+    })
+
+    const { tax } = simulateChecked(plan)[0]!.persons[0]!
+
+    expect(tax.personalIncome).toBeCloseTo(547_400, 6)
+    // AM-bidraget måler stadig på hele bruttolønnen.
+    expect(tax.layers.labourMarketContribution.base).toBeCloseTo(700_000, 6)
   })
 
   it('lader et procentbidrag følge lønpostens regulering uden et andet tal at vedligeholde', () => {

@@ -259,44 +259,49 @@ export const workedExamples: readonly WorkedExample[] = [
       'ind på ordningen',
     source:
       'docs/satser/2026.md — beløbsgrænser efter PSL § 20 (skm.dk), de fire ' +
-      'lag på personlig indkomst (skat.dk), fradragsprocenterne (skat.dk) og ' +
-      'det ekstra pensionsfradrags satser og 15-årsgrænse (LL § 9 L, stk. 3) ' +
-      'samt fradragsgrundlagets måleform efter AM-bidrag (LL § 9 L, stk. 1)',
+      'lag på personlig indkomst (skat.dk), fradragsprocenterne (skat.dk), ' +
+      'det ekstra pensionsfradrags satser og 15-årsgrænse (LL § 9 L, stk. 3), ' +
+      'fradragsgrundlagets måleform efter AM-bidrag (LL § 9 L, stk. 1) og ' +
+      'fradragsrettens virkning på den personlige indkomst (PBL § 19)',
     verifiedOn: '2026-08-13',
     dependsOnUnconfirmed: [],
 
     // Lønmodtageren fra ADR-0007: 700.000 kr. brutto, hvoraf 105.000 kr.
     // forlader lønnen som arbejdsgiverbidrag. Der lander 105.000 × 0,92 =
-    // 96.600 kr. på ordningen, og det er dét beløb, fradragsgrundlaget måler
-    // på — se docs/satser/2026.md. Tolv indkomstår til det år, personen når
-    // folkepensionsalderen, altså den høje sats.
+    // 96.600 kr. på ordningen, og det er dét beløb, både fradragsretten og
+    // det ekstra pensionsfradrags grundlag måler på — se docs/satser/2026.md.
+    // Tolv indkomstår til det år, personen når folkepensionsalderen, altså
+    // den høje sats.
     //
-    // Casen dækker fradragene alene. Indbetalingens bortseelsesret er ikke
-    // modelleret endnu — se docs/udskudt.md — og den personlige indkomst
-    // står derfor med hele bruttolønnen bag sig. En årsopgørelse ville vise
-    // en lavere skat; det er de tre fradrags regneregler, casen binder.
+    // Casen er den, indbetalingens to skattevirkninger mødes i. Fradragsretten
+    // holder de 96.600 kr. uden for den personlige indkomst og virker dermed
+    // på hvert lag ovenpå; det ekstra pensionsfradrag er et ligningsmæssigt
+    // fradrag og rører kun den skattepligtige. AM-bidraget måles imens af hele
+    // bruttolønnen. Mellemskatten forsvinder helt: 547.400 ligger under
+    // grænsen, hvor 644.000 lå over — det er fradragsrettens virkning på et
+    // lag ovenpå, gjort til et tal.
     //
-    // AM-bidrag   8,00 % af 700.000              =  56.000,00
-    // Personlig indkomst  700.000 − 56.000       = 644.000,00
-    // Beskæftigelsesfradrag, i loft              =  63.300,00
-    // Jobfradrag, i loft                         =   3.100,00
-    // Ekstra pensionsfradrag 32 % af 87.800      =  28.096,00  (grundlag i loft)
-    // Skattepligtig indkomst 644.000 − 94.496    = 549.504,00
-    // Bundskat   12,01 % af (644.000 − 54.100)   =  70.846,99
-    // Kommuneskat 25,40 % af (549.504 − 54.100)  = 125.832,62
-    // Kirkeskat    0,74 % af (549.504 − 54.100)  =   3.665,99
-    // Mellemskat   7,16 % af (644.000 − 641.200) =     200,48  (loftet binder)
-    //                                              ──────────
-    //                                              256.546,08
+    // AM-bidrag   8,00 % af 700.000                =  56.000,0000
+    // Personlig indkomst  700.000 − 56.000 − 96.600 = 547.400,0000
+    // Beskæftigelsesfradrag, i loft                =  63.300,0000
+    // Jobfradrag, i loft                           =   3.100,0000
+    // Ekstra pensionsfradrag 32 % af 87.800        =  28.096,0000  (grundlag i loft)
+    // Skattepligtig indkomst 547.400 − 94.496      = 452.904,0000
+    // Bundskat   12,01 % af (547.400 − 54.100)     =  59.245,3300
+    // Kommuneskat 25,40 % af (452.904 − 54.100)    = 101.296,2160
+    // Kirkeskat    0,74 % af (452.904 − 54.100)    =   2.951,1496
+    // Mellemskat            547.400 < 641.200      =       0,0000
+    //                                                ────────────
+    //                                                219.492,6956
     input: {
       earnedIncome: 700_000,
       municipalTaxRate: 0.254,
       churchTaxRate: 0.0074,
-      contribution: { amount: 96_600, yearsToStatePensionAge: 12 },
+      contribution: { withDeductibility: 96_600, yearsToStatePensionAge: 12 },
     },
     expected: {
-      personalIncome: 644_000,
-      taxableIncome: 549_504,
+      personalIncome: 547_400,
+      taxableIncome: 452_904,
       allowances: {
         employmentAllowance: cappedEmploymentAllowance,
         jobAllowance: cappedJobAllowance,
@@ -304,13 +309,13 @@ export const workedExamples: readonly WorkedExample[] = [
       },
       layers: {
         labourMarketContribution: 56_000,
-        bottomBracketTax: 70_846.99,
-        municipalTax: 125_832.62,
-        churchTax: 3_665.99,
-        middleBracketTax: 200.48,
+        bottomBracketTax: 59_245.33,
+        municipalTax: 101_296.216,
+        churchTax: 2_951.1496,
+        middleBracketTax: 0,
         topBracketTax: 0,
       },
-      total: 256_546.08,
+      total: 219_492.6956,
     },
   },
 ]
