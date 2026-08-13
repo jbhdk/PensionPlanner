@@ -30,7 +30,13 @@ var SATSER_2026 = {
   aftrapningFradrag: 198800,
   aftrapningIkkePensionist: 0.32,
   aftrapningPensionist: 0.16,
-  aegtefaelleBortseelse: 0.54
+  aegtefaelleBortseelse: 0.54,
+  /* Lofterne. De to former måler ikke det samme: PerYear måler årets samlede
+     indbetaling til ordningen, OnBalance måler saldoen ved årets begyndelse. */
+  ratepensionLoft: 68700,
+  aldersopsparingLoft: 9900,
+  aldersopsparingLoftHoej: 64200,
+  aktiesparekontoLoft: 174200
 };
 
 var PLAN = {
@@ -90,9 +96,9 @@ var YDELSER = [
 
 /* Beløb i dagens kroner. retning: ind | ud. */
 var POSTER = [
-  { navn: 'Løn', ejer: 'j', retning: 'ind', beloeb: 1150000, skat: 'Personlig indkomst',
+  { navn: 'Løn', ejer: 'j', retning: 'ind', beloeb: 1150000, skat: 'Arbejdsindkomst',
     forankring: 'alder', periode: 'Nu – Jespers erhvervsophør', gentagelse: 'Hvert år', forfald: 'Jævnt' },
-  { navn: 'Løn', ejer: 'a', retning: 'ind', beloeb: 620000, skat: 'Personlig indkomst',
+  { navn: 'Løn', ejer: 'a', retning: 'ind', beloeb: 620000, skat: 'Arbejdsindkomst',
     forankring: 'alder', periode: 'Nu – Annes erhvervsophør', gentagelse: 'Hvert år', forfald: 'Jævnt' },
   { navn: 'Arv efter far', ejer: 'j', retning: 'ind', beloeb: 900000, skat: 'Skattefri',
     forankring: 'kalender', fra: 2038, til: 2038, periode: '2038', gentagelse: 'Én gang', forfald: 'Juni' },
@@ -115,15 +121,65 @@ var POSTER = [
     periode: 'Hele horisonten', gentagelse: 'Hvert år', forfald: 'Jævnt' }
 ];
 
+/* En overførsel flytter mellem frie midler. Flytningen til aktiesparekontoen
+   stod her indtil etape 2 og hørte aldrig til: destinationen er en ordning med
+   et loft, og så er det en indbetaling — jf. ADR-0016. Den står nu blandt
+   INDBETALINGER. */
 var OVERFOERSLER = [
-  { fra: 'b1', til: 'b3', beloeb: 15000, gentagelse: 'Hvert år', periode: '2026 – 2038', forfald: 'Januar' },
   { fra: 'b2', til: 'b1', beloeb: 200000, gentagelse: 'Én gang', periode: '2047', forfald: 'Juni' }
+];
+
+/* Indbetalinger. Kilden er enten en lønpost — et indeks i POSTER — eller en
+   beholdning, og det er hele skellet mellem de to former, jf. ADR-0016.
+
+   Et lønkildet bidrag arver periode, forankring, gentagelse og forfald fra sin
+   post og bærer derfor kun destinationen og en beløbsangivelse: enten en
+   procent af posten eller et fast beløb i dagens kroner. Et beholdningskildet
+   bidrag har ingen post at arve fra og bærer dem alle selv.
+
+   Fradragsretten og loftet står ikke her: begge følger destinationens variant
+   og slås op. AM-behandlingen følger kilden.                                 */
+var INDBETALINGER = [
+  { kilde: { post: 0 }, destination: 'b4', procent: 0.0800 },
+  { kilde: { post: 0 }, destination: 'b7', beloeb: 9900 },
+  { kilde: { post: 1 }, destination: 'b9', procent: 0.1200 },
+  { kilde: { post: 1 }, destination: 'b8', procent: 0.0400 },
+  { kilde: { beholdning: 'b1' }, destination: 'b3', beloeb: 15000,
+    forankring: 'kalender', fra: 2026, tilAar: 2038, periode: '2026 – 2038',
+    gentagelse: 'Hvert år', forfald: 'Januar' },
+  /* Aldersopsparingens høje loft gælder de sidste syv år før folkepensionen.
+     Jesper holder op med at arbejde som 58, så hele det vindue ligger efter
+     sidste lønkrone — uden en kilde, der er en beholdning, kan det ikke
+     skrives. Det er ADR-0016's egen begrundelse, sat i fixturen. */
+  { kilde: { beholdning: 'b1' }, destination: 'b7', beloeb: 64200,
+    forankring: 'alder', fra: 2036, tilAar: 2042, periode: 'Jesper 63 – Jesper 69',
+    gentagelse: 'Hvert år', forfald: 'Januar' }
 ];
 
 /* ---------- mock-motoren ---------- */
 
 function alder(person, aar) { return aar - person.foedselsaar; }
 function nettoafkast(b) { return b.brutto - b.aaop; }
+function behP(id) { return BEHOLDNINGER.filter(function (b) { return b.id === id; })[0]; }
+function persP(id) { return PERSONER.filter(function (p) { return p.id === id; })[0]; }
+
+/* Fradragsretten følger destinationens variant og er ikke noget, bidraget
+   bærer selv — jf. ADR-0016. Loftet er et uafhængigt opslag i samme tabel:
+   aldersopsparingen har et loft og ingen fradragsret, den arbejdsgiver-
+   administrerede livrente har fradragsret og intet loft. */
+function harFradragsret(b) { return b.type === 'rate' || b.type === 'livrente'; }
+
+function loftFor(b, aar) {
+  var s = SATSER_2026, f = Math.pow(1 + PLAN.paragraf20, aar - PLAN.startAar);
+  if (b.type === 'rate') return { form: 'PerYear', beloeb: s.ratepensionLoft * f };
+  if (b.type === 'alder') {
+    var p = persP(b.ejer);
+    var hoej = alder(p, aar) >= p.folkepensionsalder - 7;
+    return { form: 'PerYear', beloeb: (hoej ? s.aldersopsparingLoftHoej : s.aldersopsparingLoft) * f };
+  }
+  if (b.type === 'ask') return { form: 'OnBalance', beloeb: s.aktiesparekontoLoft * f };
+  return null;
+}
 
 function personskat(p) {
   var s = SATSER_2026, f = Math.pow(1 + PLAN.paragraf20, p.aar - PLAN.startAar);
@@ -131,7 +187,9 @@ function personskat(p) {
   var l = {};
 
   var am = p.arbejdsindkomst * s.amBidrag;
-  var pi = p.arbejdsindkomst - am + p.ovrigPersonligIndkomst;
+  /* Fradragsretten holder indbetalingen uden for den personlige indkomst og
+     rammer dermed alle lag ovenpå. Den er ikke et ligningsmæssigt fradrag. */
+  var pi = p.arbejdsindkomst - am + p.ovrigPersonligIndkomst - (p.fradragsret || 0);
   var posKap = Math.max(0, p.kapitalindkomst);
 
   var besk = Math.min((p.arbejdsindkomst - am) * s.beskaeftigelsesfradragPct, g('beskaeftigelsesfradragMaks'));
@@ -140,6 +198,7 @@ function personskat(p) {
   var pf = g('personfradrag');
 
   l.amBidrag = am;
+  l.fradragsret = p.fradragsret || 0;
   l.personligIndkomst = pi;
   l.kapitalindkomst = p.kapitalindkomst;
   l.aktieindkomst = p.aktieindkomst;
@@ -182,13 +241,23 @@ function postAktiv(post, aar) {
   return true;
 }
 
+/* Et lønkildet bidrag har ingen periode at prøve: det falder præcis de år,
+   dets post falder, og ophører af sig selv ved erhvervsophøret. */
+function indbetalingAktiv(ind, aar) {
+  if (ind.kilde.post !== undefined) return postAktiv(POSTER[ind.kilde.post], aar);
+  if (aar < ind.fra || aar > ind.tilAar) return false;
+  if (ind.gentagelse === 'Én gang') return aar === ind.fra;
+  return true;
+}
+
 function simuler(variant) {
   var saldi = {}, omsat = {}, raekker = [];
   var udgiftsloft = variant === 'uholdbar' ? 1.22 : 1;
   BEHOLDNINGER.forEach(function (b) { saldi[b.id] = b.saldo; });
 
   for (var aar = PLAN.startAar; aar <= PLAN.slutAar; aar++) {
-    var r = { aar: aar, aldre: {}, primo: {}, ultimo: {}, afkast: {}, palSkat: {}, udbetaling: {},
+    var r = { aar: aar, aldre: {}, primo: {}, ultimo: {}, afkast: {}, beholdningsskat: {},
+      udbetaling: {}, indbetaling: {}, indbetalinger: [], lofter: [],
       satsgrundlag: aar <= PLAN.sidstKendteSatsaar ? 'kendt' : 'fremskrevet' };
     var infl = Math.pow(1 + PLAN.inflation, aar - PLAN.startAar);
     var satsreg = Math.pow(1 + PLAN.satsregulering, aar - PLAN.startAar);
@@ -198,21 +267,25 @@ function simuler(variant) {
     BEHOLDNINGER.forEach(function (b) { r.primo[b.id] = saldi[b.id]; primoIalt += saldi[b.id]; });
     r.primoFormue = primoIalt;
 
-    var afkastIalt = 0, palIalt = 0, askSkat = 0;
+    /* Beholdningsskatten bæres af beholdningen selv og trækkes af dens saldo.
+       Det gælder også aktiesparekontoens egen sats, som denne fil før lod
+       bufferen betale — den passerer ingen persons indkomst og hører derfor
+       ikke til blandt de skattelag, husstanden betaler af pengestrømmen.  */
+    var afkastIalt = 0, beholdningsskatIalt = 0;
     r.omsatDepot = 0;
     BEHOLDNINGER.forEach(function (b) {
       var grundlag = (b.type === 'livrente' && omsat[b.id] !== undefined) ? 0 : saldi[b.id];
       var a = grundlag * nettoafkast(b);
       r.afkast[b.id] = a; afkastIalt += a;
       saldi[b.id] += a;
-      if (b.type === 'rate' || b.type === 'alder' || b.type === 'livrente') {
-        var pal = Math.max(0, a) * SATSER_2026.palSkat;
-        r.palSkat[b.id] = pal; palIalt += pal; saldi[b.id] -= pal;
-      } else if (b.type === 'ask') {
-        askSkat += Math.max(0, a) * SATSER_2026.aktiesparekonto;
-      }
+      var sats = 0;
+      if (b.type === 'rate' || b.type === 'alder' || b.type === 'livrente') sats = SATSER_2026.palSkat;
+      else if (b.type === 'ask') sats = SATSER_2026.aktiesparekonto;
+      if (!sats) return;
+      var bs = Math.max(0, a) * sats;
+      r.beholdningsskat[b.id] = bs; beholdningsskatIalt += bs; saldi[b.id] -= bs;
     });
-    r.afkastIalt = afkastIalt; r.palIalt = palIalt; r.askSkat = askSkat;
+    r.afkastIalt = afkastIalt; r.beholdningsskatIalt = beholdningsskatIalt;
 
     BEHOLDNINGER.forEach(function (b) {
       if (!b.udbetaling || aar < b.udbetaling.start) return;
@@ -249,9 +322,78 @@ function simuler(variant) {
         : (post.navn === 'Løn' ? PLAN.loenregulering : PLAN.inflation);
       var beloeb = post.beloeb * Math.pow(1 + sats, aar - PLAN.startAar);
       if (post.retning === 'ud') beloeb *= udgiftsloft;
-      r.poster.push({ navn: post.navn, ejer: post.ejer, retning: post.retning, beloeb: beloeb, skat: post.skat });
+      r.poster.push({ indeks: POSTER.indexOf(post), navn: post.navn, ejer: post.ejer,
+        retning: post.retning, beloeb: beloeb, skat: post.skat });
       if (post.retning === 'ind') loenIalt += beloeb; else udgifter += beloeb;
     });
+
+    /* ---------- indbetalinger ----------
+       Kilden afgør AM-behandlingen, destinationen afgør fradragsretten og
+       loftet. Et lønkildet bidrag betaler AM på vejen ind, så der lander 92 %
+       i ordningen; forskellen står allerede i personens eget skattelag og må
+       ikke trækkes igen her. Et beholdningskildet bidrag flytter hele beløbet.
+       Begge former er bevægelser og dermed formueneutrale — de flytter, de
+       skaber og forbruger ikke.                                             */
+    var fradragsretPr = {};
+    var landetPr = {}, forladtFraLoen = 0;
+    PERSONER.forEach(function (p) { fradragsretPr[p.id] = 0; });
+
+    INDBETALINGER.forEach(function (ind) {
+      if (!indbetalingAktiv(ind, aar)) return;
+      var dest = behP(ind.destination);
+      var fraLoen = ind.kilde.post !== undefined;
+      var forlod;
+      if (ind.procent !== undefined) {
+        var lp = r.poster.filter(function (x) { return x.indeks === ind.kilde.post; })[0];
+        if (!lp) return;
+        forlod = lp.beloeb * ind.procent;
+      } else {
+        forlod = ind.beloeb * infl;
+      }
+      var landet = fraLoen ? forlod * (1 - SATSER_2026.amBidrag) : forlod;
+
+      /* Et OnBalance-loft afviser: det uindskudte beløb bliver liggende i
+         kilden, og intet er markeret. Råderummet er loftet minus saldoen
+         primo og ånder derfor med afkastet. */
+      var loft = loftFor(dest, aar), uindskudt = 0;
+      if (loft && loft.form === 'OnBalance') {
+        var raaderum = Math.max(0, loft.beloeb - r.primo[dest.id] - (landetPr[dest.id] || 0));
+        if (landet > raaderum) {
+          uindskudt = landet - raaderum;
+          landet = raaderum;
+          forlod = fraLoen ? landet / (1 - SATSER_2026.amBidrag) : landet;
+        }
+      }
+
+      if (fraLoen) forladtFraLoen += landet;
+      else saldi[ind.kilde.beholdning] -= forlod;
+      saldi[dest.id] += landet;
+      landetPr[dest.id] = (landetPr[dest.id] || 0) + landet;
+
+      r.indbetalinger.push({
+        kilde: ind.kilde, destination: dest.id, fraLoen: fraLoen,
+        forlod: forlod, landet: landet, uindskudt: uindskudt
+      });
+    });
+
+    /* Loftet måler årets samlede indbetaling til ordningen, ikke det enkelte
+       bidrag. Et brudt PerYear-loft afviser ikke pengene — det overskydende
+       mister blot sin fradragsret, og året er markeret. */
+    Object.keys(landetPr).forEach(function (id) {
+      var b = behP(id), loft2 = loftFor(b, aar), indbetalt = landetPr[id];
+      var brudt = !!(loft2 && loft2.form === 'PerYear' && indbetalt > loft2.beloeb);
+      var medFradragsret = !harFradragsret(b) ? 0
+        : (loft2 && loft2.form === 'PerYear' ? Math.min(indbetalt, loft2.beloeb) : indbetalt);
+      fradragsretPr[b.ejer] += medFradragsret;
+      r.lofter.push({
+        beholdning: id, indbetalt: indbetalt,
+        loft: loft2 ? loft2.beloeb : null, loftform: loft2 ? loft2.form : null,
+        raaderum: loft2 && loft2.form === 'OnBalance'
+          ? Math.max(0, loft2.beloeb - r.primo[id]) : null,
+        medFradragsret: medFradragsret, brudt: brudt
+      });
+    });
+    r.indbetaling = landetPr;
 
     var pr = {};
     PERSONER.forEach(function (p) {
@@ -304,15 +446,17 @@ function simuler(variant) {
       x.folkepension = x.grundbeloeb + x.pensionstillaeg;
     });
 
-    var skatIalt = askSkat + palIalt;
+    var skatIalt = beholdningsskatIalt;
     PERSONER.forEach(function (p) {
       var x = pr[p.id];
+      x.fradragsret = fradragsretPr[p.id];
       x.skat = personskat({
         aar: aar,
         arbejdsindkomst: x.arbejdsindkomst,
         ovrigPersonligIndkomst: x.ordningsindkomst + x.atp + x.folkepension,
         kapitalindkomst: x.kapitalindkomst,
-        aktieindkomst: x.aktieindkomst
+        aktieindkomst: x.aktieindkomst,
+        fradragsret: x.fradragsret
       });
       skatIalt += x.skat.iAlt;
     });
@@ -359,14 +503,17 @@ function simuler(variant) {
     r.skat = skatIalt;
 
     /* Bufferen modtager årets eksterne over- eller underskud plus alt, der er
-       udbetalt fra andre beholdninger. PAL-skatten er allerede trukket i
-       depotet og må derfor ikke trækkes en gang til her — den indgår kun i
-       r.skat, som er visningens tal.
+       udbetalt fra andre beholdninger, minus det, der er indbetalt fra
+       pengestrømmen. Beholdningsskatten er allerede trukket i beholdningen og
+       må derfor ikke trækkes en gang til her — den indgår kun i r.skat, som er
+       visningens tal.
        Balanceinvarianten er dermed:
        ultimoFormue − primoFormue
-         = indtægter + afkast − skat − udgifter − omsatDepot */
+         = indtægter + afkast − skat − udgifter − omsatDepot
+       Indbetalingerne har intet led: de flytter formue og skaber den ikke. */
     var buffer = BEHOLDNINGER.filter(function (b) { return b.buffer; })[0];
-    r.bufferBevaegelse = r.indtaegter - (r.skat - r.palIalt) - r.udgifter + ordninger;
+    r.bufferBevaegelse = r.indtaegter - (r.skat - r.beholdningsskatIalt) - r.udgifter +
+      ordninger - forladtFraLoen;
     saldi[buffer.id] += r.bufferBevaegelse;
     r.netto = r.indtaegter + r.afkastIalt - r.skat - r.udgifter - r.omsatDepot;
 

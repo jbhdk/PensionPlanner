@@ -41,6 +41,40 @@ function behUnder(b) {
 }
 function postUnder(p) { return p.periode + ' · ' + p.gentagelse + ' · ' + p.forfald; }
 
+/* Indbetalingen er én figur i to udgaver. Kilden er hele skellet: en post har
+   en periode, en forankring, en gentagelse og et forfald, som bidraget arver
+   og derfor ikke bærer selv; en beholdning har ingen af delene at låne ud. */
+function kildeV(ind) {
+  return ind.kilde.post !== undefined ? POSTER[ind.kilde.post] : beh(ind.kilde.beholdning);
+}
+function kildenavnV(ind) {
+  var k = kildeV(ind);
+  return k.navn + (k.ejer ? ' · ' + pers(k.ejer).navn : '');
+}
+function indNavnV(ind) { return kildenavnV(ind) + ' → ' + beh(ind.destination).navn; }
+function indBeloebV(ind) {
+  return ind.procent !== undefined ? PV(ind.procent) : KV(ind.beloeb) + ' kr.';
+}
+function indUnderV(ind) {
+  if (ind.kilde.post !== undefined) {
+    var p = POSTER[ind.kilde.post];
+    return 'Følger ' + kildenavnV(ind) + ': ' + p.periode + ' · ' +
+      p.gentagelse.toLowerCase() + ' · ' + p.forfald.toLowerCase();
+  }
+  return ind.periode + ' · ' + ind.gentagelse.toLowerCase() + ' · ' + ind.forfald.toLowerCase();
+}
+function indTilV(id) {
+  return INDBETALINGER.map(function (ind, i) { return { ind: ind, i: i }; })
+    .filter(function (o) { return o.ind.destination === id; });
+}
+function fradragsretsnoteV(b) {
+  var loft = loftFor(b, PLAN.startAar);
+  return b.navn + (harFradragsret(b) ? ' giver fradragsret' : ' giver ingen fradragsret') +
+    (loft ? (loft.form === 'PerYear' ? ' og har et loft pr. år.' : ' og har et loft på saldoen.')
+      : ' og har intet loft.') +
+    ' Begge følger destinationen. Om loftet bandt, står i forklar-året.';
+}
+
 /* ================= A · HARMONIKA ================= */
 
 function modelA() {
@@ -148,8 +182,20 @@ function behFelter(b) {
     h.push(felt('Omsætningsfaktor', inp(pctV.format(b.omsaetningsfaktor * 100), 'tal'), '%'));
     h.push(felt('Ydelse', udl(KV(aarV(b.udbetaling.start).udbetaling[b.id])), 'udledt'));
   }
-  h.push('<h4>Indbetaling <span class="skitsemaerke">etape 2</span></h4>');
-  h.push('<div class="skitse" style="padding:6px"><span class="hint" style="margin:0">Ingen indbetaling.</span></div>');
+  /* Kun en ordning kan modtage en indbetaling. Går pengene ind i frie midler,
+     er det en overførsel — destinationen er hele skellet. */
+  if (b.type !== 'frie') {
+    var ind = indTilV(b.id);
+    h.push('<h4>Indbetaling</h4>');
+    h.push(ind.length ? ind.map(function (o) {
+      return '<div class="rk"><div class="hoved"><span class="ejer">→</span>' +
+        '<span class="navn">' + kildenavnV(o.ind) + '</span>' +
+        '<span class="tal">' + indBeloebV(o.ind) + '</span></div>' +
+        '<div class="under">' + indUnderV(o.ind) + '</div></div>';
+    }).join('') : '<div class="hint" style="margin:0">Ingen indbetaling til denne beholdning.</div>');
+    h.push('<div class="hint">' + fradragsretsnoteV(b) + '</div>');
+    h.push(knap('+ Indbetaling'));
+  }
   return h.join('');
 }
 function aarV(a) { return DATA_V.filter(function (r) { return r.aar === a; })[0]; }
@@ -158,7 +204,8 @@ function aarV(a) { return DATA_V.filter(function (r) { return r.aar === a; })[0]
 
 function modelB() {
   var h = ['<div class="spaltehoved">Planen<span class="antal">' +
-    (BEHOLDNINGER.length + POSTER.length + OVERFOERSLER.length + YDELSER.length + 2) + '</span></div>'];
+    (BEHOLDNINGER.length + POSTER.length + INDBETALINGER.length + OVERFOERSLER.length +
+      YDELSER.length + 2) + '</span></div>'];
 
   h.push(navGruppe('Planen', '', '<div class="nav-rk' + (V.valgt === 'plan' ? ' valgt' : '') +
     '" onclick="vaelgV(\'plan\')"><span class="navn">Ophør som 58</span>' +
@@ -181,6 +228,10 @@ function modelB() {
     return navRk('p' + i, p.navn, (p.retning === 'ud' ? '−' : '') + KV(p.beloeb), null);
   }).join('')));
 
+  h.push(navGruppe('Indbetalinger', INDBETALINGER.length, INDBETALINGER.map(function (ind, i) {
+    return navRk('i' + i, indNavnV(ind), indBeloebV(ind), null);
+  }).join('')));
+
   h.push(navGruppe('Overførsler', OVERFOERSLER.length, OVERFOERSLER.map(function (o, i) {
     return navRk('o' + i, beh(o.fra).navn + ' → ' + beh(o.til).navn, KV(o.beloeb), null);
   }).join('')));
@@ -198,6 +249,36 @@ function navRk(id, navn, tal, farve) {
 }
 
 function inspektor() {
+  if (/^i\d+$/.test(V.valgt)) {
+    var ind = INDBETALINGER[+V.valgt.slice(1)];
+    var fraPost = ind.kilde.post !== undefined;
+    var dest = beh(ind.destination);
+    var pct = ind.procent !== undefined;
+    return '<div class="spaltehoved">Inspektør</div><div class="inspektor">' +
+      '<div class="titel">Indbetaling<span class="luk">×</span></div>' +
+      '<div class="undertitel">' + indNavnV(ind) + '</div>' +
+      '<h4>Indbetalingen</h4>' +
+      felt('Kilde', vlg([kildenavnV(ind)])) +
+      felt('Destination', vlg([dest.navn + ' · ' + pers(dest.ejer).navn])) +
+      '<div class="hint">' + (fraPost
+        ? 'Kilden er en post, så AM-bidraget trækkes på vejen ind. '
+        : 'Kilden er en beholdning, så der trækkes intet AM-bidrag. ') +
+      fradragsretsnoteV(dest) + '</div>' +
+      '<h4>Beløb</h4>' +
+      felt(pct ? 'Procent af posten' : 'Fast beløb',
+        inp(pct ? pctV.format(ind.procent * 100) : KV(ind.beloeb), 'tal'), pct ? '%' : 'kr.') +
+      /* Det arvede står som én linje og ikke som felter: bidraget har dem ikke. */
+      (fraPost
+        ? '<h4>Følger ' + kildenavnV(ind) + '</h4><div class="hint" style="margin:0">' +
+          indUnderV(ind).replace('Følger ' + kildenavnV(ind) + ': ', '') +
+          '. Periode, forankring, gentagelse og forfald hører til posten.</div>'
+        : '<h4>Perioden</h4>' +
+          felt('Forankring', vlg([ind.forankring === 'alder' ? 'Alder' : 'Kalenderår'])) +
+          felt('Periode', inp(ind.periode, 'tekst')) +
+          felt('Gentagelse', vlg([ind.gentagelse])) +
+          felt('Forfald', vlg([ind.forfald]))) +
+      '</div>';
+  }
   var b = beh(V.valgt);
   if (!b) {
     return '<div class="spaltehoved">Inspektør</div><div class="inspektor">' +

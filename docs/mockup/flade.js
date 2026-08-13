@@ -89,7 +89,22 @@ function tegnPlanspalte() {
       (post.skat ? ' · ' + post.skat : '') +
       (post.egenRegulering !== undefined ? ' · reguleres ' + P(post.egenRegulering) : '') +
       '</span></div>';
-  }).join('') + '<button class="knap tilfoej">+ Post</button>'));
+  }).join('') +
+    '<div class="hint">Lønposter tastes <b>brutto, inklusive arbejdsgiverens pensionsbidrag</b> ' +
+    '— tallet på lønsedlen og ikke det, der går ind på kontoen. Bidraget flyttes til ordningen ' +
+    'som en indbetaling for sig; taster du nettolønnen og lægger et bidrag oveni, går alle tal ' +
+    'op og er alligevel forkerte.</div>' +
+    '<button class="knap tilfoej">+ Post</button>'));
+
+  h.push(afsnit('Indbetalinger', INDBETALINGER.length, INDBETALINGER.map(function (ind) {
+    return '<div class="linje"><span class="ejermaerke">→</span>' +
+      '<span class="navn">' + kildenavn(ind) + ' → ' + beholdning(ind.destination).navn + '</span>' +
+      '<span class="tal">' + indbetalingsbeloeb(ind) + '</span>' +
+      '<span class="under">' + (ind.kilde.post !== undefined
+        ? 'Arver periode, gentagelse og forfald fra posten'
+        : ind.periode + ' · ' + ind.gentagelse.toLowerCase() + ' · ' + ind.forfald.toLowerCase()) +
+      '</span></div>';
+  }).join('') + '<button class="knap tilfoej">+ Indbetaling</button>'));
 
   h.push(afsnit('Overførsler', OVERFOERSLER.length, OVERFOERSLER.map(function (o) {
     var f = beholdning(o.fra), t = beholdning(o.til);
@@ -176,10 +191,56 @@ function beholdningsdetalje(b) {
     h.push(felt('Omsætningsfaktor', input('number', pct.format(b.omsaetningsfaktor * 100)), '%'));
     h.push(felt('Ydelse fra ' + b.udbetaling.start, udledt(K(aarsraekke(b.udbetaling.start).udbetaling[b.id]) + ' kr.'), 'udledt'));
   }
-  h.push('<h4>Indbetaling <span class="skitsemaerke">etape 2</span></h4>');
-  h.push('<div class="skitse" style="padding:6px"><div class="tom">Ingen indbetaling.</div></div>');
+  if (b.type !== 'frie') {
+    var ind = indbetalingerTil(b.id);
+    h.push('<h4>Indbetaling</h4>');
+    h.push(ind.length ? ind.map(indbetalingslinje).join('')
+      : '<div class="tom">Ingen indbetaling til denne beholdning.</div>');
+    h.push('<div class="hint">' + fradragsretsnote(b) + '</div>');
+    h.push('<button class="knap tilfoej">+ Indbetaling</button>');
+  }
   h.push('</div>');
   return h.join('');
+}
+
+/* ---------- indbetalingens to former ----------
+   Ét objekt i to udgaver, ikke to slags. Kilden er hele skellet: en post har
+   en periode, en forankring, en gentagelse og et forfald, som bidraget arver
+   og derfor ikke bærer selv; en beholdning har ingen af delene at låne ud.  */
+
+function indbetalingskilde(ind) {
+  return ind.kilde.post !== undefined ? POSTER[ind.kilde.post] : beholdning(ind.kilde.beholdning);
+}
+function kildenavn(ind) {
+  var k = indbetalingskilde(ind);
+  return k.navn + (k.ejer ? ' · ' + person(k.ejer).navn : '');
+}
+function indbetalingsbeloeb(ind) {
+  return ind.procent !== undefined ? P(ind.procent) : K(ind.beloeb) + ' kr.';
+}
+function indbetalingerTil(id) {
+  return INDBETALINGER.filter(function (ind) { return ind.destination === id; });
+}
+function fradragsretsnote(b) {
+  var loft = loftFor(b, PLAN.startAar);
+  return b.navn + (harFradragsret(b) ? ' giver fradragsret' : ' giver ingen fradragsret') +
+    (loft ? (loft.form === 'PerYear' ? ' og har et loft pr. år.' : ' og har et loft på saldoen.')
+      : ' og har intet loft.') +
+    ' Begge følger destinationen og tastes ikke. Om loftet bandt, står i forklar-året.';
+}
+
+function indbetalingslinje(ind) {
+  var fraPost = ind.kilde.post !== undefined;
+  var under = fraPost
+    ? 'Følger ' + kildenavn(ind) + ': ' + POSTER[ind.kilde.post].periode + ' · ' +
+      POSTER[ind.kilde.post].gentagelse.toLowerCase() + ' · ' +
+      POSTER[ind.kilde.post].forfald.toLowerCase() + ' · AM-bidrag på vejen ind'
+    : ind.periode + ' · ' + ind.gentagelse.toLowerCase() + ' · ' + ind.forfald.toLowerCase() +
+      ' · intet AM-bidrag';
+  return '<div class="linje"><span class="ejermaerke">→</span>' +
+    '<span class="navn">' + kildenavn(ind) + '</span>' +
+    '<span class="tal">' + indbetalingsbeloeb(ind) + '</span>' +
+    '<span class="under">' + under + '</span></div>';
 }
 
 /* ================= formuegrafen ================= */
@@ -411,6 +472,10 @@ function tegnForklarAaret() {
     var rows = [];
     rows.push(['Løn og skattepligtige poster', x.arbejdsindkomst]);
     if (x.arbejdsindkomst) rows.push(['AM-bidrag, 8,00 %', -s.amBidrag, 'indryk']);
+    /* Fradragsretten er ikke et ligningsmæssigt fradrag: den nedsætter den
+       personlige indkomst og dermed alle lag ovenpå. Derfor står den her og
+       ikke nede ved beskæftigelses- og jobfradraget. */
+    if (s.fradragsret) rows.push(['Indbetaling med fradragsret', -s.fradragsret, 'indryk']);
     if (x.ordningsindkomst) rows.push(['Udbetaling fra ordninger', x.ordningsindkomst]);
     if (x.atp) rows.push(['ATP', x.atp]);
     if (x.folkepension) rows.push(['Folkepension', x.folkepension]);
@@ -483,32 +548,44 @@ function tegnForklarAaret() {
   /* beholdningerne */
   var udbetaltIalt = 0;
   BEHOLDNINGER.forEach(function (b) { udbetaltIalt += r.udbetaling[b.id] || 0; });
+  var indbetaltIalt = 0;
+  BEHOLDNINGER.forEach(function (b) { indbetaltIalt += r.indbetaling[b.id] || 0; });
+  /* Beholdningsskatten står som sin egen kolonne ved siden af afkastet, så de
+     to kan efterregnes hver for sig. Den bæres af beholdningen selv — også
+     aktiesparekontoens, som ikke er nogen persons skat. */
   var brows = ['<div class="blok bred"><h3>Beholdningerne</h3>' +
     '<table class="regn"><tr><td></td><td class="b">Primo</td><td class="b">Indbetaling</td>' +
-    '<td class="b">Afkast</td><td class="b">PAL-skat</td><td class="b">Udbetaling</td>' +
+    '<td class="b">Afkast</td><td class="b">Beholdningsskat</td><td class="b">Udbetaling</td>' +
     '<td class="b">Omsætning</td><td class="b">Buffer</td><td class="b">Ultimo</td></tr>'];
   BEHOLDNINGER.forEach(function (b) {
     var buf = b.buffer ? r.bufferBevaegelse : 0;
     var omsat = (b.type === 'livrente' && r.omsatDepot && r.primo[b.id] > 0) ? r.omsatDepot : 0;
     brows.push('<tr><td>' + b.navn + ' <span class="enhed">(' + person(b.ejer).navn + ')</span></td>' +
       '<td class="b">' + K(r.primo[b.id] * f) + '</td>' +
-      '<td class="b">–</td>' +
+      '<td class="b">' + (r.indbetaling[b.id] ? '+' + K(r.indbetaling[b.id] * f) : '–') + '</td>' +
       '<td class="b">' + K(r.afkast[b.id] * f) + '</td>' +
-      '<td class="b">' + (r.palSkat[b.id] ? '−' + K(r.palSkat[b.id] * f) : '–') + '</td>' +
+      '<td class="b">' + (r.beholdningsskat[b.id] ? '−' + K(r.beholdningsskat[b.id] * f) : '–') + '</td>' +
       '<td class="b">' + (r.udbetaling[b.id] ? '−' + K(r.udbetaling[b.id] * f) : '–') + '</td>' +
       '<td class="b">' + (omsat ? '−' + K(omsat * f) : '–') + '</td>' +
       '<td class="b">' + (b.buffer ? (buf < 0 ? '−' : '+') + K(Math.abs(buf) * f) : '–') + '</td>' +
       '<td class="b">' + K(r.ultimo[b.id] * f) + '</td></tr>');
   });
-  brows.push('<tr class="sum"><td>I alt</td><td class="b">' + K(r.primoFormue * f) + '</td><td class="b">–</td>' +
-    '<td class="b">' + K(r.afkastIalt * f) + '</td><td class="b">−' + K(r.palIalt * f) + '</td>' +
-    '<td class="b">−' + K(udbetaltIalt * f) + '</td>' +
+  brows.push('<tr class="sum"><td>I alt</td><td class="b">' + K(r.primoFormue * f) + '</td>' +
+    '<td class="b">' + (indbetaltIalt ? '+' + K(indbetaltIalt * f) : '–') + '</td>' +
+    '<td class="b">' + K(r.afkastIalt * f) + '</td>' +
+    '<td class="b">' + (r.beholdningsskatIalt ? '−' + K(r.beholdningsskatIalt * f) : '–') + '</td>' +
+    '<td class="b">' + (udbetaltIalt ? '−' + K(udbetaltIalt * f) : '–') + '</td>' +
     '<td class="b">' + (r.omsatDepot ? '−' + K(r.omsatDepot * f) : '–') + '</td>' +
     '<td class="b">' + (r.bufferBevaegelse < 0 ? '−' : '+') + K(Math.abs(r.bufferBevaegelse) * f) + '</td>' +
     '<td class="b">' + K(r.ultimoFormue * f) + '</td></tr></table>');
-  brows.push('<div class="hint">Aktiesparekontoens skat på ' + K(r.askSkat * f) +
-    ' kr. (17 %) er trukket i skattekolonnen, ikke i beholdningen.</div></div>');
+  brows.push('<div class="hint">Beholdningsskatten er trukket i beholdningen selv og passerer ' +
+    'ingen persons indkomst: PAL-skat på ratepension, aldersopsparing og livrente, ' +
+    'aktiesparekontoens egen sats på 17 %. De frie midler har ingen — deres afkast beskattes ' +
+    'hos personen eller husstanden i stedet. Indbetalingskolonnen er det, der landede i ' +
+    'beholdningen; hvad der forlod kilden, står nedenfor.</div></div>');
   h.push(brows.join(''));
+
+  h.push(indbetalingsblok(r, f));
 
   /* posterne */
   var prows = r.poster.map(function (post) {
@@ -519,6 +596,67 @@ function tegnForklarAaret() {
   h.push('<div class="blok bred"><h3>Posterne</h3>' + regn(prows, f) + '</div>');
 
   h.push('</div></div>');
+  return h.join('');
+}
+
+/* ---------- indbetalingerne og lofterne ----------
+   Loftlinjen hører i forklar-året og aldrig i inspektørskuffen. Om et loft
+   bandt, afhænger af årets fremskrevne beløb målt mod årets satsår — det er
+   et resultat og ikke en egenskab ved planen. Skuffen viser planen; her står
+   det, året gjorde ved den.
+
+   De to tal pr. indbetaling er, hvad der forlod kilden, og hvad der landede i
+   beholdningen. Forskellen er AM-bidraget, som allerede står i personens eget
+   skattelag og derfor ikke gentages.                                        */
+
+function indbetalingsblok(r, f) {
+  if (!r.indbetalinger.length) return '';
+  var h = ['<div class="blok bred"><h3>Indbetalingerne</h3>' +
+    '<table class="regn"><tr><td></td><td class="b">Forlod kilden</td>' +
+    '<td class="b">Landede</td><td class="n"></td></tr>'];
+  var forlodIalt = 0, landetIalt = 0;
+  r.indbetalinger.forEach(function (i) {
+    forlodIalt += i.forlod; landetIalt += i.landet;
+    var kilde = i.fraLoen ? POSTER[i.kilde.post] : beholdning(i.kilde.beholdning);
+    var noter = [i.fraLoen ? 'AM-bidrag 8,00 % på vejen ind' : 'fra beholdning, intet AM-bidrag'];
+    if (i.uindskudt) noter.push(K(i.uindskudt * f) + ' kr. blev liggende i kilden');
+    h.push('<tr><td>' + kilde.navn +
+      (kilde.ejer ? ' <span class="enhed">(' + person(kilde.ejer).navn + ')</span>' : '') +
+      ' → ' + beholdning(i.destination).navn + '</td>' +
+      '<td class="b">' + K(i.forlod * f) + '</td>' +
+      '<td class="b">' + K(i.landet * f) + '</td>' +
+      '<td class="n">' + noter.join(' · ') + '</td></tr>');
+  });
+  h.push('<tr class="sum"><td>Indbetalt i alt</td><td class="b">' + K(forlodIalt * f) +
+    '</td><td class="b">' + K(landetIalt * f) + '</td><td class="n"></td></tr></table>');
+
+  h.push('<h3 style="margin-top:14px">Lofterne</h3>' +
+    '<table class="regn"><tr><td></td><td class="b">Indbetalt</td><td class="b">Loft</td>' +
+    '<td class="b">Med fradragsret</td><td class="n"></td></tr>');
+  r.lofter.forEach(function (l) {
+    var b = beholdning(l.beholdning), noter = [];
+    if (!l.loft) noter.push('intet loft');
+    else if (l.loftform === 'OnBalance') {
+      noter.push('måler saldoen primo · råderum ' + K(l.raaderum * f) + ' kr.');
+    } else if (l.brudt) {
+      noter.push('loftet bandt · ' + K((l.indbetalt - l.loft) * f) + ' kr. uden fradragsret');
+    } else noter.push('måler årets samlede indbetaling');
+    if (!harFradragsret(b)) noter.push('ordningen giver ingen fradragsret');
+    /* Ingen rød farve her: den er forbeholdt en negativ buffer. Et brudt loft
+       er ikke en fejl, det er en oplysning — og den står i noten. */
+    h.push('<tr><td>' + b.navn +
+      ' <span class="enhed">(' + person(b.ejer).navn + ')</span></td>' +
+      '<td class="b">' + K(l.indbetalt * f) + '</td>' +
+      '<td class="b">' + (l.loft ? K(l.loft * f) : '–') + '</td>' +
+      '<td class="b">' + (l.medFradragsret ? K(l.medFradragsret * f) : '–') + '</td>' +
+      '<td class="n">' + noter.join(' · ') + '</td></tr>');
+  });
+  h.push('</table><div class="hint">Fradragsretten holder indbetalingen uden for den ' +
+    'personlige indkomst og rammer dermed alle lag ovenpå. Den følger destinationens ' +
+    'variant og ikke bidraget: ratepension og livrente har den, aldersopsparing og ' +
+    'aktiesparekonto har den ikke. Et brudt loft pr. år afviser ikke pengene — det ' +
+    'overskydende mister blot sin fradragsret. Et loft på saldoen afviser derimod, og ' +
+    'det uindskudte bliver liggende, uden at noget er sket.</div></div>');
   return h.join('');
 }
 

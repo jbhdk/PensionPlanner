@@ -22,7 +22,8 @@ var N = {
   fane: 'graf',
   gruppe: 'beholdninger',
   valgt: 'b4',
-  foldet: { plan: true, husstand: true, ydelser: true, indtaegter: true, udgifter: true, overfoersler: true }
+  foldet: { plan: true, husstand: true, ydelser: true, indtaegter: true, udgifter: true,
+    indbetalinger: true, overfoersler: true }
 };
 
 var FARVER_N = ['#5b7ba6', '#7d92b0', '#96a6bc', '#a3854e', '#b79a6c', '#c5b38d',
@@ -39,6 +40,33 @@ function folkeaarN(p) { return p.foedselsaar + p.folkepensionsalder; }
 
 var DATA_N = simuler('basis');
 function aarN(a) { return DATA_N.filter(function (r) { return r.aar === a; })[0]; }
+
+/* ---------- indbetalingens to former ----------
+   Samme figur, to udgaver. Kilden er det eneste, der skiller dem: en lønpost
+   har en periode, en forankring, en gentagelse og et forfald, som bidraget
+   arver og derfor ikke bærer selv — en beholdning har ingen af delene at
+   låne ud, så bidraget bærer dem alle. Navnet er kilde → destination i begge
+   udgaver, så de læses som ét slags objekt i listen.                       */
+
+function kildeN(ind) {
+  return ind.kilde.post !== undefined ? POSTER[ind.kilde.post] : behN(ind.kilde.beholdning);
+}
+function kildeNavnN(ind) {
+  var k = kildeN(ind);
+  return k.navn + ' · ' + persN(k.ejer).navn;
+}
+function indNavnN(ind) { return kildeNavnN(ind) + ' → ' + behN(ind.destination).navn; }
+function indBeloebN(ind) {
+  return ind.procent !== undefined ? PN(ind.procent) : KN(ind.beloeb) + ' kr.';
+}
+function indTilN(id) {
+  return INDBETALINGER.map(function (ind, i) { return { ind: ind, i: i }; })
+    .filter(function (o) { return o.ind.destination === id; });
+}
+function indFraPostN(i) {
+  return INDBETALINGER.map(function (ind, j) { return { ind: ind, i: j }; })
+    .filter(function (o) { return o.ind.kilde.post === i; });
+}
 
 /* ---------- planens indhold som én liste af grupper ----------
    De tre udgaver læser den samme struktur; det er kun indpakningen, der
@@ -94,6 +122,16 @@ function grupperN() {
       resume: '', tilfoej: '+ Udgift',
       raekker: udgifter.map(function (p) {
         return { id: 'p' + POSTER.indexOf(p), navn: p.navn, tal: '−' + KN(p.beloeb) };
+      })
+    },
+    {
+      // Ingen sum her heller. En procent af en lønpost har intet kronebeløb,
+      // før året er regnet, og et samlet tal ville være et årsafhængigt
+      // resultat i en spalte, der kun viser planen. Antallet er nok.
+      id: 'indbetalinger', titel: 'Indbetalinger', kort: 'Indbetalinger',
+      antal: INDBETALINGER.length, resume: '', tilfoej: '+ Indbetaling',
+      raekker: INDBETALINGER.map(function (ind, i) {
+        return { id: 'i' + i, navn: indNavnN(ind), tal: indBeloebN(ind) };
       })
     },
     {
@@ -224,8 +262,158 @@ function behFelterN(b) {
       felt('Ydelse', udl(KN(aarN(b.udbetaling.start).udbetaling[b.id])), 'udledt')));
   }
 
-  h.push(afsnitN('Indbetaling <span class="skitsemaerke">etape 2</span>',
-    '<div class="skitse" style="padding:6px"><span class="hint" style="margin:0">Ingen indbetaling.</span></div>'));
+  /* Beholdningen viser sine indbetalinger kompakt og fører til hver enkelt.
+     Indbetalingen er et objekt på linje med posten og overførslen — den
+     redigeres i sin egen rude, ikke inde i destinationens. */
+  if (b.type !== 'frie') {
+    var ind = indTilN(b.id);
+    h.push(afsnitN('Indbetaling', (ind.length
+      ? ind.map(function (o) {
+          return '<div class="henvis" onclick="vaelgN(\'i' + o.i + '\')">' +
+            '<span class="navn">' + kildeNavnN(o.ind) + '</span>' +
+            '<span class="tal">' + indBeloebN(o.ind) + '</span><span class="vip">›</span></div>';
+        }).join('')
+      : '<div class="hint" style="margin:0 0 6px">Ingen indbetaling til denne beholdning.</div>') +
+      '<button class="knap" style="width:100%;text-align:left">+ Indbetaling</button>'));
+  }
+  return h.join('');
+}
+
+/* ---------- indbetalingens rude ----------
+   Kilden er ét felt med to grupper, fordi kilden er ét spørgsmål og ikke to.
+   Ruden skifter form efter svaret: er kilden en lønpost, står periode,
+   forankring, gentagelse og forfald slet ikke her — hverken som felter eller
+   som grå felter — men som én linje, der siger, hvad bidraget følger.     */
+
+function kildevaelgerN(ind) {
+  var h = ['<select style="max-width:190px"><optgroup label="Lønposter">'];
+  POSTER.forEach(function (p, i) {
+    if (p.retning !== 'ind') return;
+    h.push('<option' + (ind.kilde.post === i ? ' selected' : '') + '>' +
+      p.navn + ' · ' + persN(p.ejer).navn + '</option>');
+  });
+  h.push('</optgroup><optgroup label="Beholdninger">');
+  BEHOLDNINGER.forEach(function (b) {
+    if (b.id === ind.destination) return;   /* kilden er en *anden* beholdning */
+    h.push('<option' + (ind.kilde.beholdning === b.id ? ' selected' : '') + '>' +
+      b.navn + ' · ' + persN(b.ejer).navn + '</option>');
+  });
+  h.push('</optgroup></select>');
+  return h.join('');
+}
+
+/* En indbetaling kan ikke gå til frie midler — så er det en overførsel. */
+function destinationsvaelgerN(ind) {
+  return '<select style="max-width:190px">' + BEHOLDNINGER.filter(function (b) {
+    return b.type !== 'frie';
+  }).map(function (b) {
+    return '<option' + (b.id === ind.destination ? ' selected' : '') + '>' +
+      b.navn + ' · ' + persN(b.ejer).navn + '</option>';
+  }).join('') + '</select>';
+}
+
+function kontaktN(valg) {
+  return '<span class="kontakt">' + valg.map(function (v) {
+    return '<button aria-pressed="' + (v.valgt ? 'true' : 'false') + '">' +
+      v.tekst + '</button>';
+  }).join('') + '</span>';
+}
+
+function indFelterN(ind) {
+  var fraPost = ind.kilde.post !== undefined;
+  var dest = behN(ind.destination);
+  var pct = ind.procent !== undefined;
+  var h = [];
+
+  h.push(afsnitN('Indbetalingen',
+    felt('Kilde', kildevaelgerN(ind)) +
+    felt('Destination', destinationsvaelgerN(ind)) +
+    '<div class="hint">' + (fraPost
+      ? 'Kilden er en post, så AM-bidraget trækkes på vejen ind.'
+      : 'Kilden er en beholdning, så der trækkes intet AM-bidrag.') +
+    ' ' + (harFradragsret(dest)
+      ? dest.navn + ' giver fradragsret'
+      : dest.navn + ' giver ingen fradragsret') +
+    (loftFor(dest, PLAN.startAar)
+      ? (loftFor(dest, PLAN.startAar).form === 'PerYear'
+        ? ' og har et loft pr. år.' : ' og har et loft på saldoen.')
+      : ' og har intet loft.') +
+    ' Begge følger destinationen og tastes ikke. Om loftet bandt, står i forklar-året.</div>'));
+
+  /* Kontakten står kun, når der er noget at vælge imellem. En procent skal
+     have en post at måle af, så et beholdningskildet bidrag har kun den ene
+     form — og så er linjen *Angives som* et valg, der aldrig kan træffes. */
+  h.push(afsnitN('Beløb',
+    (fraPost ? felt('Angives som', kontaktN([
+      { tekst: '% af posten', valgt: pct },
+      { tekst: 'kr.', valgt: !pct }
+    ])) : '') +
+    felt(pct ? 'Procent' : 'Fast beløb',
+      inp(pct ? pctN.format(ind.procent * 100) : KN(ind.beloeb), 'tal'),
+      pct ? '%' : 'kr.') +
+    (pct ? '<div class="hint">Måles af ' + kildeNavnN(ind) +
+      ', så bidraget følger lønnen op uden at blive rettet.</div>' : '')));
+
+  if (fraPost) {
+    var post = POSTER[ind.kilde.post];
+    h.push('<section class="afsnit arvet"><h3>Følger ' + kildeNavnN(ind) + '</h3>' +
+      '<div class="arvelinje">' + post.periode + ' · ' + post.gentagelse.toLowerCase() +
+      ' · ' + post.forfald.toLowerCase() + '</div>' +
+      '<div class="hint">Periode, forankring, gentagelse og forfald hører til posten. ' +
+      'Bidraget har dem ikke selv og ophører derfor af sig selv ved erhvervsophøret.</div></section>');
+  } else {
+    h.push(afsnitN('Perioden',
+      felt('Forankring', vlg(ind.forankring === 'alder'
+        ? ['Alder', 'Kalenderår'] : ['Kalenderår', 'Alder'])) +
+      felt('Fra', inp(ind.periode.split(' – ')[0], 'tekst')) +
+      felt('Til', inp(ind.periode.split(' – ')[1] || '', 'tekst')) +
+      felt('Gentagelse', vlg([ind.gentagelse, 'Én gang', 'Hvert N. år'])) +
+      felt('Forfald', vlg([ind.forfald, 'Jævnt'])) +
+      '<div class="hint">Kilden er en beholdning og har ingen periode at låne ud. ' +
+      'Til gengæld kan bidraget aldersforankres: destinationen har en ejer.</div>'));
+  }
+  return h.join('');
+}
+
+/* ---------- postens rude ----------
+   ADR-0007 forpligter fladen til at sige udtrykkeligt, at lønnen tastes
+   brutto. Det er ikke kosmetik: taster man nettolønnen og lægger et bidrag
+   oveni, går alle tal op og er alligevel over 100.000 kr. forkerte om året,
+   og ingen invariant fanger det.                                          */
+
+function postFelterN(i) {
+  var post = POSTER[i], erIndtaegt = post.retning === 'ind';
+  var brutto = post.skat === 'Arbejdsindkomst';
+  var h = [];
+
+  h.push(afsnitN('Posten',
+    felt('Navn', inp(post.navn, 'tekst')) +
+    felt('Ejer', vlg([post.ejer ? persN(post.ejer).navn : 'Husstanden'])) +
+    felt('Retning', vlg([erIndtaegt ? 'Indtægt' : 'Udgift'])) +
+    felt(brutto ? 'Beløb, brutto' : 'Beløb', inp(KN(post.beloeb), 'tal'), 'kr.') +
+    (erIndtaegt ? felt('Skattebehandling', vlg([post.skat, 'Arbejdsindkomst', 'Skattefri'])) : '') +
+    (brutto ? '<div class="hint">Brutto, inklusive arbejdsgiverens pensionsbidrag — tallet på ' +
+      'lønsedlen og ikke det, der går ind på kontoen. Bidraget flyttes til ordningen som en ' +
+      'indbetaling for sig; taster du nettolønnen og lægger et bidrag oveni, går alle tal op ' +
+      'og er alligevel forkerte.</div>' : '')));
+
+  h.push(afsnitN('Perioden',
+    felt('Forankring', vlg([post.forankring === 'alder' ? 'Alder' : 'Kalenderår'])) +
+    felt('Periode', inp(post.periode, 'tekst')) +
+    felt('Gentagelse', vlg([post.gentagelse])) +
+    felt('Forfald', vlg([post.forfald])) +
+    (erIndtaegt ? felt('Reguleringssats',
+      inp(pctN.format((post.egenRegulering !== undefined ? post.egenRegulering
+        : PLAN.loenregulering) * 100), 'tal'), '% p.a.') : '')));
+
+  var traekker = indFraPostN(i);
+  if (traekker.length) {
+    h.push(afsnitN('Trækker på posten', traekker.map(function (o) {
+      return '<div class="henvis" onclick="vaelgN(\'i' + o.i + '\')">' +
+        '<span class="navn">→ ' + behN(o.ind.destination).navn + '</span>' +
+        '<span class="tal">' + indBeloebN(o.ind) + '</span><span class="vip">›</span></div>';
+    }).join('') + '<div class="hint">Bidragene arver postens periode, gentagelse og forfald.</div>'));
+  }
   return h.join('');
 }
 
@@ -280,6 +468,18 @@ function inspektorKrop() {
     return '<div class="inspektor"><div class="titel">' + b.navn + lukN() + '</div>' +
       '<div class="undertitel">' + persN(b.ejer).navn + ' · ' + behUnderN(b) + '</div>' +
       behFelterN(b) + '</div>';
+  }
+  if (/^i\d+$/.test(N.valgt)) {
+    var ind = INDBETALINGER[+N.valgt.slice(1)];
+    return '<div class="inspektor"><div class="titel">Indbetaling' + lukN() + '</div>' +
+      '<div class="undertitel">' + indNavnN(ind) + '</div>' + indFelterN(ind) + '</div>';
+  }
+  if (/^p\d+$/.test(N.valgt)) {
+    var pi = +N.valgt.slice(1), post = POSTER[pi];
+    return '<div class="inspektor"><div class="titel">' + post.navn + lukN() + '</div>' +
+      '<div class="undertitel">' + (post.ejer ? persN(post.ejer).navn + ' · ' : '') +
+      (post.retning === 'ind' ? 'indtægt' : 'udgift') + ' · ' + post.periode + '</div>' +
+      postFelterN(pi) + '</div>';
   }
   return '<div class="tomrude">Ruden for denne slags er ikke tegnet.<br>' +
     'Den ligner beholdningens.</div>';

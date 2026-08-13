@@ -63,7 +63,7 @@ kunne redigere inline. De fire er stikprøver, ikke et katalog.
 sig ud af syne: med Danica åben ses 4 af 9 beholdninger, og Ydelser, Poster og Overførsler
 ligger under kanten. Listen flytter sig, mens man redigerer i den.
 
-**B** viser hele planen på én gang — alle 31 objekter står i navigatoren, og listen står
+**B** viser hele planen på én gang — alle 36 objekter står i navigatoren, og listen står
 stille, mens inspektøren skifter. Prisen er 576 px, før resultatspalten begynder; grafen
 og tabellen mister omkring en tredjedel af deres bredde.
 
@@ -114,7 +114,12 @@ regelmæssighed, planen ikke har — det var oprindeligt afprøvet som `−512.0
 for udgifterne alene, men tallet er droppet igen. De to grupper folder derfor sammen til
 kun deres antal, badge'en de allerede har; de nøjagtige tal står i årstabellen.
 
-**B1** lader alle syv grupper stå, så man altid kan se, hvad planen består af. Med kun
+**Indbetalinger er den tredje uden resumé**, og af en grund mere. Et procentbidrag har
+intet kronebeløb, før året er regnet, og et samlet tal ville derfor være et årsafhængigt
+resultat i en spalte, der kun viser planen. Rækkerne hedder kilde → destination, så de to
+former står side om side i den samme liste.
+
+**B1** lader alle otte grupper stå, så man altid kan se, hvad planen består af. Med kun
 Beholdninger foldet ud fylder navigatoren godt halvdelen af spaltens højde — der er luft. Prisen er, at man
 selv skal folde: åbner man tre grupper, ruller spalten igen.
 
@@ -152,6 +157,50 @@ skifter størrelse. Det er en oplysning til grafbiblioteket: en fast højde duer
   ikke har ét tal, før de er beregnet — spørgsmålet er, om et resumé må vise et beregnet
   tal, eller kun det, der er skrevet ind.
 
+## Indbetalingernes rude
+
+Tegnet i alle tre udgaver af planspalten, så beholdningens rude ser ens ud, uanset hvilken
+man åbner. Seks ting står fast efter den, og de tre andre skiver i etape 2 bygger dem.
+
+**Kilden er ét felt, ikke to spørgsmål.** Én vælger med to grupper — Lønposter og
+Beholdninger — og resten af ruden retter sig efter svaret. Alternativet var en kontakt
+*Lønpost · Beholdning* og derefter en vælger, men den gør kilden til to greb og får de to
+former til at ligne to dialoger. De er én figur.
+
+**Det arvede står som én linje og aldrig som felter.** Et lønkildet bidrag peger på sin
+post og arver dens periode, forankring, gentagelse og forfald. De felter findes ikke på
+bidraget, og de må derfor hverken stå tomme eller grå i ruden — i stedet siger afsnittet
+*Følger Løn · Jesper* med postens tre værdier på én linje. Et beholdningskildet bidrag har
+ingen post at låne af og bærer dem alle selv, i afsnittet *Perioden*, på samme plads i
+ruden. Det er hele forskellen mellem de to udgaver.
+
+**Perioden er lønpostens periodeafsnit, én til én.** Bærer bidraget sin egen periode, gør
+afsnittet præcis det, `EntryFields` allerede gør i appen: gentagelsen først, et *Hvert*-felt
+når den er `EveryNYears`, så forankringen, så endepunkterne — ét felt når gentagelsen er
+`Once`, ellers *Fra* og *Til* i den form, forankringen bestemmer, årstal eller `AgeBound` —
+og til sidst forfaldet med de valg, gentagelsen tillader. Mock-uppen viser ikke den
+dynamik: dens vælgere svarer ikke, og *Fra* og *Til* står fast uanset det valgte. Forlægget
+for den del af ruden er lønpostens rude i appen og ikke fladekortet.
+
+**Beløbet er én segmenteret kontakt over ét felt** — dér, hvor der er noget at vælge
+imellem. `% af posten · kr.`, og enheden skifter med valget. Begge muligheder er synlige
+uden at åbne noget. Er kilden en beholdning, er der ingen post at måle en procent af, og så
+står linjen der slet ikke: feltet hedder *Fast beløb* og er det eneste, der spørges om. Et
+slukket segment ville vise et valg, der aldrig kan træffes.
+
+**Lønnen tastes brutto, og etiketten bærer det.** Feltet hedder *Beløb, brutto*, og under
+det står, hvad det betyder — tallet på lønsedlen og ikke det, der går ind på kontoen. Det
+er ADR-0007's egen forpligtelse, og den er indfriet med en etiket og en fast forklaring
+frem for en advarselsblok eller et flueben: fladen har ingen advarselsblokke, og et
+afkrydsningsfelt uden et felt bag sig i modellen ville være en løgn i formen. Lønpostens
+rude viser desuden, hvilke bidrag der trækker på den.
+
+**Loftet står ikke i skuffen.** Om et loft bandt afhænger af årets fremskrevne beløb målt
+mod årets satsår, og det er et resultat. Skuffen siger kun, at destinationen har et loft og
+hvilken form det har — `pr. år` eller `på saldoen` — og henviser til forklar-året. Der står
+loftlinjen med sine tre tal på samme linje: indbetalt, loftet det blev målt mod, og den del
+der fik fradragsret.
+
 ## Hvad det ikke er
 
 `plan.js` indeholder en fixtur og en grov fremskrivning. **Den er ikke motoren.** Den er
@@ -160,10 +209,15 @@ den kender ikke alle regler, den runder hjørner af, og den må aldrig blive for
 ADR eller for koden. Satserne i den er hentet fra [satsår 2026](../satser/2026.md), men
 sammenstillingen af dem er ikke verificeret.
 
+Indbetalingerne regnes med — de flytter penge, betaler AM-bidrag på vejen ind fra en post,
+og prøves mod destinationens loft — fordi forklar-årets loftlinje ellers ville vise tal,
+der ikke stemmer med beholdningerne. Overførslen mellem de to sæt frie midler regnes
+derimod ikke: den er formueneutral og flytter kun mellem to bånd i grafen.
+
 Fixturen er husstanden fra [PRD'en](https://github.com/jbhdk/PensionPlanner/issues/1):
 Jesper født 1973 med tre ratepensioner oprettet før 1. maj 2007, Anne født 1985, og et
 forløb forskudt med tolv år. Beløbene er opdigtede, men størrelsesordenen er valgt, så
-planen akkurat holder — bufferen bunder i 439.589 kr. i sidste år. Det er med vilje: en
+planen akkurat holder — bufferen bunder i 782.198 kr. i sidste år, under ét års udgifter. Det er med vilje: en
 plan med rigelig margin viser ikke, hvor fladen skal være præcis.
 
 ## Skitsekonventionen
@@ -217,6 +271,12 @@ tillægget nul, fordi 8,5 mio. kr. i lagerbeskattede frie midler aftrapper det h
 selv. Se også 2054, hvor Annes ordninger begynder, og 2057, hvor hun selv bliver
 pensionist og aftrapningssatsen falder fra 32 % til 16 %.
 
+**Loftet ses bedst i `#forklar:2029.`** Dér binder Jespers ratepensionsloft — 8 % af en
+bruttoløn på 1,15 mio. kr. er mere end fradragsloftet, og det overskydende går stadig ind i
+ordningen, blot uden fradragsret. Samme år står aktiesparekontoen med et råderum på nul, så
+årets indbetaling til den blev afvist og blev liggende. I 2043 er kun Annes to bidrag
+tilbage, og intet loft binder.
+
 ## Hvad det at bygge fladekortet afslørede
 
 **Beholdningen kan ikke være en flad liste.** I etape 1 har en beholdning tre felter. I
@@ -245,6 +305,21 @@ hvad `YearResult` skal rumme.
 er ufuldstændig i 2055, hvor bufferen mangler penge, men husstanden har dem andetsteds —
 og uholdbar senere, hvor der ikke er noget at hente. Skellet i
 [#11](https://github.com/jbhdk/PensionPlanner/issues/11) skal derfor bo i tabelrækken.
+
+**En flytning ind i en ordning var bogført som en overførsel.** Fixturens 15.000 kr. om
+året fra Jespers frie midler til aktiesparekontoen stod blandt overførslerne. Destinationen
+er en ordning med et loft, og så er det en indbetaling, uanset hvor pengene kom fra —
+[ADR-0016](../adr/0016-indbetalingen-kendes-paa-sin-destination.md). Flytningen står nu
+blandt indbetalingerne, og det viser samtidig, hvad et `OnBalance`-loft gør: råderummet er
+loftet minus saldoen primo, og da kontoen allerede stod tæt på loftet, kom kun 12.200 kr.
+ind det første år og ingenting derefter. Pengene blev liggende i kilden, og intet er
+markeret — der er ikke sket noget ulovligt.
+
+**Aktiesparekontoens skat blev betalt af bufferen.** Beholdningsskatten bæres af
+beholdningen selv og trækkes af dens saldo; det gælder også aktiesparekontoens egen sats,
+som mock-motoren lod husstandens pengestrøm bære. Den er nu trukket i beholdningen, og
+forklar-årets regnetabel har fået **Beholdningsskat** som sin egen kolonne ved siden af
+afkastet — én kolonne for begge satser, så afkast og skat kan efterregnes hver for sig.
 
 **Enhedsfælden rammer også noterne.** En note som "7,50 % over 641.200" ved siden af et
 beløb i dagens kroner skal deflateres på samme måde som beløbet. Det stod forkert i
@@ -295,11 +370,3 @@ Spiket er [#18](https://github.com/jbhdk/PensionPlanner/issues/18).
   designforslag, og især ikke afprøvet for farveblindhed.
 - **Etape 4's ord** — bolig, lån, restgæld, ejendomsværdiskat, grundskyld, nedsparingslån
   — mangler i glossaret. Afsnittet står tomt og skitsemærket, indtil de er der.
-- **Indbetalingernes rude** (etape 2) er stadig tom og skal tegnes, men tre ting er
-  afgjort på forhånd og skal holdes. Ruden skifter form efter kilden: et lønkildet
-  bidrag arver periode, gentagelse og forfald fra sin `Entry` og har dem derfor ikke
-  selv, hvor et beholdningskildet bidrag har dem alle. **Loftlinjen hører kun i
-  forklar-året** — skuffen bliver ved med udelukkende at vise planen og aldrig et
-  årsafhængigt resultat. Og ADR-0007's pligt til at sige udtrykkeligt, at lønnen tastes
-  brutto inklusive pension, skal indfries her: taster man nettolønnen og lægger et
-  bidrag oveni, går alle tal op og er alligevel forkerte.
