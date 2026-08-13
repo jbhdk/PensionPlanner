@@ -1,4 +1,6 @@
+import { holdingTaxRate } from './holdingVariant'
 import type { Holding, HoldingId, Nominal } from './plan'
+import type { RateYear } from './rates/rateYear'
 import type { HoldingYear } from './yearResult'
 
 /** Årets beholdningsrækker under opbygning — én række pr. beholdning, ikke
@@ -69,16 +71,36 @@ export function returnOf(years: HoldingYears, holding: HoldingId): Nominal {
   return credited(row(years, holding))
 }
 
-/** Lukker året: afkastet krediteres, og rækkerne bliver til årsresultatets
-    `HoldingYear`. */
-export function closeYear(years: HoldingYears): HoldingYear[] {
-  return [...years.values()].map((row) => ({
-    holding: row.holding.id,
-    openingBalance: row.openingBalance,
-    closingBalance: row.balance + credited(row),
-    return: credited(row),
-    weightedFlow: row.weightedFlow,
-  }))
+/** Lukker året: afkastet krediteres, beholdningsskatten trækkes af det, og
+    rækkerne bliver til årsresultatets `HoldingYear`. Rækkefølgen er diagram
+    02's — strømme, afkast, `HoldingTax`, luk — og skatten regnes derfor af
+    årets faktiske, vægtede afkast. Afkastet står brutto i rækken; det er
+    saldoen, skatten er trukket af. */
+export function closeYear(years: HoldingYears, rates: RateYear): HoldingYear[] {
+  return [...years.values()].map((row) => {
+    const tax = holdingTax(row, rates)
+    return {
+      holding: row.holding.id,
+      openingBalance: row.openingBalance,
+      closingBalance: row.balance + credited(row) - tax,
+      return: credited(row),
+      tax,
+      weightedFlow: row.weightedFlow,
+    }
+  })
+}
+
+/** Beholdningsskatten af årets afkast: satsen slås op på varianten og hentes
+    i satsåret. Nul, når varianten ingen har.
+
+    Et negativt afkast giver en negativ skat, og det er med vilje: der er
+    hverken gulv eller advarsel. Et negativt PAL-afkast er fremførbart og
+    bliver før eller siden til penge tilbage, så at lade tabsåret give en
+    negativ skat er en timingforenkling af samme slags som den, personskatten
+    allerede hviler på. Læg ikke et `Math.max(0, …)` her. */
+function holdingTax(row: Row, rates: RateYear): Nominal {
+  const rate = holdingTaxRate(row.holding)
+  return rate === undefined ? 0 : credited(row) * rates.taxRates[rate]
 }
 
 function credited(row: Row): Nominal {

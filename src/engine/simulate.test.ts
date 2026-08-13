@@ -31,6 +31,12 @@ function aPlanWithSecondHolding(options: Parameters<typeof aPlan>[0] = {}): Plan
   })
 }
 
+/** Én beholdnings række i årets resultat. Beholdningen findes altid: planen
+    er valideret, og rækkerne er åbnet på planens egne beholdninger. */
+function holding(year: YearResult, id: string) {
+  return year.holdings.find((h) => h.holding === id)!
+}
+
 describe('simulate', () => {
   it('løber fra planens startår til og med personens horisont, ét kalenderår ad gangen', () => {
     const plan = aPlan({ startYear: 2026, birthYear: 1973, horizon: 90 })
@@ -1016,31 +1022,6 @@ describe('overførsler', () => {
 })
 
 describe('pensionsbeholdninger', () => {
-  it('forrenter en ratepension som enhver anden beholdning, med ÅOP trukket fra bruttoafkastet', () => {
-    const plan = aPlan({
-      balance: 0,
-      holdings: [
-        {
-          id: 'ratepension',
-          name: 'Ratepension',
-          variant: 'InstalmentPension',
-          balance: 1_000_000,
-          grossReturn: 0.07,
-          annualCostRate: 0.005,
-        },
-      ],
-    })
-
-    const ratepension = simulateChecked(plan)[0]!.holdings.find(
-      (holding) => holding.holding === 'ratepension',
-    )!
-
-    // Nettoafkastsatsen er 6,5 %, ikke 7 %: ÅOP er trukket fra, som i
-    // enhver anden beholdning — jf. ADR-0003.
-    expect(ratepension.return).toBeCloseTo(65_000, 6)
-    expect(ratepension.closingBalance).toBeCloseTo(1_065_000, 6)
-  })
-
   it('holder en pensionsbeholdnings afkast ude af personens kapitalindkomst', () => {
     // Samme beholdning to gange, kun varianten skiftet: afkastet er
     // kapitalindkomst i den ene og ingen personindkomst i den anden. Det er
@@ -1064,34 +1045,6 @@ describe('pensionsbeholdninger', () => {
     expect(ratepension.persons[0]!.shareIncome).toBe(0)
     expect(ratepension.tax).toBeLessThan(fri.tax)
   })
-
-  const pensionVariants: HoldingVariant[] = ['InstalmentPension', 'LifeAnnuity', 'OldAgeSavings']
-
-  it.each(pensionVariants)(
-    'forrenter %s efter samme regel som enhver anden beholdning',
-    (variant) => {
-      const plan = aPlan({
-        balance: 0,
-        holdings: [
-          {
-            id: 'ordning',
-            name: 'Ordning',
-            variant,
-            balance: 500_000,
-            grossReturn: 0.06,
-            annualCostRate: 0.01,
-          },
-        ],
-      })
-
-      const ordning = simulateChecked(plan)[0]!.holdings.find(
-        (holding) => holding.holding === 'ordning',
-      )!
-
-      expect(ordning.return).toBeCloseTo(25_000, 6)
-      expect(ordning.closingBalance).toBeCloseTo(525_000, 6)
-    },
-  )
 
   it('afviser en plan, hvor bufferen er en pensionsbeholdning', () => {
     // Bufferen bærer årets restpost, og en ordning kan ikke modtage frit
@@ -1144,6 +1097,151 @@ describe('pensionsbeholdninger', () => {
     expect(() => simulate(withTransfer('ratepension', 'free-assets'))).toThrow(
       /frie midler/i,
     )
+  })
+})
+
+
+describe('beholdningsskat', () => {
+  it('trækker PAL-skatten af ratepensionens afkast, og lader afkastet stå brutto', () => {
+    const plan = aPlan({
+      balance: 0,
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 1_000_000,
+          grossReturn: 0.07,
+          annualCostRate: 0.005,
+        },
+      ],
+    })
+
+    const ratepension = holding(simulateChecked(plan)[0]!, 'ratepension')
+
+    // Nettoafkastsatsen er 6,5 %, ikke 7 %: ÅOP er trukket fra som i enhver
+    // anden beholdning, jf. ADR-0003. PAL-skatten er 15,3 % af de 65.000.
+    // Afkastet står brutto, så afkastsats og skattesats kan efterregnes hver
+    // for sig; saldoen er nettet af skatten.
+    expect(ratepension.return).toBeCloseTo(65_000, 6)
+    expect(ratepension.tax).toBeCloseTo(9_945, 6)
+    expect(ratepension.closingBalance).toBeCloseTo(1_055_055, 6)
+  })
+
+  it('lægger beholdningsskatten til årets samlede skat uden at trække den af bufferen', () => {
+    // Ingen poster, så husstanden har hverken indtægt eller skat af egen
+    // indkomst: årets skat er beholdningsskatten alene. Bufferen står
+    // urørt — beholdningsskatten er trukket i beholdningen selv og passerer
+    // aldrig pengestrømmen, jf. `HoldingTax`.
+    const plan = aPlan({
+      balance: 0,
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 1_000_000,
+          grossReturn: 0.07,
+          annualCostRate: 0.005,
+        },
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(year.tax).toBeCloseTo(9_945, 6)
+    expect(bufferBalance(year)).toBeCloseTo(0, 6)
+  })
+
+  it.each(['InstalmentPension', 'LifeAnnuity', 'OldAgeSavings'] as HoldingVariant[])(
+    'beskatter %s efter PAL-satsen — satsen følger varianten',
+    (variant) => {
+      const plan = aPlan({
+        balance: 0,
+        holdings: [
+          {
+            id: 'ordning',
+            name: 'Ordning',
+            variant,
+            balance: 500_000,
+            grossReturn: 0.06,
+            annualCostRate: 0.01,
+          },
+        ],
+      })
+
+      const ordning = holding(simulateChecked(plan)[0]!, 'ordning')
+
+      // ÅOP er trukket fra først som i enhver anden beholdning, jf. ADR-0003:
+      // 5 % netto af 500.000 giver 25.000, og 15,3 % af dem er 3.825. De tre
+      // ordninger deler sats, fordi varianttabellen giver dem samme række —
+      // ikke fordi tre steder i motoren tilfældigvis siger det samme.
+      expect(ordning.return).toBeCloseTo(25_000, 6)
+      expect(ordning.tax).toBeCloseTo(3_825, 6)
+      expect(ordning.closingBalance).toBeCloseTo(521_175, 6)
+    },
+  )
+
+  it.each(['ShareDepot', 'SavingsAccount'] as HoldingVariant[])(
+    'lader %s stå uden beholdningsskat — afkastet beskattes hos personen i stedet',
+    (variant) => {
+      const plan = aPlan({ balance: 1_000_000, variant, grossReturn: 0.05 })
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(holding(year, 'free-assets').tax).toBe(0)
+      // Afkastet er ikke ubeskattet: det er blot personens eller husstandens
+      // skat, ikke beholdningens.
+      expect(year.tax).toBeGreaterThan(0)
+    },
+  )
+
+  it('lader et negativt afkast give en negativ beholdningsskat, uden gulv', () => {
+    const plan = aPlan({
+      balance: 0,
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 1_000_000,
+          grossReturn: -0.1,
+          annualCostRate: 0,
+        },
+      ],
+    })
+
+    const ratepension = holding(simulateChecked(plan)[0]!, 'ratepension')
+
+    // Tabsåret giver penge tilbage frem for et nul: et negativt PAL-afkast er
+    // fremførbart og bliver før eller siden til netop det. Gulvet ville gøre
+    // saldoen for lav for altid.
+    expect(ratepension.return).toBeCloseTo(-100_000, 6)
+    expect(ratepension.tax).toBeCloseTo(-15_300, 6)
+    expect(ratepension.closingBalance).toBeCloseTo(915_300, 6)
+  })
+
+  it('bærer den nettede saldo videre som næste års primosaldo', () => {
+    const plan = aPlan({
+      balance: 0,
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 1_000_000,
+          grossReturn: 0.07,
+          annualCostRate: 0.005,
+        },
+      ],
+    })
+
+    const years = simulateChecked(plan)
+
+    // Skatten falder før lukningen, som diagram 02 foreskriver — så næste år
+    // forrenter den nettede saldo og ikke den brutto.
+    expect(holding(years[1]!, 'ratepension').openingBalance).toBeCloseTo(1_055_055, 6)
+    expect(holding(years[1]!, 'ratepension').return).toBeCloseTo(1_055_055 * 0.065, 6)
   })
 })
 

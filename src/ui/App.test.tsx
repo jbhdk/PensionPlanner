@@ -1309,8 +1309,68 @@ describe('fladen', () => {
     // Jævnt forfald vejer overførslen halvt: 200.000 bliver 100.000, negativt
     // hos afgiveren og positivt hos modtageren. Begge beholdninger har 0 %
     // nettoafkast i fixturen, så afkastet er 0 uanset grundlaget.
-    expect(cells('Frie midler')).toEqual(['Frie midler', '1.000.000', '-100.000', '0,00 %', '0'])
-    expect(cells('Anden beholdning')).toEqual(['Anden beholdning', '0', '100.000', '0,00 %', '0'])
+    expect(cells('Frie midler')).toEqual([
+      'Frie midler',
+      '1.000.000',
+      '-100.000',
+      '0,00 %',
+      '0',
+      '0',
+    ])
+    expect(cells('Anden beholdning')).toEqual([
+      'Anden beholdning',
+      '0',
+      '100.000',
+      '0,00 %',
+      '0',
+      '0',
+    ])
+  })
+
+  it('viser beholdningsskatten som sin egen kolonne ved siden af afkastet', async () => {
+    // Afkastet står brutto, og skatten ved siden af, så de to kan efterregnes
+    // hver for sig: ligger afvigelsen i afkastsatsen eller i skatten? Med ét
+    // nettotal kunne brugeren ikke se det.
+    const user = userEvent.setup()
+    const plan = aPlan({
+      startYear: 2026,
+      balance: 1_000_000,
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 1_000_000,
+          grossReturn: 0.07,
+          annualCostRate: 0.005,
+        },
+      ],
+    })
+    render(<App initialPlan={plan} />)
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2026 — startåret, hvor dagens kroner og løbende priser er ét
+
+    const holdingsTable = document.querySelector('table.beholdningstabel') as HTMLElement
+    const cells = (name: string) =>
+      within(within(holdingsTable).getByText(name).closest('tr') as HTMLElement)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent)
+
+    // 6,5 % netto af 1.000.000 er 65.000, og PAL-skatten er 15,3 % af dem.
+    // Den vises negativ: den er trukket af beholdningens egen saldo.
+    expect(cells('Ratepension')).toEqual([
+      'Ratepension',
+      '1.000.000',
+      '0',
+      '6,50 %',
+      '65.000',
+      '-9.945',
+    ])
+    // De frie midler har ingen beholdningsskat — deres afkast beskattes hos
+    // personen i stedet, og satsen vælges ingen steder i fladen.
+    expect(cells('Frie midler')).toEqual(['Frie midler', '1.000.000', '0', '0,00 %', '0', '0'])
   })
 
   it('viser årets poster med forfald og afkastvægt', async () => {

@@ -30,7 +30,15 @@ export type HoldingYear = {
   holding: HoldingId
   openingBalance: Nominal
   closingBalance: Nominal
+  /** Årets afkast **brutto** — før beholdningsskatten. Står brutto, så
+      afkastsatsen og skattesatsen kan efterregnes hver for sig;
+      `closingBalance` er nettet af `tax`. */
   return: Nominal
+  /** Beholdningsskatten af årets afkast, båret af beholdningen selv og
+      trukket af dens saldo, jf. `HoldingTax` i CONTEXT.md. Nul for de
+      varianter, der ingen har. Indgår i `YearResult.tax` — den passerer
+      ingen persons indkomst, men den er en skat husstanden betaler. */
+  tax: Nominal
   /** Årets strømme ind og ud af beholdningen, hver vægtet efter sit forfald
       — bufferens andel af posterne, og enhver overførsel til eller fra
       beholdningen. Det, der lægges til primosaldoen i Modified Dietz, før

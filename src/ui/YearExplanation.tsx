@@ -219,7 +219,12 @@ function EntriesBlock({
 /** Afkastet pr. beholdning: primosaldo og vægtet strøm er grundlaget,
     nettoafkastsatsen er beholdningens egen — udledt af brutto minus ÅOP,
     aldrig et gemt felt, jf. CONTEXT.md — og de tre ganget/lagt sammen giver
-    afkastet, så en række kan efterregnes i hånden alene ud fra sig selv. */
+    afkastet, så en række kan efterregnes i hånden alene ud fra sig selv.
+
+    Beholdningsskatten står i sin egen kolonne ved siden af afkastet, og
+    afkastet står brutto: kan de to kun ses som ét nettotal, kan brugeren
+    ikke se, om en afvigelse ligger i afkastsatsen eller i skatten. Satsen
+    vises ikke og vælges ingen steder — den følger varianten. */
 function HoldingsBlock({
   plan,
   year,
@@ -244,6 +249,7 @@ function HoldingsBlock({
             <th>Vægtet strøm</th>
             <th>Nettoafkastsats</th>
             <th>Afkast</th>
+            <th>Beholdningsskat</th>
           </tr>
         </thead>
         <tbody>
@@ -257,6 +263,9 @@ function HoldingsBlock({
                 <td>{kroner(display(h.weightedFlow))}</td>
                 <td>{procent(holding.grossReturn - holding.annualCostRate)}</td>
                 <td>{kroner(display(h.return))}</td>
+                {/* Negativ: skatten er trukket af beholdningens egen saldo,
+                    som udgiften er det i balancestriben. */}
+                <td>{kroner(display(-h.tax))}</td>
               </tr>
             )
           })}

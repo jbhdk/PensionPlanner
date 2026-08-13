@@ -24,20 +24,23 @@ export function simulateChecked(plan: Plan): YearResult[] {
     ).toBeCloseTo(flows, 6)
 
     // Årets skat er summen af sine dele og intet andet: hver persons egne
-    // lag, plus aktieindkomstens, som er husstandens, jf. ADR-0014. Uden den
-    // her kunne et lag blive regnet med i totalen uden at stå nogen steder
-    // — og forklar-året ville vise et tal, der ikke kan efterregnes.
+    // lag, plus aktieindkomstens, som er husstandens, plus beholdningernes,
+    // som beholdningen selv bærer. Uden den her kunne et lag blive regnet med
+    // i totalen uden at stå nogen steder — og forklar-året ville vise et tal,
+    // der ikke kan efterregnes, jf. ADR-0014.
     const fromPersons = year.persons.reduce((sum, person) => sum + totalTax(person.tax), 0)
     const fromShareIncome = Object.values(year.shareIncomeTax).reduce(
       (sum, layer) => sum + layer.amount,
       0,
     )
+    const fromHoldings = year.holdings.reduce((sum, holding) => sum + holding.tax, 0)
 
     expect(
       year.tax,
       `skatten går ikke op i ${year.year}: året siger ${year.tax}, men ` +
-        `personerne giver ${fromPersons} og aktieindkomsten ${fromShareIncome}`,
-    ).toBeCloseTo(fromPersons + fromShareIncome, 6)
+        `personerne giver ${fromPersons}, aktieindkomsten ${fromShareIncome} ` +
+        `og beholdningerne ${fromHoldings}`,
+    ).toBeCloseTo(fromPersons + fromShareIncome + fromHoldings, 6)
   }
 
   return results

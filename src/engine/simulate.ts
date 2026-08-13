@@ -28,6 +28,7 @@ import type { RateYear } from './rates/rateYear'
 import { assessHousehold, totalHouseholdTax } from './tax/assessHousehold'
 import type { TaxAssessmentInput } from './tax/assessTax'
 import { validatePlan } from './validatePlan'
+import { totalYearTax } from './yearTax'
 import type { BufferState, HoldingYear, RateBasis, YearResult } from './yearResult'
 
 /** En post sammen med dens beløb i årets løbende priser, for de poster der
@@ -102,12 +103,18 @@ function simulateYear(
     },
     rates,
   )
-  const tax = totalHouseholdTax(household)
-
   // Årets restpost lander på bufferen. Den er det ene sted, over- og
   // underskuddet må samle sig, og den må gerne gå negativt — det er modellens
   // måde at sige, at planen ikke holder, jf. ADR-0002.
-  const settled = withMovement(flowed, plan.buffer, income - tax - expenses)
+  //
+  // Kun husstandens egen skat trækkes her. Beholdningsskatten er allerede
+  // trukket af beholdningen selv ved lukningen og passerer aldrig
+  // pengestrømmen; trak bufferen den også, ville den være betalt to gange.
+  const settled = withMovement(
+    flowed,
+    plan.buffer,
+    income - totalHouseholdTax(household) - expenses,
+  )
 
   // En overførsel flytter sit fulde beløb mellem afgiver og modtager. Den
   // rammer aldrig skatten eller pengestrømmen, jf. `Transfer`.
@@ -117,7 +124,11 @@ function simulateYear(
     settled,
   )
 
-  const holdings = closeYear(moved)
+  // Lukningen krediterer afkastet og trækker beholdningsskatten, jf. diagram
+  // 02. Først dér er alle tre bærere af årets skat kendt, og først dér kan
+  // de lægges sammen.
+  const holdings = closeYear(moved, rates)
+  const tax = totalYearTax(household, holdings)
 
   return {
     year,
