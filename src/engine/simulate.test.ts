@@ -184,6 +184,59 @@ describe('simulate', () => {
     expect(expensesIn(2054)).toBe(0)
   })
 
+  it('lader en brøkalder ramme forskellige kalenderår efter fødselsmåneden', () => {
+    // Et halvt år skubber endepunktet over et årsskifte for halvdelen af
+    // fødselsmånederne: en junifødt fylder 65,5 i december 2038, mens en
+    // septemberfødt først når det i marts 2039.
+    const foersteUdgiftsaar = (birthMonth: number) => {
+      const plan = aPlan({
+        startYear: 2026,
+        birthYear: 1973,
+        birthMonth,
+        balance: 1_000_000,
+        inflationAssumption: 0,
+        entries: [
+          anExpense({
+            amountInRealKroner: 110_000,
+            period: { anchor: 'PersonAge', from: 65.5 },
+          }),
+        ],
+      })
+
+      return simulateChecked(plan).find((year) => year.expenses > 0)!.year
+    }
+
+    expect(foersteUdgiftsaar(6)).toBe(2038)
+    expect(foersteUdgiftsaar(9)).toBe(2039)
+  })
+
+  it('lader en heltalsalder falde i fødselsåret plus alderen, uanset fødselsmåned', () => {
+    // Værnet om, at den gamle adfærd er formlens specialtilfælde: en
+    // decemberfødt har det største bidrag fra fødselsmåneden, 11/12, og
+    // alligevel skal årstallet stå stille.
+    const plan = aPlan({
+      startYear: 2026,
+      birthYear: 1973,
+      birthMonth: 12,
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      entries: [
+        anExpense({
+          amountInRealKroner: 110_000,
+          period: { anchor: 'PersonAge', from: 70, to: 80 },
+        }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+    const expensesIn = (year: number) => years.find((y) => y.year === year)!.expenses
+
+    expect(expensesIn(2042)).toBe(0)
+    expect(expensesIn(2043)).toBe(110_000)
+    expect(expensesIn(2053)).toBe(110_000)
+    expect(expensesIn(2054)).toBe(0)
+  })
+
   it('flytter en aldersforankret post, der peger på erhvervsophør, når workEndAge ændres — uden at posten redigeres', () => {
     const entries = [
       aSalary({

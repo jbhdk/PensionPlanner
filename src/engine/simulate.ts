@@ -22,6 +22,7 @@ import type {
   Timing,
   Transfer,
 } from './plan'
+import { yearAtAge } from './age'
 import { rateYearFor } from './rates/rates'
 import type { RateYear } from './rates/rateYear'
 import { assessHousehold, totalHouseholdTax } from './tax/assessHousehold'
@@ -334,7 +335,7 @@ function periodBounds(
 function resolveAgeBound(bound: AgeBound | undefined, owner: Person): SimulationYear | undefined {
   if (bound === undefined) return undefined
   const age = bound === 'WorkEndAge' ? owner.workEndAge : bound
-  return owner.birthYear + age
+  return yearAtAge(owner, age)
 }
 
 function allHoldings(plan: Plan): Holding[] {

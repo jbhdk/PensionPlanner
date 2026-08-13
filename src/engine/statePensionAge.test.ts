@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { aPlan } from './testing/planFixture'
-import { deriveStatePensionAge, statePensionAge } from './statePensionAge'
+import { deriveStatePensionAge, statePensionAge, statePensionYear } from './statePensionAge'
 
 describe('deriveStatePensionAge', () => {
   it('udleder folkepensionsalderen for en fødselsdato midt i et vedtaget trin', () => {
@@ -30,5 +30,21 @@ describe('statePensionAge', () => {
   it('lader en overstyring vinde over den udledte alder', () => {
     const [person] = aPlan({ birthYear: 1985 }).household.persons
     expect(statePensionAge({ ...person!, statePensionAgeOverride: 72 })).toBe(72)
+  })
+})
+
+describe('statePensionYear', () => {
+  const aPerson = (birthYear: number, birthMonth: number) =>
+    aPlan({ birthYear, birthMonth }).household.persons[0]!
+
+  it('skubber året over årsskiftet for de fødselsmåneder, hvor det halve år rækker', () => {
+    // Folkepensionsalderen er 72,5 for hele årgang 1983. En januarfødt når
+    // den i juli 2055, mens en julifødt først når den i januar 2056.
+    expect(statePensionYear(aPerson(1983, 1))).toBe(2055)
+    expect(statePensionYear(aPerson(1983, 7))).toBe(2056)
+  })
+
+  it('giver fødselsåret plus alderen, når folkepensionsalderen er et helt år', () => {
+    expect(statePensionYear(aPerson(1973, 6))).toBe(2043)
   })
 })

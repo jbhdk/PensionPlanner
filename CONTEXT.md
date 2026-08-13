@@ -195,8 +195,8 @@ Den tidsstrækning en post er aktiv i. Formen på dens endepunkter følger `Anch
 _Avoid_: Interval, tidsrum. Forveksl den ikke med et enkelt `SimulationYear`.
 
 **Aldersendepunkt** · `AgeBound`:
-Et periodeendepunkt ved aldersforankring: enten en fast alder, eller en af personens navngivne aldre — `WorkEndAge` eller `StatePensionAge` — med et valgfrit forskud i år. Bundet til en navngiven alder flytter endepunktet sig af sig selv, når den alder ændres, uden at posten redigeres. Forskuddet er det, der gør aldersopsparingens vindue skrivbart: syv år før folkepensionsalderen er ét endepunkt, ikke et tal der skal efterregnes, hver gang skønnet for en ikke-vedtaget folkepensionsalder justeres.
-_Avoid_: Aldersgrænse, tidspunkt, offset brugt som selvstændigt begreb
+Et periodeendepunkt ved aldersforankring: enten en fast alder, eller en henvisning til `WorkEndAge`. Sat til erhvervsophør følger endepunktet `Person.workEndAge` og flytter sig automatisk, uden at posten selv redigeres. Alderen behøver ikke være et helt år — folkepensionsalderen er 65,5 for én årgang og 72,5 for en anden — og hvilket kalenderår endepunktet rammer, afhænger derfor også af fødselsmåneden.
+_Avoid_: Aldersgrænse, tidspunkt
 
 **Indbetaling** · `Contribution`:
 En bevægelse af penge ind i en beholdning, der ikke er frie midler — altså ind i en ordning med et loft på vejen ind og regler på vejen ud. Kilden er enten en indtægtspost eller en anden beholdning. Hverken skattevirkningen eller loftet er noget, indbetalingen selv bærer: skattevirkningen følger destinationens variant, og AM-behandlingen følger kilden.

@@ -25,7 +25,8 @@ const steps: StatePensionAgeStep[] = [
   { fromYear: 1996, fromMonth: 7, age: 74, enacted: false },
 ]
 
-import type { Person } from './plan'
+import { yearAtAge } from './age'
+import type { Person, SimulationYear } from './plan'
 
 export type StatePensionAgeInfo = { age: number; enacted: boolean }
 
@@ -54,4 +55,13 @@ export function statePensionAge(person: Person): number {
     person.statePensionAgeOverride ??
     deriveStatePensionAge(person.birthYear, person.birthMonth).age
   )
+}
+
+/** Det kalenderår personen når folkepensionsalderen. Motorens eneste vej til
+    det tal: aldersopsparingens vindue, det ekstra pensionsfradrags
+    15-årsgrænse og folkepensionens egen start skal ramme det samme år, og
+    alderen er en brøk for de fleste årgange — regnede hvert sted det selv,
+    ville de tre kunne skille sig i det halve år. */
+export function statePensionYear(person: Person): SimulationYear {
+  return yearAtAge(person, statePensionAge(person))
 }
