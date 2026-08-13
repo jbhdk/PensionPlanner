@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { aPlan, aTransfer } from '../engine/testing/planFixture'
 import type { Plan } from '../engine/plan'
 import { validatePlan } from '../engine/validatePlan'
-import { addEntry, removePerson } from './planEdits'
+import { addEntry, removeHolding, removePerson } from './planEdits'
 
 /** Et to-personers udgangspunkt: fixturens Jesper har bufferen
     ("free-assets"), Maria har en anden beholdning ved siden af. */
@@ -47,6 +47,38 @@ describe('removePerson', () => {
 
     expect(result.household.persons.map((p) => p.id)).toEqual(['maria'])
     expect(result.buffer).toBe('marias-konto')
+  })
+
+  it('giver bufferrollen til frie midler, også når personens første beholdning er en ordning', () => {
+    const base = aTwoPersonPlan()
+    const maria = base.household.persons[1]!
+    const plan: Plan = {
+      ...base,
+      household: {
+        persons: [
+          base.household.persons[0]!,
+          {
+            ...maria,
+            holdings: [
+              {
+                id: 'marias-ratepension',
+                name: 'Marias ratepension',
+                variant: 'InstalmentPension',
+                balance: 1_000_000,
+                grossReturn: 0,
+                annualCostRate: 0,
+              },
+              ...maria.holdings,
+            ],
+          },
+        ],
+      },
+    }
+
+    const result = removePerson(plan, 'jesper')
+
+    expect(result.buffer).toBe('marias-konto')
+    expect(validatePlan(result)).toBeUndefined()
   })
 
   it('lader bufferen stå, når dens ejer ikke er den, der fjernes', () => {
@@ -134,3 +166,40 @@ describe('addEntry', () => {
     expect(result.entries.map((e) => e.name)).toEqual(['Indtægt 1', 'Udgift 1', 'Indtægt 2'])
   })
 })
+
+describe('removeHolding', () => {
+  /** Fixturens buffer, en ratepension lige efter, og frie midler til sidst —
+      rækkefølgen er den, en arvtager til bufferrollen møder. */
+  function aPlanWithPensionFirst(): Plan {
+    return aPlan({
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 1_000_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+        {
+          id: 'anden-frie',
+          name: 'Andre frie midler',
+          variant: 'CapitalIncome',
+          balance: 200_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+  }
+
+  it('lader bufferrollen gå videre til frie midler og springer pensionsbeholdningen over', () => {
+    const plan = aPlanWithPensionFirst()
+
+    const result = removeHolding(plan, 'free-assets')
+
+    expect(result.buffer).toBe('anden-frie')
+    expect(validatePlan(result)).toBeUndefined()
+  })
+})
+

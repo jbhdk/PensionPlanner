@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Plan } from '../engine/plan'
+import type { Holding, Plan } from '../engine/plan'
 import { aPlan, aSalary, aTransfer, anExpense } from '../engine/testing/planFixture'
 import { exportPlan } from '../persistence/planFile'
 import { loadPlan } from '../persistence/planStorage'
@@ -11,55 +11,49 @@ import { defaultPlan } from './defaultPlan'
 /** Fixturens buffer plus én beholdning til, så en overførsel har et sted at
     flytte penge hen. */
 function aPlanWithSecondHolding(): Plan {
-  const base = aPlan()
-  return {
-    ...base,
-    household: {
-      persons: [
-        {
-          ...base.household.persons[0]!,
-          holdings: [
-            ...base.household.persons[0]!.holdings,
-            {
-              id: 'anden-beholdning',
-              name: 'Anden beholdning',
-              variant: 'CapitalIncome' as const,
-              balance: 0,
-              grossReturn: 0,
-              annualCostRate: 0,
-            },
-          ],
-        },
-      ],
-    },
-  }
+  return aPlan({ holdings: [aFreeHolding('anden-beholdning', 'Anden beholdning')] })
 }
 
 /** Som ovenfor, men med en tredje beholdning, så "Fra" og "Til" hver har
     mere end ét lovligt valg tilbage, når den anden er udelukket. */
 function aPlanWithThreeHoldings(): Plan {
-  const base = aPlanWithSecondHolding()
-  return {
-    ...base,
-    household: {
-      persons: [
-        {
-          ...base.household.persons[0]!,
-          holdings: [
-            ...base.household.persons[0]!.holdings,
-            {
-              id: 'tredje-beholdning',
-              name: 'Tredje beholdning',
-              variant: 'CapitalIncome' as const,
-              balance: 0,
-              grossReturn: 0,
-              annualCostRate: 0,
-            },
-          ],
-        },
-      ],
-    },
-  }
+  return aPlan({
+    holdings: [
+      aFreeHolding('anden-beholdning', 'Anden beholdning'),
+      aFreeHolding('tredje-beholdning', 'Tredje beholdning'),
+    ],
+  })
+}
+
+function aFreeHolding(id: string, name: string): Holding {
+  return { id, name, variant: 'CapitalIncome', balance: 0, grossReturn: 0, annualCostRate: 0 }
+}
+
+/** Fixturens buffer plus en ratepension, så skuffen har en pensionsbeholdning
+    at vise. */
+function aPlanWithPension(): Plan {
+  return aPlan({
+    holdings: [
+      {
+        id: 'ratepension',
+        name: 'Ratepension',
+        variant: 'InstalmentPension',
+        balance: 2_000_000,
+        grossReturn: 0.07,
+        annualCostRate: 0.005,
+      },
+    ],
+  })
+}
+
+/** Et udledt eller låst felt i skuffen. Det har ingen kontrol at pege på og
+    kan derfor ikke findes med `getByLabelText`. */
+function lockedField(label: string): HTMLElement {
+  const felt = Array.from(document.querySelectorAll('.felt')).find(
+    (element) => element.querySelector('.etiket')?.textContent === label,
+  )
+  if (!felt) throw new Error(`Skuffen har intet felt med etiketten ${label}.`)
+  return felt as HTMLElement
 }
 
 /** Etiketten på det første felt i Perioden-afsnittet — til at fastslå
@@ -357,22 +351,58 @@ describe('fladen', () => {
     expect(bruttoafkast().value).toBe('0')
   })
 
-  it('lader en beholdnings variant vælges mellem Aktieindkomst og Kapitalindkomst', async () => {
+  it('lader en beholdnings variant vælges mellem de fem, med deres danske navne', async () => {
     const user = userEvent.setup()
-    render(<App initialPlan={aPlan()} />)
+    render(<App initialPlan={aPlanWithSecondHolding()} />)
 
-    await user.click(navigatorButton(/Frie midler/))
+    await user.click(navigatorButton(/Anden beholdning/))
     const variant = screen.getByLabelText(/Variant/) as HTMLSelectElement
 
-    // Fixturens beholdning er CapitalIncome, og etape 1 tilbyder kun de to
-    // lovlige varianter — ingen af de tre, der først findes i senere etaper.
+    // Fixturens beholdning er CapitalIncome. Aktiesparekontoen står ikke i
+    // listen — den findes først i etape 3 — og intet engelsk identifier når
+    // skærmen.
     expect(variant.value).toBe('Kapitalindkomst')
-    expect(
-      Array.from(variant.options).map((option) => option.value),
-    ).toEqual(['Aktieindkomst', 'Kapitalindkomst'])
+    expect(Array.from(variant.options).map((option) => option.value)).toEqual([
+      'Ratepension',
+      'Livrente',
+      'Aldersopsparing',
+      'Aktieindkomst',
+      'Kapitalindkomst',
+    ])
 
-    await user.selectOptions(variant, 'Aktieindkomst')
-    expect(variant.value).toBe('Aktieindkomst')
+    await user.selectOptions(variant, 'Ratepension')
+    expect(variant.value).toBe('Ratepension')
+  })
+
+  it('viser nettoafkastet udledt af bruttoafkast og ÅOP også for en pensionsbeholdning', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithPension()} />)
+
+    await user.click(navigatorButton(/Ratepension/))
+
+    // ÅOP'ens betydning bliver synlig, hvor beløbene er størst: 7 % minus
+    // 0,5 % er 6,5 %, og feltet er udledt frem for tastet.
+    const nettoafkast = lockedField('Nettoafkast')
+    expect(nettoafkast.querySelector('.laast')!.textContent).toBe('6,50 %')
+    expect(nettoafkast.textContent).toContain('udledt')
+  })
+
+  it('lader ikke bufferen udpeges til en pensionsbeholdning, og siger hvorfor', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithPension()} />)
+
+    await user.click(navigatorButton(/Ratepension/))
+    const buffer = screen.getByLabelText(/Buffer/) as HTMLInputElement
+
+    expect(buffer.checked).toBe(false)
+    expect(buffer.disabled).toBe(true)
+    // Reglen står i skuffen frem for at være et felt, der forsvandt.
+    expect(screen.getByText(/Bufferen skal være frie midler/i)).toBeTruthy()
+
+    await user.click(buffer)
+
+    await user.click(navigatorButton(/Frie midler/))
+    expect((screen.getByLabelText(/Buffer/) as HTMLInputElement).checked).toBe(true)
   })
 
   it('lader en posts forfald vælges som jævnt fordelt eller en bestemt måned', async () => {

@@ -10,28 +10,18 @@ import { WealthChart } from './WealthChart'
 /** Fixturens buffer plus én beholdning til, så grafen har mere end ét lag
     at stable. */
 function aPlanWithSecondHolding(): Plan {
-  const base = aPlan()
-  return {
-    ...base,
-    household: {
-      persons: [
-        {
-          ...base.household.persons[0]!,
-          holdings: [
-            ...base.household.persons[0]!.holdings,
-            {
-              id: 'anden-beholdning',
-              name: 'Anden beholdning',
-              variant: 'CapitalIncome' as const,
-              balance: 500_000,
-              grossReturn: 0,
-              annualCostRate: 0,
-            },
-          ],
-        },
-      ],
-    },
-  }
+  return aPlan({
+    holdings: [
+      {
+        id: 'anden-beholdning',
+        name: 'Anden beholdning',
+        variant: 'CapitalIncome',
+        balance: 500_000,
+        grossReturn: 0,
+        annualCostRate: 0,
+      },
+    ],
+  })
 }
 
 describe('WealthChart', () => {
@@ -243,4 +233,55 @@ describe('WealthChart', () => {
     const svg = container.querySelector('svg')!
     expect(svg.getAttribute('viewBox')!.split(' ')[2]).toBe('480')
   })
+
+  it('stabler frie midler nederst og skraverer de bundne beholdninger over dem', () => {
+    // Husstandens egen rækkefølge sætter ratepensionen mellem de to frie
+    // midler. Grafen stabler alligevel de frie nederst, så stablen kan læses
+    // som "hvad er til rådighed" mod "hvad er bundet" — og skraveringen gør
+    // skellet synligt uden at læse legenden.
+    const plan = aPlan({
+      balance: 1_000_000,
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 2_000_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+        {
+          id: 'anden-beholdning',
+          name: 'Anden beholdning',
+          variant: 'CapitalIncome',
+          balance: 500_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+    const years = simulate(plan)
+    const { container } = render(<WealthChart years={years} plan={plan} unit="Real" />)
+
+    const lag = Array.from(container.querySelectorAll('svg [data-holding]'))
+    expect(lag.map((el) => el.getAttribute('data-holding'))).toEqual([
+      'free-assets',
+      'anden-beholdning',
+      'ratepension',
+    ])
+    expect(lag.map((el) => el.getAttribute('data-free-assets'))).toEqual([
+      'true',
+      'true',
+      'false',
+    ])
+
+    // Kun det bundne bånd bærer skraveringen, og den ligger oven på
+    // beholdningens egen farve frem for at erstatte den.
+    const skraverede = Array.from(container.querySelectorAll('svg [data-hatch]'))
+    expect(skraverede.map((el) => el.getAttribute('data-hatch'))).toEqual(['ratepension'])
+    const ratepension = lag[2]!
+    expect(skraverede[0]!.getAttribute('d')).toBe(ratepension.getAttribute('d'))
+    expect(ratepension.getAttribute('fill')).not.toBe(skraverede[0]!.getAttribute('fill'))
+  })
 })
+

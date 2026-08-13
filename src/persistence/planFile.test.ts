@@ -25,4 +25,44 @@ describe('planFile', () => {
 
     expect(result.kind).toBe('Failed')
   })
+
+  it('bærer en plan med de tre pensionsvarianter hele vejen rundt, uden et nyt led i kæden', () => {
+    // En udvidet union er bagudkompatibel: en gemt plan fra etape 1 kender
+    // ingen af de tre og skal indlæses uændret, og en plan der gør, skal
+    // kunne gemmes og hentes på samme skemaversion.
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 2_000_000,
+          grossReturn: 0.06,
+          annualCostRate: 0.005,
+        },
+        {
+          id: 'livrente',
+          name: 'Livrente',
+          variant: 'LifeAnnuity',
+          balance: 1_000_000,
+          grossReturn: 0.05,
+          annualCostRate: 0.004,
+        },
+        {
+          id: 'aldersopsparing',
+          name: 'Aldersopsparing',
+          variant: 'OldAgeSavings',
+          balance: 300_000,
+          grossReturn: 0.07,
+          annualCostRate: 0.006,
+        },
+      ],
+    })
+
+    const result = importPlan(exportPlan(plan))
+
+    expect(result).toEqual({ kind: 'Loaded', plan })
+    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(4)
+  })
 })
+

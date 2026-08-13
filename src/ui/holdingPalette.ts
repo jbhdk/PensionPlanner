@@ -1,3 +1,4 @@
+import { isFreeAssets } from '../engine/holdingVariant'
 import type { Household } from '../engine/plan'
 
 /** Otte farver i fast rækkefølge, aldrig genereret eller cyklet — valideret
@@ -17,10 +18,16 @@ const CATEGORICAL_PALETTE = [
 ]
 
 /** Beholdningerne i den rækkefølge, farvetildelingen og formuegrafens
-    stabling bruger — husstandens personrækkefølge, så en beholdning holder
-    sin farve, selv om en anden fjernes eller tilføjes bagved den. */
+    stabling bruger: frie midler først, bundne beholdninger derefter, og inden
+    for hver gruppe husstandens personrækkefølge, så en beholdning holder sin
+    farve, selv om en anden fjernes eller tilføjes bagved den.
+
+    Grupperingen er formuegrafens skel mellem "hvad er til rådighed" og "hvad
+    er bundet". Den flytter kun rækkefølgen — hvad der er frie midler, står i
+    varianttabellen. */
 export function orderedHoldings(household: Household) {
-  return household.persons.flatMap((person) => person.holdings)
+  const holdings = household.persons.flatMap((person) => person.holdings)
+  return [...holdings.filter(isFreeAssets), ...holdings.filter((h) => !isFreeAssets(h))]
 }
 
 export function holdingColor(holdingIndex: number): string {

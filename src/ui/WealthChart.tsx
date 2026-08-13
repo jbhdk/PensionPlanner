@@ -1,6 +1,7 @@
 import { scaleLinear } from 'd3-scale'
 import { area as d3Area, curveLinear } from 'd3-shape'
 import { useEffect, useRef, useState } from 'react'
+import { isFreeAssets } from '../engine/holdingVariant'
 import type { Plan } from '../engine/plan'
 import type { BufferState, YearResult } from '../engine/yearResult'
 import { bufferStateClasses, bufferStateLabels } from './bufferState'
@@ -140,6 +141,20 @@ export function WealthChart({
     <div className="formuegraf">
       <div className="formuegraf-plot" ref={plotRef}>
         <svg role="img" aria-label="Formuegraf" viewBox={`0 0 ${width} ${height}`}>
+          <defs>
+            {/* Skellet mellem bundne beholdninger og frie midler skal kunne
+                ses uden at læse legenden. Stregerne har fladens egen
+                baggrundsfarve, som båndene i forvejen er adskilt med. */}
+            <pattern
+              id="skravering"
+              patternUnits="userSpaceOnUse"
+              width={8}
+              height={8}
+              patternTransform="rotate(45)"
+            >
+              <line x1={0} y1={0} x2={0} y2={8} stroke="var(--flade)" strokeWidth={2.5} />
+            </pattern>
+          </defs>
           {bufferSpans(years).map((span) => {
             const x0 = Math.max(MARGIN.left, x(span.fromIndex) - halfStep)
             const x1 = Math.min(width - MARGIN.right, x(span.toIndex) + halfStep)
@@ -179,16 +194,32 @@ export function WealthChart({
           </g>
           {holdings.map((holding, si) => {
             const dimmed = selected?.kind === 'holding' && selected.id !== holding.id
+            const path = areaGenerator(bands[si]!) ?? undefined
+            const free = isFreeAssets(holding)
             return (
-              <path
-                key={holding.id}
-                data-holding={holding.id}
-                d={areaGenerator(bands[si]!) ?? undefined}
-                fill={holdingColor(si)}
-                fillOpacity={dimmed ? 0.28 : 1}
-                stroke="var(--flade)"
-                strokeWidth={2}
-              />
+              <g key={holding.id}>
+                <path
+                  data-holding={holding.id}
+                  data-free-assets={free}
+                  d={path}
+                  fill={holdingColor(si)}
+                  fillOpacity={dimmed ? 0.28 : 1}
+                  stroke="var(--flade)"
+                  strokeWidth={2}
+                />
+                {/* Skraveringen ligger oven på beholdningens egen farve frem
+                    for at erstatte den: farven siger hvilken beholdning,
+                    skraveringen at den er bundet. */}
+                {!free && (
+                  <path
+                    data-hatch={holding.id}
+                    d={path}
+                    fill="url(#skravering)"
+                    fillOpacity={dimmed ? 0.28 : 1}
+                    stroke="none"
+                  />
+                )}
+              </g>
             )
           })}
           <g className="formuegraf-akse-x">
@@ -216,7 +247,11 @@ export function WealthChart({
                 className={sameSelection(selected, target) ? 'valgt' : undefined}
                 onClick={() => onSelect(sameSelection(selected, target) ? null : target)}
               >
-                <span className="svatch" style={{ background: holdingColor(si) }} />
+                <span
+                  className="svatch"
+                  data-free-assets={isFreeAssets(holding)}
+                  style={{ background: holdingColor(si) }}
+                />
                 {holding.name}
               </button>
             </li>

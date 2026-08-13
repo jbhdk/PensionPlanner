@@ -17,13 +17,19 @@ export type EntryId = string
     og kirkeskatteprocenten slås op for det simuleringsår, der regnes på. */
 export type Municipality = string
 
-/** Beskatningsformen er beholdningens akse. Etape 1 kender kun de to frie. */
-export type HoldingVariant = 'ShareIncome' | 'CapitalIncome'
+/** Beskatningsformen er beholdningens akse og ikke et felt ved siden af den,
+    jf. ADR-0010 og ADR-0015. `ShareSavingsAccount` hører i etape 3 og står
+    derfor ikke her endnu. */
+export type HoldingVariant =
+  | 'InstalmentPension'
+  | 'LifeAnnuity'
+  | 'OldAgeSavings'
+  | 'ShareIncome'
+  | 'CapitalIncome'
 
-export type Holding = {
+type HoldingBase = {
   id: HoldingId
   name: string
-  variant: HoldingVariant
   /** Saldoen ved planens startår, hvor dagens kroner og løbende priser er ét. */
   balance: Real
   /** Andel pr. år, ikke procent: 0,07 er 7 %. Nettoafkastsatsen er
@@ -31,6 +37,17 @@ export type Holding = {
   grossReturn: number
   annualCostRate: number
 }
+
+/** En diskrimineret union på `variant`. De fem medlemmer er ens i dag, og
+    formen er valgt for det, de bliver: livrentens omsætningsfelter hænger på
+    sit eget medlem i etape 3, hvor de først har noget at lave. Et dødt felt i
+    det gemte skema er en løgn, der aldrig fejler, jf. ADR-0015. */
+export type Holding =
+  | (HoldingBase & { variant: 'InstalmentPension' })
+  | (HoldingBase & { variant: 'LifeAnnuity' })
+  | (HoldingBase & { variant: 'OldAgeSavings' })
+  | (HoldingBase & { variant: 'ShareIncome' })
+  | (HoldingBase & { variant: 'CapitalIncome' })
 
 export type Person = {
   id: PersonId

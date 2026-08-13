@@ -1,5 +1,6 @@
 import type {
   Entry,
+  Holding,
   HoldingVariant,
   Municipality,
   Period,
@@ -22,6 +23,9 @@ type Options = {
   horizon?: number
   balance?: number
   variant?: HoldingVariant
+  /** Beholdninger ved siden af bufferen, i den rækkefølge de skal stå.
+      Bufferen er altid den første — testene skruer på det, de handler om. */
+  holdings?: Holding[]
   grossReturn?: number
   annualCostRate?: number
   entries?: Entry[]
@@ -53,6 +57,7 @@ export function aPlan(options: Options = {}): Plan {
     horizon = 90,
     balance = 1_000_000,
     variant = 'CapitalIncome',
+    holdings = [],
     grossReturn = 0,
     annualCostRate = 0,
     entries = [],
@@ -90,6 +95,7 @@ export function aPlan(options: Options = {}): Plan {
               grossReturn,
               annualCostRate,
             },
+            ...holdings,
           ],
         },
       ],

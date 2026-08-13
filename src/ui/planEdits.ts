@@ -1,3 +1,4 @@
+import { isFreeAssets } from '../engine/holdingVariant'
 import type { Direction, Entry, Holding, Person, Plan, Transfer } from '../engine/plan'
 
 /** Redigeringerne er rene: de bygger en ny plan frem for at rette i den
@@ -85,12 +86,7 @@ export function addPerson(plan: Plan): Plan {
     første tilbageværende beholdning rollen, så planen forbliver regnbar. */
 export function removePerson(plan: Plan, id: string): Plan {
   const persons = plan.household.persons.filter((person) => person.id !== id)
-  const remainingHoldingIds = persons.flatMap((person) =>
-    person.holdings.map((holding) => holding.id),
-  )
-  const buffer = remainingHoldingIds.includes(plan.buffer)
-    ? plan.buffer
-    : (remainingHoldingIds[0] ?? plan.buffer)
+  const buffer = inheritedBuffer(plan, persons)
 
   const gone = new Set(
     (plan.household.persons.find((person) => person.id === id)?.holdings ?? []).map(
@@ -160,12 +156,7 @@ export function removeHolding(plan: Plan, id: string): Plan {
     ...person,
     holdings: person.holdings.filter((holding) => holding.id !== id),
   }))
-  const remainingHoldingIds = persons.flatMap((person) =>
-    person.holdings.map((holding) => holding.id),
-  )
-  const buffer = remainingHoldingIds.includes(plan.buffer)
-    ? plan.buffer
-    : (remainingHoldingIds[0] ?? plan.buffer)
+  const buffer = inheritedBuffer(plan, persons)
 
   return {
     ...plan,
@@ -173,6 +164,18 @@ export function removeHolding(plan: Plan, id: string): Plan {
     household: { persons },
     transfers: plan.transfers.filter((transfer) => transfer.from !== id && transfer.to !== id),
   }
+}
+
+/** Bufferpegeren efter en sletning: den samme, hvis beholdningen stadig
+    findes, ellers de første tilbageværende frie midler. En pensionsbeholdning
+    kan ikke arve rollen — bufferen bærer årets restpost, og penge ind i en
+    ordning er en indbetaling, jf. ADR-0016. Findes ingen frie midler, peger
+    bufferen videre på et tomrum, og resultatspalten viser det som en
+    simuleringsfejl frem for at styrte. */
+function inheritedBuffer(plan: Plan, persons: Person[]): string {
+  const remaining = persons.flatMap((person) => person.holdings)
+  if (remaining.some((holding) => holding.id === plan.buffer)) return plan.buffer
+  return remaining.find(isFreeAssets)?.id ?? plan.buffer
 }
 
 function freshHoldingId(plan: Plan): string {

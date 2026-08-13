@@ -637,6 +637,16 @@ body {
   flex: none;
 }
 
+/* Bundne beholdninger bærer samme skravering i legenden som i grafens bånd,
+   så prøven og båndet kan genkendes som det samme. */
+.formuegraf-legend .svatch[data-free-assets='false'] {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0 2px,
+    var(--flade) 2px 3.5px
+  );
+}
+
 /* Bufferens to fejltilstande, jf. ADR-0008. Samme røde tone som årstabellen
    for begge — rød er forbeholdt den negative buffer alene, og de to
    tilstande skelnes med ordet i mærkatet, ikke med endnu en farve. */

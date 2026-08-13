@@ -1,3 +1,4 @@
+import { isFreeAssets } from '../engine/holdingVariant'
 import type { Anchor, Period, Plan, Recurrence } from '../engine/plan'
 import { latestRateYear } from '../engine/rates/rates'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
@@ -370,11 +371,13 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
         <RadioField
           label="Buffer"
           checked={plan.buffer === id}
+          disabled={!isFreeAssets(holding)}
           onSelect={() => onChange({ ...plan, buffer: id })}
         />
         <Hint>
           Årets samlede over- eller underskud lander på bufferen. Præcis én
-          beholdning kan være det.
+          beholdning kan være det, og bufferen skal være frie midler — penge
+          ind i en ordning er en indbetaling.
         </Hint>
       </Section>
       <Section title="Afkast">

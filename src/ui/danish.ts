@@ -17,9 +17,13 @@ export const directions: Record<string, Direction> = {
   Udgift: 'Expense',
 }
 
-/** Etape 1 kender kun de to varianter for frie midler — de tre øvrige findes
-    ikke i fladen, før de findes i motoren, jf. ADR-0010. */
+/** Ordningerne først, de frie midler til sidst — samme rækkefølge som
+    varianttabellen i motoren. Aktiesparekontoen findes ikke i fladen, før den
+    findes i motoren, jf. ADR-0010. */
 export const variants: Record<string, HoldingVariant> = {
+  Ratepension: 'InstalmentPension',
+  Livrente: 'LifeAnnuity',
+  Aldersopsparing: 'OldAgeSavings',
   Aktieindkomst: 'ShareIncome',
   Kapitalindkomst: 'CapitalIncome',
 }

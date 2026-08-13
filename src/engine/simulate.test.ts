@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Plan } from './plan'
+import type { HoldingVariant, Plan } from './plan'
 import { simulate } from './simulate'
 import {
   aPlan,
@@ -16,28 +16,19 @@ import type { YearResult } from './yearResult'
     bruttoafkast som bufferen, så en overførsel har et sted at flytte penge
     hen. */
 function aPlanWithSecondHolding(options: Parameters<typeof aPlan>[0] = {}): Plan {
-  const base = aPlan(options)
-  return {
-    ...base,
-    household: {
-      persons: [
-        {
-          ...base.household.persons[0]!,
-          holdings: [
-            ...base.household.persons[0]!.holdings,
-            {
-              id: 'anden-beholdning',
-              name: 'Anden beholdning',
-              variant: 'CapitalIncome',
-              balance: 0,
-              grossReturn: options.grossReturn ?? 0,
-              annualCostRate: options.annualCostRate ?? 0,
-            },
-          ],
-        },
-      ],
-    },
-  }
+  return aPlan({
+    ...options,
+    holdings: [
+      {
+        id: 'anden-beholdning',
+        name: 'Anden beholdning',
+        variant: 'CapitalIncome',
+        balance: 0,
+        grossReturn: options.grossReturn ?? 0,
+        annualCostRate: options.annualCostRate ?? 0,
+      },
+    ],
+  })
 }
 
 describe('simulate', () => {
@@ -403,7 +394,7 @@ describe('simulate', () => {
     expect(years[0]!.return).toBeCloseTo(60_000, 6)
     expect(years[0]!.income).toBe(0)
 
-    // Beholdningen er CapitalIncome (fixturens standard), så afkastet
+    // Beholdningen er en opsparingskonto (fixturens standard), så afkastet
     // beskattes i samme åndedrag som det krediteres, jf. ADR-0010: bundskat
     // af hele beløbet, og topskat af de 5.000 kr. over kapitalindkomstens
     // eget bundfradrag på 55.000 — men bundskat og kommuneskat alene lægger
@@ -419,7 +410,7 @@ describe('simulate', () => {
     expect(bufferBalance(years[0]!)).toBeCloseTo(1_000_000 + 60_000 - 8_976.58, 2)
   })
 
-  it('fører afkastet af en CapitalIncome-beholdning som ejerens kapitalindkomst', () => {
+  it('fører afkastet af en opsparingskonto som ejerens kapitalindkomst', () => {
     const plan = aPlan({
       balance: 1_000_000,
       inflationAssumption: 0,
@@ -531,7 +522,7 @@ describe('simulate', () => {
     expect(year.return).toBeCloseTo(buffer.return + anden.return, 6)
   })
 
-  it('lagerbeskatter en ShareIncome-beholdnings afkast med 27/42 % om progressionsgrænsen', () => {
+  it('lagerbeskatter et aktiedepots afkast med 27/42 % om progressionsgrænsen', () => {
     const plan = aPlan({
       balance: 1_000_000,
       inflationAssumption: 0,
@@ -970,3 +961,136 @@ describe('overførsler', () => {
     expect(anden(2029)).toBe(100_000)
   })
 })
+
+describe('pensionsbeholdninger', () => {
+  it('forrenter en ratepension som enhver anden beholdning, med ÅOP trukket fra bruttoafkastet', () => {
+    const plan = aPlan({
+      balance: 0,
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 1_000_000,
+          grossReturn: 0.07,
+          annualCostRate: 0.005,
+        },
+      ],
+    })
+
+    const ratepension = simulateChecked(plan)[0]!.holdings.find(
+      (holding) => holding.holding === 'ratepension',
+    )!
+
+    // Nettoafkastsatsen er 6,5 %, ikke 7 %: ÅOP er trukket fra, som i
+    // enhver anden beholdning — jf. ADR-0003.
+    expect(ratepension.return).toBeCloseTo(65_000, 6)
+    expect(ratepension.closingBalance).toBeCloseTo(1_065_000, 6)
+  })
+
+  it('holder en pensionsbeholdnings afkast ude af personens kapitalindkomst', () => {
+    // Samme beholdning to gange, kun varianten skiftet: afkastet er
+    // kapitalindkomst i den ene og ingen personindkomst i den anden. Det er
+    // varianten alene, der afgør det, jf. ADR-0010 — beskatningen er ikke et
+    // felt ved siden af den.
+    const holding = {
+      id: 'ordning',
+      name: 'Ordning',
+      balance: 1_000_000,
+      grossReturn: 0.07,
+      annualCostRate: 0.005,
+    }
+    const first = (variant: HoldingVariant) =>
+      simulateChecked(aPlan({ balance: 0, holdings: [{ ...holding, variant }] }))[0]!
+
+    const fri = first('CapitalIncome')
+    const ratepension = first('InstalmentPension')
+
+    expect(fri.persons[0]!.capitalIncome).toBeCloseTo(65_000, 6)
+    expect(ratepension.persons[0]!.capitalIncome).toBe(0)
+    expect(ratepension.persons[0]!.shareIncome).toBe(0)
+    expect(ratepension.tax).toBeLessThan(fri.tax)
+  })
+
+  const pensionVariants: HoldingVariant[] = ['InstalmentPension', 'LifeAnnuity', 'OldAgeSavings']
+
+  it.each(pensionVariants)(
+    'forrenter %s efter samme regel som enhver anden beholdning',
+    (variant) => {
+      const plan = aPlan({
+        balance: 0,
+        holdings: [
+          {
+            id: 'ordning',
+            name: 'Ordning',
+            variant,
+            balance: 500_000,
+            grossReturn: 0.06,
+            annualCostRate: 0.01,
+          },
+        ],
+      })
+
+      const ordning = simulateChecked(plan)[0]!.holdings.find(
+        (holding) => holding.holding === 'ordning',
+      )!
+
+      expect(ordning.return).toBeCloseTo(25_000, 6)
+      expect(ordning.closingBalance).toBeCloseTo(525_000, 6)
+    },
+  )
+
+  it('afviser en plan, hvor bufferen er en pensionsbeholdning', () => {
+    // Bufferen bærer årets restpost, og en ordning kan ikke modtage frit
+    // forbrug: pengene ind i den er en indbetaling med et loft og en
+    // skattevirkning, jf. ADR-0016. Bufferen er frie midler.
+    const plan = {
+      ...aPlan({
+        balance: 0,
+        holdings: [
+          {
+            id: 'ratepension',
+            name: 'Ratepension',
+            variant: 'InstalmentPension' as const,
+            balance: 1_000_000,
+            grossReturn: 0,
+            annualCostRate: 0,
+          },
+        ],
+      }),
+      buffer: 'ratepension',
+    }
+
+    expect(() => simulate(plan)).toThrow(/frie midler/i)
+  })
+
+  it('afviser en overførsel med en pensionsbeholdning i den ene eller den anden ende', () => {
+    // En flytning ind i en ordning er en indbetaling og ikke en overførsel,
+    // uanset hvor pengene kom fra, jf. ADR-0016 — og den anden vej ud er en
+    // udbetaling, som hører i etape 3.
+    const withTransfer = (from: string, to: string) => ({
+      ...aPlan({
+        balance: 1_000_000,
+        holdings: [
+          {
+            id: 'ratepension',
+            name: 'Ratepension',
+            variant: 'InstalmentPension' as const,
+            balance: 1_000_000,
+            grossReturn: 0,
+            annualCostRate: 0,
+          },
+        ],
+        transfers: [aTransfer({ from, to, amountInRealKroner: 10_000 })],
+      }),
+    })
+
+    expect(() => simulate(withTransfer('free-assets', 'ratepension'))).toThrow(
+      /indbetaling/i,
+    )
+    expect(() => simulate(withTransfer('ratepension', 'free-assets'))).toThrow(
+      /frie midler/i,
+    )
+  })
+})
+

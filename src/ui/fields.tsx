@@ -239,15 +239,26 @@ export function RadioField({
   label,
   checked,
   onSelect,
+  disabled = false,
 }: {
   label: string
   checked: boolean
   onSelect: () => void
+  /** Valget står, men kan ikke træffes — reglen bag skal stå i et `Hint` ved
+      siden af, så et spærret felt ikke bare ser i stykker ud. */
+  disabled?: boolean
 }) {
   return (
     <Field label={label}>
       {(id) => (
-        <input id={id} type="radio" name="buffer" checked={checked} onChange={onSelect} />
+        <input
+          id={id}
+          type="radio"
+          name="buffer"
+          checked={checked}
+          disabled={disabled}
+          onChange={onSelect}
+        />
       )}
     </Field>
   )
