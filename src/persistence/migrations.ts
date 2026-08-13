@@ -148,6 +148,17 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    // v6 → v7: planen bærer indbetalinger. En plan fra før etape 2 har ingen
+    // og får en tom liste — motoren læser `contributions` for hvert år, og et
+    // manglende felt ville få den til at falde over frem for at regne på en
+    // plan uden indbetalinger.
+    from: 6,
+    migrate: (data) => {
+      const plan = data as { [key: string]: unknown }
+      return { ...plan, contributions: [] }
+    },
+  },
 ]
 
 /** Kører kæden fra `fromVersion` til `toVersion`, ét led ad gangen. Rent og

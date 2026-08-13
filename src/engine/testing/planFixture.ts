@@ -1,4 +1,5 @@
 import type {
+  Contribution,
   Entry,
   Holding,
   HoldingVariant,
@@ -30,6 +31,7 @@ type Options = {
   annualCostRate?: number
   entries?: Entry[]
   transfers?: Transfer[]
+  contributions?: Contribution[]
   municipality?: Municipality
   churchMember?: boolean
 }
@@ -62,6 +64,7 @@ export function aPlan(options: Options = {}): Plan {
     annualCostRate = 0,
     entries = [],
     transfers = [],
+    contributions = [],
     municipality = 'Hvidovre',
     churchMember = true,
   } = options
@@ -75,6 +78,7 @@ export function aPlan(options: Options = {}): Plan {
     buffer: 'free-assets',
     entries,
     transfers,
+    contributions,
     household: {
       persons: [
         {
@@ -193,4 +197,15 @@ export function aTaxFreeIncome(options: {
     recurrence: options.recurrence ?? annually,
     regulationRate: options.regulationRate ?? 0,
   }
+}
+
+/** Et lønkildet bidrag. Det bærer hverken periode, forankring, gentagelse
+    eller forfald — dem arver det fra sin lønpost, jf. ADR-0016. */
+export function aContribution(
+  options: { source: string; to: string } & (
+    | { percentageOfEntry: number }
+    | { amountInRealKroner: number }
+  ),
+): Contribution {
+  return { id: 'contribution', kind: 'EntrySourced', ...options }
 }

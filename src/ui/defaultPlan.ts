@@ -11,6 +11,7 @@ export function defaultPlan(): Plan {
     benefitProjectionAssumption: 0.02,
     buffer: 'free-assets',
     transfers: [],
+    contributions: [],
     entries: [
       {
         id: 'living-costs',

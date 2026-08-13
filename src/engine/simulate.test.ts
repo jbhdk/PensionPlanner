@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { HoldingVariant, Plan } from './plan'
+import type { Contribution, HoldingVariant, Plan } from './plan'
 import { simulate } from './simulate'
 import {
+  aContribution,
   aPlan,
   aSalary,
   aTaxFreeIncome,
@@ -1245,3 +1246,289 @@ describe('beholdningsskat', () => {
   })
 })
 
+
+describe('indbetalinger', () => {
+  /** Fixturens buffer plus en ratepension at betale ind i. Uden afkast, med
+      mindre testen beder om det — så står bevægelsen alene. */
+  function aPlanWithPension(options: Parameters<typeof aPlan>[0] = {}): Plan {
+    return aPlan({
+      ...options,
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 0,
+          grossReturn: options.grossReturn ?? 0,
+          annualCostRate: options.annualCostRate ?? 0,
+        },
+      ],
+    })
+  }
+
+  it('flytter et fast bidrag fra bufferen ind i ordningen', () => {
+    const plan = aPlanWithPension({
+      balance: 1_000_000,
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      contributions: [
+        aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 48_000 }),
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    // De 48.000 er, hvad der forlod lønnen — brutto. AM-bidraget af dem er
+    // allerede betalt som en del af årets skat af hele bruttolønnen, så der
+    // lander 92 % i ordningen, jf. ADR-0016.
+    expect(holding(year, 'ratepension').closingBalance).toBeCloseTo(44_160, 6)
+  })
+
+  it('bærer indbetalingens id og dens to beløb i årsresultatet', () => {
+    const plan = aPlanWithPension({
+      balance: 1_000_000,
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      contributions: [
+        aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    // De to beløb og ikke et tredje: differencen er AM-bidraget, som allerede
+    // står i personens eget skattelag. Et tredje felt kunne komme til at sige
+    // noget andet end laget.
+    expect(year.contributions).toEqual([
+      { contribution: 'contribution', fromSource: 48_000, intoHolding: 44_160 },
+    ])
+  })
+
+  it('lader bidraget ophøre af sig selv året efter erhvervsophør', () => {
+    // Bidraget er ikke rørt: det har ingen periode at komme ud af trit med
+    // lønnens. Lønposten løber til `WorkEndAge`, og bidraget følger med.
+    const plan = aPlanWithPension({
+      balance: 1_000_000,
+      birthYear: 1973,
+      birthMonth: 6,
+      workEndAge: 58,
+      entries: [
+        aSalary({
+          amountInRealKroner: 600_000,
+          period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+        }),
+      ],
+      contributions: [
+        aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+    const contributionsIn = (year: number) =>
+      years.find((y) => y.year === year)!.contributions
+
+    expect(contributionsIn(2031)).toHaveLength(1)
+    expect(contributionsIn(2032)).toHaveLength(0)
+  })
+
+  it('belaster bufferen nettobeløbet og lader AM-delen ligge i årets skat', () => {
+    // Samme plan to gange, kun bidraget skiftet til og fra. Skatten er den
+    // samme i begge: AM-bidraget er af hele bruttolønnen og rører sig ikke af,
+    // at en del af den flyttes videre — fradragsretten bygges ikke i denne
+    // skive. Bufferen mister derfor præcis nettobeløbet og ikke bruttoet;
+    // trak den bruttoet, ville AM-delen være betalt to gange.
+    const options = {
+      balance: 1_000_000,
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+    }
+    const without = simulateChecked(aPlanWithPension(options))[0]!
+    const withContribution = simulateChecked(
+      aPlanWithPension({
+        ...options,
+        contributions: [
+          aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 48_000 }),
+        ],
+      }),
+    )[0]!
+
+    expect(withContribution.tax).toBeCloseTo(without.tax, 6)
+    expect(bufferBalance(without) - bufferBalance(withContribution)).toBeCloseTo(44_160, 6)
+    // Intet nyt led i balanceinvarianten: bevægelsen flytter formue mellem to
+    // beholdninger og ændrer ikke husstandens samlede.
+    expect(withContribution.closingWealth).toBeCloseTo(without.closingWealth, 6)
+  })
+
+  it('lader et procentbidrag følge lønpostens regulering uden et andet tal at vedligeholde', () => {
+    const plan = aPlanWithPension({
+      balance: 1_000_000,
+      inflationAssumption: 0.02,
+      entries: [aSalary({ amountInRealKroner: 600_000, regulationRate: 0.03 })],
+      contributions: [
+        aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+
+    // Lønnen stiger 3 %, ikke de 2 % planen inflaterer med, og bidraget
+    // følger med af sig selv, fordi det måles af posten.
+    expect(years[0]!.contributions[0]!.fromSource).toBeCloseTo(48_000, 6)
+    expect(years[1]!.contributions[0]!.fromSource).toBeCloseTo(48_000 * 1.03, 6)
+    expect(years[2]!.contributions[0]!.fromSource).toBeCloseTo(48_000 * 1.03 ** 2, 6)
+  })
+
+  it('løfter også et fast bidrag med lønpostens reguleringssats', () => {
+    // Bidraget arver alt andet fra posten og arver dermed også dens tempo.
+    // Fulgte det planens inflationsantagelse i stedet, ville et fast bidrag
+    // skride fra den løn, det er en del af.
+    const plan = aPlanWithPension({
+      balance: 1_000_000,
+      inflationAssumption: 0.02,
+      entries: [aSalary({ amountInRealKroner: 600_000, regulationRate: 0.03 })],
+      contributions: [
+        aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 9_900 }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+
+    expect(years[1]!.contributions[0]!.fromSource).toBeCloseTo(9_900 * 1.03, 6)
+  })
+
+  it('vejer bidraget ind i afkastgrundlaget i begge ender', () => {
+    const plan = aPlanWithPension({
+      balance: 0,
+      grossReturn: 0.05,
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      contributions: [
+        aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    // Lønposten lagde hele sit bruttobeløb vægtet på bufferen: 600.000 × ½.
+    // Bidraget tager de 44.160 × ½ ud igen og lægger dem i ordningen. Uden
+    // modposten på bufferen ville de samme kroner forrente sig to steder.
+    expect(holding(year, 'free-assets').weightedFlow).toBeCloseTo(277_920, 6)
+    expect(holding(year, 'ratepension').weightedFlow).toBeCloseTo(22_080, 6)
+  })
+
+  it('trækker intet AM-bidrag, når kildeposten ikke er AM-pligtig', () => {
+    // AM-behandlingen følger kilden, jf. ADR-0016. En skattefri indtægt har
+    // aldrig båret AM-bidrag, så der er intet at trække af på vejen ind — og
+    // trak motoren de 8 % alligevel, ville pengene blive stående på bufferen
+    // som en skat, ingen har betalt.
+    const plan = aPlanWithPension({
+      balance: 1_000_000,
+      entries: [aTaxFreeIncome({ amountInRealKroner: 100_000 })],
+      contributions: [
+        aContribution({ source: 'inheritance', to: 'ratepension', amountInRealKroner: 48_000 }),
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(year.contributions[0]).toEqual({
+      contribution: 'contribution',
+      fromSource: 48_000,
+      intoHolding: 48_000,
+    })
+  })
+})
+
+describe('indbetalingens pegere', () => {
+  /** Fixturens buffer, en ratepension og en lønpost — det mindste, en gyldig
+      indbetaling kan bygges på. Testene skruer på den ene peger, de handler om. */
+  function aPlanWith(contribution: Contribution): Plan {
+    return aPlan({
+      balance: 1_000_000,
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      contributions: [contribution],
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+  }
+
+  it('afviser en indbetaling, hvis destination ikke findes', () => {
+    const plan = aPlanWith(
+      aContribution({ source: 'salary', to: 'findes-ikke', percentageOfEntry: 0.08 }),
+    )
+
+    expect(() => simulate(plan)).toThrow(/findes-ikke.*ikke findes/i)
+  })
+
+  it('afviser en indbetaling, hvis kilden ikke findes', () => {
+    const plan = aPlanWith(
+      aContribution({ source: 'ingen-loen', to: 'ratepension', percentageOfEntry: 0.08 }),
+    )
+
+    expect(() => simulate(plan)).toThrow(/ingen-loen.*ikke findes/i)
+  })
+
+  it('afviser en indbetaling til frie midler — så er det en overførsel', () => {
+    const plan = aPlanWith(
+      aContribution({ source: 'salary', to: 'free-assets', percentageOfEntry: 0.08 }),
+    )
+
+    expect(() => simulate(plan)).toThrow(/overførsel/i)
+  })
+
+  it('afviser en lønkilde, der ikke er en indtægtspost', () => {
+    // En udgift er ikke en kilde, penge kan komme fra. Uden reglen ville
+    // motoren måle en procent af et forbrug og kalde det opsparing.
+    const plan: Plan = {
+      ...aPlanWith(
+        aContribution({ source: 'living-costs', to: 'ratepension', percentageOfEntry: 0.08 }),
+      ),
+      entries: [anExpense({ amountInRealKroner: 360_000 })],
+    }
+
+    expect(() => simulate(plan)).toThrow(/living-costs.*udgiftspost|udgift/i)
+  })
+
+  it('afviser en indbetaling, hvor kilde og destination ikke er samme persons', () => {
+    // Jespers løn ind i Marias ordning ville placere skattevirkningen hos den
+    // forkerte: fradragsretten nedsætter den personlige indkomst, og den
+    // hører hos den, der har ordningen.
+    const base = aPlanWith(
+      aContribution({ source: 'salary', to: 'marias-ratepension', percentageOfEntry: 0.08 }),
+    )
+    const plan: Plan = {
+      ...base,
+      household: {
+        persons: [
+          ...base.household.persons,
+          {
+            id: 'maria',
+            name: 'Maria',
+            birthYear: 1973,
+            birthMonth: 6,
+            workEndAge: 58,
+            horizon: 90,
+            municipality: 'København',
+            churchMember: true,
+            holdings: [
+              {
+                id: 'marias-ratepension',
+                name: 'Marias ratepension',
+                variant: 'InstalmentPension',
+                balance: 0,
+                grossReturn: 0,
+                annualCostRate: 0,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    expect(() => simulate(plan)).toThrow(/samme person/i)
+  })
+})

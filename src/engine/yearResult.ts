@@ -1,4 +1,11 @@
-import type { EntryId, HoldingId, Nominal, PersonId, SimulationYear } from './plan'
+import type {
+  ContributionId,
+  EntryId,
+  HoldingId,
+  Nominal,
+  PersonId,
+  SimulationYear,
+} from './plan'
 import type { ShareIncomeLayer } from './tax/assessHousehold'
 import type { LayerAmount, TaxAssessment } from './tax/assessTax'
 
@@ -24,6 +31,19 @@ export type RateBasis = {
 export type EntryYear = {
   entry: EntryId
   amount: Nominal
+}
+
+/** Én indbetalings to beløb i ét simuleringsår, i årets egne løbende priser
+    — kun for de indbetalinger der faktisk falder i året. Det ene er, hvad der
+    forlod kilden; det andet, hvad der landede i beholdningen. Differencen er
+    AM-bidraget, som allerede står i personens eget skattelag og derfor ikke
+    gentages her: et tredje felt kunne komme til at sige noget andet end
+    laget. Forfaldet står heller ikke her — et lønkildet bidrag arver det fra
+    sin post, ligesom `EntryYear` læser sit fra `Plan.entries`. */
+export type ContributionYear = {
+  contribution: ContributionId
+  fromSource: Nominal
+  intoHolding: Nominal
 }
 
 export type HoldingYear = {
@@ -91,6 +111,7 @@ export type YearResult = {
       og hele feltet er et tomt objekt, når ingen har aktieindkomst. */
   shareIncomeTax: Partial<Record<ShareIncomeLayer, LayerAmount>>
   entries: EntryYear[]
+  contributions: ContributionYear[]
   /** Fraværende, når bufferen ikke er negativ. */
   bufferState?: BufferState
 }

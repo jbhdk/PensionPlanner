@@ -11,6 +11,7 @@ export type HoldingId = string
 export type PersonId = string
 export type TransferId = string
 export type EntryId = string
+export type ContributionId = string
 
 /** Den kommune en person er bosat i. En nøgle ind i satsårets
     `RateYear.municipalTax`, ikke et tal skrevet direkte på personen — kommune-
@@ -153,6 +154,35 @@ export type Transfer = {
   recurrence: Recurrence
 }
 
+/** Beløbsangivelsen på et bidrag: enten en procent af lønposten, eller et
+    fast kronebeløb i dagens kroner. Formen er felterne selv — der er ikke et
+    tredje felt ved siden af dem, der siger hvilken af de to der gælder, og
+    et bidrag kan derfor ikke bære begge tal på én gang. */
+type ContributionAmount = { percentageOfEntry: number } | { amountInRealKroner: Real }
+
+/** En bevægelse af penge ind i en beholdning, der ikke er frie midler, jf.
+    ADR-0016. Destinationen er hele skellet mod `Transfer`: hverken
+    skattevirkningen eller loftet indgår i det.
+
+    En diskrimineret union på kilden. Det lønkildede medlem peger på sin
+    `Entry` og bærer kun destinationen og en beløbsangivelse: periode,
+    forankring, gentagelse og forfald arves fra lønposten og findes ikke her.
+    Det er dét, der får bidraget til at ophøre af sig selv, når lønnen
+    ophører ved erhvervsophør, og som gør, at de to aldrig kan komme ud af
+    trit. Det beholdningskildede medlem har ingen post at arve fra og bærer
+    dem alle selv — det hører i en senere skive og står ikke her endnu.
+
+    Hverken fradragsretten eller AM-behandlingen er felter: den første følger
+    destinationens variant, den anden kilden. */
+export type Contribution = {
+  id: ContributionId
+  kind: 'EntrySourced'
+  /** Lønposten, bidraget måles af og arver sin periode fra. */
+  source: EntryId
+  /** Destinationen. Aldrig frie midler — så er det en overførsel. */
+  to: HoldingId
+} & ContributionAmount
+
 export type Plan = {
   name: string
   startYear: SimulationYear
@@ -168,6 +198,7 @@ export type Plan = {
   household: Household
   entries: Entry[]
   transfers: Transfer[]
+  contributions: Contribution[]
   /** Beholdningen årets restpost lander på. Præcis én, og pegeren er påkrævet. */
   buffer: HoldingId
 }

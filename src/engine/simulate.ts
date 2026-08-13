@@ -9,6 +9,7 @@ import {
 import type { HoldingYears } from './holdingYears'
 import type {
   AgeBound,
+  Contribution,
   Entry,
   Holding,
   HoldingVariant,
@@ -38,6 +39,16 @@ type ActiveEntry = { entry: Entry; amount: Nominal }
 /** En overførsel sammen med dens beløb i årets løbende priser, for de
     overførsler der rent faktisk falder i det pågældende år. */
 type ActiveTransfer = { transfer: Transfer; amount: Nominal }
+
+/** En indbetaling sammen med dens to beløb i årets løbende priser og det
+    forfald, den arvede fra sin kilde — for de indbetalinger der rent faktisk
+    falder i det pågældende år. */
+type ActiveContribution = {
+  contribution: Contribution
+  fromSource: Nominal
+  intoHolding: Nominal
+  timing: Timing
+}
 
 /** Fremskriver planen år for år i løbende priser. Ren funktion: samme plan
     giver altid samme årsrække, og planen røres ikke.
@@ -73,6 +84,7 @@ function simulateYear(
 ): YearResult {
   const entries = entriesInYear(plan, year)
   const transfers = transfersInYear(plan, year)
+  const contributions = contributionsInYear(plan, year, entries, rates)
 
   const income = sumOf(entries, 'Income')
   const expenses = sumOf(entries, 'Expense')
@@ -83,10 +95,20 @@ function simulateYear(
   // personen som netop dette afkast.
   // Kun bufferen modtager poster; en overførsel vejer ind i afkastgrundlaget
   // i begge ender, jf. ADR-0004.
-  const flowed = transfers.reduce((years, { transfer, amount }) => {
+  const afterEntries = withFlow(opening, plan.buffer, weightedNetFlow(entries))
+  const afterTransfers = transfers.reduce((years, { transfer, amount }) => {
     const weighted = amount * returnWeight(transfer.timing)
     return withFlow(withFlow(years, transfer.from, -weighted), transfer.to, weighted)
-  }, withFlow(opening, plan.buffer, weightedNetFlow(entries)))
+  }, afterEntries)
+  // Indbetalingen vejer ind i begge ender som en overførsel. Bufferen fik
+  // hele bruttolønnen vægtet ind med posten, og uden modposten her ville de
+  // penge, der gik videre til ordningen, forrente sig to steder på én gang.
+  // Det er nettobeløbet, der vejes: AM-delen forlader bufferen som skat, og
+  // skat rører aldrig afkastgrundlaget.
+  const flowed = contributions.reduce((years, { contribution, intoHolding, timing }) => {
+    const weighted = intoHolding * returnWeight(timing)
+    return withFlow(withFlow(years, plan.buffer, -weighted), contribution.to, weighted)
+  }, afterTransfers)
 
   const shareIncomeByPerson = incomeByVariant(plan, flowed, 'ShareDepot')
   const capitalIncomeByPerson = incomeByVariant(plan, flowed, 'SavingsAccount')
@@ -124,10 +146,25 @@ function simulateYear(
     settled,
   )
 
+  // Indbetalingen tilføjer intet led til balanceinvarianten: den er en
+  // intern bevægelse ligesom en overførsel. Bufferen belastes nettobeløbet,
+  // fordi AM-delen allerede er trukket som en del af årets skat — trak vi
+  // bruttobeløbet ud og lagde nettobeløbet ind, ville AM-delen forsvinde to
+  // gange, og invarianten knække.
+  const contributed = contributions.reduce(
+    (years, { contribution, intoHolding }) =>
+      withMovement(
+        withMovement(years, plan.buffer, -intoHolding),
+        contribution.to,
+        intoHolding,
+      ),
+    moved,
+  )
+
   // Lukningen krediterer afkastet og trækker beholdningsskatten, jf. diagram
   // 02. Først dér er alle tre bærere af årets skat kendt, og først dér kan
   // de lægges sammen.
-  const holdings = closeYear(moved, rates)
+  const holdings = closeYear(contributed, rates)
   const tax = totalYearTax(household, holdings)
 
   return {
@@ -142,6 +179,11 @@ function simulateYear(
     conversion: 0,
     holdings,
     entries: entries.map(({ entry, amount }) => ({ entry: entry.id, amount })),
+    contributions: contributions.map(({ contribution, fromSource, intoHolding }) => ({
+      contribution: contribution.id,
+      fromSource,
+      intoHolding,
+    })),
     persons: plan.household.persons.map((person, index) => ({
       person: person.id,
       shareIncome: shareIncomeByPerson.get(person.id)!,
@@ -273,6 +315,50 @@ function entryProjection(entry: Entry, plan: Plan, year: SimulationYear): number
 function appliesInYear(entry: Entry, year: SimulationYear, owner: Person): boolean {
   const { from, to } = periodBounds(entry.period, owner)
   return withinPeriod(from, to, year) && matchesRecurrence(entry.recurrence, year, from, to)
+}
+
+/** Årets indbetalinger med deres to beløb. Et lønkildet bidrag har ingen
+    periode at prøve: det falder præcis de år, dets lønpost falder, og
+    ophører derfor af sig selv, når lønnen gør — det er hele pointen med at
+    lade det pege på posten frem for at give det en periode, der kan komme ud
+    af trit, jf. ADR-0016.
+
+    Det, der forlader kilden, er brutto. AM-behandlingen følger kilden: er
+    lønposten AM-pligtig, er AM-bidraget af de penge allerede betalt i
+    personens eget skattelag, og der lander 92 % i beholdningen. */
+function contributionsInYear(
+  plan: Plan,
+  year: SimulationYear,
+  entries: ActiveEntry[],
+  rates: RateYear,
+): ActiveContribution[] {
+  return plan.contributions.flatMap((contribution) => {
+    const source = entries.find(({ entry }) => entry.id === contribution.source)
+    if (source === undefined) return []
+
+    const fromSource =
+      'percentageOfEntry' in contribution
+        ? source.amount * contribution.percentageOfEntry
+        : contribution.amountInRealKroner * entryProjection(source.entry, plan, year)
+
+    // AM-behandlingen følger kilden. En AM-pligtig lønpost har allerede
+    // betalt bidraget af hele sit bruttobeløb i personens eget skattelag, og
+    // der lander derfor 92 %; en skattefri indtægt har aldrig båret AM, og
+    // hele beløbet går ind.
+    const labourMarketContribution =
+      source.entry.direction === 'Income' && source.entry.taxTreatment === 'EarnedIncome'
+        ? rates.taxRates.labourMarketContribution
+        : 0
+
+    return [
+      {
+        contribution,
+        fromSource,
+        intoHolding: fromSource * (1 - labourMarketContribution),
+        timing: source.entry.timing,
+      },
+    ]
+  })
 }
 
 /** En overførsel har ingen ejer at binde en alder til, så dens periode er

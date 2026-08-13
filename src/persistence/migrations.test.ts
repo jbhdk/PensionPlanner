@@ -269,3 +269,28 @@ describe('v5 → v6: folkepensionsalderen kan ikke længere overstyres', () => {
     expect(maria!.workEndAge).toBe(62)
   })
 })
+
+describe('v6 → v7: planen bærer indbetalinger', () => {
+  it('giver en gemt plan et tomt contributions og lader resten stå', () => {
+    // En plan fra før etape 2 har ingen indbetalinger og skal have listen,
+    // motoren nu læser — ikke et manglende felt, den ville falde over.
+    const v6: unknown = {
+      name: 'Gammel plan',
+      startYear: 2026,
+      buffer: 'free-assets',
+      transfers: [{ id: 'transfer', from: 'free-assets', to: 'anden', amountInRealKroner: 1_000 }],
+      entries: [{ id: 'salary', name: 'Løn', direction: 'Income' }],
+      household: { persons: [{ id: 'jesper', name: 'Jesper', holdings: [] }] },
+    }
+
+    const migrated = runMigrations(v6, 6, 7, migrations) as {
+      contributions: unknown[]
+      transfers: unknown[]
+      entries: unknown[]
+    }
+
+    expect(migrated.contributions).toEqual([])
+    expect(migrated.transfers).toHaveLength(1)
+    expect(migrated.entries).toHaveLength(1)
+  })
+})
