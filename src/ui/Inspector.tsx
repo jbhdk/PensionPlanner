@@ -63,6 +63,7 @@ import {
   withHoldingOwner,
   withPerson,
   withTransfer,
+  withTransferEnd,
 } from './planEdits'
 import type { Selection } from './selection'
 
@@ -982,21 +983,22 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
         deleteLabel="Fjern overførsel"
       />
       <Section title="Overførslen">
+        {/* Begge ender står i begge lister. Vælges den beholdning, der
+            allerede er den anden ende, bytter de to plads — se
+            `withTransferEnd`. Udelod listen den anden ende, ville retningen
+            være låst, og med præcis to beholdninger ville der ikke være et
+            valg tilbage overhovedet. */}
         <SelectField
           label="Fra"
           value={holdingName(transfer.from)}
-          options={holdings.filter((holding) => holding.id !== transfer.to).map((h) => h.name)}
-          onChange={(name) =>
-            onChange(withTransfer(plan, id, (t) => ({ ...t, from: holdingByName[name]! })))
-          }
+          options={holdings.map((holding) => holding.name)}
+          onChange={(name) => onChange(withTransferEnd(plan, id, 'from', holdingByName[name]!))}
         />
         <SelectField
           label="Til"
           value={holdingName(transfer.to)}
-          options={holdings.filter((holding) => holding.id !== transfer.from).map((h) => h.name)}
-          onChange={(name) =>
-            onChange(withTransfer(plan, id, (t) => ({ ...t, to: holdingByName[name]! })))
-          }
+          options={holdings.map((holding) => holding.name)}
+          onChange={(name) => onChange(withTransferEnd(plan, id, 'to', holdingByName[name]!))}
         />
         <NumberField
           label="Beløb (dagens kroner)"

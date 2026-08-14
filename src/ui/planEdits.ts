@@ -298,6 +298,31 @@ export function withTransfer(
   }
 }
 
+/** Sætter den ene ende af en overførsel. Vælges den beholdning, der allerede
+    er den anden ende, bytter de to plads frem for at lade overførslen pege på
+    sig selv.
+
+    Byttet er det eneste, valget kan betyde. En overførsel har to ender og
+    ingen anden retning end dem, så "fra den beholdning, der i forvejen er
+    til" er brugerens måde at sige den anden vej på. Udelod listen i stedet
+    den anden ende, ville retningen være låst fra oprettelsen — og med præcis
+    to beholdninger ville hver liste have ét valg, nemlig det, der allerede
+    stod. */
+export function withTransferEnd(
+  plan: Plan,
+  id: string,
+  end: 'from' | 'to',
+  holding: string,
+): Plan {
+  return withTransfer(plan, id, (transfer) => {
+    const other = end === 'from' ? 'to' : 'from'
+    if (transfer[other] === holding) {
+      return { ...transfer, from: transfer.to, to: transfer.from }
+    }
+    return { ...transfer, [end]: holding }
+  })
+}
+
 /** Den tyndeste overførsel, der kan tilføjes: fra og til de to første
     beholdninger, hele horisonten, hvert år. Brugeren retter dem i skuffen
     bagefter. Kræver to beholdninger at flytte penge mellem — knappen der

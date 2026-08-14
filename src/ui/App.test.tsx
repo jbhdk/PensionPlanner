@@ -1267,6 +1267,43 @@ describe('fladen', () => {
     ).toBeTruthy()
   })
 
+  it('bytter en overførsels to ender om, når den ene sættes til den anden', async () => {
+    // Med præcis to beholdninger er der ét lovligt valg i hver liste, hvis
+    // den anden ende udelades — og retningen er dermed låst fra oprettelsen.
+    // At vælge "fra" den beholdning, der allerede er "til", kan kun betyde
+    // én ting: den anden vej.
+    const user = userEvent.setup()
+    const plan = aPlanWithSecondHolding()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          transfers: [
+            aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 50_000 }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+
+    const fra = screen.getByLabelText('Fra') as HTMLSelectElement
+    expect(Array.from(fra.options).map((option) => option.value)).toEqual([
+      'Frie midler',
+      'Anden beholdning',
+    ])
+
+    await user.selectOptions(fra, 'Anden beholdning')
+
+    expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Anden beholdning')
+    expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Frie midler')
+
+    await user.click(screen.getByRole('button', { name: /Luk inspektøren/ }))
+    expect(
+      screen.getByRole('button', { name: /Anden beholdning.*Frie midler.*50.000/ }),
+    ).toBeTruthy()
+  })
+
   it('mærker en ufuldstændig og en uholdbar buffer forskelligt i årstabellen', async () => {
     const base = aPlanWithSecondHolding()
     const plan: Plan = {
@@ -1468,7 +1505,11 @@ describe('fladen', () => {
     ).not.toContain('Jævnt fordelt')
   })
 
-  it('udelukker den valgte fra-beholdning fra til-vælgeren og omvendt', async () => {
+  it('lader en overførsels to ender aldrig pege på den samme beholdning', async () => {
+    // Invarianten er, at de to ender er forskellige — ikke at et valg mangler
+    // i listen. Udeladelsen var den gamle mekanisme, og den låste retningen:
+    // med præcis to beholdninger stod der ét valg tilbage i hver liste, og
+    // det var det, der allerede var valgt.
     const user = userEvent.setup()
     render(
       <App
@@ -1483,19 +1524,22 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
 
-    const fra = screen.getByLabelText('Fra') as HTMLSelectElement
-    const til = screen.getByLabelText('Til') as HTMLSelectElement
+    const ender = () => [
+      (screen.getByLabelText('Fra') as HTMLSelectElement).value,
+      (screen.getByLabelText('Til') as HTMLSelectElement).value,
+    ]
 
-    // "Til" kan ikke vælges til det samme som "Fra" — og omvendt.
-    expect(Array.from(fra.options).map((o) => o.value)).not.toContain('Anden beholdning')
-    expect(Array.from(til.options).map((o) => o.value)).not.toContain('Frie midler')
-    // Men det tredje valg er stadig muligt i begge.
-    expect(Array.from(fra.options).map((o) => o.value)).toContain('Tredje beholdning')
-    expect(Array.from(til.options).map((o) => o.value)).toContain('Tredje beholdning')
+    // En fri ende flytter sig til det valgte og rører ikke den anden.
+    await user.selectOptions(screen.getByLabelText('Til'), 'Tredje beholdning')
+    expect(ender()).toEqual(['Frie midler', 'Tredje beholdning'])
 
-    await user.selectOptions(til, 'Tredje beholdning')
-    expect(Array.from(fra.options).map((o) => o.value)).not.toContain('Tredje beholdning')
-    expect(Array.from(fra.options).map((o) => o.value)).toContain('Anden beholdning')
+    // Vælges den beholdning, der allerede er den anden ende, bytter de to
+    // plads frem for at mødes.
+    await user.selectOptions(screen.getByLabelText('Til'), 'Frie midler')
+    expect(ender()).toEqual(['Tredje beholdning', 'Frie midler'])
+
+    await user.selectOptions(screen.getByLabelText('Fra'), 'Frie midler')
+    expect(ender()).toEqual(['Frie midler', 'Tredje beholdning'])
   })
 
   it('tilføjer en overførsel via overførselsgruppen, og dens inspektør kan åbnes', async () => {
