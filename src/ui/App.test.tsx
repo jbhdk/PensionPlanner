@@ -117,6 +117,17 @@ async function showYearTable(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
 }
 
+/** Satsen i et skattelags egen linje i forklar-året. Lagtabellen har fire
+    kolonner — lag, grundlag, sats, beløb — og det er den tredje. */
+function lagSats(label: string): string {
+  const table = document.querySelector('table.lagtabel') as HTMLElement
+  const row = within(table)
+    .getAllByRole('row')
+    .find((candidate) => candidate.querySelector('td')?.textContent === label)
+  if (!row) throw new Error(`Lagtabellen har ingen linje for ${label}.`)
+  return row.querySelectorAll('td')[2]!.textContent ?? ''
+}
+
 /** En beholdnings navn findes både som navigatorrække og som knap i
     grafens legend — de to skal kunne skelnes, ikke kun den ene fjernes.
     Denne henter navigatorens, som de fleste tests handler om. */
@@ -1387,6 +1398,42 @@ describe('fladen', () => {
     expect(row.className).toContain('fradragtabt')
     expect(row.className).not.toContain('ufuldstaendig')
     expect(row.className).not.toContain('uholdbar')
+  })
+
+  it('holder skattelagenes satser faste i forklar-året og lægger loftets virkning i sit eget lag', async () => {
+    // Lagenes satser er lovens og flytter sig ikke med kommunen. Binder det
+    // skrå skatteloft, står det i loftnedslagets linje — og det var netop
+    // det, der før flyttede sig, når kommunen blev skiftet i skuffen.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          startYear: 2026,
+          entries: [aSalary({ amountInRealKroner: 950_000 })],
+        })}
+      />,
+    )
+    await showYearTable(user)
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!)
+
+    // Fixturens Hvidovre har 25,40 % og lægger trappens første trin fri.
+    expect(lagSats('Mellemskat')).toBe('7,50 %')
+    expect(lagSats('Topskat')).toBe('7,50 %')
+    expect(lagSats('Loftnedslag')).toBe('-0,34 %')
+
+    // Albertslund ligger 0,20 procentpoint højere. Kun nedslaget rører sig.
+    await user.click(navigatorButton(/^Jesper/))
+    await user.selectOptions(screen.getByLabelText('Kommune'), 'Albertslund')
+
+    expect(lagSats('Mellemskat')).toBe('7,50 %')
+    expect(lagSats('Topskat')).toBe('7,50 %')
+    expect(lagSats('Loftnedslag')).toBe('-0,54 %')
+
+    // Gladsaxes 23,60 % er under loftets referencesats: intet nedslag.
+    await user.selectOptions(screen.getByLabelText('Kommune'), 'Gladsaxe')
+
+    expect(lagSats('Mellemskat')).toBe('7,50 %')
+    expect(lagSats('Loftnedslag')).toBe('0,00 %')
   })
 
   it('viser loftlinjen med sine tre tal i forklar-året', async () => {

@@ -125,16 +125,54 @@ describe('skatteopgørelsen', () => {
     expect(assessment.layers.additionalTopBracketTax.amount).toBeCloseTo(8_365, 2)
   })
 
-  it('nedsætter progressionslagets sats, når det skrå skatteloft binder', () => {
+  it('lægger loftnedslaget i sit eget lag og lader progressionslagene stå med lovsatserne', () => {
     // Bundskat 12,01 + mellemskat 7,50 + kommuneskat 25,40 = 44,91 % — 0,34
-    // procentpoint over loftets første trin på 44,57 %. Andet trin ligger
-    // 0,34 over på samme måde, så begge lag regnes med 7,16 % i stedet for
-    // 7,50 %. 828.000 i personlig indkomst: 186.800 × 7,16 % i mellemskat og
-    // 50.100 × 7,16 % i topskat.
-    const assessment = assess({ earnedIncome: 900_000, municipalTaxRate: 0.254 })
+    // procentpoint over loftets første trin på 44,57 %. Nedslaget er de 0,34
+    // procentpoint af mellemskattens grundlag, og det er staten, der giver
+    // afkald: 828.000 i personlig indkomst giver 186.800 i mellemskattens
+    // grundlag og 50.100 i topskattens.
+    const { layers } = assess({ earnedIncome: 900_000, municipalTaxRate: 0.254 })
 
-    expect(assessment.layers.middleBracketTax.amount).toBeCloseTo(13_374.88, 2)
-    expect(assessment.layers.topBracketTax.amount).toBeCloseTo(3_587.16, 2)
+    expect(layers.middleBracketTax.rate).toBeCloseTo(0.075, 6)
+    expect(layers.middleBracketTax.amount).toBeCloseTo(14_010, 2)
+    expect(layers.topBracketTax.rate).toBeCloseTo(0.075, 6)
+    expect(layers.topBracketTax.amount).toBeCloseTo(3_757.5, 2)
+
+    expect(layers.taxCeilingRelief.base).toBeCloseTo(186_800, 2)
+    expect(layers.taxCeilingRelief.rate).toBeCloseTo(-0.0034, 6)
+    expect(layers.taxCeilingRelief.amount).toBeCloseTo(-635.12, 2)
+  })
+
+  it('lader lovsatserne stå i enhver kommune og bærer forskellen i loftnedslaget', () => {
+    // Mellemskat, topskat og top-topskat er faste satser: de står i loven med
+    // 7,50 %, 7,50 % og 5,00 %, og trappen rører dem ikke, hvor højt
+    // kommunesatsen end ligger. Nedslaget bærer hele forskellen, og det
+    // bærer den én gang — grundlaget er mellemskattens, som er det lag,
+    // trappen rammer først.
+    for (const municipalTaxRate of [0.256, 0.253, 0.263]) {
+      const { layers } = assess({ earnedIncome: 3_000_000, municipalTaxRate })
+
+      expect(layers.middleBracketTax.rate).toBeCloseTo(0.075, 6)
+      expect(layers.topBracketTax.rate).toBeCloseTo(0.075, 6)
+      expect(layers.additionalTopBracketTax.rate).toBeCloseTo(0.05, 6)
+
+      expect(layers.taxCeilingRelief.base).toBeCloseTo(layers.middleBracketTax.base, 2)
+      expect(layers.taxCeilingRelief.rate).toBeCloseTo(
+        0.4457 - 0.1201 - 0.075 - municipalTaxRate,
+        6,
+      )
+    }
+  })
+
+  it('holder grundlag × sats = beløb i loftnedslagets egen linje', () => {
+    // Nedslaget er et lag som de andre og skal kunne efterregnes af sin egen
+    // linje alene, jf. `LayerAmount`.
+    const { base, rate, amount } = assess({
+      earnedIncome: 900_000,
+      municipalTaxRate: 0.254,
+    }).layers.taxCeilingRelief
+
+    expect(amount).toBeCloseTo(base * rate, 6)
   })
 
   it('regner loftet uden AM-bidrag og kirkeskat', () => {
@@ -152,23 +190,27 @@ describe('skatteopgørelsen', () => {
       churchTaxRate: 0.0074,
     })
 
-    expect(withChurchTax.layers.middleBracketTax.amount).toBeCloseTo(
-      withoutChurchTax.layers.middleBracketTax.amount,
+    expect(withChurchTax.layers.taxCeilingRelief.rate).toBeCloseTo(
+      withoutChurchTax.layers.taxCeilingRelief.rate,
       6,
     )
-    expect(withChurchTax.layers.topBracketTax.amount).toBeCloseTo(
-      withoutChurchTax.layers.topBracketTax.amount,
+    expect(withChurchTax.layers.taxCeilingRelief.amount).toBeCloseTo(
+      withoutChurchTax.layers.taxCeilingRelief.amount,
       6,
     )
   })
 
-  it('lader loftet nedsætte en sats, men aldrig løfte den', () => {
-    // 12,01 + 7,50 + 22,00 = 41,51 % er under loftets første trin. En
-    // kommune under referencesatsen får de fulde 7,50 % — ikke mere.
-    const assessment = assess({ earnedIncome: 900_000, municipalTaxRate: 0.22 })
+  it('lader loftnedslaget stå tomt, når loftet ikke binder, og aldrig blive et tillæg', () => {
+    // 12,01 + 7,50 + 22,00 = 41,51 % er under loftets første trin. Laget
+    // udebliver ikke — det er der altid, ligesom de tre progressionslag — det
+    // er bare nul. En kommune under referencesatsen får de fulde 7,50 %,
+    // ikke mere: loftet kan sætte en sats ned, aldrig løfte den.
+    const { layers } = assess({ earnedIncome: 900_000, municipalTaxRate: 0.22 })
 
-    expect(assessment.layers.middleBracketTax.amount).toBeCloseTo(14_010, 2)
-    expect(assessment.layers.topBracketTax.amount).toBeCloseTo(3_757.5, 2)
+    expect(layers.middleBracketTax.amount).toBeCloseTo(14_010, 2)
+    expect(layers.topBracketTax.amount).toBeCloseTo(3_757.5, 2)
+    expect(layers.taxCeilingRelief.rate).toBe(0)
+    expect(layers.taxCeilingRelief.amount).toBe(0)
   })
 
   it('måler mellemskattegrænsen på indkomsten efter AM-bidrag', () => {
@@ -465,16 +507,16 @@ describe('lagenes grundlag og sats', () => {
     expect(amount).toBeCloseTo(base * rate, 6)
   })
 
-  it('viser progressionslagets nedsatte sats, når det skrå skatteloft binder, uden at bryde grundlag × sats = beløb', () => {
-    // Samme case som "nedsætter progressionslagets sats..." ovenfor: satsen
-    // i lagets egen linje skal være den nedsatte 7,16 %, ikke den nominelle
-    // 7,50 % — ellers stemmer grundlag × sats ikke med beløbet.
+  it('viser mellemskattens lovsats, også når det skrå skatteloft binder', () => {
+    // Satsen i lagets egen linje er lovens 7,50 % og flytter sig ikke med
+    // kommunen. Det, loftet koster, står i sit eget lag — se
+    // "lægger loftnedslaget i sit eget lag ..." ovenfor.
     const { base, rate, amount } = assess({
       earnedIncome: 900_000,
       municipalTaxRate: 0.254,
     }).layers.middleBracketTax
 
-    expect(rate).toBeCloseTo(0.0716, 4)
+    expect(rate).toBeCloseTo(0.075, 6)
     expect(amount).toBeCloseTo(base * rate, 6)
   })
 
@@ -529,5 +571,30 @@ describe('marginalTaxRate', () => {
     const acrossThreshold = marginal({ earnedIncome: 750_000, municipalTaxRate: 0.254, churchTaxRate: 0.0074 })
 
     expect(acrossThreshold).toBeGreaterThan(belowThreshold)
+  })
+
+  it('lander marginalskatten præcis på det lofttrin, indkomsten når op i', () => {
+    // Det er den invariant, trappen er: binder loftet, er marginalskatten
+    // trinnet selv — hverken over eller under. AM-bidraget står uden for
+    // loftet og lægges oven på de 92 %, der er tilbage af kronen.
+    // Regnes nedslaget af de nominelle satser i stedet for af de nedsatte,
+    // gives det én gang pr. lag, og de to øverste trin rammes for lavt.
+    const ceiling = (step: number) => 0.08 + 0.92 * step
+
+    // 690.000 i personlig indkomst — over mellemskattegrænsen, under
+    // topskattens.
+    expect(marginal({ earnedIncome: 750_000, municipalTaxRate: 0.254, churchTaxRate: 0 })).toBeCloseTo(
+      ceiling(0.4457),
+      6,
+    )
+    // 874.000 — over topskattegrænsen, under top-topskattens.
+    expect(marginal({ earnedIncome: 950_000, municipalTaxRate: 0.254, churchTaxRate: 0 })).toBeCloseTo(
+      ceiling(0.5207),
+      6,
+    )
+    // 2.760.000 — over top-topskattegrænsen.
+    expect(
+      marginal({ earnedIncome: 3_000_000, municipalTaxRate: 0.254, churchTaxRate: 0 }),
+    ).toBeCloseTo(ceiling(0.5707), 6)
   })
 })

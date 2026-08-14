@@ -54,6 +54,26 @@ describe('satsår 2026', () => {
     }
   })
 
+  it('lader loftets trin ligge præcis progressionslagenes egne satser fra hinanden', () => {
+    // Trappens anden selvkontrol, jf. docs/satser/2026.md: 44,57 + 7,50 =
+    // 52,07 og 52,07 + 5,00 = 57,07. Relationen er grunden til, at højst ét
+    // trin kan binde — er første trin først bragt ned på loftet, rammer de
+    // næste præcis deres eget. `taxCeilingRelief` hviler på det og tager
+    // nedslaget i det første trin, der binder. Skrives et satsår, hvor
+    // trinene ligger anderledes, skal nedslaget tænkes om, og det er den
+    // fejl, denne test fanger.
+    const { bracketTaxRates, taxCeiling } = rateYear2026
+
+    expect(taxCeiling.atTopBracket - taxCeiling.atMiddleBracket).toBeCloseTo(
+      bracketTaxRates.topBracketTax,
+      10,
+    )
+    expect(taxCeiling.atAdditionalTopBracket - taxCeiling.atTopBracket).toBeCloseTo(
+      bracketTaxRates.additionalTopBracketTax,
+      10,
+    )
+  })
+
   it('bærer en kilde på hver blok og holder de ⚠︎-mærkede tal ude fra de bekræftede', () => {
     const blocks = Object.entries(rateYear2026).flatMap(([name, value]) =>
       typeof value === 'object' && value !== null ? [[name, value] as const] : [],

@@ -141,12 +141,16 @@ Udelukkende det 7,5 %-lag der rammer personlig indkomst over topskattegrænsen. 
 _Avoid_: Topskat brugt om progressionen som helhed
 
 **Skattelag** · `TaxLayer`:
-Ét af de lag, en persons skat falder i — AM-bidrag, bundskat, kommuneskat, kirkeskat og progressionslagene. Lagene opgøres og vises hver for sig; kun summen af dem er skatten. Aktieindkomstens to lag er ikke blandt dem: de er husstandens og hører til `HouseholdTaxAssessment`.
+Ét af de lag, en persons skat falder i — AM-bidrag, bundskat, kommuneskat, kirkeskat og progressionslagene — samt loftnedslaget, som er det ene lag med negativt fortegn. Lagene opgøres og vises hver for sig; kun summen af dem er skatten. Aktieindkomstens to lag er ikke blandt dem: de er husstandens og hører til `HouseholdTaxAssessment`.
 _Avoid_: Skattetrin, skatteart, bracket
 
 **Progressionslag** · `ProgressionLayer`:
 De tre skattelag over mellemskattegrænsen — mellemskat, topskat og top-topskat — under ét. Hvert har sin egen grænse, sin egen sats og sit eget trin på det skrå skatteloft, og de tre ligger oven på hinanden frem for at afløse hinanden. Ordet findes for at `TopBracketTax` aldrig skal bruges som samlebetegnelse for dem.
 _Avoid_: Topskat brugt om de tre, progressionstrin, bracket
+
+**Loftnedslag** · `TaxCeilingRelief`:
+Det, staten giver afkald på, når kommuneskatten er så høj, at den sammenlagte sats ville bryde det skrå skatteloft. Et skattelag som de øvrige — med grundlag, sats og beløb — men det ene med negativ sats og negativt beløb. Grundlaget er grundlaget for det progressionslag, der bærer nedslaget, og satsen er de procentpoint, summen lå over trinnet. Kommunen får sit fulde; nedslaget ligger i statens lag. Et lag med sats nul i enhver kommune under loftets referencesats — det udebliver ikke, det er bare tomt.
+_Avoid_: Skatteloftsnedslag, nedslag brugt alene, loftrabat
 
 **Ligningsmæssigt fradrag** · `Allowance`:
 Et fradrag der kun nedsætter den skattepligtige indkomst — grundlaget for kommune- og kirkeskat — og ikke den personlige indkomst. De tre er beskæftigelsesfradraget, jobfradraget og det ekstra pensionsfradrag, og de opgøres hver for sig ligesom skattelagene. Personfradraget er ikke et af dem: det hører til de enkelte lag og nedsætter også bundskattens grundlag.

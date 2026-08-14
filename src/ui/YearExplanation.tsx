@@ -17,6 +17,9 @@ const TAX_LAYER_ORDER: TaxLayer[] = [
   'middleBracketTax',
   'topBracketTax',
   'additionalTopBracketTax',
+  // Nedslaget står efter de lag, det tager af, og før kommuneskatten: det er
+  // statens afkald, og kommunen får sit fulde.
+  'taxCeilingRelief',
   'municipalTax',
   'churchTax',
 ]
@@ -39,6 +42,7 @@ const TAX_LAYER_LABELS: Record<TaxLayer, string> = {
   middleBracketTax: 'Mellemskat',
   topBracketTax: 'Topskat',
   additionalTopBracketTax: 'Top-topskat',
+  taxCeilingRelief: 'Loftnedslag',
   municipalTax: 'Kommuneskat',
   churchTax: 'Kirkeskat',
 }

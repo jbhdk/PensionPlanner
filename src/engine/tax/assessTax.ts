@@ -67,12 +67,16 @@ export type Allowance =
   | 'jobAllowance'
   | 'extraPensionAllowance'
 
-/** De lag, skatten falder i. */
+/** De lag, skatten falder i — plus `taxCeilingRelief`, som er det ene lag
+    med negativt fortegn. Nedslaget er et lag og ikke et felt ved siden af
+    lagene, så totalen bliver ved med at være summen af dem, jf.
+    `TaxAssessment`. */
 export type TaxLayer =
   | 'labourMarketContribution'
   | 'bottomBracketTax'
   | 'municipalTax'
   | 'churchTax'
+  | 'taxCeilingRelief'
   | ProgressionLayer
 
 /** Et lag for sig: grundlaget og satsen, det er regnet af, og beløbet de to
@@ -164,7 +168,8 @@ export function assessTax(
       bottomBracketTax: layerAmount(bottomBase, rates.bracketTaxRates.bottomBracketTax),
       municipalTax: layerAmount(taxableBase, input.municipalTaxRate),
       churchTax: layerAmount(taxableBase, input.churchTaxRate),
-      ...progression(personalIncome, input.municipalTaxRate, rates),
+      ...progression(personalIncome, rates),
+      taxCeilingRelief: taxCeilingRelief(personalIncome, input.municipalTaxRate, rates),
     },
     ...(Object.keys(capitalIncomeContribution).length > 0
       ? { capitalIncomeContribution }
@@ -282,31 +287,63 @@ function sum(amounts: Record<string, Nominal>): Nominal {
     Lagene har intet personfradrag — det hører til bundskatten, kommuneskatten
     og kirkeskatten.
 
-    Binder det skrå skatteloft, er det lagets sats der sættes ned, ikke et
-    nedslag ved siden af lagene. Loftet er dermed usynligt i opgørelsen og
-    synligt i beløbet, hvilket er den vej rundt, der holder totalen lig summen
-    af lagene. */
+    Satserne er lovens og flytter sig ikke med kommunen. Binder det skrå
+    skatteloft, står det i sit eget lag, jf. `taxCeilingRelief`. */
 function progression(
   personalIncome: Nominal,
-  municipalTaxRate: number,
   rates: RateYear,
 ): Record<ProgressionLayer, LayerAmount> {
   const layers = {} as Record<ProgressionLayer, LayerAmount>
 
-  // Hverken AM-bidraget eller kirkeskatten indgår i den sats, loftet måles
-  // på — ingen af trinene omfatter dem.
+  for (const { layer } of progressionLayers) {
+    const base = Math.max(0, personalIncome - rates.thresholds[layer])
+    layers[layer] = layerAmount(base, rates.bracketTaxRates[layer])
+  }
+
+  return layers
+}
+
+/** Loftnedslaget: de procentpoint, den sammenlagte sats ligger over det trin,
+    indkomsten når op i, ganget med grundlaget for det lag, der bærer dem.
+    Satsen er negativ, og det er staten der giver afkald — kommunen får sit
+    fulde.
+
+    Hverken AM-bidraget eller kirkeskatten indgår i den sats, trinene måles
+    på; ingen af trinene omfatter dem.
+
+    Nedslaget tages i det første trin, der binder, og kun dér. Trinene ligger
+    præcis lagenes egne satser fra hinanden (44,57 + 7,50 = 52,07 + 5,00 =
+    57,07), så er første trin bragt ned på loftet, rammer de næste præcis
+    deres eget — højst ét trin kan binde. Den relation er satsårets og ikke
+    kodens, og den er testet som sådan i `rateYear.test.ts`. Toges nedslaget i
+    hvert trin for sig, ville det blive givet én gang pr. lag, og
+    marginalskatten landede *under* loftet; invarianten er, at den lander
+    præcis på det.
+
+    Grundlaget er progressionslagets eget, så nedslaget vokser med
+    indkomsten på samme måde som den skat, det tager af. Er indkomsten under
+    lagets grænse, er grundlaget nul — satsen står stadig og siger, hvor
+    meget loftet ville binde. */
+function taxCeilingRelief(
+  personalIncome: Nominal,
+  municipalTaxRate: number,
+  rates: RateYear,
+): LayerAmount {
   let combinedRate = rates.bracketTaxRates.bottomBracketTax + municipalTaxRate
 
   for (const { layer, step } of progressionLayers) {
     combinedRate += rates.bracketTaxRates[layer]
     const aboveCeiling = Math.max(0, combinedRate - rates.taxCeiling[step])
-    const rate = rates.bracketTaxRates[layer] - aboveCeiling
-    const base = Math.max(0, personalIncome - rates.thresholds[layer])
-
-    layers[layer] = { base, rate, amount: base * rate }
+    if (aboveCeiling > 0) {
+      const base = Math.max(0, personalIncome - rates.thresholds[layer])
+      // Beløbet skrives ud frem for at komme fra `layerAmount`: et nul
+      // grundlag gange en negativ sats er minus nul, og det ville stå som
+      // "−0 kr." i forklar-året.
+      return { base, rate: -aboveCeiling, amount: base === 0 ? 0 : -(base * aboveCeiling) }
+    }
   }
 
-  return layers
+  return layerAmount(0, 0)
 }
 
 /** Kapitalindkomstens eget bidrag til bundskat og topskat — hver sit
@@ -327,11 +364,14 @@ function capitalIncomeLayers(
   const positive = Math.max(0, capitalIncome)
   const aboveThreshold = Math.max(0, positive - rates.thresholds.capitalIncomeInTopBracket)
 
+  // Loftet måles på den sats, der faktisk betales, ligesom i `progression`:
+  // er bundskatten allerede sat ned, er det den nedsatte, topskattens eget
+  // trin lægges oven på.
   let combinedRate = rates.bracketTaxRates.bottomBracketTax + municipalTaxRate
   const bottomRate =
     rates.bracketTaxRates.bottomBracketTax - Math.max(0, combinedRate - rates.taxCeiling.capitalIncome)
 
-  combinedRate += rates.bracketTaxRates.topBracketTax
+  combinedRate = municipalTaxRate + bottomRate + rates.bracketTaxRates.topBracketTax
   const topRate =
     rates.bracketTaxRates.topBracketTax - Math.max(0, combinedRate - rates.taxCeiling.capitalIncome)
 

@@ -208,27 +208,31 @@ export const workedExamples: readonly WorkedExample[] = [
     source:
       'docs/satser/2026.md — beløbsgrænser efter PSL § 20 (skm.dk), de fire ' +
       'lag på personlig indkomst (skat.dk), fradragsprocenterne (skat.dk) og ' +
-      'det skrå skatteloft, trappet fra 2026 (skatteguiden.dk)',
-    verifiedOn: '2026-08-10',
+      'det skrå skatteloft, trappet fra 2026 (skatteguiden.dk), og trinnenes ' +
+      'måleform, jf. selvkontrollen i docs/satser/2026.md',
+    verifiedOn: '2026-08-14',
     dependsOnUnconfirmed: [],
 
     // Samme indkomst som topskattecasen ovenfor, men med en kommunesats der
     // lægger trappen fri:
     //   12,01 + 7,50 + 25,40         = 44,91 % mod første trins 44,57 %
-    //   12,01 + 7,50 + 7,50 + 25,40  = 52,41 % mod andet trins  52,07 %
-    // Begge trin overskrides med 0,34 procentpoint, så de to lag regnes med
-    // 7,16 % i stedet for 7,50 %. Kirkeskatten er med i opgørelsen, men ikke
-    // i den sats, loftet måles på — og AM-bidraget hverken eller.
+    // Første trin overskrides med 0,34 procentpoint. Lagene beholder lovens
+    // satser, og de 0,34 % af mellemskattens grundlag står som et lag for
+    // sig — loftnedslaget. Andet trin binder ikke: er første trin bragt ned
+    // på loftet, er 44,57 + 7,50 = 52,07 % præcis andet trin.
+    // Kirkeskatten er med i opgørelsen, men ikke i den sats, loftet måles
+    // på — og AM-bidraget hverken eller.
     // AM-bidrag   8,00 % af 950.000              =  76.000,00
     // Personlig indkomst  950.000 − 76.000       = 874.000,00
     // Skattepligtig indkomst 874.000 − 66.400    = 807.600,00
     // Bundskat   12,01 % af (874.000 − 54.100)   =  98.469,99
     // Kommuneskat 25,40 % af (807.600 − 54.100)  = 191.389,00
     // Kirkeskat    0,74 % af (807.600 − 54.100)  =   5.575,90
-    // Mellemskat   7,16 % af 232.800             =  16.668,48
-    // Topskat      7,16 % af  96.100             =   6.880,76
+    // Mellemskat   7,50 % af 232.800             =  17.460,00
+    // Topskat      7,50 % af  96.100             =   7.207,50
+    // Loftnedslag −0,34 % af 232.800             =    −791,52
     //                                              ──────────
-    //                                              394.984,13
+    //                                              395.310,87
     input: {
       earnedIncome: 950_000,
       municipalTaxRate: 0.254,
@@ -246,10 +250,11 @@ export const workedExamples: readonly WorkedExample[] = [
         bottomBracketTax: 98_469.99,
         municipalTax: 191_389,
         churchTax: 5_575.9,
-        middleBracketTax: 16_668.48,
-        topBracketTax: 6_880.76,
+        middleBracketTax: 17_460,
+        topBracketTax: 7_207.5,
+        taxCeilingRelief: -791.52,
       },
-      total: 394_984.13,
+      total: 395_310.87,
     },
   },
 

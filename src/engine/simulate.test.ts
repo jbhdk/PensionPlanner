@@ -407,9 +407,10 @@ describe('simulate', () => {
     // Samme lønmodtager som facitcasen, hvor det skrå skatteloft binder:
     // 950.000 kr. brutto, Hvidovres 25,40 % kommuneskat og 0,72 % kirkeskat.
     const { layers } = years[0]!.persons[0]!.tax
-    expect(layers.middleBracketTax.amount).toBeCloseTo(16_668.48, 2)
-    expect(layers.topBracketTax.amount).toBeCloseTo(6_880.76, 2)
-    expect(years[0]!.tax).toBeCloseTo(394_833.43, 2)
+    expect(layers.middleBracketTax.amount).toBeCloseTo(17_460, 2)
+    expect(layers.topBracketTax.amount).toBeCloseTo(7_207.5, 2)
+    expect(layers.taxCeilingRelief.amount).toBeCloseTo(-791.52, 2)
+    expect(years[0]!.tax).toBeCloseTo(395_160.17, 2)
   })
 
   it('bærer hvert skattelag for sig pr. person og stempler satsgrundlaget', () => {
@@ -439,6 +440,10 @@ describe('simulate', () => {
       middleBracketTax: 0,
       topBracketTax: 0,
       additionalTopBracketTax: 0,
+      // Loftnedslaget står som nul af samme grund: Hvidovres 25,40 % lægger
+      // godt nok trappens første trin fri, men indkomsten når ikke op i det
+      // lag, nedslaget måles af.
+      taxCeilingRelief: 0,
     })
 
     // Begge fradrag er i loft ved 600.000, og personlig indkomst ligger
