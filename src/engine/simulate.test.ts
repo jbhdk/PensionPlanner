@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Contribution, HoldingVariant, Plan } from './plan'
+import type { Contribution, Holding, HoldingVariant, Plan } from './plan'
 import { simulate } from './simulate'
 import { validatePlan } from './validatePlan'
 import {
@@ -13,7 +13,7 @@ import {
   bufferBalance,
 } from './testing/planFixture'
 import { simulateChecked } from './testing/simulateChecked'
-import type { YearResult } from './yearResult'
+import type { CapYear, YearResult } from './yearResult'
 
 /** Fixturens buffer ("free-assets") plus én beholdning til, med samme
     bruttoafkast som bufferen, så en overførsel har et sted at flytte penge
@@ -38,6 +38,25 @@ function aPlanWithSecondHolding(options: Parameters<typeof aPlan>[0] = {}): Plan
     er valideret, og rækkerne er åbnet på planens egne beholdninger. */
 function holding(year: YearResult, id: string) {
   return year.holdings.find((h) => h.holding === id)!
+}
+
+/** En loftlinje af `PerYear`-formen. `paid` og `withDeductibility` findes
+    kun på den ene af `CapYear`s to former, og indsnævringen står ét sted
+    frem for i hver assertion — kaster den, står det med det samme, at linjen
+    fik den forkerte form. */
+function perYear(cap: CapYear): Extract<CapYear, { form: 'PerYear' }> {
+  if (cap.form !== 'PerYear') {
+    throw new Error(`Loftlinjen for ${cap.variant} har formen ${cap.form} og ikke PerYear.`)
+  }
+  return cap
+}
+
+/** En loftlinje af `OnBalance`-formen — modstykket til `perYear`. */
+function onBalance(cap: CapYear): Extract<CapYear, { form: 'OnBalance' }> {
+  if (cap.form !== 'OnBalance') {
+    throw new Error(`Loftlinjen for ${cap.variant} har formen ${cap.form} og ikke OnBalance.`)
+  }
+  return cap
 }
 
 /** De år, hvor der overhovedet faldt en indbetaling. Årsrækken er motorens
@@ -1410,7 +1429,7 @@ describe('aktiesparekontoen', () => {
     expect(() => simulate(plan)).toThrow(/arbejdsgiveradministreret/i)
   })
 
-  it('lader et beholdningskildet bidrag lande med hele beløbet, uden loftlinje', () => {
+  it('lader et beholdningskildet bidrag lande med hele beløbet, når der er råderum', () => {
     // Det er den form, handlingen skal skrives i. Pengene var beskattede
     // allerede, da de kom ind på de frie midler, og en beholdningskilde har
     // aldrig båret AM-bidrag: brutto er lig netto, jf. ADR-0016.
@@ -1443,10 +1462,20 @@ describe('aktiesparekontoen', () => {
     expect(holding(year, 'aktiesparekonto').closingBalance).toBeCloseTo(50_000, 6)
     expect(bufferBalance(year)).toBeCloseTo(950_000, 6)
 
-    // Varianten står med intet loft i denne skive, og der er derfor ingen
-    // loftlinje at efterregne og intet brud at markere. Loftet kommer i næste
-    // skive og er en `OnBalance`-form, jf. ADR-0019.
-    expect(year.persons[0]!.caps).toEqual([])
+    // Loftet måler, men afkorter ikke: kontoen står tom ved årets
+    // begyndelse, så råderummet er hele de 174.200 kr., og de 50.000 er der
+    // rigelig plads til. Linjen står der alligevel, fordi året bad om noget
+    // — og året er umarkeret, for der er intet brud, jf. ADR-0019.
+    expect(year.persons[0]!.caps).toEqual([
+      {
+        form: 'OnBalance',
+        variant: 'ShareSavingsAccount',
+        requested: 50_000,
+        cap: 174_200,
+        openingBalance: 0,
+        deposited: 50_000,
+      },
+    ])
     expect(year.capBreach).toBeUndefined()
   })
 
@@ -1523,6 +1552,329 @@ describe('aktiesparekontoen', () => {
     expect(simulateChecked(plan)[0]!.contributions).toEqual([
       { contribution: 'contribution', fromSource: 30_000, intoHolding: 27_600 },
     ])
+  })
+
+  describe('indskudsloftet', () => {
+    /** Kontoen med en saldo at måle råderummet fra. Uden afkast, med mindre
+        testen beder om det — så står afkortningen alene. */
+    const anAccount = (options: { balance: number; grossReturn?: number }): Holding => ({
+      id: 'aktiesparekonto',
+      name: 'Aktiesparekonto',
+      variant: 'ShareSavingsAccount',
+      balance: options.balance,
+      grossReturn: options.grossReturn ?? 0,
+      annualCostRate: 0,
+    })
+
+    /** Et indskud fra de frie midler — den eneste form, der kan nå kontoen,
+        jf. ADR-0020. */
+    const aDeposit = (amountInRealKroner: number) =>
+      aHoldingContribution({
+        source: 'free-assets',
+        to: 'aktiesparekonto',
+        amountInRealKroner,
+      })
+
+    it('afkorter indskuddet til råderummet og lader resten blive liggende i kilden', () => {
+      // Loftet er 174.200 kr. i 2026, og kontoen står med 150.000 kr. ved
+      // årets begyndelse: der er plads til 24.200 kr. Brugeren beder om
+      // 50.000, og pengeinstituttet tager imod 24.200 — de resterende 25.800
+      // forlader aldrig bufferen. Det er hele skellet mod ratepensionens
+      // loft, hvor pengene lander og bliver liggende, jf. ADR-0019.
+      const plan = aPlan({
+        balance: 1_000_000,
+        holdings: [anAccount({ balance: 150_000 })],
+        contributions: [aDeposit(50_000)],
+      })
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(year.contributions).toEqual([
+        { contribution: 'contribution', fromSource: 24_200, intoHolding: 24_200 },
+      ])
+      expect(holding(year, 'aktiesparekonto').closingBalance).toBeCloseTo(174_200, 6)
+      expect(bufferBalance(year)).toBeCloseTo(975_800, 6)
+    })
+
+    it('indskyder nul, når råderummet er brugt op, og lader linjen stå', () => {
+      // Kontoen står med 200.000 kr. ved årets begyndelse og er dermed
+      // allerede over loftet. Der er ikke plads til en krone, indskuddet
+      // sker ikke, og de 50.000 forlader aldrig bufferen.
+      //
+      // Linjen står der alligevel. Den findes, når året **bad om** noget, og
+      // ikke når noget landede — ellers forsvandt netop det år, brugeren
+      // skal kunne se, jf. ADR-0019.
+      const plan = aPlan({
+        balance: 1_000_000,
+        holdings: [anAccount({ balance: 200_000 })],
+        contributions: [aDeposit(50_000)],
+      })
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(year.contributions).toEqual([
+        { contribution: 'contribution', fromSource: 0, intoHolding: 0 },
+      ])
+      expect(bufferBalance(year)).toBeCloseTo(1_000_000, 6)
+      expect(holding(year, 'aktiesparekonto').closingBalance).toBeCloseTo(200_000, 6)
+      expect(year.persons[0]!.caps).toEqual([
+        {
+          form: 'OnBalance',
+          variant: 'ShareSavingsAccount',
+          requested: 50_000,
+          cap: 174_200,
+          openingBalance: 200_000,
+          deposited: 0,
+        },
+      ])
+    })
+
+    it('giver den første indbetaling i planens rækkefølge hele råderummet og den næste resten', () => {
+      // Kontoen står med 134.200 kr., så der er 40.000 kr. tilbage. To
+      // indskud på 30.000 beder tilsammen om 60.000: skranken honorerer det
+      // første fuldt ud og afviser 20.000 af det næste. Pro rata ville have
+      // afkortet dem begge til 20.000, og den fordeling sker ikke nogen
+      // steder, jf. ADR-0019.
+      //
+      // Rækkefølgen i `plan.contributions` er dermed betydningsbærende, hvor
+      // den hidtil var ligegyldig.
+      const plan = aPlan({
+        balance: 1_000_000,
+        holdings: [anAccount({ balance: 134_200 })],
+        contributions: [
+          aDeposit(30_000),
+          { ...aDeposit(30_000), id: 'contribution-2' },
+        ],
+      })
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(year.contributions).toEqual([
+        { contribution: 'contribution', fromSource: 30_000, intoHolding: 30_000 },
+        { contribution: 'contribution-2', fromSource: 10_000, intoHolding: 10_000 },
+      ])
+      expect(holding(year, 'aktiesparekonto').closingBalance).toBeCloseTo(174_200, 6)
+      expect(bufferBalance(year)).toBeCloseTo(960_000, 6)
+    })
+
+    it('markerer ikke året, når indskuddet blev afkortet', () => {
+      // Der bedes om 200.000 kr. mod et loft på 174.200 — et tal, der ligger
+      // over loftet, og som en opgørelse, der sammenlignede uden at se på
+      // formen, ville kalde et brud.
+      //
+      // Der er intet brud. `CapBreach` svarer på, hvorfor et loft er brudt,
+      // og her skete indskuddet bare ikke: de 25.800 blev liggende på
+      // bufferen. Afkortningen ses på loftlinjen i stedet, jf. ADR-0019.
+      const plan = aPlan({
+        balance: 1_000_000,
+        holdings: [anAccount({ balance: 0 })],
+        contributions: [aDeposit(200_000)],
+      })
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(year.capBreach).toBeUndefined()
+      expect(year.persons[0]!.caps).toEqual([
+        {
+          form: 'OnBalance',
+          variant: 'ShareSavingsAccount',
+          requested: 200_000,
+          cap: 174_200,
+          openingBalance: 0,
+          deposited: 174_200,
+        },
+      ])
+      expect(bufferBalance(year)).toBeCloseTo(825_800, 6)
+    })
+
+    it('lader saldoen vokse over loftet af afkast alene uden at bryde noget', () => {
+      // Kontoen står med 170.000 kr. og forrentes 10 %. I 2026 er der 4.200
+      // kr. tilbage under loftet, og det er alt, der kommer ind af de 10.000,
+      // der blev bedt om. Årets gevinst rører ikke det tal: den samlede
+      // værdi opgøres pr. 31. december og styrer det **følgende** års
+      // råderum, jf. ASKL § 9, stk. 1, og docs/satser/2026.md.
+      //
+      // Året efter er saldoen af sig selv over loftet. Der er ikke plads til
+      // mere, og intet loft er brudt — det er hele forskellen på et loft, der
+      // forhindrer, og et, der straffer, jf. ADR-0019.
+      const plan = aPlan({
+        balance: 1_000_000,
+        holdings: [anAccount({ balance: 170_000, grossReturn: 0.1 })],
+        contributions: [aDeposit(10_000)],
+      })
+
+      const years = simulateChecked(plan)
+      const capIn = (year: number) => years.find((result) => result.year === year)!
+
+      expect(capIn(2026).persons[0]!.caps).toEqual([
+        {
+          form: 'OnBalance',
+          variant: 'ShareSavingsAccount',
+          requested: 10_000,
+          cap: 174_200,
+          openingBalance: 170_000,
+          deposited: 4_200,
+        },
+      ])
+
+      // Forrige års ultimo er dette års primo, og der er intet at trække fra
+      // loftet med. Linjen står der stadig, for året bad om 10.000.
+      const nextLine = onBalance(capIn(2027).persons[0]!.caps[0]!)
+      expect(nextLine.requested).toBeCloseTo(10_000, 6)
+      expect(nextLine.openingBalance).toBeCloseTo(
+        holding(capIn(2026), 'aktiesparekonto').closingBalance,
+        6,
+      )
+      expect(nextLine.openingBalance).toBeGreaterThan(174_200)
+      expect(nextLine.deposited).toBe(0)
+
+      expect(capIn(2026).capBreach).toBeUndefined()
+      expect(capIn(2027).capBreach).toBeUndefined()
+    })
+
+    it('løfter loftet med § 20-antagelsen som de øvrige beløbsgrænser', () => {
+      // Loftet er en § 20-reguleret beløbsgrænse og fremskrives som resten af
+      // dem, jf. ADR-0005: 174.200 i 2026 og 2 % mere i 2027, altså 177.684.
+      //
+      // Kontoen fyldes helt op i det første år, og det er netop
+      // fremskrivningen, der giver plads til de 3.484 kr. året efter. Var
+      // loftet holdt fast, var råderummet nul.
+      const plan = aPlan({
+        balance: 1_000_000,
+        section20ProjectionAssumption: 0.02,
+        holdings: [anAccount({ balance: 0 })],
+        contributions: [aDeposit(200_000)],
+      })
+
+      const years = simulateChecked(plan)
+      const lineIn = (year: number) =>
+        onBalance(years.find((result) => result.year === year)!.persons[0]!.caps[0]!)
+
+      expect(lineIn(2026).cap).toBeCloseTo(174_200, 6)
+      expect(lineIn(2026).deposited).toBeCloseTo(174_200, 6)
+      expect(lineIn(2027).cap).toBeCloseTo(177_684, 6)
+      expect(lineIn(2027).openingBalance).toBeCloseTo(174_200, 6)
+      expect(lineIn(2027).deposited).toBeCloseTo(3_484, 6)
+    })
+
+    it('markerer stadig året, når et PerYear-loft brydes i samme år som et indskud afkortes', () => {
+      // Modprøve på filtreringen i `capBreach`. Den skal se på formen, før
+      // den sammenligner to tal — men den skal kun sortere `OnBalance` fra,
+      // ikke lukke for et brud, der faktisk er sket.
+      //
+      // Året rummer begge dele: ratepensionen får 96.600 kr. mod et loft på
+      // 68.700 og mister fradragsretten for forskellen, mens indskuddet på
+      // aktiesparekontoen afvises helt. En filtrering, der lukkede for meget,
+      // ville lade året stå umarkeret, og brugeren ville ikke se, at
+      // 27.900 kr. holdt op med at virke.
+      const plan = aPlan({
+        balance: 1_000_000,
+        entries: [aSalary({ amountInRealKroner: 700_000 })],
+        holdings: [
+          anAccount({ balance: 200_000 }),
+          {
+            id: 'ratepension',
+            name: 'Ratepension',
+            variant: 'InstalmentPension',
+            balance: 0,
+            grossReturn: 0,
+            annualCostRate: 0,
+          },
+        ],
+        contributions: [
+          aDeposit(50_000),
+          {
+            ...aContribution({
+              source: 'salary',
+              to: 'ratepension',
+              amountInRealKroner: 105_000,
+            }),
+            id: 'contribution-2',
+          },
+        ],
+      })
+
+      const year = simulateChecked(plan)[0]!
+      const { caps } = year.persons[0]!
+
+      expect(year.capBreach).toBe('LostDeductibility')
+      expect(onBalance(caps.find((line) => line.form === 'OnBalance')!).deposited).toBe(0)
+      expect(perYear(caps.find((line) => line.form === 'PerYear')!).paid).toBeCloseTo(96_600, 6)
+    })
+
+    it('måler råderummet pr. person, så den enes fulde konto ikke lukker den andens', () => {
+      // Modprøve på, at loftet er personens. Jespers konto er over loftet, og
+      // hans indskud afvises; Marias er tom, og hendes lander helt. En
+      // opgørelse, der lagde husstandens konti sammen eller så alle årets
+      // indbetalinger under ét, ville afvise et indskud, der er fuldt
+      // lovligt — og den ville se lige så grøn ud som den rigtige uden denne
+      // test, jf. ADR-0018.
+      const account = (id: string, balance: number): Holding => ({
+        id,
+        name: 'Aktiesparekonto',
+        variant: 'ShareSavingsAccount',
+        balance,
+        grossReturn: 0,
+        annualCostRate: 0,
+      })
+      const base = aPlan({
+        balance: 1_000_000,
+        holdings: [account('jespers-konto', 200_000)],
+        contributions: [
+          aHoldingContribution({
+            source: 'free-assets',
+            to: 'jespers-konto',
+            amountInRealKroner: 50_000,
+          }),
+          {
+            ...aHoldingContribution({
+              source: 'marias-frie-midler',
+              to: 'marias-konto',
+              amountInRealKroner: 50_000,
+            }),
+            id: 'contribution-2',
+          },
+        ],
+      })
+      const plan: Plan = {
+        ...base,
+        household: {
+          persons: [
+            ...base.household.persons,
+            {
+              id: 'maria',
+              name: 'Maria',
+              birthYear: 1973,
+              birthMonth: 6,
+              workEndAge: 58,
+              horizon: 90,
+              municipality: 'Hvidovre',
+              churchMember: true,
+              holdings: [
+                {
+                  id: 'marias-frie-midler',
+                  name: 'Marias frie midler',
+                  variant: 'SavingsAccount',
+                  balance: 1_000_000,
+                  grossReturn: 0,
+                  annualCostRate: 0,
+                },
+                account('marias-konto', 0),
+              ],
+            },
+          ],
+        },
+      }
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(year.contributions).toEqual([
+        { contribution: 'contribution', fromSource: 0, intoHolding: 0 },
+        { contribution: 'contribution-2', fromSource: 50_000, intoHolding: 50_000 },
+      ])
+      expect(onBalance(year.persons[0]!.caps[0]!).deposited).toBe(0)
+      expect(onBalance(year.persons[1]!.caps[0]!).deposited).toBeCloseTo(50_000, 6)
+    })
   })
 })
 
@@ -2014,9 +2366,9 @@ describe('indbetalinger', () => {
 
       expect(caps).toHaveLength(1)
       expect(caps[0]!.variant).toBe('InstalmentPension')
-      expect(caps[0]!.paid).toBeCloseTo(96_600, 6)
+      expect(perYear(caps[0]!).paid).toBeCloseTo(96_600, 6)
       expect(caps[0]!.cap).toBeCloseTo(68_700, 6)
-      expect(caps[0]!.withDeductibility).toBeCloseTo(68_700, 6)
+      expect(perYear(caps[0]!).withDeductibility).toBeCloseTo(68_700, 6)
     })
 
     it('står uden loftlinje i et år uden indbetaling til en loftbelagt ordning', () => {
@@ -2068,6 +2420,7 @@ describe('indbetalinger', () => {
 
       expect(paying.persons[0]!.caps).toEqual([
         {
+          form: 'PerYear',
           variant: 'OldAgeSavings',
           paid: 20_000,
           cap: 9_900,
@@ -2173,7 +2526,7 @@ describe('indbetalinger', () => {
 
       const year = simulateChecked(plan)[0]!
 
-      expect(year.persons[0]!.caps[0]!.withDeductibility).toBeCloseTo(68_700, 6)
+      expect(perYear(year.persons[0]!.caps[0]!).withDeductibility).toBeCloseTo(68_700, 6)
       expect(year.capBreach).toBeUndefined()
     })
 

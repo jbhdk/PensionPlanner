@@ -3,7 +3,13 @@ import { returnWeight } from '../engine/simulate'
 import type { ShareIncomeLayer } from '../engine/tax/assessHousehold'
 import type { LayerAmount, TaxLayer } from '../engine/tax/assessTax'
 import { totalTax } from '../engine/tax/assessTax'
-import type { HoldingYear, PersonYear, RateBasis, YearResult } from '../engine/yearResult'
+import type {
+  CapYear,
+  HoldingYear,
+  PersonYear,
+  RateBasis,
+  YearResult,
+} from '../engine/yearResult'
 import { kroner, procent } from './format'
 import { danish, danishTiming, variants } from './danish'
 import { inRealKroner } from './real'
@@ -303,7 +309,13 @@ function CapsBlock({
 }) {
   const lines = plan.household.persons.flatMap((person) => {
     const personYear = year.persons.find((p) => p.person === person.id)
-    return (personYear?.caps ?? []).map((cap) => ({ person: person.name, cap }))
+    return (personYear?.caps ?? [])
+      // Kun `PerYear`-formen tegnes. `OnBalance`-linjen har sine egne fem
+      // tal og sin egen aflæsning, og den hører sammen med den skive, hvor
+      // aktiesparekontoen bliver vælgelig — fladen kan ikke oprette en
+      // endnu, så der er ingen linje at skjule for nogen.
+      .filter((cap): cap is Extract<CapYear, { form: 'PerYear' }> => cap.form === 'PerYear')
+      .map((cap) => ({ person: person.name, cap }))
   })
   if (lines.length === 0) return null
 

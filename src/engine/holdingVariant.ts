@@ -3,14 +3,14 @@ import type { RateYear, TaxRates } from './rates/rateYear'
 
 /** De varianter, der har et `Cap`. Ikke et begreb ved siden af
     `HoldingVariant`, men den delmængde af den, der bærer et loft — og den
-    slags, loftet måles over: årets samlede indbetaling til personens
-    ordninger af varianten, jf. `CapYear`.
+    slags, loftet måles over: personens ordninger af varianten under ét, jf.
+    `CapYear`. Hvad der så måles, er formens svar og ikke listens.
 
     Listen og tabellen kan ikke komme ud af trit: tabellens type kræver en
     loftregel af præcis disse rækker og `undefined` af alle andre. Gives
     livrenten et loft uden at stå her, er det en oversætterfejl og ikke en
     forkert skat, der først ses i et årsresultat. */
-const cappedVariants = ['InstalmentPension', 'OldAgeSavings'] as const
+const cappedVariants = ['InstalmentPension', 'OldAgeSavings', 'ShareSavingsAccount'] as const
 
 export type CappedVariant = (typeof cappedVariants)[number]
 
@@ -28,7 +28,10 @@ const table: {
     freeAssets: false,
     holdingTaxRate: 'palTaxRate',
     deductibility: true,
-    cap: (rates) => rates.thresholds.instalmentPensionCap,
+    cap: {
+      form: 'PerYear',
+      amount: (rates) => rates.thresholds.instalmentPensionCap,
+    },
   },
   LifeAnnuity: {
     freeAssets: false,
@@ -40,16 +43,22 @@ const table: {
     freeAssets: false,
     holdingTaxRate: 'palTaxRate',
     deductibility: false,
-    cap: (rates, yearsToStatePensionAge) =>
-      yearsToStatePensionAge <= oldAgeSavingsHighCapFrom
-        ? rates.thresholds.oldAgeSavingsCapNearStatePensionAge
-        : rates.thresholds.oldAgeSavingsCap,
+    cap: {
+      form: 'PerYear',
+      amount: (rates, yearsToStatePensionAge) =>
+        yearsToStatePensionAge <= oldAgeSavingsHighCapFrom
+          ? rates.thresholds.oldAgeSavingsCapNearStatePensionAge
+          : rates.thresholds.oldAgeSavingsCap,
+    },
   },
   ShareSavingsAccount: {
     freeAssets: false,
     holdingTaxRate: 'shareSavingsAccountTaxRate',
     deductibility: false,
-    cap: undefined,
+    cap: {
+      form: 'OnBalance',
+      amount: (rates) => rates.thresholds.shareSavingsAccountCap,
+    },
   },
   ShareDepot: {
     freeAssets: true,
@@ -79,11 +88,32 @@ type Row = {
   deductibility: boolean
 }
 
-/** Årets loftbeløb for en variant, slået op i satsåret. Rækken regner
-    beløbet frem for at navngive et satsfelt, som `holdingTaxRate` gør: et
-    loft kan have en trappe, og den hører i den ene række, der har den, frem
-    for i en kolonne, de øvrige rækker skal stå tomme i. */
-type CapRule = (rates: RateYear, yearsToStatePensionAge: number) => Nominal
+/** Loftets form, og hvad det gælder i året — de to sider af `Cap`, jf.
+    CONTEXT.md.
+
+    Formen er rækkens egen og ikke noget, satsåret svarer på: hvad loftet
+    måler, og om pengene overhovedet kommer ind, er en egenskab ved
+    ordningen. Beløbet regnes derimod, hvor `holdingTaxRate` blot navngiver
+    et satsfelt: et loft kan have en trappe, og den hører i den ene række,
+    der har den, frem for i en kolonne, de øvrige rækker skal stå tomme i. */
+type CapRule = {
+  form: CapForm
+  amount: (rates: RateYear, yearsToStatePensionAge: number) => Nominal
+}
+
+/** Hvad et loft måler, og hvad det gør ved det overskydende. `PerYear` måler
+    årets samlede indbetaling til ordningen, og pengene kommer ind —
+    ratepensionens overskydende mister sin fradragsret, aldersopsparingens
+    bliver afgiftspligtigt. `OnBalance` måler beholdningens saldo ved årets
+    begyndelse, og råderummet er loftet minus den: indskuddet afkortes, og
+    det uindskudte bliver liggende i kilden, jf. ADR-0019. */
+export type CapForm = 'PerYear' | 'OnBalance'
+
+/** Årets loft for en variant: formen, og det beløb satsåret giver den. */
+export type Cap = {
+  form: CapForm
+  amount: Nominal
+}
 
 /** Aldersopsparingens høje loft gælder fra og med det syvende indkomstår før
     det indkomstår, hvor personen når folkepensionsalderen, jf. PBL § 16,
@@ -123,18 +153,20 @@ export function hasDeductibility(holding: Holding): boolean {
   return table[holding.variant].deductibility
 }
 
-/** Loftet over det, der må lande i beholdningen i ét år, eller `undefined`
-    når varianten ingen har. Kun `PerYear`-formen findes: den måler årets
-    samlede indbetaling, og det overskydende afvises ikke — det mister sin
-    fradragsret eller bliver afgiftspligtigt, jf. `Cap` i CONTEXT.md.
+/** Beholdningens loft i året, eller `undefined` når varianten ingen har.
+    Svaret er formen og beløbet sammen: de to tal, formen sammenligner, er
+    ikke de samme, og et bart tal kunne måles mod det forkerte.
 
-    Beløbet måler på det, der **landede** efter AM-bidrag, samme form som
+    `PerYear` måler årets samlede indbetaling, og det overskydende afvises
+    ikke — det mister sin fradragsret eller bliver afgiftspligtigt. Beløbet
+    måler dér på det, der **landede** efter AM-bidrag, samme form som
     fradragsretten selv, jf. PBL § 16, stk. 3, og docs/satser/2026.md.
 
-    Aktiesparekontoen står også uden, og cellen er tom med vilje frem for ved
-    en forglemmelse: dens loft er en `OnBalance`-form, der måler saldoen og
-    afkorter selve indbetalingen, og den findes ikke i denne skive, jf.
-    ADR-0019.
+    `OnBalance` måler en helt anden ting: aktiesparekontoens loft gælder
+    beholdningens værdi og ikke en indbetaling, og AM-bidrag rører det slet
+    ikke. Råderummet er loftet minus primosaldoen, og indskuddet afkortes til
+    det, jf. ASKL § 9, stk. 1, ADR-0019 og docs/satser/2026.md. De to
+    måleformer må aldrig bytte plads.
 
     Livrenten har intet loft: PBL § 16, stk. 2, opremser ratepensionen og de
     ophørende livrenter, og den livsvarige står ikke i den. Det er netop den
@@ -150,8 +182,10 @@ export function cap(
   holding: Holding,
   rates: RateYear,
   yearsToStatePensionAge: number,
-): Nominal | undefined {
-  return table[holding.variant].cap?.(rates, yearsToStatePensionAge)
+): Cap | undefined {
+  const rule = table[holding.variant].cap
+  if (rule === undefined) return undefined
+  return { form: rule.form, amount: rule.amount(rates, yearsToStatePensionAge) }
 }
 
 /** Beholdningens variant, når den har et loft — ellers `undefined`. Det

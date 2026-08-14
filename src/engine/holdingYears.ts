@@ -49,6 +49,14 @@ function open(holdings: Holding[], openingBalance: (holding: Holding) => Nominal
   )
 }
 
+/** Beholdningernes saldi ved årets begyndelse. Et `OnBalance`-loft måler
+    mod netop dem, og opgørelsen får dem som et bart kort frem for hele
+    bogen: den skal kunne læse en primosaldo og ikke andet, og et kort af tal
+    kan hverken vejes, flyttes eller lukkes ved en fejl. */
+export function openingBalances(years: HoldingYears): ReadonlyMap<HoldingId, Nominal> {
+  return new Map([...years].map(([id, row]) => [id, row.openingBalance]))
+}
+
 /** Lægger en vægtet strøm til beholdningens afkastgrundlag, jf. ADR-0006.
     Strømmen flytter ikke saldoen — det gør `withMovement` — og den lægges
     oveni de strømme, der allerede er noteret. */

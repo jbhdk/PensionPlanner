@@ -2,6 +2,7 @@ import {
   closeYear,
   fromBalances,
   fromPreviousYear,
+  openingBalances,
   returnOf,
   withFlow,
   withMovement,
@@ -104,9 +105,16 @@ function simulateYear(
 
   // Lofterne opgøres, før noget vejes ind. En loftform, der afkorter selve
   // indbetalingen, skal være afgjort først — ellers forrenter penge sig et
-  // sted, de aldrig kom hen, jf. ADR-0019. Opgørelsen læser kun planen,
-  // satsåret og året selv og aldrig en saldo, så den kan stå her.
-  const contributionsByPersonId = contributionsByPerson(plan, requested, rates, year)
+  // sted, de aldrig kom hen, jf. ADR-0019. Primosaldiene er netop dem,
+  // `OnBalance` måler råderummet af, og de står fast hele året igennem: de
+  // er forrige års ultimo og ændrer sig ikke af noget, der sker herefter.
+  const contributionsByPersonId = contributionsByPerson(
+    plan,
+    requested,
+    rates,
+    year,
+    openingBalances(opening),
+  )
   const contributions = inPlanOrder(requested, contributionsByPersonId)
 
   const income = sumOf(entries, 'Income')
@@ -278,6 +286,10 @@ export function returnWeight(timing: Timing): number {
     et bidrag, der rammer loftet på kronen, har hverken mistet fradragsret
     eller udløst afgift.
 
+    Kun `PerYear` kan bryde. `OnBalance` forhindrer indskuddet frem for at
+    straffe det, og et år, hvor et indskud blev afkortet, er derfor umarkeret
+    — afkortningen står på loftlinjen i stedet, jf. ADR-0019.
+
     De to slags brud er én form og to regler. Ratepensionen har en
     fradragsret, som det overskydende mister, og det koster rigtige penge i
     årets skat; aldersopsparingen har ingen at miste og betaler i stedet en
@@ -286,6 +298,11 @@ export function returnWeight(timing: Timing): number {
 function capBreach(persons: PersonContributions[]): CapBreach | undefined {
   const breached = persons
     .flatMap(({ caps }) => caps)
+    // Formen først, tallene bagefter. En `OnBalance`-linje har ikke et
+    // beløb, der landede over sit loft — den har et, der aldrig kom ind — og
+    // sammenlignes de to alligevel, markerer året et brud, der ikke er sket,
+    // jf. ADR-0019.
+    .filter((line): line is Extract<CapYear, { form: 'PerYear' }> => line.form === 'PerYear')
     .filter((line) => line.paid > line.cap)
   if (breached.length === 0) return undefined
 
@@ -321,9 +338,10 @@ type PersonContributions = {
     ikke kan efterregne hverken den skat eller den saldo, den står ved siden
     af, jf. ADR-0018 og ADR-0019.
 
-    Opgørelsen står før årets strømme og læser aldrig en saldo. En loftform,
-    der afkorter selve indbetalingen, skal være afgjort, før noget vejes ind
-    i afkastgrundlaget.
+    Opgørelsen står før årets strømme. En loftform, der afkorter selve
+    indbetalingen, skal være afgjort, før noget vejes ind i
+    afkastgrundlaget — og den saldo, `OnBalance` måler mod, er årets primo
+    og ikke en saldo undervejs, jf. ASKL § 9, stk. 1.
 
     Det er denne gruppering — og aldrig en `HoldingVariant` — der krydser
     skattesømmet: skattereglen hedder ikke "ratepension giver fradragsret",
@@ -346,6 +364,7 @@ function contributionsByPerson(
   contributions: ActiveContribution[],
   rates: RateYear,
   year: SimulationYear,
+  opening: ReadonlyMap<HoldingId, Nominal>,
 ): Map<PersonId, PersonContributions> {
   return new Map(
     plan.household.persons.map((person) => [
@@ -354,7 +373,7 @@ function contributionsByPerson(
       // det årstal: aldersopsparingens vindue og det ekstra pensionsfradrags
       // 15-årsgrænse skal ramme det samme år, og alderen er en brøk for de
       // fleste årgange.
-      throughCaps(person, contributions, rates, statePensionYear(person) - year),
+      throughCaps(person, contributions, rates, statePensionYear(person) - year, opening),
     ]),
   )
 }
@@ -382,54 +401,133 @@ function inPlanOrder(
 
 /** Årets indbetalinger til én person ført gennem personens lofter, grupperet
     efter beholdningens variant — den slags ordning, loftet måler over.
-    Loftet er personens og gælder årets samlede indbetaling til den slags: to
-    ratepensioner med 40.000 kr. hver er ét brud og ikke to lovlige
+    Loftet er personens og gælder personens ordninger af den slags under ét:
+    to ratepensioner med 40.000 kr. hver er ét brud og ikke to lovlige
     indbetalinger, jf. PBL § 16.
 
-    Funktionen både måler og kan begrænse. `PerYear` begrænser kun det ene
-    tal, der krydser skattesømmet — pengene er landet, og det overskydende
-    bliver liggende, jf. ADR-0018 — hvor en afkortende loftform vil svare med
-    en mindre indbetaling end den, året bad om. Derfor svarer den med de målte
-    indbetalinger og ikke kun med linjerne.
+    Funktionen både måler og begrænser, og hvad den begrænser, følger formen.
+    `PerYear` begrænser kun det ene tal, der krydser skattesømmet — pengene
+    er landet, og det overskydende bliver liggende, jf. ADR-0018. `OnBalance`
+    begrænser selve indbetalingen og svarer derfor med mindre, end året bad
+    om. Det er hele grunden til, at den svarer med de målte indbetalinger og
+    ikke kun med linjerne.
 
     Grupper uden indbetaling udelades, og en variant uden loft får ingen
     linje. En linje på nul ville sige, at året indbetalte til en ordning, det
-    ikke rørte, og et loft, der ikke blev målt mod noget, er ikke et svar. */
+    ikke rørte, og et loft, der ikke blev målt mod noget, er ikke et svar.
+    Men det, der tælles, er hvad året **bad om** og ikke hvad der landede:
+    ellers forsvandt netop det år, hvor råderummet var nul, og hele
+    indskuddet blev afvist. */
 function throughCaps(
   person: Person,
   contributions: ActiveContribution[],
   rates: RateYear,
   yearsToStatePensionAge: number,
+  opening: ReadonlyMap<HoldingId, Nominal>,
 ): PersonContributions {
-  const groups = new Map<HoldingVariant, { holding: Holding; paid: Nominal }>()
-  const measured: ActiveContribution[] = []
-  for (const holding of person.holdings) {
-    const into = contributions.filter(({ contribution }) => contribution.to === holding.id)
-    measured.push(...into)
-    const paid = into.reduce((sum, { intoHolding }) => sum + intoHolding, 0)
-    if (paid === 0) continue
-    const group = groups.get(holding.variant)
-    groups.set(holding.variant, { holding, paid: (group?.paid ?? 0) + paid })
-  }
-
   const caps: CapYear[] = []
+  const measured: ActiveContribution[] = []
   let withDeductibility = 0
-  for (const { holding, paid } of groups.values()) {
-    const limit = cap(holding, rates, yearsToStatePensionAge)
-    const withinCap = limit === undefined ? paid : Math.min(paid, limit)
-    // Aldersopsparingen har ingen fradragsret at miste. Dens loft er stadig
-    // et loft — det overskydende er afgiftspligtigt — men det ændrer ikke et
-    // tal her, jf. `Cap` i CONTEXT.md.
-    const deductible = hasDeductibility(holding) ? withinCap : 0
-    withDeductibility += deductible
 
-    const variant = cappedVariant(holding)
-    if (variant !== undefined && limit !== undefined) {
-      caps.push({ variant, paid, cap: limit, withDeductibility: deductible })
+  for (const holdings of byVariant(person).values()) {
+    // Gruppens indbetalinger læses ud af årets liste, som allerede står i
+    // planens rækkefølge, frem for at blive samlet op beholdning for
+    // beholdning: den rækkefølge afgør, hvem der først får råderummet, jf.
+    // ADR-0019.
+    const ids = new Set(holdings.map((holding) => holding.id))
+    const into = contributions.filter(({ contribution }) => ids.has(contribution.to))
+    const requested = into.reduce((sum, { intoHolding }) => sum + intoHolding, 0)
+
+    // Bad året ikke om noget, er der intet at måle. Indbetalingerne skal
+    // stadig med videre: en indbetaling på nul falder også i året, og en,
+    // opgørelsen tabte, ville forsvinde ud af årsresultatet.
+    if (requested === 0) {
+      measured.push(...into)
+      continue
     }
+
+    const representative = holdings[0]!
+    const limit = cap(representative, rates, yearsToStatePensionAge)
+    const variant = cappedVariant(representative)
+
+    if (limit === undefined || variant === undefined) {
+      measured.push(...into)
+      withDeductibility += hasDeductibility(representative) ? requested : 0
+      continue
+    }
+
+    if (limit.form === 'PerYear') {
+      // Pengene er landet. Loftet begrænser kun det tal, skatten regnes af —
+      // og aldersopsparingen har ingen fradragsret at miste, så dens
+      // overskydende ændrer ikke et tal her, jf. `Cap` i CONTEXT.md.
+      const withinCap = Math.min(requested, limit.amount)
+      const deductible = hasDeductibility(representative) ? withinCap : 0
+      withDeductibility += deductible
+      measured.push(...into)
+      caps.push({
+        form: 'PerYear',
+        variant,
+        paid: requested,
+        cap: limit.amount,
+        withDeductibility: deductible,
+      })
+      continue
+    }
+
+    // `OnBalance`: råderummet er loftet minus primosaldoen og aldrig
+    // negativt — vokser saldoen over loftet af afkast alene, er intet loft
+    // brudt, der er blot ikke plads til mere, jf. ADR-0019.
+    const openingBalance = holdings.reduce((sum, holding) => sum + opening.get(holding.id)!, 0)
+    const headroom = Math.max(limit.amount - openingBalance, 0)
+    const shortened = shortenToHeadroom(into, headroom)
+    const deposited = shortened.reduce((sum, { intoHolding }) => sum + intoHolding, 0)
+
+    measured.push(...shortened)
+    withDeductibility += hasDeductibility(representative) ? deposited : 0
+    caps.push({
+      form: 'OnBalance',
+      variant,
+      requested,
+      cap: limit.amount,
+      openingBalance,
+      deposited,
+    })
   }
 
   return { caps, withDeductibility, contributions: measured }
+}
+
+/** Personens beholdninger grupperet efter variant, i den rækkefølge de står
+    i planen. Loftet måles over gruppen og aldrig over den enkelte
+    beholdning, jf. ADR-0018. */
+function byVariant(person: Person): Map<HoldingVariant, Holding[]> {
+  const groups = new Map<HoldingVariant, Holding[]>()
+  for (const holding of person.holdings) {
+    groups.set(holding.variant, [...(groups.get(holding.variant) ?? []), holding])
+  }
+  return groups
+}
+
+/** Årets indskud afkortet til råderummet, i planens rækkefølge: den første
+    tager sit fulde beløb, og den næste får resten. Skranken honorerer det
+    første indskud og afviser det næste — pro rata ville afkorte dem begge,
+    og den fordeling sker ikke nogen steder, jf. ADR-0019.
+
+    Begge tal afkortes til det samme. Kun et beholdningskildet bidrag kan nå
+    et `OnBalance`-loft — der findes ingen arbejdsgiveradministreret
+    aktiesparekonto, og `validatePlan` afviser den anden form — og dér har
+    pengene aldrig båret AM-bidrag, så det, der forlod kilden, er det, der
+    kom ind. Resten forlader aldrig kilden. */
+function shortenToHeadroom(
+  deposits: ActiveContribution[],
+  headroom: Nominal,
+): ActiveContribution[] {
+  let left = headroom
+  return deposits.map((deposit) => {
+    const amount = Math.min(deposit.intoHolding, left)
+    left -= amount
+    return { ...deposit, fromSource: amount, intoHolding: amount }
+  })
 }
 
 /** Det, en persons skat skal regnes af — selve opgørelsen sker bag

@@ -21,6 +21,10 @@ export type BufferState = 'Incomplete' | 'Unsustainable'
     `Chargeable`, når det i stedet er afgiftspligtigt. Fraværende, når intet
     loft er brudt.
 
+    Kun `PerYear`-formen kan bryde. En `OnBalance`-form forhindrer indskuddet
+    frem for at straffe det, og der er derfor intet brud at markere —
+    afkortningen ses på `CapYear`-linjen i stedet, jf. ADR-0019.
+
     Et resultat på linje med `BufferState` og ikke en valideringsfejl: om et
     beløb overskrider loftet afhænger af årets fremskrevne beløb målt mod
     årets satsår, og de to vokser med hver sin antagelse — det samme bidrag
@@ -64,28 +68,51 @@ export type ContributionYear = {
 }
 
 /** Én persons indbetaling til én slags loftbelagt ordning i ét
-    simuleringsår, målt mod det loft der gjaldt. Tre tal på samme linje — det
-    der landede, loftet, og den del der beholdt sin fradragsret — så linjen
-    kan efterregnes af sig selv, som et `LayerAmount` kan.
+    simuleringsår, målt mod det loft der gjaldt. Linjen kan efterregnes af
+    sig selv, som et `LayerAmount` kan — og hvilke tal der skal til, følger
+    loftets form.
 
-    Loftet er personens og måles over årets samlede indbetaling til
-    varianten: to ratepensioner deler ét loft, jf. PBL § 16 og ADR-0018. En
-    variant uden loft har ingen linje, og en variant, året intet indbetalte
-    til, har heller ingen.
+    En union på `Cap`-formen frem for ét sæt felter med huller i: de to
+    former måler ikke det samme, og et felt, der kun giver mening for den
+    ene, skal ikke kunne skrives for den anden. Samme greb som `Entry` på
+    `direction` og `Contribution` på `kind`, jf. ADR-0019.
 
-    Alle tre tal måler **efter** AM-bidrag, altså det der landede i
-    beholdningen, jf. PBL § 16, stk. 3, og docs/satser/2026.md. */
-export type CapYear = {
-  variant: CappedVariant
-  paid: Nominal
-  cap: Nominal
-  /** Den del af `paid`, der beholdt sin `Deductibility` — `min(paid, cap)`
-      for en variant, der har fradragsret, og nul for en, der ingen har.
-      Aldersopsparingen har ingen at miste: dens overskydende er
-      afgiftspligtigt i stedet, og afgiften er ikke modelleret, jf.
-      docs/udskudt.md. */
-  withDeductibility: Nominal
-}
+    Loftet er personens og måles over personens ordninger af varianten under
+    ét: to ratepensioner deler ét loft, jf. PBL § 16 og ADR-0018. En variant
+    uden loft har ingen linje, og linjen findes, når året **bad om** noget,
+    ikke når noget landede — ellers forsvandt netop det år, hvor råderummet
+    var nul, og hele indskuddet blev afvist. */
+export type CapYear =
+  | {
+      form: 'PerYear'
+      variant: CappedVariant
+      /** Det, der landede i ordningerne i alt. Måler **efter** AM-bidrag,
+          jf. PBL § 16, stk. 3, og docs/satser/2026.md. */
+      paid: Nominal
+      cap: Nominal
+      /** Den del af `paid`, der beholdt sin `Deductibility` — `min(paid, cap)`
+          for en variant, der har fradragsret, og nul for en, der ingen har.
+          Aldersopsparingen har ingen at miste: dens overskydende er
+          afgiftspligtigt i stedet, og afgiften er ikke modelleret, jf.
+          docs/udskudt.md. */
+      withDeductibility: Nominal
+    }
+  | {
+      form: 'OnBalance'
+      variant: CappedVariant
+      /** Det, årets indbetalinger tilsammen bad om. AM-bidrag rører ikke
+          denne form: pengene er fuldt beskattede midler, ejeren selv flytter
+          derind, jf. docs/satser/2026.md. */
+      requested: Nominal
+      cap: Nominal
+      /** Saldoen ved årets begyndelse — forrige års ultimo, jf. ASKL § 9,
+          stk. 1. Det er den, loftet måles mod, og derfor ånder råderummet
+          med afkastet. */
+      openingBalance: Nominal
+      /** Det, der faktisk kom ind: `requested` afkortet til råderummet.
+          Resten forlod aldrig kilden, jf. ADR-0019. */
+      deposited: Nominal
+    }
 
 export type HoldingYear = {
   holding: HoldingId
