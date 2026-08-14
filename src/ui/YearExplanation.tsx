@@ -5,7 +5,7 @@ import type { LayerAmount, TaxLayer } from '../engine/tax/assessTax'
 import { totalTax } from '../engine/tax/assessTax'
 import type { HoldingYear, PersonYear, RateBasis, YearResult } from '../engine/yearResult'
 import { kroner, procent } from './format'
-import { danishTiming } from './danish'
+import { danish, danishTiming, variants } from './danish'
 import { inRealKroner } from './real'
 
 /** Rækkefølgen skattelagene vises i: samme rækkefølge som mockuppens
@@ -269,7 +269,74 @@ function ContributionsBlock({
           ))}
         </tbody>
       </table>
+      <CapsBlock plan={plan} year={year} display={display} />
     </div>
+  )
+}
+
+/** Loftlinjerne: hvad der landede i alt, loftet det blev målt mod, og den
+    del der beholdt sin fradragsret. Tre tal på samme linje, så den kan
+    efterregnes uden at finde tal andre steder på siden — som et skattelag
+    kan det fra sin egen række.
+
+    Linjen står i forklar-året og kun der. Om et loft bandt, afhænger af
+    årets fremskrevne beløb målt mod årets satsår, og det er dermed en
+    egenskab ved året og ikke ved indbetalingen; inspektørskuffen viser
+    planen og aldrig et årsafhængigt resultat.
+
+    Loftet er personens og måles over årets samlede indbetaling til den slags
+    ordning — rækken hedder derfor varianten og ejeren, ikke den enkelte
+    beholdning, jf. ADR-0018. Blokken udebliver, når året ingen indbetaling
+    havde til en loftbelagt ordning. */
+function CapsBlock({
+  plan,
+  year,
+  display,
+}: {
+  plan: Plan
+  year: YearResult
+  display: (amount: number) => number
+}) {
+  const lines = plan.household.persons.flatMap((person) => {
+    const personYear = year.persons.find((p) => p.person === person.id)
+    return (personYear?.caps ?? []).map((cap) => ({ person: person.name, cap }))
+  })
+  if (lines.length === 0) return null
+
+  return (
+    <>
+      <h3>Lofterne</h3>
+      <table className="lofttabel">
+        <thead>
+          <tr>
+            <th>Ordning</th>
+            <th>Indbetalt</th>
+            <th>Loft</th>
+            <th>Med fradragsret</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map(({ person, cap }) => (
+            <tr key={`${person}-${cap.variant}`}>
+              <td>
+                {danish(variants, cap.variant)} <span className="enhed">({person})</span>
+              </td>
+              <td>{kroner(display(cap.paid))}</td>
+              <td>{kroner(display(cap.cap))}</td>
+              <td>{kroner(display(cap.withDeductibility))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {/* Ingen farve her: rød er bufferens, og markeringen af året står i
+          årstabellen. Her står tallene, der forklarer den. */}
+      <p className="hint">
+        Loftet måler årets samlede indbetaling til den slags ordning efter AM-bidrag —
+        to ratepensioner deler ét loft. Det, der ligger over, bliver liggende i
+        ordningen: ratepensionens overskydende mister sin fradragsret, og
+        aldersopsparingens er afgiftspligtigt.
+      </p>
+    </>
   )
 }
 

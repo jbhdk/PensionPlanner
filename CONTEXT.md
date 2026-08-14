@@ -248,6 +248,14 @@ _Avoid_: Bidragsår, indbetalingsresultat, indskud
 Én persons skatteopgørelse for ét simuleringsår, sammen med årets aktie- og kapitalindkomst og personens marginalskat. Aktieindkomstens skat står ikke her: den er en husstandsberegning.
 _Avoid_: Personresultat, skatteår, opgørelse
 
+**Loftår** · `CapYear`:
+Én persons indbetaling til én slags loftbelagt ordning i ét simuleringsår, målt mod det loft der gjaldt: hvad der landede i alt, loftet, og den del der beholdt sin fradragsret. Tre tal på samme linje, så den kan efterregnes af sig selv. Måles pr. person og pr. slags og aldrig pr. beholdning eller pr. indbetaling — to ratepensioner deler ét loft.
+_Avoid_: Loftlinje, loftresultat, indbetalingsloft
+
+**Loftbrud** · `CapBreach`:
+Hvorfor et loft er brudt i ét simuleringsår: `LostDeductibility`, når det overskydende mistede sin fradragsret, eller `Chargeable`, når det i stedet er afgiftspligtigt. Et resultat på linje med `BufferState` og ikke en valideringsfejl — det samme bidrag kan være lovligt i ét år og et brud i et senere, fordi bidraget og loftet vokser med hver sin antagelse. Sker begge dele samme år, står `LostDeductibility`, som er den, der flytter årets skat.
+_Avoid_: Overskridelse, loftfejl, brudt loft brugt om planen frem for om ét år
+
 **Aftrapningsgrundlag** · `TaperBase`:
 Den indkomst der reducerer pensionstillægget. Omfatter ATP, livrente- og ratepensionsudbetalinger, positiv kapitalindkomst og aktieindkomst — men hverken arbejdsindkomst, udbetalinger fra aldersopsparing eller afkast på en aktiesparekonto. Kapitalindkomsten tæller kun når den er positiv: en negativ nettokapitalindkomst lemper ikke grundlaget. Ægtefællens indkomst indgår med 54 % bortseelse, og ægtefællens arbejdsindkomst indgår slet ikke.
 _Avoid_: Modregningsgrundlag, indtægtsgrundlag

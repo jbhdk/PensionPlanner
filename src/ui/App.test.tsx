@@ -1301,6 +1301,108 @@ describe('fladen', () => {
     expect(uholdbarRow.className).toContain('uholdbar')
   })
 
+  it('markerer et brudt loft i årstabellen, uden at låne bufferens mærkat', async () => {
+    // De to markeringer skal kunne skelnes: rød er forbeholdt den negative
+    // buffer, og et brudt loft er ikke en fejltilstand — det er en
+    // oplysning om, at en del af indbetalingen ikke virkede.
+    //
+    // Fladen markerer fra det ene felt på årsresultatet og sammenligner
+    // ikke selv indbetalt med loft, jf. ADR-0012.
+    const base = aPlanWithPension()
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...base,
+          entries: [aSalary({ amountInRealKroner: 700_000 })],
+          contributions: [
+            aContribution({
+              source: 'salary',
+              to: 'ratepension',
+              amountInRealKroner: 105_000,
+            }),
+          ],
+        }}
+      />,
+    )
+    await showYearTable(user)
+
+    const row = within(screen.getByRole('table')).getAllByRole('row')[1]!
+
+    expect(within(row).getByText('Fradrag tabt')).toBeTruthy()
+    expect(row.className).toContain('fradragtabt')
+    expect(row.className).not.toContain('ufuldstaendig')
+    expect(row.className).not.toContain('uholdbar')
+  })
+
+  it('viser loftlinjen med sine tre tal i forklar-året', async () => {
+    // Tre tal på samme linje — indbetalt, loft, fradragsberettiget — så den
+    // kan efterregnes uden at finde tal andre steder på siden. De 96.600 kr.
+    // landede, loftet var 68.700, og resten mistede sin fradragsret.
+    const base = aPlanWithPension()
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...base,
+          startYear: 2026,
+          entries: [aSalary({ amountInRealKroner: 700_000 })],
+          contributions: [
+            aContribution({
+              source: 'salary',
+              to: 'ratepension',
+              amountInRealKroner: 105_000,
+            }),
+          ],
+        }}
+      />,
+    )
+    await showYearTable(user)
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!)
+
+    const lofterne = screen
+      .getByRole('heading', { name: 'Lofterne', level: 3 })
+      .closest('.blok')!
+      .querySelector('table.lofttabel') as HTMLElement
+    const cells = within(lofterne)
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) =>
+        within(row)
+          .getAllByRole('cell')
+          .map((cell) => cell.textContent),
+      )
+
+    expect(cells).toEqual([['Ratepension (Jesper)', '96.600', '68.700', '68.700']])
+  })
+
+  it('holder loftlinjen ude af inspektørskuffen', async () => {
+    // Skuffen viser planen, aldrig et årsafhængigt resultat. Loftet er ikke
+    // en egenskab ved indbetalingen — det er en egenskab ved året.
+    const base = aPlanWithPension()
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...base,
+          entries: [aSalary({ amountInRealKroner: 700_000 })],
+          contributions: [
+            aContribution({
+              source: 'salary',
+              to: 'ratepension',
+              amountInRealKroner: 105_000,
+            }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(navigatorButton(/Løn.*Ratepension/))
+
+    expect(screen.queryByText('Loft')).toBeNull()
+    expect(screen.queryByText('Med fradragsret')).toBeNull()
+  })
+
   it('tilføjer en beholdning via beholdningsgruppen', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlan()} />)
@@ -1601,7 +1703,7 @@ describe('fladen', () => {
             aContribution({
               source: 'salary',
               to: 'ratepension',
-              amountInRealKroner: 105_000,
+              amountInRealKroner: 70_000,
             }),
           ],
         }}
@@ -1616,12 +1718,14 @@ describe('fladen', () => {
     const post = (label: string) =>
       within(blok).getByText(label).closest('.stribepost')!.querySelector('.v')!.textContent
 
-    // 700.000 − 56.000 − 96.600 = 547.400. Det er de 96.600, der landede, og
-    // ikke de 105.000, der forlod lønnen: AM-bidraget måles af bruttolønnen.
+    // 700.000 − 56.000 − 64.400 = 579.600. Det er de 64.400, der landede, og
+    // ikke de 70.000, der forlod lønnen: AM-bidraget måles af bruttolønnen.
+    // Bidraget er holdt under ratepensionens loft, så linjen her viser
+    // fradragsretten alene — loftlinjen har sin egen test.
     expect(post('Løn og skattepligtige poster')).toBe('700.000')
     expect(post('AM-bidrag, 8,00 %')).toBe('-56.000')
-    expect(post('Indbetaling med fradragsret')).toBe('-96.600')
-    expect(post('Personlig indkomst')).toBe('547.400')
+    expect(post('Indbetaling med fradragsret')).toBe('-64.400')
+    expect(post('Personlig indkomst')).toBe('579.600')
   })
 
   it('udelader linjen om fradragsret i et år uden en indbetaling, der har den', async () => {

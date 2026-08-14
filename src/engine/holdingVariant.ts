@@ -1,5 +1,18 @@
-import type { Holding, HoldingVariant } from './plan'
-import type { TaxRates } from './rates/rateYear'
+import type { Holding, HoldingVariant, Nominal } from './plan'
+import type { RateYear, TaxRates } from './rates/rateYear'
+
+/** De varianter, der har et `Cap`. Ikke et begreb ved siden af
+    `HoldingVariant`, men den delmængde af den, der bærer et loft — og den
+    slags, loftet måles over: årets samlede indbetaling til personens
+    ordninger af varianten, jf. `CapYear`.
+
+    Listen og tabellen kan ikke komme ud af trit: tabellens type kræver en
+    loftregel af præcis disse rækker og `undefined` af alle andre. Gives
+    livrenten et loft uden at stå her, er det en oversætterfejl og ikke en
+    forkert skat, der først ses i et årsresultat. */
+const cappedVariants = ['InstalmentPension', 'OldAgeSavings'] as const
+
+export type CappedVariant = (typeof cappedVariants)[number]
 
 /** Varianttabellen: det opslag, beholdningssiden af motoren hænger på, tegnet
     i docs/diagrams/01-domaenemodel.md. Én række pr. variant og én kolonne pr.
@@ -7,13 +20,43 @@ import type { TaxRates } from './rates/rateYear'
     finde og rette — jf. ADR-0010, hvor varianten er aksen og beskatningen
     ikke et felt ved siden af den.
 
-    Denne skive bruger tre kolonner. Loftet får sin, når det skives ind. */
-const table: Record<HoldingVariant, Row> = {
-  InstalmentPension: { freeAssets: false, holdingTaxRate: 'palTaxRate', deductibility: true },
-  LifeAnnuity: { freeAssets: false, holdingTaxRate: 'palTaxRate', deductibility: true },
-  OldAgeSavings: { freeAssets: false, holdingTaxRate: 'palTaxRate', deductibility: false },
-  ShareDepot: { freeAssets: true, holdingTaxRate: undefined, deductibility: false },
-  SavingsAccount: { freeAssets: true, holdingTaxRate: undefined, deductibility: false },
+    Denne skive bruger fire kolonner. */
+const table: {
+  [V in HoldingVariant]: Row & { cap: V extends CappedVariant ? CapRule : undefined }
+} = {
+  InstalmentPension: {
+    freeAssets: false,
+    holdingTaxRate: 'palTaxRate',
+    deductibility: true,
+    cap: (rates) => rates.thresholds.instalmentPensionCap,
+  },
+  LifeAnnuity: {
+    freeAssets: false,
+    holdingTaxRate: 'palTaxRate',
+    deductibility: true,
+    cap: undefined,
+  },
+  OldAgeSavings: {
+    freeAssets: false,
+    holdingTaxRate: 'palTaxRate',
+    deductibility: false,
+    cap: (rates, yearsToStatePensionAge) =>
+      yearsToStatePensionAge <= oldAgeSavingsHighCapFrom
+        ? rates.thresholds.oldAgeSavingsCapNearStatePensionAge
+        : rates.thresholds.oldAgeSavingsCap,
+  },
+  ShareDepot: {
+    freeAssets: true,
+    holdingTaxRate: undefined,
+    deductibility: false,
+    cap: undefined,
+  },
+  SavingsAccount: {
+    freeAssets: true,
+    holdingTaxRate: undefined,
+    deductibility: false,
+    cap: undefined,
+  },
 }
 
 type Row = {
@@ -29,6 +72,21 @@ type Row = {
       slås op for dem. Diagram 01 skriver samme celle som "—". */
   deductibility: boolean
 }
+
+/** Årets loftbeløb for en variant, slået op i satsåret. Rækken regner
+    beløbet frem for at navngive et satsfelt, som `holdingTaxRate` gør: et
+    loft kan have en trappe, og den hører i den ene række, der har den, frem
+    for i en kolonne, de øvrige rækker skal stå tomme i. */
+type CapRule = (rates: RateYear, yearsToStatePensionAge: number) => Nominal
+
+/** Aldersopsparingens høje loft gælder fra og med det syvende indkomstår før
+    det indkomstår, hvor personen når folkepensionsalderen, jf. PBL § 16,
+    stk. 1, 2. pkt. Grænsen står i loven og ikke i § 20-tabellen og hører
+    derfor ikke i satsåret. Den har ingen øvre ende — loftet bliver ved med
+    at være det høje efter folkepensionsalderen — og sammenligningen er
+    derfor `<=` og ikke et interval, ganske som det ekstra pensionsfradrags
+    egen 15-årsgrænse i `assessTax`. */
+const oldAgeSavingsHighCapFrom = 7
 
 /** Om beholdningen er frie midler. `FreeAssets` er en kategori og ikke en
     variant, jf. ADR-0010: den dækker `ShareDepot` og `SavingsAccount` under
@@ -57,4 +115,37 @@ export function holdingTaxRate(holding: Holding): keyof TaxRates | undefined {
     skattesømmet, jf. ADR-0014. */
 export function hasDeductibility(holding: Holding): boolean {
   return table[holding.variant].deductibility
+}
+
+/** Loftet over det, der må lande i beholdningen i ét år, eller `undefined`
+    når varianten ingen har. Kun `PerYear`-formen findes: den måler årets
+    samlede indbetaling, og det overskydende afvises ikke — det mister sin
+    fradragsret eller bliver afgiftspligtigt, jf. `Cap` i CONTEXT.md.
+
+    Beløbet måler på det, der **landede** efter AM-bidrag, samme form som
+    fradragsretten selv, jf. PBL § 16, stk. 3, og docs/satser/2026.md.
+
+    Livrenten har intet loft: PBL § 16, stk. 2, opremser ratepensionen og de
+    ophørende livrenter, og den livsvarige står ikke i den. Det er netop den
+    forskel, ADR-0015 krævede belagt, før livrenten blev en egen variant.
+
+    `yearsToStatePensionAge` er antallet af indkomstår frem til det år,
+    personen når folkepensionsalderen — nul i selve det år, negativt bagefter
+    — og det er den differens, aldersopsparingens trappe måles på. Den kommer
+    fra `statePensionYear`, motorens eneste vej til det årstal, så trappen og
+    det ekstra pensionsfradrags 15-årsgrænse ikke kan skille sig i det halve
+    år, en brøkalder giver. */
+export function cap(
+  holding: Holding,
+  rates: RateYear,
+  yearsToStatePensionAge: number,
+): Nominal | undefined {
+  return table[holding.variant].cap?.(rates, yearsToStatePensionAge)
+}
+
+/** Beholdningens variant, når den har et loft — ellers `undefined`. Det
+    opslag, der gør en `HoldingVariant` til en `CappedVariant` uden et cast:
+    svaret kommer fra listen selv, og tabellens type holder de to i takt. */
+export function cappedVariant(holding: Holding): CappedVariant | undefined {
+  return cappedVariants.find((variant) => variant === holding.variant)
 }

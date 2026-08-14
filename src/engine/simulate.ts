@@ -25,7 +25,7 @@ import type {
   Transfer,
 } from './plan'
 import { yearAtAge } from './age'
-import { hasDeductibility } from './holdingVariant'
+import { cap, cappedVariant, hasDeductibility } from './holdingVariant'
 import { rateYearFor } from './rates/rates'
 import type { RateYear } from './rates/rateYear'
 import { statePensionYear } from './statePensionAge'
@@ -33,7 +33,14 @@ import { assessHousehold, totalHouseholdTax } from './tax/assessHousehold'
 import type { TaxAssessmentInput } from './tax/assessTax'
 import { validatePlan } from './validatePlan'
 import { totalYearTax } from './yearTax'
-import type { BufferState, HoldingYear, RateBasis, YearResult } from './yearResult'
+import type {
+  BufferState,
+  CapBreach,
+  CapYear,
+  HoldingYear,
+  RateBasis,
+  YearResult,
+} from './yearResult'
 
 /** En post sammen med dens beløb i årets løbende priser, for de poster der
     rent faktisk falder i det pågældende år. */
@@ -121,7 +128,7 @@ function simulateYear(
 
   const shareIncomeByPerson = incomeByVariant(plan, flowed, 'ShareDepot')
   const capitalIncomeByPerson = incomeByVariant(plan, flowed, 'SavingsAccount')
-  const withDeductibilityByPerson = contributionsWithDeductibility(plan, contributions)
+  const contributionsByPersonId = contributionsByPerson(plan, contributions, rates, year)
 
   // Hele husstandens skat bag ét søm, jf. ADR-0014. Motoren lægger intet
   // sammen selv: aktieindkomstens skat er husstandens og hører ikke til
@@ -131,7 +138,7 @@ function simulateYear(
       persons: plan.household.persons.map((person) => ({
         tax: taxInput(entries, person, rates, year, {
           capitalIncome: capitalIncomeByPerson.get(person.id)!,
-          withDeductibility: withDeductibilityByPerson.get(person.id)!,
+          withDeductibility: contributionsByPersonId.get(person.id)!.withDeductibility,
         }),
         shareIncome: shareIncomeByPerson.get(person.id)!,
       })),
@@ -199,9 +206,11 @@ function simulateYear(
       capitalIncome: capitalIncomeByPerson.get(person.id)!,
       tax: household.persons[index]!.tax,
       marginalTaxRate: household.persons[index]!.marginalTaxRate,
+      caps: contributionsByPersonId.get(person.id)!.caps,
     })),
     shareIncomeTax: household.shareIncomeTax,
     bufferState: bufferState(plan, holdings),
+    capBreach: capBreach([...contributionsByPersonId.values()]),
   }
 }
 
@@ -258,36 +267,118 @@ export function returnWeight(timing: Timing): number {
   return timing === 'Even' ? 0.5 : (12 - timing + 1) / 12
 }
 
-/** Summen af det, der landede i hver persons ordninger med `Deductibility`.
+/** Om et loft er brudt i året, og hvad bruddet kostede — husstandens
+    konklusion i ét felt, jf. ADR-0018. Et brud er beløbet **over** loftet:
+    et bidrag, der rammer loftet på kronen, har hverken mistet fradragsret
+    eller udløst afgift.
+
+    De to slags brud er én form og to regler. Ratepensionen har en
+    fradragsret, som det overskydende mister, og det koster rigtige penge i
+    årets skat; aldersopsparingen har ingen at miste og betaler i stedet en
+    afgift, som ikke er modelleret. Brydes begge samme år, står den, der
+    flyttede skatten. */
+function capBreach(persons: PersonContributions[]): CapBreach | undefined {
+  const breached = persons
+    .flatMap(({ caps }) => caps)
+    .filter((line) => line.paid > line.cap)
+  if (breached.length === 0) return undefined
+
+  // En loftbelagt ordning med fradragsret har fået præcis loftet med over —
+  // resten er tabt. En uden har nul, og dens overskydende er afgiftspligtigt
+  // i stedet.
+  return breached.some((line) => line.withDeductibility > 0)
+    ? 'LostDeductibility'
+    : 'Chargeable'
+}
+
+/** Årets indbetalinger for én person, opgjort mod lofterne: loftlinjerne,
+    der står i årsresultatet, og det ene tal, der krydser skattesømmet. */
+type PersonContributions = { caps: CapYear[]; withDeductibility: Nominal }
+
+/** Summen af det, der landede i hver persons ordninger med `Deductibility`,
+    begrænset af lofterne — og de loftlinjer, begrænsningen kom af.
+
+    De to svar kommer fra samme opgørelse med vilje. Regnede forklar-årets
+    linje og årets skat hver sit sted, kunne de komme til at sige hver sit,
+    og brugeren ville se en linje, der ikke kan efterregne den skat, den står
+    ved siden af.
+
     Det er denne gruppering — og aldrig en `HoldingVariant` — der krydser
     skattesømmet: skattereglen hedder ikke "ratepension giver fradragsret",
     men "indbetalinger til ordninger, hvis udbetaling er personlig indkomst,
     giver fradragsret", og hvilke varianter det så er, er varianttabellens
     viden og ikke skattens, jf. ADR-0016 og ADR-0014. Det er det samme greb
-    som `capitalIncome`, der også krydser som et tal.
+    som `capitalIncome`, der også krydser som et tal. Loftet anvendes her,
+    bag sømmet, på præcis den gruppering.
 
     Det er beløbet, der **landede**, og ikke det, der forlod kilden: både
-    fradragsretten og det ekstra pensionsfradrags grundlag måler efter
-    AM-bidrag, jf. docs/satser/2026.md. */
-function contributionsWithDeductibility(
+    fradragsretten, det ekstra pensionsfradrags grundlag og lofterne måler
+    efter AM-bidrag, jf. PBL § 16, stk. 3, LL § 9 L, stk. 1, og
+    docs/satser/2026.md.
+
+    Loftet begrænser kun tallet. Hele indbetalingen er allerede landet i
+    beholdningen, og det overskydende bliver liggende dér — motoren flytter
+    ikke pengene tilbage på bufferen, jf. ADR-0018 og ADR-0002. */
+function contributionsByPerson(
   plan: Plan,
   contributions: ActiveContribution[],
-): Map<PersonId, Nominal> {
+  rates: RateYear,
+  year: SimulationYear,
+): Map<PersonId, PersonContributions> {
   return new Map(
     plan.household.persons.map((person) => [
       person.id,
-      person.holdings
-        .filter(hasDeductibility)
-        .reduce(
-          (sum, holding) =>
-            sum +
-            contributions
-              .filter(({ contribution }) => contribution.to === holding.id)
-              .reduce((into, { intoHolding }) => into + intoHolding, 0),
-          0,
-        ),
+      // Årstællingen går gennem `statePensionYear`, motorens eneste vej til
+      // det årstal: aldersopsparingens vindue og det ekstra pensionsfradrags
+      // 15-årsgrænse skal ramme det samme år, og alderen er en brøk for de
+      // fleste årgange.
+      againstCaps(person, contributions, rates, statePensionYear(person) - year),
     ]),
   )
+}
+
+/** Årets indbetalinger til én person, grupperet efter beholdningens variant
+    — den slags ordning, loftet måler over. Loftet er personens og gælder
+    årets samlede indbetaling til den slags: to ratepensioner med 40.000 kr.
+    hver er ét brud og ikke to lovlige indbetalinger, jf. PBL § 16.
+
+    Grupper uden indbetaling udelades, og en variant uden loft får ingen
+    linje. En linje på nul ville sige, at året indbetalte til en ordning, det
+    ikke rørte, og et loft, der ikke blev målt mod noget, er ikke et svar. */
+function againstCaps(
+  person: Person,
+  contributions: ActiveContribution[],
+  rates: RateYear,
+  yearsToStatePensionAge: number,
+): PersonContributions {
+  const groups = new Map<HoldingVariant, { holding: Holding; paid: Nominal }>()
+  for (const holding of person.holdings) {
+    const paid = contributions
+      .filter(({ contribution }) => contribution.to === holding.id)
+      .reduce((into, { intoHolding }) => into + intoHolding, 0)
+    if (paid === 0) continue
+    const group = groups.get(holding.variant)
+    groups.set(holding.variant, { holding, paid: (group?.paid ?? 0) + paid })
+  }
+
+  const caps: CapYear[] = []
+  let withDeductibility = 0
+  for (const { holding, paid } of groups.values()) {
+    const limit = cap(holding, rates, yearsToStatePensionAge)
+    const withinCap = limit === undefined ? paid : Math.min(paid, limit)
+    // Aldersopsparingen har ingen fradragsret at miste. Dens loft er stadig
+    // et loft — det overskydende er afgiftspligtigt — men det ændrer ikke et
+    // tal her, jf. `Cap` i CONTEXT.md.
+    const deductible = hasDeductibility(holding) ? withinCap : 0
+    withDeductibility += deductible
+
+    const variant = cappedVariant(holding)
+    if (variant !== undefined && limit !== undefined) {
+      caps.push({ variant, paid, cap: limit, withDeductibility: deductible })
+    }
+  }
+
+  return { caps, withDeductibility }
 }
 
 /** Det, en persons skat skal regnes af — selve opgørelsen sker bag

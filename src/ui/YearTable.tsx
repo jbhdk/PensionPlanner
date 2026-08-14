@@ -1,6 +1,7 @@
 import type { Plan } from '../engine/plan'
 import type { YearResult } from '../engine/yearResult'
 import { bufferStateClasses, bufferStateLabels } from './bufferState'
+import { capBreachClasses, capBreachLabels } from './capBreach'
 import { kroner } from './format'
 import type { AmountUnit } from './real'
 import { toDisplayKroner } from './real'
@@ -55,11 +56,22 @@ export function YearTable({
               (holding) => holding.holding === plan.buffer,
             )!.closingBalance
             const state = year.bufferState
+            const breach = year.capBreach
+            // To markeringer, der skal kunne skelnes, og som kan falde i
+            // samme år. Rækken bærer begge klasser, og hver af de to ord
+            // står i den kolonne, det handler om — bufferens ved saldoen,
+            // loftets ved indbetalingerne.
+            const rowClass = [
+              state ? bufferStateClasses[state] : undefined,
+              breach ? capBreachClasses[breach] : undefined,
+            ]
+              .filter(Boolean)
+              .join(' ')
 
             return (
               <tr
                 key={year.year}
-                className={state ? bufferStateClasses[state] : undefined}
+                className={rowClass === '' ? undefined : rowClass}
                 onClick={() => onSelectYear(year.year)}
               >
                 <td>
@@ -77,7 +89,7 @@ export function YearTable({
                   <td key={person.id}>{year.year - person.birthYear}</td>
                 ))}
                 <td>{kroner(display(year.income))}</td>
-                <td>
+                <td className="indbetaling">
                   {kroner(
                     display(
                       year.contributions.reduce(
@@ -86,6 +98,11 @@ export function YearTable({
                       ),
                     ),
                   )}
+                  {/* Markeringen læses af motorens ene felt. Fladen
+                      sammenligner ikke selv indbetalt med loft — hvilket
+                      loft der bandt, og med hvor meget, står i
+                      forklar-året, jf. ADR-0012. */}
+                  {breach && <span className="tilstand">{capBreachLabels[breach]}</span>}
                 </td>
                 <td>{kroner(display(year.return))}</td>
                 <td>{kroner(display(-year.tax))}</td>

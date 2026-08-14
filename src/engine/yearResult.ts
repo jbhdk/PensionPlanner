@@ -6,6 +6,7 @@ import type {
   PersonId,
   SimulationYear,
 } from './plan'
+import type { CappedVariant } from './holdingVariant'
 import type { ShareIncomeLayer } from './tax/assessHousehold'
 import type { LayerAmount, TaxAssessment } from './tax/assessTax'
 
@@ -14,6 +15,22 @@ import type { LayerAmount, TaxAssessment } from './tax/assessTax'
     overførsel, eller `Unsustainable`, når husstandens samlede frie midler
     også er negative. Fraværende, når bufferen ikke er negativ. */
 export type BufferState = 'Incomplete' | 'Unsustainable'
+
+/** Hvorfor et loft er brudt i ét simuleringsår, jf. ADR-0018:
+    `LostDeductibility`, når det overskydende mistede sin fradragsret, eller
+    `Chargeable`, når det i stedet er afgiftspligtigt. Fraværende, når intet
+    loft er brudt.
+
+    Et resultat på linje med `BufferState` og ikke en valideringsfejl: om et
+    beløb overskrider loftet afhænger af årets fremskrevne beløb målt mod
+    årets satsår, og de to vokser med hver sin antagelse — det samme bidrag
+    kan være lovligt i 2030 og et brud i 2040. `validatePlan` kender ikke et
+    år og kan derfor ikke svare på det.
+
+    Brydes begge slags loft samme år, står `LostDeductibility`: det er den,
+    der flytter årets skat, hvor afgiften ikke er modelleret. Samme greb som
+    `BufferState`, der også kollapser til én værdi pr. år. */
+export type CapBreach = 'LostDeductibility' | 'Chargeable'
 
 /** Om et `YearResult` er regnet på et kendt satsår eller på et fremskrevet,
     jf. ADR-0005. `knownYear` er satsåret selv, når `projected` er falsk, og
@@ -44,6 +61,30 @@ export type ContributionYear = {
   contribution: ContributionId
   fromSource: Nominal
   intoHolding: Nominal
+}
+
+/** Én persons indbetaling til én slags loftbelagt ordning i ét
+    simuleringsår, målt mod det loft der gjaldt. Tre tal på samme linje — det
+    der landede, loftet, og den del der beholdt sin fradragsret — så linjen
+    kan efterregnes af sig selv, som et `LayerAmount` kan.
+
+    Loftet er personens og måles over årets samlede indbetaling til
+    varianten: to ratepensioner deler ét loft, jf. PBL § 16 og ADR-0018. En
+    variant uden loft har ingen linje, og en variant, året intet indbetalte
+    til, har heller ingen.
+
+    Alle tre tal måler **efter** AM-bidrag, altså det der landede i
+    beholdningen, jf. PBL § 16, stk. 3, og docs/satser/2026.md. */
+export type CapYear = {
+  variant: CappedVariant
+  paid: Nominal
+  cap: Nominal
+  /** Den del af `paid`, der beholdt sin `Deductibility` — `min(paid, cap)`
+      for en variant, der har fradragsret, og nul for en, der ingen har.
+      Aldersopsparingen har ingen at miste: dens overskydende er
+      afgiftspligtigt i stedet, og afgiften er ikke modelleret, jf.
+      docs/udskudt.md. */
+  withDeductibility: Nominal
 }
 
 export type HoldingYear = {
@@ -84,6 +125,11 @@ export type PersonYear = {
       år — se `marginalTaxRate`. Aktie- og kapitalindkomst har flade satser
       og har ikke en marginal at vise. */
   marginalTaxRate: number
+  /** Årets loftlinjer, én pr. slags loftbelagt ordning personen indbetalte
+      til. Tom, når året ingen sådan indbetaling havde. Konklusionen — om et
+      loft rent faktisk er brudt — står ét sted, på `YearResult`, så fladen
+      kan markere rækken uden selv at sammenligne to tal, jf. ADR-0012. */
+  caps: CapYear[]
 }
 
 /** Motorens fulde output for ét simuleringsår — alle mellemregninger, ikke
@@ -114,4 +160,9 @@ export type YearResult = {
   contributions: ContributionYear[]
   /** Fraværende, når bufferen ikke er negativ. */
   bufferState?: BufferState
+  /** Fraværende, når intet loft er brudt. Konklusionen står her og ikke pr.
+      person: fladen markerer årets række fra det ene felt og laver ingen
+      aritmetik, jf. ADR-0012. Hvilket loft, hvor meget og hos hvem står i
+      `PersonYear.caps`. */
+  capBreach?: CapBreach
 }

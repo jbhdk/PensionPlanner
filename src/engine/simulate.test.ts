@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Contribution, HoldingVariant, Plan } from './plan'
 import { simulate } from './simulate'
+import { validatePlan } from './validatePlan'
 import {
   aContribution,
   aHoldingContribution,
@@ -1420,6 +1421,10 @@ describe('indbetalinger', () => {
     // Forskellen skal kunne efterregnes: de 96.600 kr., der landede, er ude
     // af den personlige indkomst i den ene plan og med i den anden, og
     // derudover giver de 12 % i ekstra pensionsfradrag af grundlaget i loft.
+    //
+    // Ordningen med fradragsret er livrenten og ikke ratepensionen, fordi
+    // den er uden årligt loft: så måler forskellen fradragsretten alene, og
+    // ikke fradragsretten og loftet blandet sammen.
     const options = {
       balance: 1_000_000,
       entries: [aSalary({ amountInRealKroner: 700_000 })],
@@ -1428,9 +1433,9 @@ describe('indbetalinger', () => {
       aContribution({ source: 'salary', to, amountInRealKroner: 105_000 }),
     ]
     const pension = simulateChecked(
-      aPlanWithScheme(instalmentPension, {
+      aPlanWithScheme(lifeAnnuity, {
         ...options,
-        contributions: contribution('ratepension'),
+        contributions: contribution('livrente'),
       }),
     )[0]!
     const savings = simulateChecked(
@@ -1487,11 +1492,14 @@ describe('indbetalinger', () => {
     // indbetalinger havde at regne det af. Nu har den: 12 % af de 96.600 kr.,
     // der landede — den lave sats, fordi der er 17 indkomstår til
     // folkepensionsalderen, jf. LL § 9 L, stk. 3.
-    const plan = aPlanWithPension({
+    //
+    // Livrenten og ikke ratepensionen, så det er fradragets eget
+    // grundlagsloft på 87.800 kr., der binder, og ikke ordningens.
+    const plan = aPlanWithScheme(lifeAnnuity, {
       balance: 1_000_000,
       entries: [aSalary({ amountInRealKroner: 700_000 })],
       contributions: [
-        aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 105_000 }),
+        aContribution({ source: 'salary', to: 'livrente', amountInRealKroner: 105_000 }),
       ],
     })
 
@@ -1502,21 +1510,24 @@ describe('indbetalinger', () => {
   })
 
   it('holder en indbetaling til ratepensionen uden for den personlige indkomst', () => {
-    // Lønmodtageren fra ADR-0007: 700.000 kr. brutto, hvoraf 105.000 kr. går
-    // videre som arbejdsgiverbidrag. Der lander 96.600 kr. på ordningen, og
-    // det er dét beløb, fradragsretten holder uden for indkomsten:
-    // 700.000 − 56.000 − 96.600 = 547.400.
+    // 700.000 kr. brutto, hvoraf 70.000 kr. går videre som arbejdsgiverbidrag.
+    // Der lander 64.400 kr. på ordningen, og det er dét beløb, fradragsretten
+    // holder uden for indkomsten: 700.000 − 56.000 − 64.400 = 579.600.
+    //
+    // Bidraget er holdt under ratepensionens loft med vilje. Fradragsretten
+    // og loftet måler på samme beløb, og en test, der rammer begge, kan ikke
+    // sige hvilken af de to der flyttede tallet.
     const plan = aPlanWithPension({
       balance: 1_000_000,
       entries: [aSalary({ amountInRealKroner: 700_000 })],
       contributions: [
-        aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 105_000 }),
+        aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 70_000 }),
       ],
     })
 
     const { tax } = simulateChecked(plan)[0]!.persons[0]!
 
-    expect(tax.personalIncome).toBeCloseTo(547_400, 6)
+    expect(tax.personalIncome).toBeCloseTo(579_600, 6)
     // AM-bidraget måler stadig på hele bruttolønnen.
     expect(tax.layers.labourMarketContribution.base).toBeCloseTo(700_000, 6)
   })
@@ -1596,6 +1607,398 @@ describe('indbetalinger', () => {
       contribution: 'contribution',
       fromSource: 48_000,
       intoHolding: 48_000,
+    })
+  })
+
+  describe('lofterne', () => {
+    it('giver kun den del af årets indbetaling, der er under loftet, fradragsret', () => {
+      // Lønmodtageren fra ADR-0007: 105.000 kr. i arbejdsgiverbidrag, hvoraf
+      // 96.600 lander på ordningen efter AM-bidrag. Ratepensionens loft er
+      // 68.700 kr. i 2026 og måler netop det beløb, der landede — de
+      // overskydende 27.900 kr. mister deres fradragsret, jf.
+      // docs/satser/2026.md. Den personlige indkomst bliver dermed
+      // 700.000 − 56.000 − 68.700 = 575.300 og ikke 547.400.
+      const plan = aPlanWithPension({
+        balance: 1_000_000,
+        entries: [aSalary({ amountInRealKroner: 700_000 })],
+        contributions: [
+          aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 105_000 }),
+        ],
+      })
+
+      const { tax } = simulateChecked(plan)[0]!.persons[0]!
+
+      expect(tax.contributionWithDeductibility).toBeCloseTo(68_700, 6)
+      expect(tax.personalIncome).toBeCloseTo(575_300, 6)
+    })
+
+    it('lader hele indbetalingen lande i ordningen, også den del der ligger over loftet', () => {
+      // Motoren flytter ikke pengene. De 27.900 kr. over loftet bliver
+      // liggende i ordningen; kun skattevirkningen er begrænset. At skubbe
+      // dem tilbage på bufferen ville være den stiltiende rettelse af
+      // brugerens plan, ADR-0002 forbyder.
+      //
+      // Målt mod livrenten, som er uden loft: samme beløb ind, samme saldo
+      // ud. Det er loftets virkning på pengene — ingen — sagt som et tal.
+      const options = {
+        balance: 1_000_000,
+        entries: [aSalary({ amountInRealKroner: 700_000 })],
+      }
+      const capped = simulateChecked(
+        aPlanWithScheme(instalmentPension, {
+          ...options,
+          contributions: [
+            aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 105_000 }),
+          ],
+        }),
+      )[0]!
+      const uncapped = simulateChecked(
+        aPlanWithScheme(lifeAnnuity, {
+          ...options,
+          contributions: [
+            aContribution({ source: 'salary', to: 'livrente', amountInRealKroner: 105_000 }),
+          ],
+        }),
+      )[0]!
+
+      expect(holding(capped, 'ratepension').closingBalance).toBeCloseTo(96_600, 6)
+      expect(holding(capped, 'ratepension').closingBalance).toBeCloseTo(
+        holding(uncapped, 'livrente').closingBalance,
+        6,
+      )
+      expect(capped.contributions[0]!.intoHolding).toBeCloseTo(96_600, 6)
+
+      // Bufferen er belastet det samme i de to planer: loftet flyttede ikke
+      // en krone, det flyttede skatten. Forskellen på de to buffere er
+      // præcis forskellen på årets skat og intet andet.
+      expect(
+        bufferBalance(capped) - bufferBalance(uncapped),
+      ).toBeCloseTo(uncapped.tax - capped.tax, 6)
+    })
+
+    it('måler ét loft på tværs af ordninger af samme slags', () => {
+      // To ratepensioner med 40.000 kr. hver er ét brud og ikke to lovlige
+      // indbetalinger: loftet er personens og gælder årets samlede
+      // indbetaling til den slags ordning, ikke den enkelte beholdning og
+      // ikke det enkelte bidrag.
+      //
+      // Bidragene er beholdningskildede, så der intet AM-bidrag er på vejen
+      // ind: de 40.000 kr. er både det, der forlod kilden, og det, der
+      // landede, og loftet måler netop det sidste.
+      const plan = aPlan({
+        balance: 1_000_000,
+        entries: [aSalary({ amountInRealKroner: 700_000 })],
+        holdings: [
+          {
+            ...instalmentPension,
+            balance: 0,
+            grossReturn: 0,
+            annualCostRate: 0,
+          },
+          {
+            id: 'ratepension-2',
+            name: 'Ratepension 2',
+            variant: 'InstalmentPension',
+            balance: 0,
+            grossReturn: 0,
+            annualCostRate: 0,
+          },
+        ],
+        contributions: [
+          aHoldingContribution({
+            source: 'free-assets',
+            to: 'ratepension',
+            amountInRealKroner: 40_000,
+          }),
+          {
+            ...aHoldingContribution({
+              source: 'free-assets',
+              to: 'ratepension-2',
+              amountInRealKroner: 40_000,
+            }),
+            id: 'contribution-2',
+          },
+        ],
+      })
+
+      const { tax } = simulateChecked(plan)[0]!.persons[0]!
+
+      expect(tax.contributionWithDeductibility).toBeCloseTo(68_700, 6)
+    })
+
+    it('bærer loftlinjen med indbetalt, loft og fradragsberettiget del', () => {
+      // Tre tal på samme linje, så den kan efterregnes af sig selv:
+      // 96.600 landede, loftet var 68.700, og det er den del, der beholdt
+      // sin fradragsret. Forskellen er de 27.900 kr., docs/satser/2026.md
+      // regner sig frem til.
+      const plan = aPlanWithPension({
+        balance: 1_000_000,
+        entries: [aSalary({ amountInRealKroner: 700_000 })],
+        contributions: [
+          aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 105_000 }),
+        ],
+      })
+
+      const { caps } = simulateChecked(plan)[0]!.persons[0]!
+
+      expect(caps).toHaveLength(1)
+      expect(caps[0]!.variant).toBe('InstalmentPension')
+      expect(caps[0]!.paid).toBeCloseTo(96_600, 6)
+      expect(caps[0]!.cap).toBeCloseTo(68_700, 6)
+      expect(caps[0]!.withDeductibility).toBeCloseTo(68_700, 6)
+    })
+
+    it('står uden loftlinje i et år uden indbetaling til en loftbelagt ordning', () => {
+      // En linje på nul ville sige, at året indbetalte til en ordning, det
+      // ikke rørte — og et loft, der ikke blev målt mod noget, er ikke et
+      // svar, brugeren skal læse.
+      const plan = aPlanWithScheme(lifeAnnuity, {
+        balance: 1_000_000,
+        entries: [aSalary({ amountInRealKroner: 700_000 })],
+        contributions: [
+          aContribution({ source: 'salary', to: 'livrente', amountInRealKroner: 105_000 }),
+        ],
+      })
+
+      const person = simulateChecked(plan)[0]!.persons[0]!
+
+      // Livrenten er uden loft og har derfor ingen linje — men hele
+      // indbetalingen beholdt sin fradragsret.
+      expect(person.caps).toEqual([])
+      expect(person.tax.contributionWithDeductibility).toBeCloseTo(96_600, 6)
+    })
+
+    it('måler aldersopsparingens loft uden at røre årets skat', () => {
+      // Aldersopsparingen har et loft og ingen fradragsret. Der er derfor
+      // intet at miste ved at bryde det, og afgiften efter PBL § 25 A er
+      // ikke modelleret, jf. docs/udskudt.md — men loftlinjen står der,
+      // fordi brugeren skal kunne se, at der blev indbetalt for meget.
+      //
+      // Jesper er født i 1973 og når folkepensionsalderen i 2043. I 2026 er
+      // der 17 indkomstår til, altså langt uden for syvårsvinduet, og loftet
+      // er det lave på 9.900 kr.
+      const options = {
+        balance: 1_000_000,
+        entries: [aSalary({ amountInRealKroner: 700_000 })],
+      }
+      const paying = simulateChecked(
+        aPlanWithScheme(oldAgeSavings, {
+          ...options,
+          contributions: [
+            aHoldingContribution({
+              source: 'free-assets',
+              to: 'aldersopsparing',
+              amountInRealKroner: 20_000,
+            }),
+          ],
+        }),
+      )[0]!
+      const idle = simulateChecked(aPlanWithScheme(oldAgeSavings, options))[0]!
+
+      expect(paying.persons[0]!.caps).toEqual([
+        {
+          variant: 'OldAgeSavings',
+          paid: 20_000,
+          cap: 9_900,
+          withDeductibility: 0,
+        },
+      ])
+      // Ingen afgift: de 10.100 kr. over loftet koster ingenting i modellen.
+      expect(paying.tax).toBeCloseTo(idle.tax, 6)
+    })
+
+    it('skifter aldersopsparingens loft fra lavt til højt syv år før folkepensionsalderen', () => {
+      // PBL § 16, stk. 1, 2. pkt.: det høje grundbeløb gælder "fra og med det
+      // syvende indkomstår før det indkomstår, hvor pensionsopspareren når
+      // folkepensionsalderen". Jesper er født i juni 1973, når
+      // folkepensionsalderen i 2043, og vinduet åbner derfor i 2036 — ikke i
+      // 2035.
+      const plan = aPlanWithScheme(oldAgeSavings, {
+        balance: 5_000_000,
+        contributions: [
+          aHoldingContribution({
+            source: 'free-assets',
+            to: 'aldersopsparing',
+            amountInRealKroner: 20_000,
+          }),
+        ],
+      })
+
+      const years = simulateChecked(plan)
+      const capIn = (year: number) =>
+        years.find((result) => result.year === year)!.persons[0]!.caps[0]!.cap
+
+      expect(capIn(2035)).toBeCloseTo(9_900, 6)
+      expect(capIn(2036)).toBeCloseTo(64_200, 6)
+      // Og vinduet lukker aldrig igen: satsen bliver ved med at være den høje
+      // efter folkepensionsalderen, jf. § 20-tabellens egen formulering.
+      expect(capIn(2043)).toBeCloseTo(64_200, 6)
+    })
+
+    it('flytter vinduet med fødselsmåneden, når folkepensionsalderen er en brøk', () => {
+      // Årgang 1983 har trinnet 72,5 år. En halv alder skubber året over
+      // årsskiftet for de fødselsmåneder, hvor den skal: født juli 1983 nås
+      // folkepensionsalderen i januar 2056, født maj 1983 i 2055. Vinduet
+      // åbner syv indkomstår før og flytter sig derfor med — 2049 mod 2048.
+      //
+      // Halvdelen af fødselsmånederne rammes, så optællingen skal regnes og
+      // ikke skønnes, jf. docs/satser/2026.md.
+      const capIn = (birthMonth: number, year: number) => {
+        const plan = aPlanWithScheme(oldAgeSavings, {
+          birthYear: 1983,
+          birthMonth,
+          balance: 5_000_000,
+          contributions: [
+            aHoldingContribution({
+              source: 'free-assets',
+              to: 'aldersopsparing',
+              amountInRealKroner: 20_000,
+            }),
+          ],
+        })
+        return simulateChecked(plan).find((result) => result.year === year)!.persons[0]!
+          .caps[0]!.cap
+      }
+
+      expect(capIn(5, 2048)).toBeCloseTo(64_200, 6)
+      expect(capIn(7, 2048)).toBeCloseTo(9_900, 6)
+      expect(capIn(7, 2049)).toBeCloseTo(64_200, 6)
+    })
+
+    it('markerer året, hvor ratepensionens loft er brudt, som et tabt fradrag', () => {
+      // Konklusionen står ét sted, ved siden af `bufferState` og med samme
+      // form: fladen markerer rækken fra det ene felt og sammenligner ikke
+      // selv indbetalt med loft, jf. ADR-0012.
+      const paying = (amountInRealKroner: number) =>
+        simulateChecked(
+          aPlanWithPension({
+            balance: 1_000_000,
+            entries: [aSalary({ amountInRealKroner: 700_000 })],
+            contributions: [
+              aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner }),
+            ],
+          }),
+        )[0]!
+
+      expect(paying(105_000).capBreach).toBe('LostDeductibility')
+      expect(paying(70_000).capBreach).toBeUndefined()
+    })
+
+    it('kalder et beløb præcis på loftet for ubrudt', () => {
+      // Loven giver loftet som det beløb, der *kan* anvendes. Et brud er
+      // beløbet derover, og et bidrag, der rammer loftet på kronen, har
+      // hverken mistet fradragsret eller udløst afgift.
+      const plan = aPlanWithPension({
+        balance: 1_000_000,
+        entries: [aSalary({ amountInRealKroner: 700_000 })],
+        contributions: [
+          aHoldingContribution({
+            source: 'free-assets',
+            to: 'ratepension',
+            amountInRealKroner: 68_700,
+          }),
+        ],
+      })
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(year.persons[0]!.caps[0]!.withDeductibility).toBeCloseTo(68_700, 6)
+      expect(year.capBreach).toBeUndefined()
+    })
+
+    it('markerer aldersopsparingens brud som afgiftspligtigt', () => {
+      // Den har ingen fradragsret at miste. Bruddet koster ikke noget i
+      // modellen, men brugeren skal kunne se, at der er indbetalt for meget.
+      const plan = aPlanWithScheme(oldAgeSavings, {
+        balance: 1_000_000,
+        contributions: [
+          aHoldingContribution({
+            source: 'free-assets',
+            to: 'aldersopsparing',
+            amountInRealKroner: 20_000,
+          }),
+        ],
+      })
+
+      expect(simulateChecked(plan)[0]!.capBreach).toBe('Chargeable')
+    })
+
+    it('lader det tabte fradrag veje tungest, når begge slags loft er brudt', () => {
+      // Året har kun ét felt, og det skal sige det, der flyttede skatten:
+      // afgiften er ikke modelleret, fradragsrettens tab er.
+      const plan = aPlan({
+        balance: 2_000_000,
+        entries: [aSalary({ amountInRealKroner: 700_000 })],
+        holdings: [
+          { ...instalmentPension, balance: 0, grossReturn: 0, annualCostRate: 0 },
+          { ...oldAgeSavings, balance: 0, grossReturn: 0, annualCostRate: 0 },
+        ],
+        contributions: [
+          aHoldingContribution({
+            source: 'free-assets',
+            to: 'ratepension',
+            amountInRealKroner: 100_000,
+          }),
+          {
+            ...aHoldingContribution({
+              source: 'free-assets',
+              to: 'aldersopsparing',
+              amountInRealKroner: 20_000,
+            }),
+            id: 'contribution-2',
+          },
+        ],
+      })
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(year.persons[0]!.caps).toHaveLength(2)
+      expect(year.capBreach).toBe('LostDeductibility')
+    })
+
+    it('lader det samme bidrag være lovligt i ét år og et brud i et senere', () => {
+      // Bidraget følger lønnens 5 %, loftet følger § 20-fremskrivningen på 0
+      // — de to vokser med hver sin antagelse, og derfor er et loftbrud
+      // årets svar og ikke planens. Det er hele grunden til, at `validatePlan`
+      // ikke kan afgøre det: den kender ikke et år.
+      //
+      // 70.000 kr. brutto giver 64.400 kr. ind i ordningen i 2026 og vokser
+      // 5 % om året: 67.620 i 2027 og 71.001 i 2028, hvor loftet på 68.700
+      // først bliver brudt.
+      const plan = aPlanWithPension({
+        balance: 1_000_000,
+        entries: [aSalary({ amountInRealKroner: 700_000, regulationRate: 0.05 })],
+        contributions: [
+          aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 70_000 }),
+        ],
+      })
+
+      expect(validatePlan(plan)).toBeUndefined()
+
+      const breachIn = (year: number) =>
+        simulateChecked(plan).find((result) => result.year === year)!.capBreach
+
+      expect(breachIn(2026)).toBeUndefined()
+      expect(breachIn(2027)).toBeUndefined()
+      expect(breachIn(2028)).toBe('LostDeductibility')
+    })
+
+    it('lægger loftet på det ekstra pensionsfradrags grundlag med', () => {
+      // Fradragets grundlag er de indbetalinger, der har fradragsret, og
+      // loftet har allerede afgjort hvor mange af dem der er: 12 % af
+      // 68.700 = 8.244 og ikke 12 % af 87.800. De to lofter ligger i
+      // forlængelse af hinanden og ikke ved siden af.
+      const plan = aPlanWithPension({
+        balance: 1_000_000,
+        entries: [aSalary({ amountInRealKroner: 700_000 })],
+        contributions: [
+          aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 105_000 }),
+        ],
+      })
+
+      const { tax } = simulateChecked(plan)[0]!.persons[0]!
+
+      expect(tax.allowances.extraPensionAllowance).toBeCloseTo(8_244, 6)
     })
   })
 

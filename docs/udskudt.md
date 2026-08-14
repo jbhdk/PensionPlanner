@@ -12,6 +12,16 @@ Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog 
 
 **Hvad der skal bygges, når det tages op:** Årets skattepligtige pensionsudbetalinger pr. person skal krydse skattesømmet ved siden af indbetalingen — samme gruppering som `withDeductibility`, og af samme grund et tal frem for en `HoldingVariant`. Undtagelserne i stk. 2, nr. 1-7, kræver, at en udbetaling kan kendes fra en efterladtepension, og den skelnen findes ikke i modellen i dag.
 
+## Afgiften på indbetalinger over aldersopsparingens loft
+
+**Status:** Fravalgt, undersøgt og belagt i [satsår 2026](./satser/2026.md). Loftet selv er bygget, jf. [ADR-0018](./adr/0018-loftet-maales-pr-person-pr-loft-og-det-overskydende-bliver-liggende.md); det er alene afgiften, der ikke er.
+
+**Hvorfor det betyder noget:** [PBL § 25 A](https://danskelove.dk/pensionsbeskatningsloven/25a) lægger 20 % afgift på årets indbetaling over det loft, der gælder personen, 40 % hvis der er sket en diskvalificerende udbetaling, og 4 % på det beløb, der føres ud af ordningen året efter. Ratepensionens loft er derimod et skatteloft, og dets konsekvens *er* modelleret: det overskydende mister sin fradragsret og hæver årets skat.
+
+**Prisen ved at lade den ligge:** Aldersopsparingens 20 % er en administrativ konsekvens af en fejl, ikke en pris på en plan. En plan, der år efter år skyder mere ind, end loven tillader, er en plan, der skal rettes — ikke en plan, hvis afgift skal fremskrives. Motoren markerer i stedet året som `Chargeable`, så fejlen er synlig, og lader den koste nul. Prisen er, at et brudt aldersopsparingsloft ser gratis ud i formuen; det er accepteret, fordi markeringen står i årstabellen og i forklar-årets loftlinje.
+
+**Hvad der skal bygges, når det tages op:** Afgiften som en fjerde bærer ved siden af `TaxAssessment`, `HouseholdTaxAssessment` og `HoldingTax` — den er hverken personens, husstandens eller beholdningens afkastskat — plus de 40 %'s afhængighed af, om der er sket en udbetaling fra en ratepension eller livrente fra og med det tiende indkomstår før folkepensionsalderen. Den skelnen findes ikke i modellen i dag.
+
 ## Den privattegnede livrentes tiårsfordeling
 
 **Status:** Fravalgt til v1, undersøgt og belagt i [satsår 2026](./satser/2026.md). Den arbejdsgiveradministrerede livrente er uden årligt loft, og det er den form, husstandens livrenter har.

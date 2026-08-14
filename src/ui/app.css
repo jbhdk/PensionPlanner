@@ -20,6 +20,10 @@
   --accent: #e0a33a;
   --neg: #e2685c;
   --neg-svag: rgba(226, 104, 92, 0.1);
+  /* Et brudt loft. Ikke en fejltilstand som den negative buffer, og derfor
+     ikke rød — men heller ikke tavs som det fremskrevne satsår. */
+  --advarsel: #d8a43c;
+  --advarsel-svag: rgba(216, 164, 60, 0.1);
   --paa-accent: #191204;
   --felt-bg: #141920;
   --felt-kant: #333d49;
@@ -733,6 +737,76 @@ table.aar tbody tr:hover {
 table.aar td.formue {
   color: #fff;
   font-weight: 600;
+}
+
+/* Loftlinjerne står under indbetalingerne i forklar-året: samme bredde og
+   samme talkolonner, så de tre tal kan læses ned ad siden sammen med det,
+   der landede. */
+table.lofttabel {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+}
+
+table.lofttabel th,
+table.lofttabel td {
+  padding: 3px 8px 3px 0;
+  text-align: right;
+  border-bottom: 1px solid var(--linje-svag);
+}
+
+table.lofttabel th:first-child,
+table.lofttabel td:first-child {
+  text-align: left;
+}
+
+table.lofttabel th {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--label);
+  letter-spacing: 0.04em;
+}
+
+table.lofttabel td {
+  font-family: var(--f-tal);
+  font-size: 11.5px;
+}
+
+table.lofttabel td:first-child {
+  font-family: var(--f-broed);
+}
+
+table.lofttabel .enhed {
+  color: var(--muted);
+}
+
+/* Et brudt loft markeres i den kolonne, det handler om, og i sin egen tone.
+   Rød er forbeholdt den negative buffer: et brudt loft er ikke en
+   fejltilstand, men en oplysning om, at en del af indbetalingen ikke
+   virkede. De to slags brud deler tone og skelnes med ordet i mærkatet,
+   ganske som bufferens to tilstande gør.
+
+   Reglerne står før bufferens, så den røde vinder i et år, hvor begge
+   markeringer falder: en plan, der ikke holder, er det tungere svar. */
+table.aar tr.fradragtabt,
+table.aar tr.afgiftspligtigt {
+  background: var(--advarsel-svag);
+}
+
+table.aar tr.fradragtabt td.indbetaling,
+table.aar tr.afgiftspligtigt td.indbetaling {
+  color: var(--advarsel);
+  font-weight: 600;
+}
+
+table.aar td.indbetaling .tilstand {
+  display: block;
+  font-family: var(--f-broed);
+  font-size: 9.5px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--advarsel);
+  white-space: nowrap;
 }
 
 /* En negativ buffer er et resultat, ikke en valideringsfejl, og markeres i
