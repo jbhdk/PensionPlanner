@@ -578,6 +578,20 @@ body {
   font-size: 12px;
 }
 
+/* Fejlskærmens veje ud. Uden dem er beskeden en blindgyde: der er ingen
+   navigator at rette planen i, når den ikke kunne indlæses. */
+.besked .udveje {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.besked p.uddybning {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 /* ---------- formuegrafen ---------- */
 
 .formuegraf {

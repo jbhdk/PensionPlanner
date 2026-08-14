@@ -4,7 +4,7 @@ import type { Plan } from '../engine/plan'
 import { simulate } from '../engine/simulate'
 import { validatePlan } from '../engine/validatePlan'
 import { exportPlan, importPlan } from '../persistence/planFile'
-import { savePlan } from '../persistence/planStorage'
+import { savePlan, storedPlanText } from '../persistence/planStorage'
 import { Inspector } from './Inspector'
 import { Navigator } from './Navigator'
 import type { AmountUnit } from './real'
@@ -13,6 +13,18 @@ import { YearExplanation } from './YearExplanation'
 import { YearTable } from './YearTable'
 import type { Selection } from './selection'
 import './app.css'
+
+/** Lader browseren gemme teksten som en fil. Den samme vej ud for en
+    eksporteret plan og for det gemte, fladen ikke kunne læse: der er ingen
+    server at hente nogen af delene fra. */
+function download(contents: string, filename: string): void {
+  const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
 
 /** Resultatspaltens visninger. Formuen er standardfanen, jf. issue #12 —
     man justerer i navigatoren og konstaterer visuelt på grafen, om planen
@@ -29,13 +41,14 @@ type ResultView = 'Wealth' | 'YearTable' | 'YearExplanation'
     resultatspalten er til enhver tid et spejl af navigatoren. */
 export function App({
   initialPlan,
-  loadError,
+  loadError: initialLoadError,
 }: {
   initialPlan: Plan
   /** Sat når en gemt plan fandtes, men ikke kunne indlæses. Fladen viser da
       en forklarende besked i stedet for en tom navigator og resultatspalte,
-      jf. issue #15 — `initialPlan` er i det tilfælde blot en tom plan uden
-      betydning, siden intet af den vises eller gemmes ovenpå den fejlede. */
+      jf. issue #15 — og `initialPlan` er den plan, brugeren starter forfra
+      med, hvis de vælger det. Indtil da vises og gemmes intet af den ovenpå
+      det fejlede. */
   loadError?: string
 }) {
   const [plan, setPlan] = useState(initialPlan)
@@ -44,6 +57,9 @@ export function App({
   const [unit, setUnit] = useState<AmountUnit>('Real')
   const [explainedYear, setExplainedYear] = useState<number | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  // Fejlen er en tilstand og ikke en egenskab ved fladen: brugeren skal kunne
+  // komme ud af den uden at genindlæse siden.
+  const [loadError, setLoadError] = useState(initialLoadError)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Ingen gem-knap: planen gemmes ved hver ændring, jf. issue #15. Er
@@ -61,13 +77,7 @@ export function App({
   }
 
   function handleExport() {
-    const blob = new Blob([exportPlan(plan)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${plan.name}.json`
-    link.click()
-    URL.revokeObjectURL(url)
+    download(exportPlan(plan), `${plan.name}.json`)
   }
 
   async function handleFileChosen(event: ChangeEvent<HTMLInputElement>) {
@@ -79,12 +89,35 @@ export function App({
     if (result.kind === 'Loaded') {
       setPlan(result.plan)
       setImportError(null)
+      // En accepteret fil er også vejen ud af fejlskærmen. Planen er tolket og
+      // valideret her, så den må gerne gemmes ovenpå det, der ikke kunne
+      // læses.
+      setLoadError(undefined)
     } else {
       setImportError(result.reason)
     }
   }
 
+  /** Filvælgeren og dens knap. Den samme på begge skærme — kun én af dem er
+      monteret ad gangen, så de kan dele reference. */
+  const importAction = (
+    <>
+      <button type="button" className="knap" onClick={() => fileInputRef.current?.click()}>
+        Importer
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="skjult-filvaelger"
+        aria-label="Importer"
+        onChange={handleFileChosen}
+      />
+    </>
+  )
+
   if (loadError) {
+    const stored = storedPlanText()
     return (
       <div className="app">
         <header className="topbjaelke">
@@ -95,6 +128,30 @@ export function App({
             <div className="besked stop">
               <h3>Planen kunne ikke indlæses</h3>
               <p>{loadError}</p>
+              {importError && (
+                <p role="alert">Filen kan ikke importeres: {importError}</p>
+              )}
+              <div className="udveje">
+                {importAction}
+                {stored !== null && (
+                  <button
+                    type="button"
+                    className="knap"
+                    onClick={() => download(stored, 'gemt-plan.json')}
+                  >
+                    Hent det gemte
+                  </button>
+                )}
+                <button type="button" className="knap" onClick={() => setLoadError(undefined)}>
+                  Start forfra
+                </button>
+              </div>
+              <p className="uddybning">
+                Det gemte røres ikke, før du vælger. Importerer du en fil,
+                erstatter den det — starter du forfra, kasseres det til fordel
+                for en tom plan. Hent det først, hvis du vil rette i det og
+                importere det igen.
+              </p>
             </div>
           </div>
         </div>
@@ -123,17 +180,7 @@ export function App({
           <button type="button" className="knap" onClick={handleExport}>
             Eksporter
           </button>
-          <button type="button" className="knap" onClick={() => fileInputRef.current?.click()}>
-            Importer
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json,.json"
-            className="skjult-filvaelger"
-            aria-label="Importer"
-            onChange={handleFileChosen}
-          />
+          {importAction}
         </span>
       </header>
 

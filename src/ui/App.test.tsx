@@ -11,7 +11,7 @@ import {
   anExpense,
 } from '../engine/testing/planFixture'
 import { exportPlan } from '../persistence/planFile'
-import { loadPlan } from '../persistence/planStorage'
+import { STORAGE_KEY, loadPlan } from '../persistence/planStorage'
 import { App } from './App'
 import { defaultPlan } from './defaultPlan'
 
@@ -2546,6 +2546,81 @@ describe('fladen', () => {
       await user.upload(screen.getByLabelText(/Importer/), file)
 
       expect(await screen.findByText(/nyere version/i)).toBeTruthy()
+    })
+  })
+
+  describe('fejlskærmen', () => {
+    let createdBlobs: Blob[]
+
+    beforeEach(() => {
+      createdBlobs = []
+      URL.createObjectURL = vi.fn((blob: Blob) => {
+        createdBlobs.push(blob)
+        return 'blob:mock'
+      }) as typeof URL.createObjectURL
+      URL.revokeObjectURL = vi.fn()
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('lader en fil føre ind i værktøjet igen, når det gemte ikke kunne indlæses', async () => {
+      // Uden en vej ud er stopbeskeden en blindgyde: fladen viser den og
+      // intet andet, og værktøjet er låst, indtil nogen tømmer localStorage
+      // i browserens konsol. En eksporteret fil skal kunne låse det op.
+      const user = userEvent.setup()
+      localStorage.setItem(STORAGE_KEY, 'ikke json{')
+      render(<App initialPlan={defaultPlan()} loadError="Det gemte er ikke gyldig JSON." />)
+
+      const importeret: Plan = { ...aPlan(), name: 'Importeret plan' }
+      await user.upload(
+        screen.getByLabelText(/Importer/),
+        new File([exportPlan(importeret)], 'plan.json', { type: 'application/json' }),
+      )
+
+      expect(await screen.findByText('Importeret plan', { selector: '.plannavn' })).toBeTruthy()
+      expect(screen.queryByText(/ikke indlæses/i)).toBeNull()
+      expect(loadPlan()).toEqual({ kind: 'Loaded', plan: importeret })
+    })
+
+    it('lader brugeren starte forfra, og rører først det gemte da', async () => {
+      // Det gemte må ikke overskrives, før brugeren har taget stilling. Er
+      // fejlen en nyere skemaversion, er planen ikke ødelagt — blot ulæselig
+      // for denne udgave af værktøjet, jf. issue #16 — og et automatisk
+      // gem ovenpå den ville tage den fra en, der bare åbnede den forkerte
+      // fane.
+      const user = userEvent.setup()
+      localStorage.setItem(STORAGE_KEY, 'ikke json{')
+      render(<App initialPlan={defaultPlan()} loadError="Det gemte er ikke gyldig JSON." />)
+
+      expect(localStorage.getItem(STORAGE_KEY)).toBe('ikke json{')
+
+      await user.click(screen.getByRole('button', { name: /Start forfra/ }))
+
+      expect(screen.queryByText(/ikke indlæses/i)).toBeNull()
+      expect(document.querySelector('.navigatorspalte')).toBeTruthy()
+      expect(loadPlan()).toEqual({ kind: 'Loaded', plan: defaultPlan() })
+    })
+
+    it('giver det gemte som fil, præcis som det står, før det kasseres', async () => {
+      // Det gemte er som regel læsbart nok til at kunne rettes i hånden og
+      // importeres igen — én variant for meget, én peger for lidt. Uden
+      // filen ville "Start forfra" koste hele planen for at komme videre, og
+      // værktøjet må ikke stille brugeren over for det valg.
+      //
+      // Filen er råteksten og ikke en tolket plan: netop det gemte, fladen
+      // ikke kunne læse, er det, der skal rettes i.
+      const user = userEvent.setup()
+      const gemt = '{"schemaVersion":99,"plan":{"name":"Min plan"}}'
+      localStorage.setItem(STORAGE_KEY, gemt)
+      render(<App initialPlan={defaultPlan()} loadError="Det gemte er fra en nyere version." />)
+
+      await user.click(screen.getByRole('button', { name: /Hent det gemte/ }))
+
+      expect(createdBlobs).toHaveLength(1)
+      expect(await createdBlobs[0]!.text()).toBe(gemt)
+      expect(localStorage.getItem(STORAGE_KEY)).toBe(gemt)
     })
   })
 
