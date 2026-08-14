@@ -22,6 +22,16 @@ Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog 
 
 **Hvad der skal bygges, når det tages op:** Afgiften som en fjerde bærer ved siden af `TaxAssessment`, `HouseholdTaxAssessment` og `HoldingTax` — den er hverken personens, husstandens eller beholdningens afkastskat — plus de 40 %'s afhængighed af, om der er sket en udbetaling fra en ratepension eller livrente fra og med det tiende indkomstår før folkepensionsalderen. Den skelnen findes ikke i modellen i dag.
 
+## Aktiesparekontoens udlodningspligt og 3 %-afgift
+
+**Status:** Fravalgt, undersøgt og belagt i [satsår 2026](./satser/2026.md). Loftet selv er bygget, jf. [ADR-0019](./adr/0019-aktiesparekontoens-loft-forhindrer-indskuddet-frem-for-at-straffe-det.md); det er alene konsekvensen af at bryde det, der ikke er.
+
+**Hvorfor det betyder noget:** [ASKL § 9, stk. 3](https://danskelove.dk/aktiesparekontoloven/9), lyder: *"Foretages indskud i strid med stk. 1, skal det overskydende beløb udloddes. Endvidere skal der betales en afgift på 3 pct. p.a. af det overskydende beløb."* Loven forudser altså, at et for stort indskud kan ske — det skal blot ud igen, og det koster undervejs. Det er strukturelt aldersopsparingens tilfælde ovenfor, blot med en anden sats og en udlodningspligt oveni.
+
+**Prisen ved at lade den ligge:** Nul, og det er hele pointen. Motoren afkorter indskuddet til råderummet frem for at lade det lande, netop fordi et pengeinstitut ikke tager imod et indskud over loftet. Afgiften kan derfor kun udløses af en disposition, motoren nægter at foretage, og der findes ingen plan, værktøjet kan skrive, hvor den koster en krone. Det skiller den fra aldersopsparingens 20 %, som *kan* udløses af en plan, motoren regner på, og som derfor markerer året `Chargeable`.
+
+**Hvad der skal bygges, når det tages op:** Kun hvis ADR-0019 rulles tilbage — altså hvis aktiesparekontoens loft en dag skulle lade indskuddet lande mod en afgift i stedet for at afkorte det. Så bliver de 3 % p.a. en bærer ved siden af de øvrige, ligesom PBL § 25 A's 20 %, og udlodningspligten kræver desuden, at penge kan forlade en aktiesparekonto uden om en udbetalingsplan. Ingen af delene findes i modellen i dag.
+
 ## Den privattegnede livrentes tiårsfordeling
 
 **Status:** Fravalgt til v1, undersøgt og belagt i [satsår 2026](./satser/2026.md). Den arbejdsgiveradministrerede livrente er uden årligt loft, og det er den form, husstandens livrenter har.
