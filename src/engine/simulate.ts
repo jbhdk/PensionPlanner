@@ -100,7 +100,14 @@ function simulateYear(
 ): YearResult {
   const entries = entriesInYear(plan, year)
   const transfers = transfersInYear(plan, year)
-  const contributions = contributionsInYear(plan, year, entries, rates)
+  const requested = contributionsInYear(plan, year, entries, rates)
+
+  // Lofterne opgøres, før noget vejes ind. En loftform, der afkorter selve
+  // indbetalingen, skal være afgjort først — ellers forrenter penge sig et
+  // sted, de aldrig kom hen, jf. ADR-0019. Opgørelsen læser kun planen,
+  // satsåret og året selv og aldrig en saldo, så den kan stå her.
+  const contributionsByPersonId = contributionsByPerson(plan, requested, rates, year)
+  const contributions = inPlanOrder(requested, contributionsByPersonId)
 
   const income = sumOf(entries, 'Income')
   const expenses = sumOf(entries, 'Expense')
@@ -128,7 +135,6 @@ function simulateYear(
 
   const shareIncomeByPerson = incomeByVariant(plan, flowed, 'ShareDepot')
   const capitalIncomeByPerson = incomeByVariant(plan, flowed, 'SavingsAccount')
-  const contributionsByPersonId = contributionsByPerson(plan, contributions, rates, year)
 
   // Hele husstandens skat bag ét søm, jf. ADR-0014. Motoren lægger intet
   // sammen selv: aktieindkomstens skat er husstandens og hører ikke til
@@ -291,17 +297,33 @@ function capBreach(persons: PersonContributions[]): CapBreach | undefined {
     : 'Chargeable'
 }
 
-/** Årets indbetalinger for én person, opgjort mod lofterne: loftlinjerne,
-    der står i årsresultatet, og det ene tal, der krydser skattesømmet. */
-type PersonContributions = { caps: CapYear[]; withDeductibility: Nominal }
+/** Årets indbetalinger for én person, ført gennem lofterne: loftlinjerne,
+    der står i årsresultatet, det ene tal, der krydser skattesømmet, og de
+    indbetalinger, opgørelsen har målt.
+
+    Det tredje svar er der, fordi et loft kan afkorte selve indbetalingen, og
+    de afkortede er dem, der skal vejes ind og bogføres. Kom de fra en anden
+    opgørelse end loftlinjen, kunne forklar-årets linje komme til at vise en
+    saldo, den ikke selv kan efterregne, jf. ADR-0019. */
+type PersonContributions = {
+  caps: CapYear[]
+  withDeductibility: Nominal
+  contributions: ActiveContribution[]
+}
 
 /** Summen af det, der landede i hver persons ordninger med `Deductibility`,
-    begrænset af lofterne — og de loftlinjer, begrænsningen kom af.
+    begrænset af lofterne — de loftlinjer, begrænsningen kom af, og de
+    indbetalinger, lofterne har målt.
 
-    De to svar kommer fra samme opgørelse med vilje. Regnede forklar-årets
-    linje og årets skat hver sit sted, kunne de komme til at sige hver sit,
-    og brugeren ville se en linje, der ikke kan efterregne den skat, den står
-    ved siden af.
+    De tre svar kommer fra samme opgørelse med vilje. Regnede forklar-årets
+    linje, årets skat og de penge, der faktisk blev flyttet, hver sit sted,
+    kunne de komme til at sige hver sit, og brugeren ville se en linje, der
+    ikke kan efterregne hverken den skat eller den saldo, den står ved siden
+    af, jf. ADR-0018 og ADR-0019.
+
+    Opgørelsen står før årets strømme og læser aldrig en saldo. En loftform,
+    der afkorter selve indbetalingen, skal være afgjort, før noget vejes ind
+    i afkastgrundlaget.
 
     Det er denne gruppering — og aldrig en `HoldingVariant` — der krydser
     skattesømmet: skattereglen hedder ikke "ratepension giver fradragsret",
@@ -316,7 +338,7 @@ type PersonContributions = { caps: CapYear[]; withDeductibility: Nominal }
     efter AM-bidrag, jf. PBL § 16, stk. 3, LL § 9 L, stk. 1, og
     docs/satser/2026.md.
 
-    Loftet begrænser kun tallet. Hele indbetalingen er allerede landet i
+    `PerYear` begrænser kun tallet. Hele indbetalingen er allerede landet i
     beholdningen, og det overskydende bliver liggende dér — motoren flytter
     ikke pengene tilbage på bufferen, jf. ADR-0018 og ADR-0002. */
 function contributionsByPerson(
@@ -332,30 +354,59 @@ function contributionsByPerson(
       // det årstal: aldersopsparingens vindue og det ekstra pensionsfradrags
       // 15-årsgrænse skal ramme det samme år, og alderen er en brøk for de
       // fleste årgange.
-      againstCaps(person, contributions, rates, statePensionYear(person) - year),
+      throughCaps(person, contributions, rates, statePensionYear(person) - year),
     ]),
   )
 }
 
-/** Årets indbetalinger til én person, grupperet efter beholdningens variant
-    — den slags ordning, loftet måler over. Loftet er personens og gælder
-    årets samlede indbetaling til den slags: to ratepensioner med 40.000 kr.
-    hver er ét brud og ikke to lovlige indbetalinger, jf. PBL § 16.
+/** De målte indbetalinger tilbage i planens rækkefølge. Opgørelsen svarer
+    pr. person, og en flad sammenlægning af de svar ville sortere årets
+    indbetalinger efter husstanden frem for efter planen.
+
+    Rækkefølgen i `plan.contributions` er betydningsbærende, jf. ADR-0019:
+    den afgør, hvem der først får råderummet, når flere indbetalinger til
+    samme ordning tilsammen beder om mere, end der er plads til. Hver
+    indbetaling går til præcis én persons beholdning, jf. `validatePlan`, så
+    hver af dem er målt nøjagtig én gang. */
+function inPlanOrder(
+  requested: ActiveContribution[],
+  byPerson: Map<PersonId, PersonContributions>,
+): ActiveContribution[] {
+  const measured = new Map(
+    [...byPerson.values()].flatMap(({ contributions }) =>
+      contributions.map((active) => [active.contribution.id, active] as const),
+    ),
+  )
+  return requested.map(({ contribution }) => measured.get(contribution.id)!)
+}
+
+/** Årets indbetalinger til én person ført gennem personens lofter, grupperet
+    efter beholdningens variant — den slags ordning, loftet måler over.
+    Loftet er personens og gælder årets samlede indbetaling til den slags: to
+    ratepensioner med 40.000 kr. hver er ét brud og ikke to lovlige
+    indbetalinger, jf. PBL § 16.
+
+    Funktionen både måler og kan begrænse. `PerYear` begrænser kun det ene
+    tal, der krydser skattesømmet — pengene er landet, og det overskydende
+    bliver liggende, jf. ADR-0018 — hvor en afkortende loftform vil svare med
+    en mindre indbetaling end den, året bad om. Derfor svarer den med de målte
+    indbetalinger og ikke kun med linjerne.
 
     Grupper uden indbetaling udelades, og en variant uden loft får ingen
     linje. En linje på nul ville sige, at året indbetalte til en ordning, det
     ikke rørte, og et loft, der ikke blev målt mod noget, er ikke et svar. */
-function againstCaps(
+function throughCaps(
   person: Person,
   contributions: ActiveContribution[],
   rates: RateYear,
   yearsToStatePensionAge: number,
 ): PersonContributions {
   const groups = new Map<HoldingVariant, { holding: Holding; paid: Nominal }>()
+  const measured: ActiveContribution[] = []
   for (const holding of person.holdings) {
-    const paid = contributions
-      .filter(({ contribution }) => contribution.to === holding.id)
-      .reduce((into, { intoHolding }) => into + intoHolding, 0)
+    const into = contributions.filter(({ contribution }) => contribution.to === holding.id)
+    measured.push(...into)
+    const paid = into.reduce((sum, { intoHolding }) => sum + intoHolding, 0)
     if (paid === 0) continue
     const group = groups.get(holding.variant)
     groups.set(holding.variant, { holding, paid: (group?.paid ?? 0) + paid })
@@ -378,7 +429,7 @@ function againstCaps(
     }
   }
 
-  return { caps, withDeductibility }
+  return { caps, withDeductibility, contributions: measured }
 }
 
 /** Det, en persons skat skal regnes af — selve opgørelsen sker bag
