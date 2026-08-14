@@ -1,5 +1,5 @@
 import { isFreeAssets } from './holdingVariant'
-import type { Holding, Plan } from './plan'
+import type { Holding, HoldingId, Plan } from './plan'
 
 /** Planen skal beskrive noget, der kan eksistere, før motoren kan regne på
     den. Hvervet er to slags regler.
@@ -72,7 +72,7 @@ function singleShareSavingsAccount(plan: Plan): string | undefined {
     en anden figur, ville gøre planen ugyldig, hver gang det felt ændres et
     andet sted i fladen, jf. ADR-0020. */
 function shareSavingsAccountSource(plan: Plan): string | undefined {
-  const byId = new Map(holdings(plan).map((holding) => [holding.id, holding]))
+  const byId = holdingsById(plan)
   for (const contribution of plan.contributions) {
     if (contribution.kind !== 'EntrySourced') continue
     if (byId.get(contribution.to)?.variant !== 'ShareSavingsAccount') continue
@@ -95,7 +95,7 @@ function shareSavingsAccountSource(plan: Plan): string | undefined {
     der ejer ordningen. En indbetaling til ægtefællens ordning ville placere
     skattevirkningen hos den forkerte. */
 function contributionEnds(plan: Plan): string | undefined {
-  const byId = new Map(holdings(plan).map((holding) => [holding.id, holding]))
+  const byId = holdingsById(plan)
   const entries = new Map(plan.entries.map((entry) => [entry.id, entry]))
   const ownerOf = new Map(
     plan.household.persons.flatMap((person) =>
@@ -189,7 +189,7 @@ function bufferPointer(plan: Plan): string | undefined {
     midler: en flytning ind i en ordning er en indbetaling og ikke en
     overførsel, uanset hvor pengene kom fra, jf. ADR-0016. */
 function transferEnds(plan: Plan): string | undefined {
-  const byId = new Map(holdings(plan).map((holding) => [holding.id, holding]))
+  const byId = holdingsById(plan)
   for (const transfer of plan.transfers) {
     const from = byId.get(transfer.from)
     const to = byId.get(transfer.to)
@@ -227,4 +227,14 @@ function entryOwners(plan: Plan): string | undefined {
 
 function holdings(plan: Plan): Holding[] {
   return plan.household.persons.flatMap((person) => person.holdings)
+}
+
+/** Husstandens beholdninger slået op på deres id — det, enhver regel om en
+    pegers modtager har brug for.
+
+    Kortet kan ikke bære alle regler: to beholdninger med samme id kollapser
+    til én indgang, og netop den plan er `bufferPointer` til for at fange.
+    Den tæller derfor på listen selv og skal blive ved med det. */
+function holdingsById(plan: Plan): Map<HoldingId, Holding> {
+  return new Map(holdings(plan).map((holding) => [holding.id, holding]))
 }
