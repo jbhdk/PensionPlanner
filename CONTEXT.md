@@ -149,7 +149,7 @@ De tre skattelag over mellemskattegrænsen — mellemskat, topskat og top-topska
 _Avoid_: Topskat brugt om de tre, progressionstrin, bracket
 
 **Loftnedslag** · `TaxCeilingRelief`:
-Det, staten giver afkald på, når kommuneskatten er så høj, at den sammenlagte sats ville bryde det skrå skatteloft. Et skattelag som de øvrige — med grundlag, sats og beløb — men det ene med negativ sats og negativt beløb. Grundlaget er grundlaget for det progressionslag, der bærer nedslaget, og satsen er de procentpoint, summen lå over trinnet. Kommunen får sit fulde; nedslaget ligger i statens lag. Et lag med sats nul i enhver kommune under loftets referencesats — det udebliver ikke, det er bare tomt.
+Det, staten giver afkald på, når kommuneskatten er så høj, at den sammenlagte sats ville bryde et skatteloft. Et skattelag som de øvrige — med grundlag, sats og beløb — men det ene med negativ sats og negativt beløb. Grundlaget er grundlaget for det lag, der bærer nedslaget, og satsen er de procentpoint, summen lå over loftet. Kommunen får sit fulde; nedslaget ligger i statens lag. De to lofter har hvert sit nedslag: den personlige indkomsts står blandt skattelagene og bliver stående som et tomt lag, når loftet ikke binder, mens kapitalindkomstens hører til dens egne lag og udelades ligesom dem, når det er tomt.
 _Avoid_: Skatteloftsnedslag, nedslag brugt alene, loftrabat
 
 **Ligningsmæssigt fradrag** · `Allowance`:

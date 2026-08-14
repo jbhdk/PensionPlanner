@@ -74,6 +74,23 @@ describe('satsår 2026', () => {
     )
   })
 
+  it('lader kapitalindkomstens loft kun kunne binde i topskattelaget', () => {
+    // Kapitalindkomstens loft er ét tal og ikke en trappe, så nedslaget
+    // tages i det første lag, der bryder det. Bundskat plus den højeste
+    // kommuneskat er 12,01 + 26,30 = 38,31 % og når ikke de 42 % — kun
+    // topskattelaget kan altså binde. Kom en kommunesats over 29,99 %,
+    // ville begge lag bryde loftet, og de har hvert sit grundlag; nedslaget
+    // skal da tænkes om.
+    const { bracketTaxRates, taxCeiling, municipalTax } = rateYear2026
+
+    for (const [name, { municipalTaxRate }] of Object.entries(municipalTax.rates)) {
+      expect(
+        bracketTaxRates.bottomBracketTax + municipalTaxRate,
+        `${name}: bundskat og kommuneskat bryder kapitalindkomstens loft alene`,
+      ).toBeLessThanOrEqual(taxCeiling.capitalIncome)
+    }
+  })
+
   it('bærer en kilde på hver blok og holder de ⚠︎-mærkede tal ude fra de bekræftede', () => {
     const blocks = Object.entries(rateYear2026).flatMap(([name, value]) =>
       typeof value === 'object' && value !== null ? [[name, value] as const] : [],

@@ -439,6 +439,15 @@ function PersonTaxBlock({
         layer: year.tax.capitalIncomeContribution.topBracketTax,
       })
     }
+    // Kapitalindkomsten har sit eget loft på 42 % og dermed sit eget
+    // nedslag. Det står ved siden af den personlige indkomsts, fordi de to
+    // har hvert sit grundlag og kan binde i samme år.
+    if (layer === 'taxCeilingRelief' && year.tax.capitalIncomeContribution?.taxCeilingRelief) {
+      rows.push({
+        label: 'Loftnedslag af kapitalindkomst',
+        layer: year.tax.capitalIncomeContribution.taxCeilingRelief,
+      })
+    }
   }
 
   const { labourMarketContribution } = year.tax.layers

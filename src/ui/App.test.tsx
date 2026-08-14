@@ -1436,6 +1436,30 @@ describe('fladen', () => {
     expect(lagSats('Loftnedslag')).toBe('0,00 %')
   })
 
+  it('viser kapitalindkomstens eget loftnedslag som sin egen linje i forklar-året', async () => {
+    // Kapitalindkomstens loft er 42 % og har intet med trappen at gøre. De
+    // to nedslag har hvert sit grundlag og står derfor hver for sig.
+    // 1.000.000 til 7 % giver 70.000 i kapitalindkomst, hvoraf 15.000 ligger
+    // over kapitalindkomstens egen bundfradragsgrænse på 55.000.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          startYear: 2026,
+          inflationAssumption: 0,
+          balance: 1_000_000,
+          grossReturn: 0.07,
+        })}
+      />,
+    )
+    await showYearTable(user)
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!)
+
+    // 25,40 + 12,01 + 7,50 = 44,91 %, altså 2,91 procentpoint over de 42 %.
+    expect(lagSats('Topskat af kapitalindkomst')).toBe('7,50 %')
+    expect(lagSats('Loftnedslag af kapitalindkomst')).toBe('-2,91 %')
+  })
+
   it('viser loftlinjen med sine tre tal i forklar-året', async () => {
     // Tre tal på samme linje — indbetalt, loft, fradragsberettiget — så den
     // kan efterregnes uden at finde tal andre steder på siden. De 96.600 kr.

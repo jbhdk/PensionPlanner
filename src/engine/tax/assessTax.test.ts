@@ -448,17 +448,54 @@ describe('skatteopgørelsen', () => {
     expect(assessment.capitalIncomeContribution?.topBracketTax?.amount).toBeCloseTo(1_875, 2)
   })
 
-  it('lofter kapitalindkomstens kombinerede sats til 42 %, uafhængigt af det skrå skatteloft', () => {
-    // Bund + kommune alene: 12,01 + 28 = 40,01 %, under loftet — bundskatten
-    // står urørt. Læg topskatten oven i: 40,01 + 7,50 = 47,51 %, 5,51
-    // procentpoint over loftet, så topskattens andel sættes ned til 1,99 %.
-    // Loftet rammer altså kun laget over grænsen, ikke laget under.
-    // Bundskat  200.000 × 12,01 %  = 24.020,00
-    // Topskat   145.000 ×  1,99 %  =  2.885,50
-    const assessment = assess({ capitalIncome: 200_000, municipalTaxRate: 0.28 })
+  it('lofter kapitalindkomstens kombinerede sats til 42 % gennem sit eget nedslag', () => {
+    // Bund + kommune alene: 12,01 + 28 = 40,01 %, under loftet. Læg
+    // topskatten oven i: 40,01 + 7,50 = 47,51 %, 5,51 procentpoint over
+    // loftet. Lagene beholder lovens satser, og de 5,51 procentpoint står i
+    // nedslaget — med topskattens grundlag, for det er dér, loftet binder.
+    // Bundskat   200.000 × 12,01 %  =  24.020,00
+    // Topskat    145.000 ×  7,50 %  =  10.875,00
+    // Loftnedslag 145.000 × −5,51 % =  −7.989,50
+    const capital = assess({ capitalIncome: 200_000, municipalTaxRate: 0.28 })
+      .capitalIncomeContribution
 
-    expect(assessment.capitalIncomeContribution?.bottomBracketTax?.amount).toBeCloseTo(24_020, 2)
-    expect(assessment.capitalIncomeContribution?.topBracketTax?.amount).toBeCloseTo(2_885.5, 2)
+    expect(capital?.bottomBracketTax?.rate).toBeCloseTo(0.1201, 6)
+    expect(capital?.bottomBracketTax?.amount).toBeCloseTo(24_020, 2)
+    expect(capital?.topBracketTax?.rate).toBeCloseTo(0.075, 6)
+    expect(capital?.topBracketTax?.amount).toBeCloseTo(10_875, 2)
+
+    expect(capital?.taxCeilingRelief?.base).toBeCloseTo(145_000, 2)
+    expect(capital?.taxCeilingRelief?.rate).toBeCloseTo(-0.0551, 6)
+    expect(capital?.taxCeilingRelief?.amount).toBeCloseTo(-7_989.5, 2)
+  })
+
+  it('udelader kapitalindkomstens nedslag, når de 42 % ikke er nået', () => {
+    // 22,00 + 12,01 + 7,50 = 41,51 %. Kapitalindkomstens lag udelades, når
+    // de er tomme, og nedslaget følger den regel frem for de personlige
+    // lags, hvor det tomme lag bliver stående.
+    const capital = assess({ capitalIncome: 200_000, municipalTaxRate: 0.22 })
+      .capitalIncomeContribution
+
+    expect(capital?.topBracketTax?.rate).toBeCloseTo(0.075, 6)
+    expect(capital?.taxCeilingRelief).toBeUndefined()
+  })
+
+  it('holder kapitalindkomstens loft og det skrå skatteloft ude fra hinanden', () => {
+    // De to lofter er hver sit: 42 % for kapitalindkomsten, trappen for den
+    // personlige indkomst. Begge kan binde i samme år, og de har hvert sit
+    // grundlag — mellemskattens og kapitalindkomstens topskattegrundlag.
+    const assessment = assess({
+      earnedIncome: 950_000,
+      capitalIncome: 200_000,
+      municipalTaxRate: 0.254,
+    })
+
+    expect(assessment.layers.taxCeilingRelief.base).toBeCloseTo(232_800, 2)
+    expect(assessment.layers.taxCeilingRelief.rate).toBeCloseTo(-0.0034, 6)
+
+    // 25,40 + 12,01 + 7,50 = 44,91 %, altså 2,91 procentpoint over de 42 %.
+    expect(assessment.capitalIncomeContribution?.taxCeilingRelief?.base).toBeCloseTo(145_000, 2)
+    expect(assessment.capitalIncomeContribution?.taxCeilingRelief?.rate).toBeCloseTo(-0.0291, 6)
   })
 
   it('nedsætter skattepligtig indkomst med negativ kapitalindkomst uden at udløse bund- eller topskat', () => {

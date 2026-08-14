@@ -88,10 +88,13 @@ export type LayerAmount = {
   amount: Nominal
 }
 
-/** De to progressionslag, kapitalindkomsten selv kan udløse. Ikke en del af
-    `TaxLayer`s egne `bottomBracketTax`/`topBracketTax` — se
-    `TaxAssessment.capitalIncomeContribution`. */
-export type CapitalIncomeLayer = 'bottomBracketTax' | 'topBracketTax'
+/** De to progressionslag, kapitalindkomsten selv kan udløse, plus dens eget
+    loftnedslag. Ikke en del af `TaxLayer`s egne lag — se
+    `TaxAssessment.capitalIncomeContribution`. Nedslaget står her og ikke i
+    `layers`, fordi kapitalindkomstens loft er sit eget tal med sit eget
+    grundlag: de to nedslag kan binde i samme år og kan ikke lægges sammen i
+    én linje uden at grundlag × sats holder op med at stemme. */
+export type CapitalIncomeLayer = 'bottomBracketTax' | 'topBracketTax' | 'taxCeilingRelief'
 
 /** Hvert lag for sig, aldrig som en total. Lagene står samlet i `layers`,
     så summen ikke kan komme til at mangle et af dem — se `totalTax`. */
@@ -347,15 +350,15 @@ function taxCeilingRelief(
 }
 
 /** Kapitalindkomstens eget bidrag til bundskat og topskat — hver sit
-    grundlag og sin egen, evt. loftbegrænsede sats. Positiv nettokapital-
-    indkomst tillægges bundskattens grundlag helt uden bundfradrag, og
-    topskattens grundlag kun for den del, der ligger over kapitalindkomstens
-    egen bundfradragsgrænse — aldrig mellem- eller top-topskattens, jf.
-    docs/satser/2026.md. Den kombinerede sats har sit eget loft på 42 %,
-    uafhængigt af det skrå skatteloftets tre trin, og negativ kapitalindkomst
-    rammer hverken laget her eller personfradraget: den nedsætter kun
-    skattepligtig indkomst. Et lag er udeladt, når dets eget grundlag er nul,
-    så en linje uden indhold ikke skal vises frem. */
+    grundlag, begge med lovens sats. Positiv nettokapitalindkomst tillægges
+    bundskattens grundlag helt uden bundfradrag, og topskattens grundlag kun
+    for den del, der ligger over kapitalindkomstens egen bundfradragsgrænse —
+    aldrig mellem- eller top-topskattens, jf. docs/satser/2026.md. Negativ
+    kapitalindkomst rammer hverken laget her eller personfradraget: den
+    nedsætter kun skattepligtig indkomst. Et lag er udeladt, når dets eget
+    grundlag er nul, så en linje uden indhold ikke skal vises frem — også
+    nedslaget, som her er et lag på lige fod med de to andre og ikke det lag,
+    der altid står, som det er blandt de personlige. */
 function capitalIncomeLayers(
   capitalIncome: Nominal,
   municipalTaxRate: number,
@@ -364,25 +367,51 @@ function capitalIncomeLayers(
   const positive = Math.max(0, capitalIncome)
   const aboveThreshold = Math.max(0, positive - rates.thresholds.capitalIncomeInTopBracket)
 
-  // Loftet måles på den sats, der faktisk betales, ligesom i `progression`:
-  // er bundskatten allerede sat ned, er det den nedsatte, topskattens eget
-  // trin lægges oven på.
-  let combinedRate = rates.bracketTaxRates.bottomBracketTax + municipalTaxRate
-  const bottomRate =
-    rates.bracketTaxRates.bottomBracketTax - Math.max(0, combinedRate - rates.taxCeiling.capitalIncome)
-
-  combinedRate = municipalTaxRate + bottomRate + rates.bracketTaxRates.topBracketTax
-  const topRate =
-    rates.bracketTaxRates.topBracketTax - Math.max(0, combinedRate - rates.taxCeiling.capitalIncome)
-
   const contribution: Partial<Record<CapitalIncomeLayer, LayerAmount>> = {}
   if (positive > 0) {
-    contribution.bottomBracketTax = { base: positive, rate: bottomRate, amount: positive * bottomRate }
+    contribution.bottomBracketTax = layerAmount(positive, rates.bracketTaxRates.bottomBracketTax)
   }
   if (aboveThreshold > 0) {
-    contribution.topBracketTax = { base: aboveThreshold, rate: topRate, amount: aboveThreshold * topRate }
+    contribution.topBracketTax = layerAmount(aboveThreshold, rates.bracketTaxRates.topBracketTax)
   }
+
+  const relief = capitalIncomeCeilingRelief(positive, aboveThreshold, municipalTaxRate, rates)
+  if (relief) contribution.taxCeilingRelief = relief
+
   return contribution
+}
+
+/** Kapitalindkomstens eget loftnedslag: de procentpoint, kommuneskatten plus
+    bund- og topskat ligger over de 42 %, ganget med grundlaget for det lag,
+    der bryder loftet.
+
+    Loftet er kapitalindkomstens eget og har intet med det skrå skatteloftets
+    tre trin at gøre — de to kan binde i samme år, hver med sit grundlag.
+    Til gengæld er dette ét tal og ikke en trappe: bryder bundskattelaget
+    loftet, bryder topskattelaget det også, og de to har hvert sit grundlag.
+    Det kan ikke ske med nogen dansk kommunesats — bundskat plus den højeste
+    er 38,31 % — og `rateYear.test.ts` holder satsåret op mod netop det. */
+function capitalIncomeCeilingRelief(
+  positive: Nominal,
+  aboveThreshold: Nominal,
+  municipalTaxRate: number,
+  rates: RateYear,
+): LayerAmount | undefined {
+  const steps = [
+    { base: positive, rate: rates.bracketTaxRates.bottomBracketTax },
+    { base: aboveThreshold, rate: rates.bracketTaxRates.topBracketTax },
+  ]
+
+  let combinedRate = municipalTaxRate
+  for (const step of steps) {
+    combinedRate += step.rate
+    const aboveCeiling = Math.max(0, combinedRate - rates.taxCeiling.capitalIncome)
+    if (aboveCeiling > 0) {
+      return step.base > 0 ? layerAmount(step.base, -aboveCeiling) : undefined
+    }
+  }
+
+  return undefined
 }
 
 /** Personfradraget anvendes i det enkelte lag frem for som en samlet
