@@ -25,6 +25,19 @@ const LABEL_GAP = 10
 // Tidsenheden er simuleringsåret, og x-aksen tæller ét pr. punkt.
 const X_AXIS_NAME = 'år'
 
+// Et fravalgt bånd i legenden træder tilbage, men forsvinder ikke.
+const DESELECTED_OPACITY = 0.28
+
+// Båndene inde i et markeret spænd trækkes mod gråt og mørknes. Farve
+// betyder "her holder planen", gråt at den ikke gør — og markeringen skal
+// derfor ikke lægge en rød flade oven på dataene for at blive set.
+const SPAN_SATURATION = 0.18
+const SPAN_BRIGHTNESS = 0.7
+
+// Spændets mærkat står i proportional skrift, hvor tegnbredden kun kan
+// skønnes. Pladen under det må hellere være et hår for bred end for smal.
+const SPAN_LABEL_CHAR_WIDTH = 5.3
+
 type BandPoint = { y0: number; y1: number }
 
 type BufferSpan = { state: BufferState; fromIndex: number; toIndex: number; fromYear: number }
@@ -148,9 +161,33 @@ export function WealthChart({
     .y1((d) => y(d.y1))
     .curve(curveLinear)
 
-  // Halvdelen af årsafstanden, så spændets tonede baggrund dækker hele det
+  // Halvdelen af årsafstanden, så spændets markering dækker hele det
   // markerede år og ikke kun punktet midt i det.
   const halfStep = n > 1 ? (x(1) - x(0)) / 2 : 0
+
+  // Spændets to kanter regnes ét sted: klipfladen, dæmpningen og markeringens
+  // egne streger skal stå præcis samme sted.
+  const spans = bufferSpans(years).map((span) => {
+    const key = `${span.state}-${span.fromIndex}`
+    return {
+      ...span,
+      key,
+      clipId: `bufferstate-klip-${key}`,
+      x0: Math.max(left, x(span.fromIndex) - halfStep),
+      x1: Math.min(width - MARGIN.right, x(span.toIndex) + halfStep),
+    }
+  })
+
+  // Båndene tegnes op til tre gange i et markeret spænd — i deres egne farver,
+  // slukket mod fladen og dæmpet ovenpå — så formen ligger ét sted.
+  const bandPaths = holdings.map((holding, si) => ({
+    holding,
+    color: holdingColor(si),
+    path: areaGenerator(bands[si]!) ?? undefined,
+    free: isFreeAssets(holding),
+    opacity:
+      selected?.kind === 'holding' && selected.id !== holding.id ? DESELECTED_OPACITY : 1,
+  }))
 
   // X-aksens årstal: hvert tiende år, plus altid første og sidste, så en
   // kort horisont ikke står uden en eneste årsmarkering.
@@ -181,28 +218,27 @@ export function WealthChart({
             >
               <line x1={0} y1={0} x2={0} y2={8} stroke="var(--flade)" strokeWidth={2.5} />
             </pattern>
-          </defs>
-          {bufferSpans(years).map((span) => {
-            const x0 = Math.max(left, x(span.fromIndex) - halfStep)
-            const x1 = Math.min(width - MARGIN.right, x(span.toIndex) + halfStep)
-            return (
-              <g
-                key={`${span.state}-${span.fromIndex}`}
-                className={`bufferstate-spaen ${bufferStateClasses[span.state]}`}
-              >
+            {/* Dæmpningen er et filter og ikke en farve: båndene beholder
+                deres egne nuancer, de trækkes bare mod gråt. */}
+            <filter id="bufferstate-daempning">
+              <feColorMatrix type="saturate" values={`${SPAN_SATURATION}`} />
+              <feComponentTransfer>
+                <feFuncR type="linear" slope={SPAN_BRIGHTNESS} />
+                <feFuncG type="linear" slope={SPAN_BRIGHTNESS} />
+                <feFuncB type="linear" slope={SPAN_BRIGHTNESS} />
+              </feComponentTransfer>
+            </filter>
+            {spans.map((span) => (
+              <clipPath key={span.clipId} id={span.clipId}>
                 <rect
-                  data-buffer-state={span.state}
-                  x={x0}
+                  x={span.x0}
                   y={MARGIN.top}
-                  width={x1 - x0}
+                  width={span.x1 - span.x0}
                   height={height - MARGIN.top - MARGIN.bottom}
                 />
-                <text x={x0 + 4} y={height - MARGIN.bottom - 6}>
-                  {bufferStateLabels[span.state]} fra {span.fromYear}
-                </text>
-              </g>
-            )
-          })}
+              </clipPath>
+            ))}
+          </defs>
           <g className="formuegraf-akse-y">
             {/* Enheden står over mærkatsøjlen og er højrestillet som den, så
                 den læses som søjlens overskrift. */}
@@ -224,33 +260,117 @@ export function WealthChart({
               </g>
             ))}
           </g>
-          {holdings.map((holding, si) => {
-            const dimmed = selected?.kind === 'holding' && selected.id !== holding.id
-            const path = areaGenerator(bands[si]!) ?? undefined
-            const free = isFreeAssets(holding)
-            return (
-              <g key={holding.id}>
+          {bandPaths.map((band) => (
+            <g key={band.holding.id}>
+              <path
+                data-holding={band.holding.id}
+                data-free-assets={band.free}
+                d={band.path}
+                fill={band.color}
+                fillOpacity={band.opacity}
+                stroke="var(--flade)"
+                strokeWidth={2}
+              />
+              {/* Skraveringen ligger oven på beholdningens egen farve frem
+                  for at erstatte den: farven siger hvilken beholdning,
+                  skraveringen at den er bundet. */}
+              {!band.free && (
                 <path
-                  data-holding={holding.id}
-                  data-free-assets={free}
-                  d={path}
-                  fill={holdingColor(si)}
-                  fillOpacity={dimmed ? 0.28 : 1}
-                  stroke="var(--flade)"
-                  strokeWidth={2}
+                  data-hatch={band.holding.id}
+                  d={band.path}
+                  fill="url(#skravering)"
+                  fillOpacity={band.opacity}
+                  stroke="none"
                 />
-                {/* Skraveringen ligger oven på beholdningens egen farve frem
-                    for at erstatte den: farven siger hvilken beholdning,
-                    skraveringen at den er bundet. */}
-                {!free && (
+              )}
+            </g>
+          ))}
+          {/* Dæmpningen inde i spændet. Begge lag gælder: spændet tager
+              mætningen, legendens valg tager dækningen — et fravalgt bånd i et
+              markeret spænd er altså både gråt og trådt tilbage. */}
+          {spans.map((span) => (
+            <g key={`daempning-${span.key}`} clipPath={`url(#${span.clipId})`}>
+              {/* Et dæmpet bånd oven på et mættet blander sig med farven
+                  nedenunder frem for at erstatte den. De fravalgte slukkes
+                  derfor først i fladens egen farve, så kopien lægger sig på
+                  ren bund. */}
+              {bandPaths
+                .filter((band) => band.opacity < 1)
+                .map((band) => (
                   <path
-                    data-hatch={holding.id}
-                    d={path}
-                    fill="url(#skravering)"
-                    fillOpacity={dimmed ? 0.28 : 1}
-                    stroke="none"
+                    key={band.holding.id}
+                    d={band.path}
+                    fill="var(--flade)"
+                    stroke="var(--flade)"
+                    strokeWidth={2}
                   />
-                )}
+                ))}
+              <g filter="url(#bufferstate-daempning)">
+                {bandPaths.map((band) => (
+                  <g key={band.holding.id}>
+                    <path
+                      data-buffer-dimmed={band.holding.id}
+                      d={band.path}
+                      fill={band.color}
+                      fillOpacity={band.opacity}
+                      stroke="var(--flade)"
+                      strokeWidth={2}
+                    />
+                    {!band.free && (
+                      <path
+                        d={band.path}
+                        fill="url(#skravering)"
+                        fillOpacity={band.opacity}
+                        stroke="none"
+                      />
+                    )}
+                  </g>
+                ))}
+              </g>
+            </g>
+          ))}
+          {/* Markeringen selv, foran båndene: to røde kanter og et mærkat.
+              Ingen flade over dataene — den ville tone båndenes farver, og
+              farven er beholdningens identitet. */}
+          {spans.map((span) => {
+            const label = `${bufferStateLabels[span.state]} fra ${span.fromYear}`
+            const plateWidth = label.length * SPAN_LABEL_CHAR_WIDTH + 8
+            // Et spænd helt ude ved højre kant får sin plade skubbet ind, så
+            // mærkatet ikke rager ud over viewBox'en.
+            const plateX = Math.min(span.x0 + 1, width - MARGIN.right - plateWidth)
+            return (
+              <g
+                key={span.key}
+                data-buffer-state={span.state}
+                className={`bufferstate-spaen ${bufferStateClasses[span.state]}`}
+              >
+                <line
+                  className="kant"
+                  x1={span.x0}
+                  x2={span.x0}
+                  y1={MARGIN.top}
+                  y2={height - MARGIN.bottom}
+                />
+                <line
+                  className="kant"
+                  x1={span.x1}
+                  x2={span.x1}
+                  y1={MARGIN.top}
+                  y2={height - MARGIN.bottom}
+                />
+                {/* Rød skrift direkte på et bånd er ikke til at læse, heller
+                    ikke på et dæmpet. */}
+                <rect
+                  className="maerkatplade"
+                  x={plateX}
+                  y={MARGIN.top + 3}
+                  width={plateWidth}
+                  height={14}
+                  rx={2}
+                />
+                <text x={plateX + 4} y={MARGIN.top + 13}>
+                  {label}
+                </text>
               </g>
             )
           })}

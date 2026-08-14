@@ -24,6 +24,30 @@ function aPlanWithSecondHolding(): Plan {
   })
 }
 
+/** En plan, der knækker begge veje: bufferen er tom fra første år, mens der
+    står rigelig likviditet på den anden beholdning uden en overførsel til at
+    hente den — ufuldstændig først, uholdbar når pengene er brugt. */
+function aPlanWithBufferFault(): Plan {
+  const base = aPlanWithSecondHolding()
+  return {
+    ...base,
+    entries: [anExpense({ amountInRealKroner: 40_000 })],
+    household: {
+      persons: [
+        {
+          ...base.household.persons[0]!,
+          holdings: [
+            // Bufferen tømmes med det samme; ingen renter forstyrrer.
+            { ...base.household.persons[0]!.holdings[0]!, balance: 0 },
+            // Rigelig likviditet andetsteds — men ingen overførsel henter den.
+            { ...base.household.persons[0]!.holdings[1]!, balance: 500_000 },
+          ],
+        },
+      ],
+    },
+  }
+}
+
 describe('WealthChart', () => {
   it('tegner ét arealag pr. beholdning, med hver sin farve, og navngiver dem i en legend', () => {
     const plan = aPlanWithSecondHolding()
@@ -68,24 +92,7 @@ describe('WealthChart', () => {
   })
 
   it('floorer en negativ buffer ved nul og markerer spændet i stedet, med ordet der skelner tilstandene', () => {
-    const base = aPlanWithSecondHolding()
-    const plan: Plan = {
-      ...base,
-      entries: [anExpense({ amountInRealKroner: 40_000 })],
-      household: {
-        persons: [
-          {
-            ...base.household.persons[0]!,
-            holdings: [
-              // Bufferen tømmes med det samme; ingen renter forstyrrer.
-              { ...base.household.persons[0]!.holdings[0]!, balance: 0 },
-              // Rigelig likviditet andetsteds — men ingen overførsel henter den.
-              { ...base.household.persons[0]!.holdings[1]!, balance: 500_000 },
-            ],
-          },
-        ],
-      },
-    }
+    const plan = aPlanWithBufferFault()
     const years = simulate(plan)
     const { container } = render(<WealthChart years={years} plan={plan} unit="Real" />)
 
@@ -118,6 +125,66 @@ describe('WealthChart', () => {
 
     expect(screen.getByText('2026')).toBeTruthy()
     expect(screen.getByText('2063')).toBeTruthy()
+  })
+
+  it('tegner markeringen foran båndene, og uden en flade over dataene', () => {
+    const plan = aPlanWithBufferFault()
+    const years = simulate(plan)
+    const { container } = render(<WealthChart years={years} plan={plan} unit="Real" />)
+
+    // En tonet flade bag stablingen forsvinder præcis, når stablingen er høj
+    // — og høj er den netop, når planen er ufuldstændig.
+    const alle = Array.from(container.querySelectorAll('svg *'))
+    const sidsteBaand = alle.reduce((sidste, el, i) => (el.hasAttribute('data-holding') ? i : sidste), -1)
+    const foersteMarkering = alle.findIndex((el) => el.hasAttribute('data-buffer-state'))
+    expect(sidsteBaand).toBeGreaterThan(-1)
+    expect(foersteMarkering).toBeGreaterThan(sidsteBaand)
+
+    // Foran båndene må markeringen ikke lægge farve på dataene: den har to
+    // kanter og mærkatets plade, og intet felt hen over stablingen.
+    const markering = container.querySelector('[data-buffer-state]')!
+    expect(markering.querySelectorAll('line')).toHaveLength(2)
+    const rects = Array.from(markering.querySelectorAll('rect'))
+    expect(rects).toHaveLength(1)
+    expect(rects[0]!.getAttribute('height')).toBe('14')
+  })
+
+  it('dæmper båndene inde i spændet i stedet for at tone dem røde', () => {
+    const plan = aPlanWithBufferFault()
+    const years = simulate(plan)
+    const { container } = render(<WealthChart years={years} plan={plan} unit="Real" />)
+
+    const spaend = container.querySelectorAll('svg g[clip-path]')
+    expect(spaend.length).toBeGreaterThan(0)
+
+    // Hvert spænd tegner begge beholdningers bånd om gennem dæmpningsfilteret.
+    expect(container.querySelectorAll('[data-buffer-dimmed]')).toHaveLength(spaend.length * 2)
+    for (const gruppe of container.querySelectorAll('svg g[filter]')) {
+      expect(gruppe.getAttribute('filter')).toBe('url(#bufferstate-daempning)')
+    }
+  })
+
+  it('lader begge dæmpninger gælde: spændet tager mætningen, valget dækningen', () => {
+    const plan = aPlanWithBufferFault()
+    const years = simulate(plan)
+    const { container } = render(
+      <WealthChart
+        years={years}
+        plan={plan}
+        unit="Real"
+        selected={{ kind: 'holding', id: 'anden-beholdning' }}
+      />,
+    )
+
+    const valgt = container.querySelector('[data-buffer-dimmed="anden-beholdning"]')!
+    const fravalgt = container.querySelector('[data-buffer-dimmed="free-assets"]')!
+    expect(valgt.getAttribute('fill-opacity')).toBe('1')
+    expect(fravalgt.getAttribute('fill-opacity')).toBe('0.28')
+
+    // Det fravalgte bånd slukkes mod fladen først — ellers ville dets mættede
+    // farve skinne igennem den halvgennemsigtige, dæmpede kopi.
+    const slukning = container.querySelectorAll('svg g[clip-path] > path[fill="var(--flade)"]')
+    expect(slukning.length).toBe(container.querySelectorAll('svg g[clip-path]').length)
   })
 
   it('navngiver aksernes enheder, så tallene ikke skal gættes', () => {

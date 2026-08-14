@@ -653,9 +653,20 @@ body {
 
 /* Bufferens to fejltilstande, jf. ADR-0008. Samme røde tone som årstabellen
    for begge — rød er forbeholdt den negative buffer alene, og de to
-   tilstande skelnes med ordet i mærkatet, ikke med endnu en farve. */
-.formuegraf .bufferstate-spaen rect {
-  fill: var(--neg-svag);
+   tilstande skelnes med ordet i mærkatet, ikke med endnu en farve.
+
+   Markeringen ligger foran båndene, fordi en tonet flade bagved forsvinder
+   præcis, når stablingen er høj — og en høj stabling er netop, hvad en
+   ufuldstændig plan har. Foran er der til gengæld ingen flade: båndene inde
+   i spændet dæmpes i stedet, se WealthChart's filter. */
+.formuegraf .bufferstate-spaen .kant {
+  stroke: var(--neg);
+  stroke-width: 1.25;
+}
+
+.formuegraf .bufferstate-spaen .maerkatplade {
+  fill: var(--laerred);
+  fill-opacity: 0.82;
 }
 
 .formuegraf .bufferstate-spaen text {

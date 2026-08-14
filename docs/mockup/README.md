@@ -337,17 +337,23 @@ kravspecifikationen:
 1. **Stablet areal med gulv ved nul, og et markeret spænd af år.** Bufferen kan blive
    negativ, men tegnes ikke under aksen: en tom buffer er ikke en beholdning med negativ
    værdi, det er et hul i planen, og et hul har ingen udstrækning på formueaksen. Årene
-   markeres i stedet med en tonet baggrund bag stablingen — én tone for *ufuldstændig*
-   og én for *uholdbar* — og dybden står som beløb i mærkatet og i tabellens
-   bufferkolonne. Se `#fejl`.
+   markeres i stedet — én tone for *ufuldstændig* og én for *uholdbar* — og dybden står
+   som beløb i mærkatet og i tabellens bufferkolonne. Se `#fejl`.
 
    Det var oprindeligt krav 1, at et bånd skulle kunne krydse nul, og det er dét krav,
    flest biblioteker fejler på. Det er nu afgjort, at det ikke er nødvendigt. Prisen er,
    at stablens overkant ikke er formuen i de år: den overvurderer med det, bufferen
    mangler. Tabellen har det rigtige tal.
-2. **En markering af et interval på x-aksen, bag serierne.** Egen tone pr. tilstand og et
+2. **En markering af et interval på x-aksen, foran serierne.** Egen tone pr. tilstand og et
    mærkat pr. spænd. Det er krav 1's anden halvdel, og det er dét, der er kommet i stedet
    for det krydsende bånd. Se `#fejl`.
+
+   Markeringen lå oprindelig *bag* serierne, og dér forsvandt den præcis, når stablingen
+   var høj — hvilket er netop, hvad en ufuldstændig plan har: pengene er der, de står bare
+   bundet. Foran må den til gengæld ikke lægge en flade over dataene, for en tone hen over
+   båndene ændrer de farver, legenden lover. I stedet **dæmpes serierne inden for spændet**
+   (trukket mod gråt og mørknet), så markeringen bæres af kanterne og mærkatet.
+   Det kræver, at biblioteket kan klippe og filtrere et lag pr. spænd.
 3. **Klik på et år**, der åbner forklar-året, og som holder grafen og tabelrækken
    synkroniseret.
 4. **Grafen måles efter den plads, den har, og tegnes om** — ved vinduesskift, og når

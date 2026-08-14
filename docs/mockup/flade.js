@@ -303,36 +303,38 @@ function tegnFormuegraf(data, serier, hoejde, maerker) {
 
   var s = ['<svg viewBox="0 0 ' + B + ' ' + H + '" role="img" aria-label="Formuegraf">'];
 
-  /* Mærkaterne tegnes først, så gitter og bånd ligger oven på dem. */
+  /* Markeringen ligger foran båndene. En tonet flade bagved forsvinder
+     præcis, når stablingen er høj — og høj er den netop, når planen er
+     ufuldstændig: pengene er der, de står bare bundet. Foran er der til
+     gengæld ingen flade over dataene; båndene inden for spændet dæmpes i
+     stedet, så farve betyder "her holder planen". */
   var TONER = {
-    ufuldstaendig: { flade: 'rgba(138,107,31,.12)', streg: '#8a6b1f', ord: 'Ufuldstændig' },
-    uholdbar: { flade: 'rgba(164,39,29,.12)', streg: '#a4271d', ord: 'Uholdbar' }
+    ufuldstaendig: { streg: '#8a6b1f', ord: 'Ufuldstændig' },
+    uholdbar: { streg: '#a4271d', ord: 'Uholdbar' }
   };
-  /* Mærkaterne sidder nede ved aksen, fordi milepælene har toppen, og de
-     trappes indbyrdes: to spænd kan ligge få år fra hinanden. */
-  var sidsteVenstre = 1e9, etageM = -1;
-  (maerker || []).slice().reverse().forEach(function (m) {
-    var halv = (B - M.l - M.r) / (n - 1) / 2;
-    var x0 = Math.max(M.l, x(m.fra) - halv), x1 = Math.min(B - M.r, x(m.til) + halv);
-    var t = TONER[m.slags];
-    s.push('<rect x="' + x0.toFixed(1) + '" y="' + M.t + '" width="' + (x1 - x0).toFixed(1) +
-      '" height="' + (H - M.b - M.t) + '" fill="' + t.flade + '"/>');
-    s.push('<line x1="' + x0.toFixed(1) + '" x2="' + x0.toFixed(1) + '" y1="' + M.t +
-      '" y2="' + (H - M.b) + '" stroke="' + t.streg + '" stroke-width="1"/>');
-
-    /* Beløbet står i mærkatet, fordi båndet ikke længere kan vise dybden. */
-    var tekst = t.ord + ' fra ' + m.aar + ' · op til ' +
-      (m.dybest < 1000000 ? K(m.dybest) + ' kr.' : mio(m.dybest) + ' kr.') + ' i minus';
-    var bredde = tekst.length * 4.6 + 10;
-    var venstre = Math.min(x0 + 4, B - M.r - bredde);
-    etageM = venstre + bredde + 6 > sidsteVenstre ? etageM + 1 : 0;
-    sidsteVenstre = venstre;
-    var linje = H - M.b - 6 - etageM * 16;
-    s.push('<rect x="' + venstre.toFixed(1) + '" y="' + (linje - 10) + '" width="' + bredde.toFixed(1) +
-      '" height="14" rx="2" fill="#ffffff" fill-opacity="0.86"/>');
-    s.push('<text x="' + (venstre + 5).toFixed(1) + '" y="' + linje +
-      '" font-size="9.5" fill="' + t.streg + '">' + tekst + '</text>');
+  var halv = (B - M.l - M.r) / (n - 1) / 2;
+  var spaend = (maerker || []).map(function (m, mi) {
+    return {
+      m: m,
+      t: TONER[m.slags],
+      klip: 'spaendklip-' + mi,
+      x0: Math.max(M.l, x(m.fra) - halv),
+      x1: Math.min(B - M.r, x(m.til) + halv)
+    };
   });
+
+  /* Dæmpningen er et filter og ikke en farve: båndene beholder deres egne
+     nuancer, de trækkes bare mod papiret. */
+  s.push('<defs>');
+  s.push('<filter id="spaenddaempning"><feColorMatrix type="saturate" values="0.18"/>' +
+    '<feComponentTransfer><feFuncR type="linear" slope="0.5" intercept="0.5"/>' +
+    '<feFuncG type="linear" slope="0.5" intercept="0.5"/>' +
+    '<feFuncB type="linear" slope="0.5" intercept="0.5"/></feComponentTransfer></filter>');
+  spaend.forEach(function (sp) {
+    s.push('<clipPath id="' + sp.klip + '"><rect x="' + sp.x0.toFixed(1) + '" y="' + M.t +
+      '" width="' + (sp.x1 - sp.x0).toFixed(1) + '" height="' + (H - M.t - M.b) + '"/></clipPath>');
+  });
+  s.push('</defs>');
 
   /* y-gitter */
   var trin = Math.pow(10, Math.floor(Math.log10(Math.max(1, maks - min)))) / 2;
@@ -347,15 +349,47 @@ function tegnFormuegraf(data, serier, hoejde, maerker) {
   s.push('<text x="' + (M.l - 6) + '" y="' + (M.t - 8) +
     '" text-anchor="end" font-size="10" fill="#57544f">mio. kr.</text>');
 
-  /* båndene */
-  bånd.forEach(function (band, si) {
-    var op = [], ned = [];
-    for (var i = 0; i < n; i++) {
-      op.push(x(i).toFixed(1) + ',' + y(band[i][1]).toFixed(1));
-      ned.unshift(x(i).toFixed(1) + ',' + y(band[i][0]).toFixed(1));
-    }
-    s.push('<polygon points="' + op.concat(ned).join(' ') + '" fill="' + serier[si].farve +
-      '" stroke="#ffffff" stroke-width="0.4"/>');
+  /* båndene. Formen ligger ét sted, fordi de tegnes om inden for hvert
+     markeret spænd — dæmpet, gennem filteret. */
+  function baandSvg() {
+    return bånd.map(function (band, si) {
+      var op = [], ned = [];
+      for (var i = 0; i < n; i++) {
+        op.push(x(i).toFixed(1) + ',' + y(band[i][1]).toFixed(1));
+        ned.unshift(x(i).toFixed(1) + ',' + y(band[i][0]).toFixed(1));
+      }
+      return '<polygon points="' + op.concat(ned).join(' ') + '" fill="' + serier[si].farve +
+        '" stroke="#ffffff" stroke-width="0.4"/>';
+    }).join('');
+  }
+  s.push(baandSvg());
+
+  spaend.forEach(function (sp) {
+    s.push('<g clip-path="url(#' + sp.klip + ')" filter="url(#spaenddaempning)">' + baandSvg() + '</g>');
+  });
+
+  /* Markeringens egne streger og mærkater, forrest. Mærkaterne sidder nede
+     ved aksen, fordi milepælene har toppen, og de trappes indbyrdes: to
+     spænd kan ligge få år fra hinanden. */
+  var sidsteVenstre = 1e9, etageM = -1;
+  spaend.slice().reverse().forEach(function (sp) {
+    [sp.x0, sp.x1].forEach(function (kx) {
+      s.push('<line x1="' + kx.toFixed(1) + '" x2="' + kx.toFixed(1) + '" y1="' + M.t +
+        '" y2="' + (H - M.b) + '" stroke="' + sp.t.streg + '" stroke-width="1.25"/>');
+    });
+
+    /* Beløbet står i mærkatet, fordi båndet ikke længere kan vise dybden. */
+    var tekst = sp.t.ord + ' fra ' + sp.m.aar + ' · op til ' +
+      (sp.m.dybest < 1000000 ? K(sp.m.dybest) + ' kr.' : mio(sp.m.dybest) + ' kr.') + ' i minus';
+    var bredde = tekst.length * 4.6 + 10;
+    var venstre = Math.min(sp.x0 + 4, B - M.r - bredde);
+    etageM = venstre + bredde + 6 > sidsteVenstre ? etageM + 1 : 0;
+    sidsteVenstre = venstre;
+    var linje = H - M.b - 6 - etageM * 16;
+    s.push('<rect x="' + venstre.toFixed(1) + '" y="' + (linje - 10) + '" width="' + bredde.toFixed(1) +
+      '" height="14" rx="2" fill="#ffffff" fill-opacity="0.86"/>');
+    s.push('<text x="' + (venstre + 5).toFixed(1) + '" y="' + linje +
+      '" font-size="9.5" fill="' + sp.t.streg + '">' + tekst + '</text>');
   });
 
   /* Milepælene. Navnene sættes i trapper, fordi to milepæle kan ligge få år
