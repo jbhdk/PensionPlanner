@@ -284,10 +284,15 @@ function ContributionsBlock({
   )
 }
 
-/** Loftlinjerne: hvad der landede i alt, loftet det blev målt mod, og den
-    del der beholdt sin fradragsret. Tre tal på samme linje, så den kan
-    efterregnes uden at finde tal andre steder på siden — som et skattelag
-    kan det fra sin egen række.
+/** Loftlinjerne: hvad året bad om, loftet det blev målt mod, og den del der
+    beholdt sin fradragsret. Tallene på samme linje, så den kan efterregnes
+    uden at finde tal andre steder på siden — som et skattelag kan det fra
+    sin egen række.
+
+    De to former deler tabel og ikke betydning. `PerYear` fylder de tre
+    talkolonner, og pengene landede. `OnBalance` måler noget andet — saldoen
+    ved årets begyndelse — og bærer sine to øvrige tal og det faktisk
+    indskudte i noten, jf. ADR-0019.
 
     Linjen står i forklar-året og kun der. Om et loft bandt, afhænger af
     årets fremskrevne beløb målt mod årets satsår, og det er dermed en
@@ -309,13 +314,7 @@ function CapsBlock({
 }) {
   const lines = plan.household.persons.flatMap((person) => {
     const personYear = year.persons.find((p) => p.person === person.id)
-    return (personYear?.caps ?? [])
-      // Kun `PerYear`-formen tegnes. `OnBalance`-linjen har sine egne fem
-      // tal og sin egen aflæsning, og den hører sammen med den skive, hvor
-      // aktiesparekontoen bliver vælgelig — fladen kan ikke oprette en
-      // endnu, så der er ingen linje at skjule for nogen.
-      .filter((cap): cap is Extract<CapYear, { form: 'PerYear' }> => cap.form === 'PerYear')
-      .map((cap) => ({ person: person.name, cap }))
+    return (personYear?.caps ?? []).map((cap) => ({ person: person.name, cap }))
   })
   if (lines.length === 0) return null
 
@@ -329,6 +328,7 @@ function CapsBlock({
             <th>Indbetalt</th>
             <th>Loft</th>
             <th>Med fradragsret</th>
+            <th>Note</th>
           </tr>
         </thead>
         <tbody>
@@ -337,9 +337,12 @@ function CapsBlock({
               <td>
                 {danish(variants, cap.variant)} <span className="enhed">({person})</span>
               </td>
-              <td>{kroner(display(cap.paid))}</td>
+              <td>{kroner(display(cap.form === 'PerYear' ? cap.paid : cap.requested))}</td>
               <td>{kroner(display(cap.cap))}</td>
-              <td>{kroner(display(cap.withDeductibility))}</td>
+              {/* Aktiesparekontoen har ingen fradragsret at måle mod loftet,
+                  og en nul ville se ud som et beløb, der blev til nul. */}
+              <td>{cap.form === 'PerYear' ? kroner(display(cap.withDeductibility)) : '–'}</td>
+              <td className="note">{capNote(cap, display)}</td>
             </tr>
           ))}
         </tbody>
@@ -347,13 +350,41 @@ function CapsBlock({
       {/* Ingen farve her: rød er bufferens, og markeringen af året står i
           årstabellen. Her står tallene, der forklarer den. */}
       <p className="hint">
-        Loftet måler årets samlede indbetaling til den slags ordning efter AM-bidrag —
-        to ratepensioner deler ét loft. Det, der ligger over, bliver liggende i
-        ordningen: ratepensionens overskydende mister sin fradragsret, og
-        aldersopsparingens er afgiftspligtigt.
+        Loftet er personens og måles over årets samlede indbetaling til den slags ordning
+        efter AM-bidrag — to ratepensioner deler ét loft. Det, der ligger over, bliver
+        liggende i ordningen: ratepensionens overskydende mister sin fradragsret, og
+        aldersopsparingens er afgiftspligtigt. Aktiesparekontoens loft måler i stedet
+        saldoen ved årets begyndelse, og indskuddet afkortes til råderummet — det
+        uindskudte blev liggende i kilden, og året er ikke markeret, for der er ikke sket
+        noget brud.
       </p>
     </>
   )
+}
+
+/** Noten bærer det, de fælles kolonner ikke kan sige.
+
+    En `OnBalance`-linje måler ikke det samme som de tre talkolonner:
+    råderummet er loftet minus saldoen ved årets begyndelse, og
+    indbetalingen blev afkortet til det. Noten giver de to tal, kolonnerne
+    ikke har, og det faktisk indskudte, som ikke er det, der står under
+    "Indbetalt" — med dem kan alle fem efterregnes af hinanden, jf.
+    ADR-0019. Subtraktionen er fladens egen og ikke en gentagen udledning i
+    ADR-0012's forstand: begge tal står på den linje, den viser.
+
+    Beløbene i noten går gennem `display` som beløbene selv. En note i
+    løbende priser ved siden af et tal i dagens kroner er den fælde,
+    fladekortet fandt, jf. ADR-0001.
+
+    `PerYear` har ingen note: dens tre tal står i deres egne kolonner, og
+    hvad loftet dér måler, står i afsnittets hint. */
+function capNote(cap: CapYear, display: (amount: number) => number): string {
+  if (cap.form === 'PerYear') return ''
+  return [
+    `primo ${kroner(display(cap.openingBalance))} kr.`,
+    `råderum ${kroner(display(cap.cap - cap.openingBalance))} kr.`,
+    `indskudt ${kroner(display(cap.deposited))} kr.`,
+  ].join(' · ')
 }
 
 /** Afkastet pr. beholdning: primosaldo og vægtet strøm er grundlaget,

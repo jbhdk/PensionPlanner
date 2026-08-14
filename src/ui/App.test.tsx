@@ -53,6 +53,26 @@ function aPensionHolding(id: string, name: string): Holding {
   return { id, name, variant: 'InstalmentPension', balance: 0, grossReturn: 0, annualCostRate: 0 }
 }
 
+/** En aktiesparekonto. Personen kan kun have én, og en lønpost kan ikke være
+    dens kilde — så listerne i skuffen har noget at udelade, når den står i
+    planen. */
+function aShareSavingsAccount(balance = 0): Holding {
+  return {
+    id: 'aktiesparekonto',
+    name: 'Aktiesparekonto',
+    variant: 'ShareSavingsAccount',
+    balance,
+    grossReturn: 0,
+    annualCostRate: 0,
+  }
+}
+
+/** Valgmulighederne i skuffens typeliste, som de står lige nu. */
+function typeOptions(): string[] {
+  const type = screen.getByLabelText(/Type/) as HTMLSelectElement
+  return Array.from(type.options).map((option) => option.value)
+}
+
 /** Fixturens buffer plus en ratepension, så skuffen har en pensionsbeholdning
     at vise. */
 function aPlanWithPension(): Plan {
@@ -115,6 +135,22 @@ function yearCell(rowIndex: number, column: string): string | null {
 /** Årstabellen ligger bag sin egen fane, med Formuen som standardfane. */
 async function showYearTable(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
+}
+
+/** Lofttabellens rækker i forklar-året, celle for celle. */
+function capRows(): (string | null)[][] {
+  const lofterne = screen
+    .getByRole('heading', { name: 'Lofterne', level: 3 })
+    .closest('.blok')!
+    .querySelector('table.lofttabel') as HTMLElement
+  return within(lofterne)
+    .getAllByRole('row')
+    .slice(1)
+    .map((row) =>
+      within(row)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent),
+    )
 }
 
 /** Satsen i et skattelags egen linje i forklar-året. Lagtabellen har fire
@@ -414,28 +450,151 @@ describe('fladen', () => {
     expect(bruttoafkast().value).toBe('0')
   })
 
-  it('lader en beholdnings type vælges mellem de fem, med deres danske navne', async () => {
+  it('lader en beholdnings type vælges mellem de seks, med deres danske navne', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithSecondHolding()} />)
 
     await user.click(navigatorButton(/Anden beholdning/))
     const type = screen.getByLabelText(/Type/) as HTMLSelectElement
 
-    // Fixturens beholdning er en opsparingskonto. Aktiesparekontoen står ikke
-    // i listen — varianten findes i motoren, men uden sit loft, og en konto
-    // uden indskudsgrænse er en usand model — og intet engelsk identifier når
-    // skærmen.
+    // Fixturens beholdning er en opsparingskonto. Ordningerne står først og de
+    // frie midler til sidst, samme rækkefølge som varianttabellen — og intet
+    // engelsk identifier når skærmen.
     expect(type.value).toBe('Opsparingskonto')
     expect(Array.from(type.options).map((option) => option.value)).toEqual([
       'Ratepension',
       'Livrente',
       'Aldersopsparing',
+      'Aktiesparekonto',
       'Aktiedepot',
       'Opsparingskonto',
     ])
 
-    await user.selectOptions(type, 'Ratepension')
-    expect(type.value).toBe('Ratepension')
+    // Valget skriver en plan, motoren kan regne på: resultatspalten viser
+    // stadig årstabellen og ikke beskeden om, at planen ikke kan simuleres.
+    await user.selectOptions(type, 'Aktiesparekonto')
+    expect(type.value).toBe('Aktiesparekonto')
+    await showYearTable(user)
+    expect(screen.getByRole('table')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+  })
+
+  it('udelader Aktiesparekonto i typelisten, når personen allerede har en anden', async () => {
+    // ASKL § 3 tillader kun én pr. person, og `validatePlan` afviser to. Stod
+    // varianten i listen, kunne ét klik lade hele resultatspalten forsvinde,
+    // mens brugeren ledte efter, hvad de gjorde galt, jf. ADR-0020.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          holdings: [aShareSavingsAccount(), aFreeHolding('anden-beholdning', 'Anden beholdning')],
+        })}
+      />,
+    )
+
+    await user.click(navigatorButton(/Anden beholdning/))
+
+    expect(typeOptions()).not.toContain('Aktiesparekonto')
+
+    // Kontoen selv skal blive ved med at vise sin egen værdi. Faldt den ud af
+    // sin egen liste, stod feltet tomt, og beholdningen kunne ikke redigeres.
+    await user.click(navigatorButton(/Aktiesparekonto/))
+
+    expect((screen.getByLabelText(/Type/) as HTMLSelectElement).value).toBe('Aktiesparekonto')
+    expect(typeOptions()).toContain('Aktiesparekonto')
+  })
+
+  it('tilbyder stadig Aktiesparekonto i ægtefællens typeliste, når den ene har en', async () => {
+    // Modprøve på, at reglen er personens og ikke husstandens — samme skel
+    // som loftets, jf. ADR-0018. En filtrering, der talte husstandens
+    // beholdninger, ville lukke for en konto, ægtefællen har lov til at have,
+    // og den ville se lige så rigtig ud som den rigtige uden denne test.
+    const user = userEvent.setup()
+    const base = aPlan({ holdings: [aShareSavingsAccount()] })
+    const jesper = base.household.persons[0]!
+    render(
+      <App
+        initialPlan={{
+          ...base,
+          household: {
+            persons: [
+              jesper,
+              {
+                ...jesper,
+                id: 'maria',
+                name: 'Maria',
+                holdings: [aFreeHolding('marias-frie-midler', 'Marias frie midler')],
+              },
+            ],
+          },
+        }}
+      />,
+    )
+
+    await user.click(navigatorButton(/Marias frie midler/))
+
+    expect(typeOptions()).toContain('Aktiesparekonto')
+  })
+
+  it('tilbyder ikke lønposterne som kilde, når indbetalingen går til en aktiesparekonto', async () => {
+    // Der findes ingen arbejdsgiveradministreret aktiesparekonto, og en
+    // lønkildet indbetaling til den kan derfor ikke ske, jf. ADR-0020. Stod
+    // lønposten i listen, kunne ét klik skrive en plan, `validatePlan`
+    // afviser, og hele resultatspalten forsvandt.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          holdings: [aShareSavingsAccount()],
+          entries: [aSalary({ amountInRealKroner: 600_000 })],
+          contributions: [
+            aHoldingContribution({
+              source: 'free-assets',
+              to: 'aktiesparekonto',
+              amountInRealKroner: 20_000,
+            }),
+          ],
+        })}
+      />,
+    )
+
+    await user.click(navigatorButton(/Frie midler → Aktiesparekonto/))
+    const kilde = screen.getByLabelText(/Kilde/) as HTMLSelectElement
+
+    expect(Array.from(kilde.options).map((option) => option.value)).toEqual([
+      'Frie midler · Jesper',
+    ])
+    // Og gruppen står ikke tom tilbage: en overskrift uden noget under sig
+    // ville se ud som en liste, der mangler at blive fyldt.
+    expect(kilde.querySelector('optgroup[label="Lønposter"]')).toBeNull()
+  })
+
+  it('flytter kilden til de frie midler, når destinationen skifter til en aktiesparekonto', async () => {
+    // Aktiesparekontoen kan ikke tage imod en lønkildet indbetaling, og
+    // destinationen kan alligevel vælges: bidraget skifter udgave med, som
+    // det gør, når en gentagelse bliver til "Én gang" og forfaldet må følge
+    // med. Ét klik, og planen kan fortsat simuleres.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          holdings: [aPensionHolding('ratepension', 'Ratepension'), aShareSavingsAccount()],
+          entries: [aSalary({ amountInRealKroner: 600_000 })],
+          contributions: [
+            aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+          ],
+        })}
+      />,
+    )
+
+    await user.click(navigatorButton(/Løn.*Ratepension/))
+    await user.selectOptions(screen.getByLabelText(/Destination/), 'Aktiesparekonto')
+
+    expect((screen.getByLabelText(/Kilde/) as HTMLSelectElement).value).toBe('Frie midler · Jesper')
+    expect((screen.getByLabelText(/Destination/) as HTMLSelectElement).value).toBe(
+      'Aktiesparekonto',
+    )
+    expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
   })
 
   it('stiller typen øverst i beholdningens skuffe, lige under navnet', async () => {
@@ -1202,6 +1361,27 @@ describe('fladen', () => {
     expect(sectionLabels('Beløb')).toEqual(['Fast beløb (dagens kroner)'])
   })
 
+  it('tilføjer en indbetaling fra de frie midler, når husstandens eneste ordning er en aktiesparekonto', async () => {
+    // Lønposten kommer først, når knappen vælger sit par — men den kan ikke
+    // være kilde her, og ét klik må ikke skrive en plan, `validatePlan`
+    // afviser, jf. ADR-0020. Parret springer den over og tager de frie
+    // midler i stedet.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          holdings: [aShareSavingsAccount()],
+          entries: [aSalary({ amountInRealKroner: 600_000 })],
+        })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: '+ Indbetaling' }))
+
+    expect(navigatorButton(/Frie midler.*Aktiesparekonto/)).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+  })
+
   it('skjuler "+ Indbetaling", når husstanden ingen ordning har at betale ind i', () => {
     // Alle beholdninger er frie midler: der er ikke noget, en indbetaling kan
     // gå til — så ville det være en overførsel, jf. ADR-0016.
@@ -1401,6 +1581,96 @@ describe('fladen', () => {
     expect(row.className).not.toContain('uholdbar')
   })
 
+  it('markerer ikke årets række, når et indskud blev afkortet', async () => {
+    // Kontoen står allerede over sit loft, så hele årets indskud på 50.000
+    // blev afvist og blev liggende i kilden. Der er intet brud at markere:
+    // markeringen siger, at en del af indbetalingen ikke virkede, og her
+    // forlod pengene aldrig kilden, jf. ADR-0019.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          balance: 1_000_000,
+          holdings: [aShareSavingsAccount(200_000)],
+          contributions: [
+            aHoldingContribution({
+              source: 'free-assets',
+              to: 'aktiesparekonto',
+              amountInRealKroner: 50_000,
+            }),
+          ],
+        })}
+      />,
+    )
+    await showYearTable(user)
+
+    const row = within(screen.getByRole('table')).getAllByRole('row')[1]!
+
+    expect(within(row).queryByText('Fradrag tabt')).toBeNull()
+    expect(within(row).queryByText('Afgiftspligtigt')).toBeNull()
+    expect(row.className).not.toContain('fradragtabt')
+    expect(row.className).not.toContain('afgiftspligtigt')
+
+    // Afkortningen ses i stedet på loftlinjen, og der står den også, når der
+    // ikke kom en krone ind: året bad om noget.
+    await user.click(row)
+    expect(capRows()).toEqual([
+      [
+        'Aktiesparekonto (Jesper)',
+        '50.000',
+        '174.200',
+        '–',
+        'primo 200.000 kr. · råderum -25.800 kr. · indskudt 0 kr.',
+      ],
+    ])
+  })
+
+  it('deflaterer loftlinjens note på samme måde som dens beløb', async () => {
+    // Enhedsfælden, fladekortet fandt: en note i løbende priser ved siden af
+    // et beløb i dagens kroner, jf. ADR-0001. Forklar-året er i dagens
+    // kroner hele vejen, og noten skal følge den samme omregning som
+    // kolonnerne — ellers ville primosaldoen stå på sine nominelle 174.200
+    // mod et loft, der også viser 174.200, og et råderum på nul, mens der
+    // alligevel stod 3.416 kr. indskudt ved siden af.
+    //
+    // Kontoen fyldes helt op i 2026, så det er § 20-fremskrivningen alene,
+    // der giver plads i 2027: loftet er 177.684 nominelt mod en primosaldo
+    // på 174.200. Deflateret er de tre tal 174.200, 170.784 og 3.416, og de
+    // går stadig op mod hinanden.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          startYear: 2026,
+          balance: 1_000_000,
+          inflationAssumption: 0.02,
+          section20ProjectionAssumption: 0.02,
+          holdings: [aShareSavingsAccount(150_000)],
+          contributions: [
+            aHoldingContribution({
+              source: 'free-assets',
+              to: 'aktiesparekonto',
+              amountInRealKroner: 50_000,
+            }),
+          ],
+        })}
+      />,
+    )
+    await showYearTable(user)
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[2]!) // 2027
+
+    expect(capRows()).toEqual([
+      [
+        'Aktiesparekonto (Jesper)',
+        '50.000',
+        '174.200',
+        '–',
+        'primo 170.784 kr. · råderum 3.416 kr. · indskudt 3.416 kr.',
+      ],
+    ])
+
+  })
+
   it('holder skattelagenes satser faste i forklar-året og lægger loftets virkning i sit eget lag', async () => {
     // Lagenes satser er lovens og flytter sig ikke med kommunen. Binder det
     // skrå skatteloft, står det i loftnedslagets linje — og det var netop
@@ -1486,20 +1756,53 @@ describe('fladen', () => {
     await showYearTable(user)
     await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!)
 
-    const lofterne = screen
-      .getByRole('heading', { name: 'Lofterne', level: 3 })
-      .closest('.blok')!
-      .querySelector('table.lofttabel') as HTMLElement
-    const cells = within(lofterne)
-      .getAllByRole('row')
-      .slice(1)
-      .map((row) =>
-        within(row)
-          .getAllByRole('cell')
-          .map((cell) => cell.textContent),
-      )
+    // Notekolonnen står tom: `PerYear`-formens tre tal står i deres egne
+    // kolonner, og der er intet, de ikke kan sige.
+    expect(capRows()).toEqual([['Ratepension (Jesper)', '96.600', '68.700', '68.700', '']])
+  })
 
-    expect(cells).toEqual([['Ratepension (Jesper)', '96.600', '68.700', '68.700']])
+  it('tegner begge loftformer i samme år, med aktiesparekontoens fem tal', async () => {
+    // Ratepensionen har et `PerYear`-loft: pengene landede, og linjen viser
+    // hvad der kom ind, loftet og den del, der beholdt sin fradragsret.
+    // Aktiesparekontoen har et `OnBalance`-loft, og dens fem tal kan
+    // efterregnes af hinanden: 174.200 − 150.000 er råderummet på 24.200, og
+    // de 50.000, året bad om, blev afkortet til netop det. Fradragsret har
+    // ordningen ingen af, jf. ADR-0019.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          startYear: 2026,
+          balance: 1_000_000,
+          holdings: [aPensionHolding('ratepension', 'Ratepension'), aShareSavingsAccount(150_000)],
+          entries: [aSalary({ amountInRealKroner: 700_000 })],
+          contributions: [
+            aContribution({ source: 'salary', to: 'ratepension', amountInRealKroner: 105_000 }),
+            {
+              ...aHoldingContribution({
+                source: 'free-assets',
+                to: 'aktiesparekonto',
+                amountInRealKroner: 50_000,
+              }),
+              id: 'contribution-2',
+            },
+          ],
+        })}
+      />,
+    )
+    await showYearTable(user)
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!)
+
+    expect(capRows()).toEqual([
+      ['Ratepension (Jesper)', '96.600', '68.700', '68.700', ''],
+      [
+        'Aktiesparekonto (Jesper)',
+        '50.000',
+        '174.200',
+        '–',
+        'primo 150.000 kr. · råderum 24.200 kr. · indskudt 24.200 kr.',
+      ],
+    ])
   })
 
   it('holder loftlinjen ude af inspektørskuffen', async () => {

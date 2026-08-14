@@ -18,14 +18,14 @@ export const directions: Record<string, Direction> = {
 }
 
 /** Ordningerne først, de frie midler til sidst — samme rækkefølge som
-    varianttabellen i motoren. Aktiesparekontoen mangler med vilje: varianten
-    findes i motoren, men står endnu uden sit loft, og kunne den vælges her,
-    kunne brugeren oprette en aktiesparekonto uden indskudsgrænse. Den kommer
-    i listen, når loftet er bygget, jf. ADR-0019. */
+    varianttabellen i motoren. Aktiesparekontoen står blandt ordningerne og
+    ikke ved de frie midler: den har et indskudsloft, og penge derind er en
+    indbetaling og ikke en overførsel, jf. ADR-0016. */
 export const variants: Record<string, HoldingVariant> = {
   Ratepension: 'InstalmentPension',
   Livrente: 'LifeAnnuity',
   Aldersopsparing: 'OldAgeSavings',
+  Aktiesparekonto: 'ShareSavingsAccount',
   Aktiedepot: 'ShareDepot',
   Opsparingskonto: 'SavingsAccount',
 }

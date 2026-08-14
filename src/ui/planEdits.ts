@@ -1,4 +1,4 @@
-import { isFreeAssets } from '../engine/holdingVariant'
+import { isEmployerAdministered, isFreeAssets } from '../engine/holdingVariant'
 import type {
   Contribution,
   Direction,
@@ -462,14 +462,21 @@ export function addContribution(plan: Plan): Plan {
     husstanden ingen indtægtspost, er der stadig en indbetaling at skrive fra
     de frie midler — det er hele grunden til, at den beholdningskildede form
     findes, og var knappen skjult her, kunne aldersopsparingens vindue efter
-    erhvervsophør ikke tastes. */
+    erhvervsophør ikke tastes.
+
+    En ordning, ingen arbejdsgiver kan administrere, kan ikke være enden på
+    et lønkildet par: så ville ét klik skrive en plan, `validatePlan`
+    afviser, jf. ADR-0020. Den springes over i første omgang og findes af den
+    beholdningskildede i anden. */
 export function firstContributionPair(
   plan: Plan,
 ): { kind: Contribution['kind']; source: string; to: string } | undefined {
   for (const entry of plan.entries) {
     if (entry.direction !== 'Income') continue
     const owner = plan.household.persons.find((person) => person.id === entry.owner)
-    const to = (owner?.holdings ?? []).find((holding) => !isFreeAssets(holding))
+    const to = (owner?.holdings ?? []).find(
+      (holding) => !isFreeAssets(holding) && isEmployerAdministered(holding),
+    )
     if (to) return { kind: 'EntrySourced', source: entry.id, to: to.id }
   }
   for (const person of plan.household.persons) {

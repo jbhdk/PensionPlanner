@@ -801,6 +801,15 @@ table.lofttabel td:first-child {
   font-family: var(--f-broed);
 }
 
+/* Noten står som prosa ved siden af tallene: venstrestillet og dæmpet, så
+   den ikke læses som en fjerde talkolonne. */
+table.lofttabel td.note {
+  text-align: left;
+  font-family: var(--f-broed);
+  font-size: 11px;
+  color: var(--muted);
+}
+
 table.lofttabel .enhed {
   color: var(--muted);
 }

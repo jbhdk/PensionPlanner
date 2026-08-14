@@ -1,10 +1,15 @@
 import type { ReactNode } from 'react'
-import { isFreeAssets } from '../engine/holdingVariant'
+import {
+  isEmployerAdministered,
+  isFreeAssets,
+  isUniquePerPerson,
+} from '../engine/holdingVariant'
 import type {
   Anchor,
   Contribution,
   Entry,
   EntryId,
+  Holding,
   HoldingId,
   Period,
   Person,
@@ -341,7 +346,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
         <SelectField
           label="Type"
           value={danish(variants, holding.variant)}
-          options={Object.keys(variants)}
+          options={variantOptions(owner, holding)}
           onChange={(choice) =>
             onChange(withHolding(plan, id, (h) => ({ ...h, variant: variants[choice]! })))
           }
@@ -403,6 +408,25 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
       </Section>
     </>
   )
+}
+
+/** Typerne, beholdningen kan sættes til. En variant, personen kun kan have
+    én af, udelades, når en anden af personens beholdninger allerede er den —
+    ét klik skal ikke kunne skrive en plan, `validatePlan` afviser, jf.
+    ADR-0020.
+
+    Beholdningens egen variant står der altid. Faldt den ud af sin egen
+    liste, ville feltet stå tomt, og aktiesparekontoen kunne ikke redigeres —
+    listen skal udelukke det, brugeren ikke kan vælge, og aldrig det, der
+    allerede er valgt. */
+function variantOptions(owner: Person, holding: Holding): string[] {
+  return Object.keys(variants).filter((label) => {
+    const variant = variants[label]!
+    if (variant === holding.variant) return true
+    return !(
+      isUniquePerPerson(variant) && owner.holdings.some((other) => other.variant === variant)
+    )
+  })
 }
 
 function EntryFields({
@@ -701,7 +725,14 @@ function ContributionFields({
   // Kilden er ét felt med to grupper. Navnet bærer personen med, så to ens
   // navne i husstanden kan skelnes fra hinanden i listen.
   const named = (name: string, person: string) => `${name} · ${person}`
-  const entrySources = plan.entries.filter((entry) => entry.direction === 'Income')
+  // Går indbetalingen til en ordning, ingen arbejdsgiver kan administrere,
+  // tilbydes lønposterne slet ikke: den plan ville `validatePlan` afvise, og
+  // så forsvandt resultatspalten efter ét klik, jf. ADR-0020.
+  const destination = holdings.find((holding) => holding.id === contribution.to)
+  const entrySources =
+    destination && !isEmployerAdministered(destination)
+      ? []
+      : plan.entries.filter((entry) => entry.direction === 'Income')
   const holdingSources = holdings.filter(isFreeAssets)
   const entryLabel = (entry: Entry) =>
     named(
@@ -715,7 +746,19 @@ function ContributionFields({
   // kilde og destination skal tilhøre samme person, jf. ADR-0016. Vælgerne
   // tilbyder kun det, der kan vælges, frem for at lade motoren afvise planen
   // bagefter.
-  const destinations = owner.holdings.filter((holding) => !isFreeAssets(holding))
+  //
+  // Destinationen kan skifte bidragets udgave med sig: vælges en ordning,
+  // ingen arbejdsgiver kan administrere, mens kilden er en lønpost, flytter
+  // kilden med over på personens frie midler. Har personen ingen at flytte
+  // den til, er der intet at skifte til, og ordningen tilbydes ikke.
+  const ownFreeAssets = owner.holdings.find(isFreeAssets)
+  const destinations = owner.holdings.filter(
+    (holding) =>
+      !isFreeAssets(holding) &&
+      (contribution.kind !== 'EntrySourced' ||
+        isEmployerAdministered(holding) ||
+        ownFreeAssets !== undefined),
+  )
   const sourceName =
     contribution.kind === 'EntrySourced'
       ? (sourceEntry?.name ?? contribution.source)
@@ -747,7 +790,9 @@ function ContributionFields({
               label: 'Beholdninger',
               options: holdingSources.map((holding) => holdingLabel(holding.id)),
             },
-          ]}
+            // En tom gruppe udelades: en overskrift uden noget under sig
+            // ligner en liste, der mangler at blive fyldt.
+          ].filter((group) => group.options.length > 0)}
           onChange={(choice) => {
             const entry = entrySources.find((source) => entryLabel(source) === choice)
             const holding = holdingSources.find((source) => holdingLabel(source.id) === choice)
@@ -764,14 +809,17 @@ function ContributionFields({
           label="Destination"
           value={holdingName(contribution.to)}
           options={destinations.map((holding) => holding.name)}
-          onChange={(name) =>
+          onChange={(name) => {
+            const to = destinations.find((holding) => holding.name === name)!
             onChange(
-              withContribution(plan, id, (c) => ({
-                ...c,
-                to: destinations.find((holding) => holding.name === name)!.id,
-              })),
+              withContribution(plan, id, (c) => {
+                const moved = { ...c, to: to.id }
+                return c.kind === 'EntrySourced' && !isEmployerAdministered(to)
+                  ? withSource(moved, { kind: 'HoldingSourced', source: ownFreeAssets!.id })
+                  : moved
+              }),
             )
-          }
+          }}
         />
         <Hint>
           {contribution.kind === 'HoldingSourced'
