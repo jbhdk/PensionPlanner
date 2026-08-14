@@ -536,6 +536,28 @@ describe('fladen', () => {
     expect(typeOptions()).toContain('Aktiesparekonto')
   })
 
+  it('tilbyder ikke ordningerne som type for bufferen', async () => {
+    // Bufferen skal være frie midler, jf. ADR-0004: årets restpost lander på
+    // den, og en ordning kan ikke tage imod frit forbrug. Bufferradioen bærer
+    // allerede reglen fra sin ende, men typelisten gjorde ikke — og ét klik
+    // kunne gøre bufferen til en ordning. Den plan kan hverken simuleres
+    // eller indlæses igen, og fladen skal bære reglen, så afvisningen aldrig
+    // nås, jf. ADR-0020.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithPension()} />)
+
+    await user.click(navigatorButton(/Frie midler/))
+
+    expect(typeOptions()).toEqual(['Aktiedepot', 'Opsparingskonto'])
+
+    // Modprøve på, at reglen gælder bufferen og ikke enhver beholdning. En
+    // filtrering, der lukkede for meget, ville gøre enhver beholdning
+    // uomdannelig og se lige så grøn ud som den rigtige.
+    await user.click(navigatorButton(/Ratepension/))
+
+    expect(typeOptions()).toContain('Ratepension')
+  })
+
   it('tilbyder ikke lønposterne som kilde, når indbetalingen går til en aktiesparekonto', async () => {
     // Der findes ingen arbejdsgiveradministreret aktiesparekonto, og en
     // lønkildet indbetaling til den kan derfor ikke ske, jf. ADR-0020. Stod

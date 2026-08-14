@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import {
   isEmployerAdministered,
   isFreeAssets,
+  isFreeAssetsVariant,
   isUniquePerPerson,
 } from '../engine/holdingVariant'
 import type {
@@ -346,7 +347,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
         <SelectField
           label="Type"
           value={danish(variants, holding.variant)}
-          options={variantOptions(owner, holding)}
+          options={variantOptions(plan, owner, holding)}
           onChange={(choice) =>
             onChange(withHolding(plan, id, (h) => ({ ...h, variant: variants[choice]! })))
           }
@@ -410,19 +411,29 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
   )
 }
 
-/** Typerne, beholdningen kan sættes til. En variant, personen kun kan have
-    én af, udelades, når en anden af personens beholdninger allerede er den —
-    ét klik skal ikke kunne skrive en plan, `validatePlan` afviser, jf.
-    ADR-0020.
+/** Typerne, beholdningen kan sættes til. To regler udelader hver sin slags,
+    og begge er `validatePlan`s: ét klik skal ikke kunne skrive en plan, den
+    afviser, jf. ADR-0020.
+
+    En variant, personen kun kan have én af, udelades, når en anden af
+    personens beholdninger allerede er den. Og er beholdningen planens
+    buffer, udelades ordningerne helt: årets restpost lander på bufferen, og
+    en ordning kan ikke tage imod frit forbrug, jf. ADR-0004. Reglen er den
+    samme, bufferradioen bærer fra sin ende — den lader sig ikke sætte på en
+    ordning, og her kan bufferen ikke blive til en. Vil man omdanne den, skal
+    en anden beholdning først være buffer; planen rettes ikke tavst under
+    brugeren, jf. ADR-0002.
 
     Beholdningens egen variant står der altid. Faldt den ud af sin egen
-    liste, ville feltet stå tomt, og aktiesparekontoen kunne ikke redigeres —
+    liste, ville feltet stå tomt, og beholdningen kunne ikke redigeres —
     listen skal udelukke det, brugeren ikke kan vælge, og aldrig det, der
-    allerede er valgt. */
-function variantOptions(owner: Person, holding: Holding): string[] {
+    allerede er valgt. En buffer, der allerede er en ordning, beholder derfor
+    sin egen linje og kan vælge sig tilbage til frie midler. */
+function variantOptions(plan: Plan, owner: Person, holding: Holding): string[] {
   return Object.keys(variants).filter((label) => {
     const variant = variants[label]!
     if (variant === holding.variant) return true
+    if (plan.buffer === holding.id && !isFreeAssetsVariant(variant)) return false
     return !(
       isUniquePerPerson(variant) && owner.holdings.some((other) => other.variant === variant)
     )

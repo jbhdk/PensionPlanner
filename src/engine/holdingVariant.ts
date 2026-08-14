@@ -150,7 +150,19 @@ const oldAgeSavingsHighCapFrom = 7
     variant, jf. ADR-0010: den dækker `ShareDepot` og `SavingsAccount` under
     ét, og det er den, buffer- og overførselsreglerne taler om. */
 export function isFreeAssets(holding: Holding): boolean {
-  return table[holding.variant].freeAssets
+  return isFreeAssetsVariant(holding.variant)
+}
+
+/** Samme spørgsmål stillet om varianten alene, ganske som
+    `isUniquePerPerson`: fladen spørger, før beholdningen har varianten —
+    typelisten skal vide, om et skifte ville tage de frie midler fra
+    bufferen, mens beholdningen endnu er den, den var.
+
+    De to former står ved siden af hinanden frem for at afløse hinanden:
+    resten af koden spørger om en beholdning, den har i hånden, og læser
+    `filter(isFreeAssets)` frem for en lambda om et felt. */
+export function isFreeAssetsVariant(variant: HoldingVariant): boolean {
+  return table[variant].freeAssets
 }
 
 /** Om personen kun kan have én beholdning af varianten, jf. `UniquePerPerson`
