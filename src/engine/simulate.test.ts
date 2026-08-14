@@ -1395,7 +1395,9 @@ describe('aktiesparekontoen', () => {
     })
     const plan = aPlan({ holdings: [anAccount('den-ene'), anAccount('den-anden')] })
 
-    expect(() => simulate(plan)).toThrow(/jesper.*aktiesparekonti/i)
+    // Beskeden navngiver varianten og ikke ordningen på dansk: reglen er
+    // varianttabellens og ikke aktiesparekontoens alene, jf. ADR-0010.
+    expect(() => simulate(plan)).toThrow(/jesper.*ShareSavingsAccount/i)
   })
 
   it('afviser en lønkildet indbetaling til aktiesparekontoen', () => {

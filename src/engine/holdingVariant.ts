@@ -20,7 +20,7 @@ export type CappedVariant = (typeof cappedVariants)[number]
     finde og rette — jf. ADR-0010, hvor varianten er aksen og beskatningen
     ikke et felt ved siden af den.
 
-    Denne skive bruger fire kolonner. */
+    Denne skive bruger seks kolonner. */
 const table: {
   [V in HoldingVariant]: Row & { cap: V extends CappedVariant ? CapRule : undefined }
 } = {
@@ -28,6 +28,8 @@ const table: {
     freeAssets: false,
     holdingTaxRate: 'palTaxRate',
     deductibility: true,
+    uniquePerPerson: false,
+    employerAdministered: true,
     cap: {
       form: 'PerYear',
       amount: (rates) => rates.thresholds.instalmentPensionCap,
@@ -37,12 +39,16 @@ const table: {
     freeAssets: false,
     holdingTaxRate: 'palTaxRate',
     deductibility: true,
+    uniquePerPerson: false,
+    employerAdministered: true,
     cap: undefined,
   },
   OldAgeSavings: {
     freeAssets: false,
     holdingTaxRate: 'palTaxRate',
     deductibility: false,
+    uniquePerPerson: false,
+    employerAdministered: true,
     cap: {
       form: 'PerYear',
       amount: (rates, yearsToStatePensionAge) =>
@@ -55,6 +61,8 @@ const table: {
     freeAssets: false,
     holdingTaxRate: 'shareSavingsAccountTaxRate',
     deductibility: false,
+    uniquePerPerson: true,
+    employerAdministered: false,
     cap: {
       form: 'OnBalance',
       amount: (rates) => rates.thresholds.shareSavingsAccountCap,
@@ -64,12 +72,16 @@ const table: {
     freeAssets: true,
     holdingTaxRate: undefined,
     deductibility: false,
+    uniquePerPerson: false,
+    employerAdministered: false,
     cap: undefined,
   },
   SavingsAccount: {
     freeAssets: true,
     holdingTaxRate: undefined,
     deductibility: false,
+    uniquePerPerson: false,
+    employerAdministered: false,
     cap: undefined,
   },
 }
@@ -86,6 +98,16 @@ type Row = {
       midler er en overførsel og afvises af `validatePlan`, så feltet aldrig
       slås op for dem. Diagram 01 skriver samme celle som "—". */
   deductibility: boolean
+  /** Om personen kun kan have én beholdning af varianten. Sand alene for
+      aktiesparekontoen, jf. ASKL § 3; flere ratepensioner, aldersopsparinger
+      og livrenter er lovlige, og ADR-0018 hviler på, at to af dem deler ét
+      loft. */
+  uniquePerPerson: boolean
+  /** Om varianten kan være arbejdsgiveradministreret, så en lønpost kan være
+      kilde til en indbetaling til den. Falsk for aktiesparekontoen og for de
+      to frie varianter — en indbetaling til frie midler er en overførsel og
+      afvises i forvejen, så deres celle slås aldrig op. */
+  employerAdministered: boolean
 }
 
 /** Loftets form, og hvad det gælder i året — de to sider af `Cap`, jf.
@@ -129,6 +151,33 @@ const oldAgeSavingsHighCapFrom = 7
     ét, og det er den, buffer- og overførselsreglerne taler om. */
 export function isFreeAssets(holding: Holding): boolean {
   return table[holding.variant].freeAssets
+}
+
+/** Om personen kun kan have én beholdning af varianten, jf. `UniquePerPerson`
+    i CONTEXT.md. Spørgsmålet stilles om varianten og ikke om en beholdning:
+    fladen spørger, før beholdningen har varianten — det er hele pointen, at
+    den ikke kan få den — og `validatePlan` tæller varianter og ikke
+    beholdninger.
+
+    En strukturel umulighed og ikke et årsafhængigt brud, jf. ADR-0020:
+    svaret er det samme i alle simuleringsår, og planen afvises derfor ved
+    indgangen frem for at bære en markering i årsresultatet. */
+export function isUniquePerPerson(variant: HoldingVariant): boolean {
+  return table[variant].uniquePerPerson
+}
+
+/** Om beholdningen kan være arbejdsgiveradministreret, jf.
+    `EmployerAdministered` i CONTEXT.md. Der findes ingen
+    arbejdsgiveradministreret aktiesparekonto, og en lønkildet indbetaling
+    til den kan derfor ikke ske: den form indeholder AM-bidrag på vejen ind, og pengene
+    på kontoen er allerede fuldt beskattede midler, ejeren selv flytter
+    derind.
+
+    Svaret afgør alene, om indbetalingen kan skrives, og aldrig hvad den
+    koster — AM-behandlingen følger kilden og ikke destinationen, jf.
+    ADR-0016. */
+export function isEmployerAdministered(holding: Holding): boolean {
+  return table[holding.variant].employerAdministered
 }
 
 /** Satsnøglen for beholdningens egen skat på årets afkast, eller `undefined`

@@ -1,4 +1,4 @@
-import { isFreeAssets } from './holdingVariant'
+import { isEmployerAdministered, isFreeAssets, isUniquePerPerson } from './holdingVariant'
 import type { Holding, HoldingId, Plan } from './plan'
 
 /** Planen skal beskrive noget, der kan eksistere, før motoren kan regne på
@@ -32,55 +32,63 @@ export function validatePlan(plan: Plan): string | undefined {
     transferEnds(plan) ??
     contributionEnds(plan) ??
     entryOwners(plan) ??
-    singleShareSavingsAccount(plan) ??
-    shareSavingsAccountSource(plan)
+    oneOfEachUniqueVariant(plan) ??
+    entrySourcedDestination(plan)
   )
 }
 
-/** [ASKL § 3](https://danskelove.dk/aktiesparekontoloven/3) tillader kun én
-    aktiesparekonto pr. person. Reglen gælder alene aktiesparekontoen: flere
-    ratepensioner, aldersopsparinger og livrenter er lovlige og skal blive ved
-    med at kunne skrives — ADR-0018 hviler direkte på, at to ratepensioner
-    deler ét loft, og det tilfælde skal kunne stilles.
+/** En variant, personen kun kan have én af, må ikke stå to gange hos samme
+    person. I dag er aktiesparekontoen den eneste — [ASKL
+    § 3](https://danskelove.dk/aktiesparekontoloven/3) tillader kun én — og
+    reglen spørger varianttabellen frem for at nævne den ved navn, jf.
+    ADR-0010. Flere ratepensioner, aldersopsparinger og livrenter er lovlige
+    og skal blive ved med at kunne skrives: ADR-0018 hviler direkte på, at to
+    ratepensioner deler ét loft, og det tilfælde skal kunne stilles.
 
     To konti ville dele ét råderum og fremskrive en skattefri beholdning på
     det dobbelte af, hvad et pengeinstitut ville have oprettet, jf. ADR-0020. */
-function singleShareSavingsAccount(plan: Plan): string | undefined {
+function oneOfEachUniqueVariant(plan: Plan): string | undefined {
   for (const person of plan.household.persons) {
-    const accounts = person.holdings.filter(
-      (holding) => holding.variant === 'ShareSavingsAccount',
-    )
-    if (accounts.length > 1) {
-      return (
-        `Personen ${person.id} har ${accounts.length} aktiesparekonti. Der kan kun ` +
-        `være én pr. person, jf. ASKL § 3.`
-      )
+    const counted = new Map<string, number>()
+    for (const holding of person.holdings) {
+      if (!isUniquePerPerson(holding.variant)) continue
+      const count = (counted.get(holding.variant) ?? 0) + 1
+      counted.set(holding.variant, count)
+      if (count > 1) {
+        return (
+          `Personen ${person.id} har ${
+            person.holdings.filter((other) => other.variant === holding.variant).length
+          } beholdninger af varianten ${holding.variant}. Der kan kun være én pr. person.`
+        )
+      }
     }
   }
   return undefined
 }
 
-/** Der findes ingen arbejdsgiveradministreret aktiesparekonto, og en
-    lønkildet indbetaling til den kan derfor ikke ske. Den form indeholder
-    AM-bidrag på vejen ind, fordi kilden er AM-pligtig — rigtigt for de tre
-    pensionsordninger og en kategorifejl her: pengene på en aktiesparekonto er
-    fuldt beskattede midler, ejeren selv flytter derind, og der lander 100 %.
+/** En lønkildet indbetaling kræver en destination, en arbejdsgiver kan
+    administrere. Aktiesparekontoen er den eneste, der ikke er det, og reglen
+    spørger varianttabellen frem for at nævne den ved navn, jf. ADR-0010. Den
+    lønkildede form indeholder AM-bidrag på vejen ind, fordi kilden er
+    AM-pligtig — rigtigt for de tre pensionsordninger og en kategorifejl her:
+    pengene på en aktiesparekonto er fuldt beskattede midler, ejeren selv
+    flytter derind, og der lander 100 %.
 
     Reglen koster en smule udtryksevne. En skattefri indtægtspost regner
     faktisk rigtigt som lønkilde, fordi der ikke indeholdes AM-bidrag af den,
     og den afvises alligevel — en regel, hvis gyldighed afhang af et felt på
     en anden figur, ville gøre planen ugyldig, hver gang det felt ændres et
     andet sted i fladen, jf. ADR-0020. */
-function shareSavingsAccountSource(plan: Plan): string | undefined {
+function entrySourcedDestination(plan: Plan): string | undefined {
   const byId = holdingsById(plan)
   for (const contribution of plan.contributions) {
     if (contribution.kind !== 'EntrySourced') continue
-    if (byId.get(contribution.to)?.variant !== 'ShareSavingsAccount') continue
+    const to = byId.get(contribution.to)
+    if (!to || isEmployerAdministered(to)) continue
     return (
       `Indbetalingen ${contribution.id} kommer fra posten ${contribution.source} og går ` +
-      `til aktiesparekontoen ${contribution.to}. Der findes ingen ` +
-      `arbejdsgiveradministreret aktiesparekonto — skriv den som et bidrag fra ` +
-      `personens frie midler.`
+      `til beholdningen ${contribution.to}, som ikke er arbejdsgiveradministreret — ` +
+      `skriv den som et bidrag fra personens frie midler.`
     )
   }
   return undefined
