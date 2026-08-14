@@ -68,7 +68,11 @@ body {
 }
 .topbjaelke .hoejre { margin-left: auto; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
 
-.spalter { flex: 1 1 auto; min-height: 0; display: grid; }
+/* Skuffen ankrer i spalterne og ikke i rammen, så dens overkant er
+   spalternes overkant. Ankret i rammen skulle topbjælkens højde gættes som et
+   tal, og gættet holdt ikke: skillelinjen stak op gennem topbjælkens egen
+   streg, og skuffen dækkede den hen over sin egen bredde. */
+.spalter { flex: 1 1 auto; min-height: 0; display: grid; position: relative; }
 .spalte { min-width: 0; height: 100%; overflow-y: auto; overflow-x: hidden; padding-bottom: 12px; }
 .spalte + .spalte { border-left: 1px solid var(--linje); }
 
@@ -231,15 +235,16 @@ body {
 
 /* B3 · inspektøren som skuffe hen over resultatet */
 .skuffe {
-  position: absolute; top: 45px; right: 0; bottom: 0; width: 356px; z-index: 20;
+  position: absolute; top: 0; right: 0; bottom: 0; width: 356px; z-index: 20;
   background: var(--top); border-left: 1px solid var(--linje);
   box-shadow: -18px 0 40px rgba(0,0,0,.45);
   overflow-y: auto; overflow-x: hidden; padding-bottom: 12px;
 }
-.skuffe[hidden] { display: none; }
 /* Skuffen ligger oven på resultatspalten, men skubber indholdet fri af sig,
-   så den aldrig dækker hverken grafen eller tabellens sidste kolonne. */
-.spalter.med-skuffe > .spalte:last-child { padding-right: 356px; }
+   så den aldrig dækker hverken grafen eller tabellens sidste kolonne. Skuffen
+   er selv sidste barn i spalterne, så det er sidste spalte og ikke sidste
+   barn, der skal skubbes. */
+.spalter.med-skuffe > .spalte:last-of-type { padding-right: 356px; }
 
 /* ---------- resultatspalten ---------- */
 

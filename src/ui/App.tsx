@@ -202,19 +202,19 @@ export function App({
             </>
           )}
         </div>
-      </div>
 
-      {selected && (
-        <aside className="skuffe" aria-label="Inspektør">
-          <Inspector
-            plan={plan}
-            years={years}
-            selected={selected}
-            onChange={setPlan}
-            onClose={() => setSelected(null)}
-          />
-        </aside>
-      )}
+        {selected && (
+          <aside className="skuffe" aria-label="Inspektør">
+            <Inspector
+              plan={plan}
+              years={years}
+              selected={selected}
+              onChange={setPlan}
+              onClose={() => setSelected(null)}
+            />
+          </aside>
+        )}
+      </div>
     </div>
   )
 }

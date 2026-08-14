@@ -594,12 +594,10 @@ function tegnN() {
   var m = MODELLER_N[N.model];
   var s = document.getElementById('spalter');
   s.style.gridTemplateColumns = m.spalter;
-  s.innerHTML = m.dele.map(function (d) { return '<div class="spalte">' + d() + '</div>'; }).join('');
-
-  var sk = document.getElementById('skuffe');
-  sk.hidden = !m.skuffe || !N.valgt;
-  sk.innerHTML = sk.hidden ? '' : inspektorN();
-  s.className = 'spalter' + (sk.hidden ? '' : ' med-skuffe');
+  var skuffe = m.skuffe && N.valgt;
+  s.innerHTML = m.dele.map(function (d) { return '<div class="spalte">' + d() + '</div>'; }).join('') +
+    (skuffe ? '<aside class="skuffe">' + inspektorN() + '</aside>' : '');
+  s.className = 'spalter' + (skuffe ? ' med-skuffe' : '');
 
   tilpasGrafN();
 

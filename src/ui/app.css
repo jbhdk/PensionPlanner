@@ -104,6 +104,11 @@ body {
   min-height: 0;
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
+  /* Skuffen ankrer i spalterne og ikke i rammen, så dens overkant er
+     spalternes overkant. Ankret i rammen skulle topbjælkens højde gættes som
+     et tal, og gættet holdt ikke: skillelinjen stak op gennem topbjælkens
+     egen streg. */
+  position: relative;
 }
 
 .spalte {
@@ -349,7 +354,7 @@ body {
 
 .skuffe {
   position: absolute;
-  top: 45px;
+  top: 0;
   right: 0;
   bottom: 0;
   width: 356px;
