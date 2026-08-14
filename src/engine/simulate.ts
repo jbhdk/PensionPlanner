@@ -399,21 +399,17 @@ function inPlanOrder(
   return requested.map(({ contribution }) => measured.get(contribution.id)!)
 }
 
-/** Årets indbetalinger til én person ført gennem personens lofter, grupperet
-    efter beholdningens variant — den slags ordning, loftet måler over.
-    Loftet er personens og gælder personens ordninger af den slags under ét:
-    to ratepensioner med 40.000 kr. hver er ét brud og ikke to lovlige
-    indbetalinger, jf. PBL § 16.
+/** Årets indbetalinger til én person ført gennem personens lofter, én
+    variantgruppe ad gangen. Loftet er personens og gælder personens
+    ordninger af den slags under ét: to ratepensioner med 40.000 kr. hver er
+    ét brud og ikke to lovlige indbetalinger, jf. PBL § 16.
 
-    Funktionen både måler og begrænser, og hvad den begrænser, følger formen.
-    `PerYear` begrænser kun det ene tal, der krydser skattesømmet — pengene
-    er landet, og det overskydende bliver liggende, jf. ADR-0018. `OnBalance`
-    begrænser selve indbetalingen og svarer derfor med mindre, end året bad
-    om. Det er hele grunden til, at den svarer med de målte indbetalinger og
-    ikke kun med linjerne.
+    Selve reglen ligger i `throughCap`. Her lægges gruppernes svar sammen —
+    de tre svar kommer af samme opgørelse og kan derfor ikke komme til at
+    sige hver sit, jf. ADR-0018 og ADR-0019.
 
-    Grupper uden indbetaling udelades, og en variant uden loft får ingen
-    linje. En linje på nul ville sige, at året indbetalte til en ordning, det
+    Grupper uden indbetaling får ingen linje, og en variant uden loft heller
+    ikke. En linje på nul ville sige, at året indbetalte til en ordning, det
     ikke rørte, og et loft, der ikke blev målt mod noget, er ikke et svar.
     Men det, der tælles, er hvad året **bad om** og ikke hvad der landede:
     ellers forsvandt netop det år, hvor råderummet var nul, og hele
@@ -430,71 +426,108 @@ function throughCaps(
   let withDeductibility = 0
 
   for (const holdings of byVariant(person).values()) {
-    // Gruppens indbetalinger læses ud af årets liste, som allerede står i
-    // planens rækkefølge, frem for at blive samlet op beholdning for
-    // beholdning: den rækkefølge afgør, hvem der først får råderummet, jf.
-    // ADR-0019.
-    const ids = new Set(holdings.map((holding) => holding.id))
-    const into = contributions.filter(({ contribution }) => ids.has(contribution.to))
-    const requested = into.reduce((sum, { intoHolding }) => sum + intoHolding, 0)
+    const group = throughCap(holdings, contributions, rates, yearsToStatePensionAge, opening)
+    measured.push(...group.contributions)
+    withDeductibility += group.withDeductibility
+    if (group.line !== undefined) caps.push(group.line)
+  }
 
-    // Bad året ikke om noget, er der intet at måle. Indbetalingerne skal
-    // stadig med videre: en indbetaling på nul falder også i året, og en,
-    // opgørelsen tabte, ville forsvinde ud af årsresultatet.
-    if (requested === 0) {
-      measured.push(...into)
-      continue
-    }
+  return { caps, withDeductibility, contributions: measured }
+}
 
-    const representative = holdings[0]!
-    const limit = cap(representative, rates, yearsToStatePensionAge)
-    const variant = cappedVariant(representative)
+/** Én gruppes vej gennem sit loft: det tal, der krydser skattesømmet, de
+    indbetalinger opgørelsen svarer med, og linjen året skal vise. */
+type CappedGroup = {
+  /** Det, der landede i gruppen med `Deductibility` i behold — nul for en
+      variant, der ingen har. De tre veje igennem giver hver sit grundlag at
+      måle af, men fradragsretten selv følger destinationens variant og
+      spørges derfor ét sted, jf. ADR-0016. */
+  withDeductibility: Nominal
+  /** Gruppens indbetalinger, som opgørelsen har målt dem. De samme, den fik,
+      med mindre et loft har afkortet dem. */
+  contributions: ActiveContribution[]
+  /** Fraværende, når varianten ingen loft har, eller når året ikke bad om
+      noget. */
+  line?: CapYear
+}
 
-    if (limit === undefined || variant === undefined) {
-      measured.push(...into)
-      withDeductibility += hasDeductibility(representative) ? requested : 0
-      continue
-    }
+/** Årets indbetalinger til én persons beholdninger af én variant, ført
+    gennem den varianttabellen giver dem — de tre veje, `Cap` kan gå.
 
-    if (limit.form === 'PerYear') {
-      // Pengene er landet. Loftet begrænser kun det tal, skatten regnes af —
-      // og aldersopsparingen har ingen fradragsret at miste, så dens
-      // overskydende ændrer ikke et tal her, jf. `Cap` i CONTEXT.md.
-      const withinCap = Math.min(requested, limit.amount)
-      const deductible = hasDeductibility(representative) ? withinCap : 0
-      withDeductibility += deductible
-      measured.push(...into)
-      caps.push({
+    Uden loft går pengene urørt igennem. `PerYear` lader dem lande og
+    begrænser kun det tal, skatten regnes af: det overskydende bliver
+    liggende i ordningen, jf. ADR-0018. `OnBalance` afkorter selve
+    indbetalingen til råderummet, og det uindskudte forlader aldrig kilden,
+    jf. ADR-0019. Det er hele grunden til, at funktionen svarer med
+    indbetalinger og ikke kun med et tal og en linje.
+
+    Bad året ikke om noget, måles der ikke. Indbetalingerne går stadig med
+    videre — en indbetaling på nul falder også i året, og en, opgørelsen
+    tabte, ville forsvinde ud af årsresultatet. */
+function throughCap(
+  holdings: Holding[],
+  contributions: ActiveContribution[],
+  rates: RateYear,
+  yearsToStatePensionAge: number,
+  opening: ReadonlyMap<HoldingId, Nominal>,
+): CappedGroup {
+  // Gruppens indbetalinger læses ud af årets liste, som allerede står i
+  // planens rækkefølge, frem for at blive samlet op beholdning for
+  // beholdning: den rækkefølge afgør, hvem der først får råderummet, jf.
+  // ADR-0019.
+  const ids = new Set(holdings.map((holding) => holding.id))
+  const into = contributions.filter(({ contribution }) => ids.has(contribution.to))
+  const requested = into.reduce((sum, { intoHolding }) => sum + intoHolding, 0)
+  if (requested === 0) return { withDeductibility: 0, contributions: into }
+
+  // Beholdningerne i gruppen deler variant, og loftet gælder dem under ét —
+  // den første kan derfor svare på tabellens vegne for dem alle.
+  const holding = holdings[0]!
+  const limit = cap(holding, rates, yearsToStatePensionAge)
+  const variant = cappedVariant(holding)
+  const deductible = (amount: Nominal) => (hasDeductibility(holding) ? amount : 0)
+
+  if (limit === undefined || variant === undefined) {
+    return { withDeductibility: deductible(requested), contributions: into }
+  }
+
+  if (limit.form === 'PerYear') {
+    // Pengene er landet. Loftet begrænser kun det tal, skatten regnes af —
+    // og aldersopsparingen har ingen fradragsret at miste, så dens
+    // overskydende ændrer ikke et tal her, jf. `Cap` i CONTEXT.md.
+    const withDeductibility = deductible(Math.min(requested, limit.amount))
+    return {
+      withDeductibility,
+      contributions: into,
+      line: {
         form: 'PerYear',
         variant,
         paid: requested,
         cap: limit.amount,
-        withDeductibility: deductible,
-      })
-      continue
+        withDeductibility,
+      },
     }
+  }
 
-    // `OnBalance`: råderummet er loftet minus primosaldoen og aldrig
-    // negativt — vokser saldoen over loftet af afkast alene, er intet loft
-    // brudt, der er blot ikke plads til mere, jf. ADR-0019.
-    const openingBalance = holdings.reduce((sum, holding) => sum + opening.get(holding.id)!, 0)
-    const headroom = Math.max(limit.amount - openingBalance, 0)
-    const shortened = shortenToHeadroom(into, headroom)
-    const deposited = shortened.reduce((sum, { intoHolding }) => sum + intoHolding, 0)
+  // Råderummet er loftet minus primosaldoen og aldrig negativt — vokser
+  // saldoen over loftet af afkast alene, er intet loft brudt, der er blot
+  // ikke plads til mere, jf. ADR-0019.
+  const openingBalance = holdings.reduce((sum, held) => sum + opening.get(held.id)!, 0)
+  const shortened = shortenToHeadroom(into, Math.max(limit.amount - openingBalance, 0))
+  const deposited = shortened.reduce((sum, { intoHolding }) => sum + intoHolding, 0)
 
-    measured.push(...shortened)
-    withDeductibility += hasDeductibility(representative) ? deposited : 0
-    caps.push({
+  return {
+    withDeductibility: deductible(deposited),
+    contributions: shortened,
+    line: {
       form: 'OnBalance',
       variant,
       requested,
       cap: limit.amount,
       openingBalance,
       deposited,
-    })
+    },
   }
-
-  return { caps, withDeductibility, contributions: measured }
 }
 
 /** Personens beholdninger grupperet efter variant, i den rækkefølge de står
