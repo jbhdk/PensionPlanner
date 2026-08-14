@@ -422,7 +422,8 @@ describe('fladen', () => {
     const type = screen.getByLabelText(/Type/) as HTMLSelectElement
 
     // Fixturens beholdning er en opsparingskonto. Aktiesparekontoen står ikke
-    // i listen — den findes først i etape 3 — og intet engelsk identifier når
+    // i listen — varianten findes i motoren, men uden sit loft, og en konto
+    // uden indskudsgrænse er en usand model — og intet engelsk identifier når
     // skærmen.
     expect(type.value).toBe('Opsparingskonto')
     expect(Array.from(type.options).map((option) => option.value)).toEqual([

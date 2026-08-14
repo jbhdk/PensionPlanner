@@ -45,6 +45,12 @@ const table: {
         ? rates.thresholds.oldAgeSavingsCapNearStatePensionAge
         : rates.thresholds.oldAgeSavingsCap,
   },
+  ShareSavingsAccount: {
+    freeAssets: false,
+    holdingTaxRate: 'shareSavingsAccountTaxRate',
+    deductibility: false,
+    cap: undefined,
+  },
   ShareDepot: {
     freeAssets: true,
     holdingTaxRate: undefined,
@@ -124,6 +130,11 @@ export function hasDeductibility(holding: Holding): boolean {
 
     Beløbet måler på det, der **landede** efter AM-bidrag, samme form som
     fradragsretten selv, jf. PBL § 16, stk. 3, og docs/satser/2026.md.
+
+    Aktiesparekontoen står også uden, og cellen er tom med vilje frem for ved
+    en forglemmelse: dens loft er en `OnBalance`-form, der måler saldoen og
+    afkorter selve indbetalingen, og den findes ikke i denne skive, jf.
+    ADR-0019.
 
     Livrenten har intet loft: PBL § 16, stk. 2, opremser ratepensionen og de
     ophørende livrenter, og den livsvarige står ikke i den. Det er netop den

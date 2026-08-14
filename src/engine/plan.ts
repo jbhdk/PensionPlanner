@@ -19,12 +19,12 @@ export type ContributionId = string
 export type Municipality = string
 
 /** Beskatningsformen er beholdningens akse og ikke et felt ved siden af den,
-    jf. ADR-0010 og ADR-0015. `ShareSavingsAccount` hører i etape 3 og står
-    derfor ikke her endnu. */
+    jf. ADR-0010 og ADR-0015. */
 export type HoldingVariant =
   | 'InstalmentPension'
   | 'LifeAnnuity'
   | 'OldAgeSavings'
+  | 'ShareSavingsAccount'
   | 'ShareDepot'
   | 'SavingsAccount'
 
@@ -39,7 +39,7 @@ type HoldingBase = {
   annualCostRate: number
 }
 
-/** En diskrimineret union på `variant`. De fem medlemmer er ens i dag, og
+/** En diskrimineret union på `variant`. De seks medlemmer er ens i dag, og
     formen er valgt for det, de bliver: livrentens omsætningsfelter hænger på
     sit eget medlem i etape 3, hvor de først har noget at lave. Et dødt felt i
     det gemte skema er en løgn, der aldrig fejler, jf. ADR-0015. */
@@ -47,6 +47,7 @@ export type Holding =
   | (HoldingBase & { variant: 'InstalmentPension' })
   | (HoldingBase & { variant: 'LifeAnnuity' })
   | (HoldingBase & { variant: 'OldAgeSavings' })
+  | (HoldingBase & { variant: 'ShareSavingsAccount' })
   | (HoldingBase & { variant: 'ShareDepot' })
   | (HoldingBase & { variant: 'SavingsAccount' })
 

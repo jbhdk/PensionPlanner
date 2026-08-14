@@ -1197,6 +1197,66 @@ describe('beholdningsskat', () => {
     },
   )
 
+  it('beskatter aktiesparekontoen efter sin egen sats og ikke efter PAL-satsen', () => {
+    const plan = aPlan({
+      balance: 0,
+      holdings: [
+        {
+          id: 'aktiesparekonto',
+          name: 'Aktiesparekonto',
+          variant: 'ShareSavingsAccount',
+          balance: 100_000,
+          grossReturn: 0.07,
+          annualCostRate: 0.005,
+        },
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+    const aktiesparekonto = holding(year, 'aktiesparekonto')
+
+    // Nettoafkastsatsen er 6,5 % som i enhver anden beholdning, jf. ADR-0003:
+    // 6.500 af de 100.000. Satsen ovenpå er kontoens egen på 17 % og ikke
+    // PAL-satsens 15,3 % — det er hele grunden til, at varianten har sin egen
+    // række. Afkastet står brutto, saldoen er nettet af skatten.
+    expect(aktiesparekonto.return).toBeCloseTo(6_500, 6)
+    expect(aktiesparekonto.tax).toBeCloseTo(1_105, 6)
+    expect(aktiesparekonto.closingBalance).toBeCloseTo(105_395, 6)
+
+    // Skatten er beholdningens egen og passerer ingen persons indkomst. Den
+    // står derfor i årets skat, men hverken i aktie- eller kapitalindkomsten
+    // — aktiesparekontoen er ikke et aktiedepot, jf. ADR-0010 og ADR-0017.
+    expect(year.tax).toBeCloseTo(1_105, 6)
+    expect(year.persons[0]!.shareIncome).toBe(0)
+    expect(year.persons[0]!.capitalIncome).toBe(0)
+  })
+
+  it('lader aktiesparekontoens negative afkast give en negativ skat, uden gulv', () => {
+    const plan = aPlan({
+      balance: 0,
+      holdings: [
+        {
+          id: 'aktiesparekonto',
+          name: 'Aktiesparekonto',
+          variant: 'ShareSavingsAccount',
+          balance: 100_000,
+          grossReturn: -0.1,
+          annualCostRate: 0,
+        },
+      ],
+    })
+
+    const aktiesparekonto = holding(simulateChecked(plan)[0]!, 'aktiesparekonto')
+
+    // Samme fremførselsforenkling som PAL-skatten allerede hviler på: et
+    // tabsår giver penge tilbage frem for et nul. Læg ikke et `Math.max(0, …)`
+    // ind for aktiesparekontoen alene — den deler regel med de øvrige, og
+    // gulvet ville gøre saldoen for lav for altid.
+    expect(aktiesparekonto.return).toBeCloseTo(-10_000, 6)
+    expect(aktiesparekonto.tax).toBeCloseTo(-1_700, 6)
+    expect(aktiesparekonto.closingBalance).toBeCloseTo(91_700, 6)
+  })
+
   it.each(['ShareDepot', 'SavingsAccount'] as HoldingVariant[])(
     'lader %s stå uden beholdningsskat — afkastet beskattes hos personen i stedet',
     (variant) => {
@@ -1257,6 +1317,212 @@ describe('beholdningsskat', () => {
     // forrenter den nettede saldo og ikke den brutto.
     expect(holding(years[1]!, 'ratepension').openingBalance).toBeCloseTo(1_055_055, 6)
     expect(holding(years[1]!, 'ratepension').return).toBeCloseTo(1_055_055 * 0.065, 6)
+  })
+})
+
+
+describe('aktiesparekontoen', () => {
+  it('afviser en plan, hvor bufferen er en aktiesparekonto', () => {
+    // Aktiesparekontoen hører ikke under `FreeAssets`: den har et
+    // indskudsloft og kan derfor ikke tage imod årets restpost, jf. ADR-0010
+    // og diagram 01. Reglen er varianttabellens ene celle og ikke en
+    // betingelse skrevet for kontoen selv.
+    const plan = aPlan({ variant: 'ShareSavingsAccount' })
+
+    expect(() => simulate(plan)).toThrow(/frie midler/i)
+  })
+
+  it('afviser en overførsel med aktiesparekontoen i den ene eller den anden ende', () => {
+    // En flytning ind i kontoen er en indbetaling og ikke en overførsel, jf.
+    // ADR-0016 — indbetalingen er den form, der kender loftet. Den anden vej
+    // ud er en udbetaling, som hører i etape 3.
+    const withTransfer = (from: string, to: string) =>
+      aPlan({
+        balance: 1_000_000,
+        holdings: [
+          {
+            id: 'aktiesparekonto',
+            name: 'Aktiesparekonto',
+            variant: 'ShareSavingsAccount',
+            balance: 100_000,
+            grossReturn: 0,
+            annualCostRate: 0,
+          },
+        ],
+        transfers: [aTransfer({ from, to, amountInRealKroner: 10_000 })],
+      })
+
+    expect(() => simulate(withTransfer('free-assets', 'aktiesparekonto'))).toThrow(
+      /indbetaling/i,
+    )
+    expect(() => simulate(withTransfer('aktiesparekonto', 'free-assets'))).toThrow(
+      /frie midler/i,
+    )
+  })
+
+  it('afviser en person med to aktiesparekonti', () => {
+    // ASKL § 3 tillader kun én. To konti ville dele ét råderum, og modellen
+    // ville fremskrive en dobbelt så stor skattefri beholdning som den, et
+    // pengeinstitut overhovedet ville have oprettet. Det er ikke et loftbrud
+    // med et årstal, men en tilstand der ikke findes — og den afvises derfor
+    // ved indgangen, jf. ADR-0020.
+    const anAccount = (id: string) => ({
+      id,
+      name: 'Aktiesparekonto',
+      variant: 'ShareSavingsAccount' as const,
+      balance: 50_000,
+      grossReturn: 0,
+      annualCostRate: 0,
+    })
+    const plan = aPlan({ holdings: [anAccount('den-ene'), anAccount('den-anden')] })
+
+    expect(() => simulate(plan)).toThrow(/jesper.*aktiesparekonti/i)
+  })
+
+  it('afviser en lønkildet indbetaling til aktiesparekontoen', () => {
+    // Der findes ingen arbejdsgiveradministreret aktiesparekonto. Den
+    // lønkildede form indeholder AM-bidrag på vejen ind, fordi kilden er
+    // AM-pligtig — rigtigt for de tre pensionsordninger og en kategorifejl
+    // her: pengene på en aktiesparekonto har for længst passeret hele ejerens
+    // skatteopgørelse. Handlingen skrives som et beholdningskildet bidrag fra
+    // bufferen, hvor den regner rigtigt, jf. ADR-0020.
+    const plan = aPlan({
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      contributions: [
+        aContribution({
+          source: 'salary',
+          to: 'aktiesparekonto',
+          percentageOfEntry: 0.05,
+        }),
+      ],
+      holdings: [
+        {
+          id: 'aktiesparekonto',
+          name: 'Aktiesparekonto',
+          variant: 'ShareSavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+
+    expect(() => simulate(plan)).toThrow(/arbejdsgiveradministreret/i)
+  })
+
+  it('lader et beholdningskildet bidrag lande med hele beløbet, uden loftlinje', () => {
+    // Det er den form, handlingen skal skrives i. Pengene var beskattede
+    // allerede, da de kom ind på de frie midler, og en beholdningskilde har
+    // aldrig båret AM-bidrag: brutto er lig netto, jf. ADR-0016.
+    const plan = aPlan({
+      balance: 1_000_000,
+      contributions: [
+        aHoldingContribution({
+          source: 'free-assets',
+          to: 'aktiesparekonto',
+          amountInRealKroner: 50_000,
+        }),
+      ],
+      holdings: [
+        {
+          id: 'aktiesparekonto',
+          name: 'Aktiesparekonto',
+          variant: 'ShareSavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(year.contributions).toEqual([
+      { contribution: 'contribution', fromSource: 50_000, intoHolding: 50_000 },
+    ])
+    expect(holding(year, 'aktiesparekonto').closingBalance).toBeCloseTo(50_000, 6)
+    expect(bufferBalance(year)).toBeCloseTo(950_000, 6)
+
+    // Varianten står med intet loft i denne skive, og der er derfor ingen
+    // loftlinje at efterregne og intet brud at markere. Loftet kommer i næste
+    // skive og er en `OnBalance`-form, jf. ADR-0019.
+    expect(year.persons[0]!.caps).toEqual([])
+    expect(year.capBreach).toBeUndefined()
+  })
+
+  it('lader to personer have hver sin aktiesparekonto', () => {
+    // Modprøve på reglen ovenfor: ASKL § 3 tæller den enkeltes konti og ikke
+    // husstandens. En regel, der talte husstandens, ville afvise en plan, der
+    // er fuldt lovlig — og den ville se lige så grøn ud som den rigtige uden
+    // denne test.
+    const anAccount = (id: string) => ({
+      id,
+      name: 'Aktiesparekonto',
+      variant: 'ShareSavingsAccount' as const,
+      balance: 50_000,
+      grossReturn: 0.05,
+      annualCostRate: 0,
+    })
+    const base = aPlan({ holdings: [anAccount('jespers-konto')] })
+    const plan: Plan = {
+      ...base,
+      household: {
+        persons: [
+          ...base.household.persons,
+          {
+            id: 'maria',
+            name: 'Maria',
+            birthYear: 1973,
+            birthMonth: 6,
+            workEndAge: 58,
+            horizon: 90,
+            municipality: 'Hvidovre',
+            churchMember: true,
+            holdings: [anAccount('marias-konto')],
+          },
+        ],
+      },
+    }
+
+    expect(validatePlan(plan)).toBeUndefined()
+
+    // Begge konti forrentes og beskattes hver for sig: 2.500 i afkast og
+    // 17 % af dem, to gange.
+    const year = simulateChecked(plan)[0]!
+    expect(holding(year, 'jespers-konto').tax).toBeCloseTo(425, 6)
+    expect(holding(year, 'marias-konto').tax).toBeCloseTo(425, 6)
+  })
+
+  it('lader en lønkildet indbetaling til en ratepension stå', () => {
+    // Modprøve på den anden regel, med samme plan som ovenfor og kun
+    // destinationens variant skiftet. Reglen måler på destinationen og ikke
+    // på formen: den lønkildede indbetaling er hele etapens hovedtilfælde, og
+    // en regel, der ramte den bredt, ville lukke det uden at nogen test blev
+    // rød af det, den handlede om.
+    const plan = aPlan({
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      contributions: [
+        aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.05 }),
+      ],
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+
+    expect(validatePlan(plan)).toBeUndefined()
+
+    // 5 % af 600.000 er 30.000 brutto, og AM-bidraget går fra på vejen ind:
+    // der lander 27.600 i ordningen, jf. ADR-0016.
+    expect(simulateChecked(plan)[0]!.contributions).toEqual([
+      { contribution: 'contribution', fromSource: 30_000, intoHolding: 27_600 },
+    ])
   })
 })
 

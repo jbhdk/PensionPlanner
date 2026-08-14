@@ -1,22 +1,89 @@
 import { isFreeAssets } from './holdingVariant'
 import type { Holding, Plan } from './plan'
 
-/** Planens pegere skal alle ramme noget, før motoren kan regne på den:
-    bufferen, overførslernes to ender, indbetalingernes kilde og destination,
-    og posternes ejere. En peger, der
+/** Planen skal beskrive noget, der kan eksistere, før motoren kan regne på
+    den. Hvervet er to slags regler.
+
+    Pegerne skal alle ramme noget: bufferen, overførslernes to ender,
+    indbetalingernes kilde og destination, og posternes ejere. En peger, der
     hænger, får motoren til enten at lyve eller styrte, jf. ADR-0013.
 
-    Returnerer en forklarende dansk besked ved den første hængende peger —
-    ellers intet. Brugt tre steder: `simulate` kaster på den, fladen viser den
-    i resultatspalten frem for at lade planen fejle tavst, og persistenslaget
-    afviser en fil, der bærer den. */
+    Og en tilstand, der ikke kan findes i virkeligheden, skal ikke kunne
+    skrives i planen, jf. ADR-0020. Kan typen bære forbuddet, hører det ikke
+    her — beskatningsformen er varianten selv, netop for at kombinationer,
+    der ikke findes, er uskrivelige frem for validerede, jf. ADR-0010. Kan
+    den ikke, afvises tilstanden her. Faren ved den slags er, at de regner
+    uden at kaste: modellen ville svare på et spørgsmål, virkeligheden ikke
+    stiller, og svaret ville se rigtigt ud.
+
+    Grænsen mod `CapBreach` går ved, om spørgsmålet har et årstal. Er svaret
+    det samme i alle simuleringsår, kan reglen stå her; afhænger det af årets
+    fremskrevne beløb målt mod årets satsår, er det et årsresultat, jf.
+    ADR-0018. En regel, der ville kræve et år for at kunne svare, hører ikke
+    i denne funktion.
+
+    Returnerer en forklarende dansk besked ved den første regel, planen
+    bryder — ellers intet. Brugt tre steder: `simulate` kaster på den, fladen
+    viser den i resultatspalten frem for at lade planen fejle tavst, og
+    persistenslaget afviser en fil, der bærer den. */
 export function validatePlan(plan: Plan): string | undefined {
   return (
     bufferPointer(plan) ??
     transferEnds(plan) ??
     contributionEnds(plan) ??
-    entryOwners(plan)
+    entryOwners(plan) ??
+    singleShareSavingsAccount(plan) ??
+    shareSavingsAccountSource(plan)
   )
+}
+
+/** [ASKL § 3](https://danskelove.dk/aktiesparekontoloven/3) tillader kun én
+    aktiesparekonto pr. person. Reglen gælder alene aktiesparekontoen: flere
+    ratepensioner, aldersopsparinger og livrenter er lovlige og skal blive ved
+    med at kunne skrives — ADR-0018 hviler direkte på, at to ratepensioner
+    deler ét loft, og det tilfælde skal kunne stilles.
+
+    To konti ville dele ét råderum og fremskrive en skattefri beholdning på
+    det dobbelte af, hvad et pengeinstitut ville have oprettet, jf. ADR-0020. */
+function singleShareSavingsAccount(plan: Plan): string | undefined {
+  for (const person of plan.household.persons) {
+    const accounts = person.holdings.filter(
+      (holding) => holding.variant === 'ShareSavingsAccount',
+    )
+    if (accounts.length > 1) {
+      return (
+        `Personen ${person.id} har ${accounts.length} aktiesparekonti. Der kan kun ` +
+        `være én pr. person, jf. ASKL § 3.`
+      )
+    }
+  }
+  return undefined
+}
+
+/** Der findes ingen arbejdsgiveradministreret aktiesparekonto, og en
+    lønkildet indbetaling til den kan derfor ikke ske. Den form indeholder
+    AM-bidrag på vejen ind, fordi kilden er AM-pligtig — rigtigt for de tre
+    pensionsordninger og en kategorifejl her: pengene på en aktiesparekonto er
+    fuldt beskattede midler, ejeren selv flytter derind, og der lander 100 %.
+
+    Reglen koster en smule udtryksevne. En skattefri indtægtspost regner
+    faktisk rigtigt som lønkilde, fordi der ikke indeholdes AM-bidrag af den,
+    og den afvises alligevel — en regel, hvis gyldighed afhang af et felt på
+    en anden figur, ville gøre planen ugyldig, hver gang det felt ændres et
+    andet sted i fladen, jf. ADR-0020. */
+function shareSavingsAccountSource(plan: Plan): string | undefined {
+  const byId = new Map(holdings(plan).map((holding) => [holding.id, holding]))
+  for (const contribution of plan.contributions) {
+    if (contribution.kind !== 'EntrySourced') continue
+    if (byId.get(contribution.to)?.variant !== 'ShareSavingsAccount') continue
+    return (
+      `Indbetalingen ${contribution.id} kommer fra posten ${contribution.source} og går ` +
+      `til aktiesparekontoen ${contribution.to}. Der findes ingen ` +
+      `arbejdsgiveradministreret aktiesparekonto — skriv den som et bidrag fra ` +
+      `personens frie midler.`
+    )
+  }
+  return undefined
 }
 
 /** Indbetalingens to ender. Destinationen skal findes og må ikke være frie
