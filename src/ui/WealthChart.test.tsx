@@ -111,12 +111,29 @@ describe('WealthChart', () => {
 
     // Ingen vækst i fixturen: saldoen (og dermed toppen af stablingen) står
     // fladt på 1.000.000 hele horisonten — y-aksens gitterlinjer trappes i
-    // pæne trin derfra.
-    expect(screen.getByText('0')).toBeTruthy()
-    expect(screen.getByText('1.000.000')).toBeTruthy()
+    // pæne trin derfra. Millionbeløb skrives i millioner, så mærkatet kan
+    // være i margenen.
+    expect(screen.getByText('0,0 mio.')).toBeTruthy()
+    expect(screen.getByText('1,0 mio.')).toBeTruthy()
 
     expect(screen.getByText('2026')).toBeTruthy()
     expect(screen.getByText('2063')).toBeTruthy()
+  })
+
+  it('giver y-aksen margen nok til det længste mærkat, så intet ciffer klippes af', () => {
+    // En stor formue giver de længste mærkater ("100,0 mio."), og de skal
+    // stadig stå helt inde i viewBox'en. Tegnbredden er kendt: mærkaterne
+    // sættes i monospace ved 10 px, hvor hvert tegn fylder 6 px.
+    const plan = aPlan({ balance: 100_000_000 })
+    const years = simulate(plan)
+    const { container } = render(<WealthChart years={years} plan={plan} unit="Real" />)
+
+    const maerkater = Array.from(container.querySelectorAll('svg .formuegraf-akse-y text'))
+    expect(maerkater.length).toBeGreaterThan(1)
+    for (const maerkat of maerkater) {
+      const hoejre = Number(maerkat.getAttribute('x'))
+      expect(hoejre - maerkat.textContent!.length * 6).toBeGreaterThanOrEqual(0)
+    }
   })
 
   it('ankrer det sidste årstal til højre, så det ikke klippes af viewBox-kanten', () => {

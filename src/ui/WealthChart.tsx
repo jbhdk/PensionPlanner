@@ -5,7 +5,7 @@ import { isFreeAssets } from '../engine/holdingVariant'
 import type { Plan } from '../engine/plan'
 import type { BufferState, YearResult } from '../engine/yearResult'
 import { bufferStateClasses, bufferStateLabels } from './bufferState'
-import { kroner } from './format'
+import { kroner, millioner } from './format'
 import { holdingColor, orderedHoldings } from './holdingPalette'
 import type { AmountUnit } from './real'
 import { toDisplayKroner } from './real'
@@ -13,6 +13,11 @@ import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
 
 const MARGIN = { top: 8, right: 8, bottom: 20, left: 58 }
+
+// Aksemærkaterne står i monospace ved 10 px, hvor hvert tegn fylder 0,6 em.
+// Margenen kan derfor udmåles af mærkatets længde frem for at måles i DOM'en.
+const LABEL_CHAR_WIDTH = 6
+const LABEL_GAP = 10
 
 type BandPoint = { y0: number; y1: number }
 
@@ -102,9 +107,24 @@ export function WealthChart({
   }
   if (maxTop === 0) maxTop = 1
 
+  // Y-aksens gitterlinjer trappes i pæne trin (en halv tierpotens ad
+  // gangen), som mockuppens tegnFormuegraf().
+  const yStep = 10 ** Math.floor(Math.log10(maxTop)) / 2
+  const yTicks: number[] = []
+  for (let v = 0; v <= maxTop; v += yStep) yTicks.push(v)
+
+  // Hele kroner fylder mere, end margenen har plads til, så snart formuen
+  // løber op i millioner, og det yderste ciffer blev klippet af viewBox'ens
+  // venstre kant. Går aksen over en million, skrives den derfor i millioner,
+  // som mockuppens tegnFormuegraf() — og margenen udmåles efter det længste
+  // mærkat, så et ciffer mere aldrig kan skubbe teksten ud over kanten igen.
+  const yLabels = yTicks.map((v) => (maxTop >= 1_000_000 ? millioner(v) : kroner(v)))
+  const longestLabel = Math.max(0, ...yLabels.map((label) => label.length))
+  const left = Math.max(MARGIN.left, longestLabel * LABEL_CHAR_WIDTH + LABEL_GAP)
+
   const x = scaleLinear()
     .domain([0, Math.max(1, n - 1)])
-    .range([MARGIN.left, width - MARGIN.right])
+    .range([left, width - MARGIN.right])
   const y = scaleLinear()
     .domain([0, maxTop])
     .range([height - MARGIN.bottom, MARGIN.top])
@@ -118,12 +138,6 @@ export function WealthChart({
   // Halvdelen af årsafstanden, så spændets tonede baggrund dækker hele det
   // markerede år og ikke kun punktet midt i det.
   const halfStep = n > 1 ? (x(1) - x(0)) / 2 : 0
-
-  // Y-aksens gitterlinjer trappes i pæne trin (en halv tierpotens ad
-  // gangen), som mockuppens tegnFormuegraf().
-  const yStep = 10 ** Math.floor(Math.log10(maxTop)) / 2
-  const yTicks: number[] = []
-  for (let v = 0; v <= maxTop; v += yStep) yTicks.push(v)
 
   // X-aksens årstal: hvert tiende år, plus altid første og sidste, så en
   // kort horisont ikke står uden en eneste årsmarkering.
@@ -156,7 +170,7 @@ export function WealthChart({
             </pattern>
           </defs>
           {bufferSpans(years).map((span) => {
-            const x0 = Math.max(MARGIN.left, x(span.fromIndex) - halfStep)
+            const x0 = Math.max(left, x(span.fromIndex) - halfStep)
             const x1 = Math.min(width - MARGIN.right, x(span.toIndex) + halfStep)
             return (
               <g
@@ -177,17 +191,17 @@ export function WealthChart({
             )
           })}
           <g className="formuegraf-akse-y">
-            {yTicks.map((v) => (
+            {yTicks.map((v, i) => (
               <g key={v}>
                 <line
-                  x1={MARGIN.left}
+                  x1={left}
                   x2={width - MARGIN.right}
                   y1={y(v)}
                   y2={y(v)}
                   className={v === 0 ? 'basislinje' : 'gitterlinje'}
                 />
-                <text x={MARGIN.left - 6} y={y(v) + 3.5} textAnchor="end">
-                  {kroner(v)}
+                <text x={left - 6} y={y(v) + 3.5} textAnchor="end">
+                  {yLabels[i]}
                 </text>
               </g>
             ))}
