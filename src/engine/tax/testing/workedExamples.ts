@@ -261,14 +261,16 @@ export const workedExamples: readonly WorkedExample[] = [
   {
     name:
       'pensionsindbetalende arbejdsår, 700.000 kr. brutto og 105.000 kr. ' +
-      'ind på ordningen',
+      'ind på en livrente',
     source:
       'docs/satser/2026.md — beløbsgrænser efter PSL § 20 (skm.dk), de fire ' +
       'lag på personlig indkomst (skat.dk), fradragsprocenterne (skat.dk), ' +
       'det ekstra pensionsfradrags satser og 15-årsgrænse (LL § 9 L, stk. 3), ' +
-      'fradragsgrundlagets måleform efter AM-bidrag (LL § 9 L, stk. 1) og ' +
-      'fradragsrettens virkning på den personlige indkomst (PBL § 19)',
-    verifiedOn: '2026-08-13',
+      'fradragsgrundlagets måleform efter AM-bidrag (LL § 9 L, stk. 1), ' +
+      'fradragsrettens virkning på den personlige indkomst (PBL § 19) og ' +
+      'den livsvarige ordnings fravær af årligt loft (PBL § 16, stk. 2, ' +
+      'modsætningsvis, og skat.dk om livsvarig livrente)',
+    verifiedOn: '2026-08-14',
     dependsOnUnconfirmed: [],
 
     // Lønmodtageren fra ADR-0007: 700.000 kr. brutto, hvoraf 105.000 kr.
@@ -277,6 +279,12 @@ export const workedExamples: readonly WorkedExample[] = [
     // det ekstra pensionsfradrags grundlag måler på — se docs/satser/2026.md.
     // Tolv indkomstår til det år, personen når folkepensionsalderen, altså
     // den høje sats.
+    //
+    // Ordningen er en arbejdsgiveradministreret livrente, og hele beløbet
+    // beholder derfor sin fradragsret: den livsvarige alderspension står ikke
+    // i PBL § 16, stk. 2's udtømmende opremsning og har intet årligt loft.
+    // Samme beløb i en ratepension ville have mistet fradragsretten for
+    // 27.900 kr. — det er casen *loftet binder* nedenfor, og de to er ét par.
     //
     // Casen er den, indbetalingens to skattevirkninger mødes i. Fradragsretten
     // holder de 96.600 kr. uden for den personlige indkomst og virker dermed
@@ -321,6 +329,200 @@ export const workedExamples: readonly WorkedExample[] = [
         topBracketTax: 0,
       },
       total: 219_492.6956,
+    },
+  },
+
+  {
+    name:
+      'loftet binder, 700.000 kr. brutto og 105.000 kr. ind på en ratepension',
+    source:
+      'docs/satser/2026.md — beløbsgrænser efter PSL § 20 (skm.dk), de fire ' +
+      'lag på personlig indkomst (skat.dk), fradragsprocenterne (skat.dk), ' +
+      'ratepensionens fradragsloft og dets måleform efter AM-bidrag (PBL ' +
+      '§ 16, stk. 2, jf. stk. 3, og Den juridiske vejledning C.A.10.2.2.3.3) ' +
+      'og det ekstra pensionsfradrags satser (LL § 9 L, stk. 1 og 3)',
+    verifiedOn: '2026-08-14',
+    dependsOnUnconfirmed: [],
+
+    // Tvillingen til livrentecasen ovenfor: samme lønmodtager, samme bidrag,
+    // og den ene forskel, at pengene går i en ratepension. Den har et
+    // fradragsloft på 68.700 kr., og de 96.600 kr., der landede, bryder det
+    // med 27.900 kr. Det er parret, der viser, at loftet hænger på ordningens
+    // slags og ikke på beløbet.
+    //
+    // Det overskydende bliver liggende i ordningen — motoren flytter ikke
+    // pengene tilbage, jf. ADR-0018 — men det mister sin fradragsret og
+    // bliver dermed personlig indkomst igen. At de 96.600 kr. rent faktisk
+    // skæres ned til loftets 68.700 kr. er `simulate`s arbejde og prøvet
+    // dér; her står, hvad nedskæringen koster i skat.
+    //
+    // Det ekstra pensionsfradrags grundlag følger med ned: det er netop de
+    // indbetalinger, fradragsretten omfatter, jf. LL § 9 L, stk. 1, og
+    // C.A.4.3.9. Grundlaget er derfor 68.700 og ikke 87.800 — ordningens loft
+    // binder før fradragets eget.
+    //
+    // AM-bidrag   8,00 % af 700.000                =  56.000,0000
+    // Personlig indkomst  700.000 − 56.000 − 68.700 = 575.300,0000
+    // Beskæftigelsesfradrag, i loft                =  63.300,0000
+    // Jobfradrag, i loft                           =   3.100,0000
+    // Ekstra pensionsfradrag 32 % af 68.700        =  21.984,0000  (under grundlagsloftet)
+    // Skattepligtig indkomst 575.300 − 88.384      = 486.916,0000
+    // Bundskat   12,01 % af (575.300 − 54.100)     =  62.596,1200
+    // Kommuneskat 25,40 % af (486.916 − 54.100)    = 109.935,2640
+    // Kirkeskat    0,74 % af (486.916 − 54.100)    =   3.202,8384
+    // Mellemskat            575.300 < 641.200      =       0,0000
+    //                                                ────────────
+    //                                                231.734,2224
+    //
+    // Loftet koster 231.734,2224 − 219.492,6956 = 12.241,5268 kr. mod
+    // livrentecasen: 12,01 % i bundskat af de 27.900 kr., der kom tilbage i
+    // den personlige indkomst, plus 26,14 % kommune- og kirkeskat af de
+    // 34.012 kr., den skattepligtige indkomst steg med — de 27.900 og de
+    // 6.112 kr., det ekstra pensionsfradrag faldt med.
+    input: {
+      earnedIncome: 700_000,
+      municipalTaxRate: 0.254,
+      churchTaxRate: 0.0074,
+      contribution: { withDeductibility: 68_700, yearsToStatePensionAge: 12 },
+    },
+    expected: {
+      personalIncome: 575_300,
+      taxableIncome: 486_916,
+      allowances: {
+        employmentAllowance: cappedEmploymentAllowance,
+        jobAllowance: cappedJobAllowance,
+        extraPensionAllowance: 21_984,
+      },
+      layers: {
+        labourMarketContribution: 56_000,
+        bottomBracketTax: 62_596.12,
+        municipalTax: 109_935.264,
+        churchTax: 3_202.8384,
+        middleBracketTax: 0,
+        topBracketTax: 0,
+      },
+      total: 231_734.2224,
+    },
+  },
+
+  {
+    name:
+      'det ekstra pensionsfradrags lave sats, 16 indkomstår til ' +
+      'folkepensionsalderen',
+    source:
+      'docs/satser/2026.md — beløbsgrænser efter PSL § 20 (skm.dk), de fire ' +
+      'lag på personlig indkomst (skat.dk), fradragsprocenterne (skat.dk) og ' +
+      'det ekstra pensionsfradrags to satser og 15-årsgrænse (LL § 9 L, ' +
+      'stk. 3)',
+    verifiedOn: '2026-08-14',
+    dependsOnUnconfirmed: [],
+
+    // Første halvdel af parret om 15-årsgrænsen. De to caser er ens på hvert
+    // eneste tal på nær ét — antallet af indkomstår til det år, personen når
+    // folkepensionsalderen — så forskellen mellem dem *er* satsspringet og
+    // ikke andet.
+    //
+    // § 9 L, stk. 3, giver de 32 % "fra og med det 15. indkomstår før" det år.
+    // Her er der seksten, altså ét år for tidligt, og satsen er de 12 %.
+    //
+    // Bidraget er 60.000 kr. med vilje: under ratepensionens loft på 68.700
+    // og under fradragets eget grundlagsloft på 87.800, så procenten står
+    // ren. Var grundlaget i loft, ville de to caser måle 12 og 32 % af det
+    // samme loftbeløb og ikke af årets indbetaling.
+    //
+    // AM-bidrag   8,00 % af 700.000                =  56.000,00
+    // Personlig indkomst  700.000 − 56.000 − 60.000 = 584.000,00
+    // Beskæftigelsesfradrag, i loft                =  63.300,00
+    // Jobfradrag, i loft                           =   3.100,00
+    // Ekstra pensionsfradrag 12 % af 60.000        =   7.200,00
+    // Skattepligtig indkomst 584.000 − 73.600      = 510.400,00
+    // Bundskat   12,01 % af (584.000 − 54.100)     =  63.640,99
+    // Kommuneskat 23,40 % af (510.400 − 54.100)    = 106.774,20
+    // Mellemskat            584.000 < 641.200      =       0,00
+    //                                                ──────────
+    //                                                226.415,19
+    input: {
+      earnedIncome: 700_000,
+      municipalTaxRate: 0.234,
+      churchTaxRate: 0,
+      contribution: { withDeductibility: 60_000, yearsToStatePensionAge: 16 },
+    },
+    expected: {
+      personalIncome: 584_000,
+      taxableIncome: 510_400,
+      allowances: {
+        employmentAllowance: cappedEmploymentAllowance,
+        jobAllowance: cappedJobAllowance,
+        extraPensionAllowance: 7_200,
+      },
+      layers: {
+        labourMarketContribution: 56_000,
+        bottomBracketTax: 63_640.99,
+        municipalTax: 106_774.2,
+        churchTax: 0,
+        middleBracketTax: 0,
+      },
+      total: 226_415.19,
+    },
+  },
+
+  {
+    name:
+      'det ekstra pensionsfradrags høje sats, 15 indkomstår til ' +
+      'folkepensionsalderen',
+    source:
+      'docs/satser/2026.md — beløbsgrænser efter PSL § 20 (skm.dk), de fire ' +
+      'lag på personlig indkomst (skat.dk), fradragsprocenterne (skat.dk) og ' +
+      'det ekstra pensionsfradrags to satser og 15-årsgrænse (LL § 9 L, ' +
+      'stk. 3)',
+    verifiedOn: '2026-08-14',
+    dependsOnUnconfirmed: [],
+
+    // Anden halvdel af parret. Ét indkomstår senere end casen ovenfor, og
+    // dermed det første år, hvor "fra og med det 15. indkomstår før" er
+    // opfyldt: satsen springer fra 12 til 32 %. Grænsen har ingen øvre ende
+    // — satsen bliver ved med at være den høje efter folkepensionsalderen —
+    // og springet er derfor ét og ikke to.
+    //
+    // Fradraget vokser fra 7.200 til 19.200 kr., og hele forskellen ligger i
+    // kommuneskatten: et ligningsmæssigt fradrag rører kun den skattepligtige
+    // indkomst, hvor fradragsretten rører alle lag ovenpå den personlige. De
+    // to caser skiller sig derfor med præcis 23,40 % af 12.000 = 2.808 kr.,
+    // og bundskatten står stille på 63.640,99 i begge.
+    //
+    // AM-bidrag   8,00 % af 700.000                =  56.000,00
+    // Personlig indkomst  700.000 − 56.000 − 60.000 = 584.000,00
+    // Beskæftigelsesfradrag, i loft                =  63.300,00
+    // Jobfradrag, i loft                           =   3.100,00
+    // Ekstra pensionsfradrag 32 % af 60.000        =  19.200,00
+    // Skattepligtig indkomst 584.000 − 85.600      = 498.400,00
+    // Bundskat   12,01 % af (584.000 − 54.100)     =  63.640,99
+    // Kommuneskat 23,40 % af (498.400 − 54.100)    = 103.966,20
+    // Mellemskat            584.000 < 641.200      =       0,00
+    //                                                ──────────
+    //                                                223.607,19
+    input: {
+      earnedIncome: 700_000,
+      municipalTaxRate: 0.234,
+      churchTaxRate: 0,
+      contribution: { withDeductibility: 60_000, yearsToStatePensionAge: 15 },
+    },
+    expected: {
+      personalIncome: 584_000,
+      taxableIncome: 498_400,
+      allowances: {
+        employmentAllowance: cappedEmploymentAllowance,
+        jobAllowance: cappedJobAllowance,
+        extraPensionAllowance: 19_200,
+      },
+      layers: {
+        labourMarketContribution: 56_000,
+        bottomBracketTax: 63_640.99,
+        municipalTax: 103_966.2,
+        churchTax: 0,
+        middleBracketTax: 0,
+      },
+      total: 223_607.19,
     },
   },
 ]
