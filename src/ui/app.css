@@ -684,6 +684,15 @@ body {
   font-family: var(--f-tal);
 }
 
+/* Aksens navn skal læses som en overskrift til mærkaterne, ikke som endnu
+   et af dem — derfor fladens labelfarve og lidt sperring. */
+.formuegraf-akse-y .aksenavn,
+.formuegraf-akse-x .aksenavn {
+  fill: var(--label);
+  font-family: var(--f-broed);
+  letter-spacing: 0.06em;
+}
+
 /* ---------- årstabellen ---------- */
 
 .tabelramme {

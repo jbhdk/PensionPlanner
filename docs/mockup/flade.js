@@ -278,7 +278,9 @@ function holdbarhedsspaen(data) {
 }
 
 function tegnFormuegraf(data, serier, hoejde, maerker) {
-  var B = 900, H = hoejde || 250, M = { t: 8, r: 8, b: 20, l: 58 };
+  /* Top og bund har hver sin ekstra linje til aksens navn: enheden over
+     y-mærkaterne, tidsenheden under årstallene. */
+  var B = 900, H = hoejde || 250, M = { t: 22, r: 8, b: 34, l: 58 };
   var n = data.length;
   var x = function (i) { return M.l + i * (B - M.l - M.r) / (n - 1); };
 
@@ -340,6 +342,10 @@ function tegnFormuegraf(data, serier, hoejde, maerker) {
     s.push('<text x="' + (M.l - 6) + '" y="' + (y(v) + 3.5).toFixed(1) +
       '" text-anchor="end" font-size="10" fill="#7d7a74">' + mio(v) + '</text>');
   }
+  /* Enheden står som overskrift over mærkatsøjlen. Hvilke kroner det er,
+     dagens eller årets egne, står i omskifteren over grafen. */
+  s.push('<text x="' + (M.l - 6) + '" y="' + (M.t - 8) +
+    '" text-anchor="end" font-size="10" fill="#57544f">mio. kr.</text>');
 
   /* båndene */
   bånd.forEach(function (band, si) {
@@ -370,9 +376,13 @@ function tegnFormuegraf(data, serier, hoejde, maerker) {
   for (var i2 = 0; i2 < n; i2++) {
     if (data[i2].aar % 10 !== 0) continue;
     var anker = x(i2) > B - M.r - 22 ? 'end' : 'middle';
-    s.push('<text x="' + x(i2).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + anker +
+    s.push('<text x="' + x(i2).toFixed(1) + '" y="' + (H - M.b + 14) + '" text-anchor="' + anker +
       '" font-size="10" fill="#7d7a74">' + data[i2].aar + '</text>');
   }
+  /* Tidsenheden står midt under årstallene, hvor den ikke kan forveksles
+     med et af dem. */
+  s.push('<text x="' + ((M.l + B - M.r) / 2).toFixed(1) + '" y="' + (H - 6) +
+    '" text-anchor="middle" font-size="10" fill="#57544f">år</text>');
   s.push('</svg>');
   return s.join('');
 }

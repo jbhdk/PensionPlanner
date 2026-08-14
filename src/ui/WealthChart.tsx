@@ -12,12 +12,18 @@ import { toDisplayKroner } from './real'
 import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
 
-const MARGIN = { top: 8, right: 8, bottom: 20, left: 58 }
+// Top og bund har hver sin ekstra linje til aksens navn: enheden over
+// y-mærkaterne, tidsenheden under årstallene. Uden dem er det tal på en akse,
+// og læseren må gætte, hvad de tæller.
+const MARGIN = { top: 22, right: 8, bottom: 34, left: 58 }
 
 // Aksemærkaterne står i monospace ved 10 px, hvor hvert tegn fylder 0,6 em.
 // Margenen kan derfor udmåles af mærkatets længde frem for at måles i DOM'en.
 const LABEL_CHAR_WIDTH = 6
 const LABEL_GAP = 10
+
+// Tidsenheden er simuleringsåret, og x-aksen tæller ét pr. punkt.
+const X_AXIS_NAME = 'år'
 
 type BandPoint = { y0: number; y1: number }
 
@@ -118,8 +124,15 @@ export function WealthChart({
   // venstre kant. Går aksen over en million, skrives den derfor i millioner,
   // som mockuppens tegnFormuegraf() — og margenen udmåles efter det længste
   // mærkat, så et ciffer mere aldrig kan skubbe teksten ud over kanten igen.
-  const yLabels = yTicks.map((v) => (maxTop >= 1_000_000 ? millioner(v) : kroner(v)))
-  const longestLabel = Math.max(0, ...yLabels.map((label) => label.length))
+  const inMillions = maxTop >= 1_000_000
+  const yLabels = yTicks.map((v) => (inMillions ? millioner(v) : kroner(v)))
+
+  // Aksens navn siger, hvad tallene tæller — og i hvilken størrelsesorden,
+  // siden mærkaterne skifter til millioner. Hvilke kroner det er, dagens
+  // eller årets egne, står i omskifteren over grafen og gentages ikke her.
+  const yAxisName = inMillions ? 'mio. kr.' : 'kr.'
+
+  const longestLabel = Math.max(0, ...[...yLabels, yAxisName].map((label) => label.length))
   const left = Math.max(MARGIN.left, longestLabel * LABEL_CHAR_WIDTH + LABEL_GAP)
 
   const x = scaleLinear()
@@ -191,6 +204,11 @@ export function WealthChart({
             )
           })}
           <g className="formuegraf-akse-y">
+            {/* Enheden står over mærkatsøjlen og er højrestillet som den, så
+                den læses som søjlens overskrift. */}
+            <text className="aksenavn" x={left - 6} y={MARGIN.top - 8} textAnchor="end">
+              {yAxisName}
+            </text>
             {yTicks.map((v, i) => (
               <g key={v}>
                 <line
@@ -243,11 +261,26 @@ export function WealthChart({
               // centreres, så det ikke rager ud over viewBox'en.
               const anchor = x(index) > width - MARGIN.right - 20 ? 'end' : 'middle'
               return (
-                <text key={yearTick} x={x(index)} y={height - 6} textAnchor={anchor}>
+                <text
+                  key={yearTick}
+                  x={x(index)}
+                  y={height - MARGIN.bottom + 14}
+                  textAnchor={anchor}
+                >
                   {yearTick}
                 </text>
               )
             })}
+            {/* Tidsenheden står midt under årstallene, hvor den ikke kan
+                forveksles med et af dem. */}
+            <text
+              className="aksenavn"
+              x={(left + width - MARGIN.right) / 2}
+              y={height - 6}
+              textAnchor="middle"
+            >
+              {X_AXIS_NAME}
+            </text>
           </g>
         </svg>
       </div>

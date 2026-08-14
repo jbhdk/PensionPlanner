@@ -120,6 +120,25 @@ describe('WealthChart', () => {
     expect(screen.getByText('2063')).toBeTruthy()
   })
 
+  it('navngiver aksernes enheder, så tallene ikke skal gættes', () => {
+    const plan = aPlan({ balance: 1_000_000 })
+    const years = simulate(plan)
+    render(<WealthChart years={years} plan={plan} unit="Real" />)
+
+    // Mærkaterne står i millioner, og enheden skal sige det samme.
+    expect(screen.getByText('mio. kr.')).toBeTruthy()
+    expect(screen.getByText('år')).toBeTruthy()
+  })
+
+  it('skriver y-aksens enhed i hele kroner, når formuen er under en million', () => {
+    const plan = aPlan({ balance: 400_000 })
+    const years = simulate(plan)
+    render(<WealthChart years={years} plan={plan} unit="Real" />)
+
+    expect(screen.getByText('kr.')).toBeTruthy()
+    expect(screen.getByText('400.000')).toBeTruthy()
+  })
+
   it('giver y-aksen margen nok til det længste mærkat, så intet ciffer klippes af', () => {
     // En stor formue giver de længste mærkater ("100,0 mio."), og de skal
     // stadig stå helt inde i viewBox'en. Tegnbredden er kendt: mærkaterne

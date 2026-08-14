@@ -352,7 +352,10 @@ kravspecifikationen:
    synkroniseret.
 4. **Grafen måles efter den plads, den har, og tegnes om** — ved vinduesskift, og når
    inspektørskuffen åbner eller lukker. En fast højde duer ikke.
-5. Dansk talformatering, `tabular-nums`, og en akse i millioner.
+5. Dansk talformatering, `tabular-nums`, og en akse i millioner. Begge akser bærer deres
+   enhed — `mio. kr.` som overskrift over mærkatsøjlen, `år` under årstallene — og
+   y-margenen retter sig efter det længste mærkat, så intet ciffer klippes af kanten.
+   Hvilke kroner det er, siger omskifteren over grafen, og det gentages ikke på aksen.
 
 To krav er faldet bort. Den **divergerende stablede søjlegraf** stod som krav 2 med
 henvisning til `#cashflow`, og den form er forkastet; **flere serier af samme slags oven i
