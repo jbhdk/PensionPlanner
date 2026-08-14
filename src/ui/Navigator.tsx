@@ -8,6 +8,7 @@ import {
   addPerson,
   addTransfer,
   firstContributionPair,
+  firstTransferPair,
 } from './planEdits'
 import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
@@ -216,9 +217,10 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
         value: kroner(transfer.amountInRealKroner),
         target: { kind: 'transfer', id: transfer.id },
       })),
-      // En overførsel flytter penge mellem to beholdninger — der skal være
-      // to at vælge mellem, før knappen giver mening.
-      addLabel: holdings.length >= 2 ? '+ Overførsel' : undefined,
+      // En overførsel flytter penge mellem to beholdninger med frie midler —
+      // der skal være to at vælge mellem, før knappen giver mening, jf.
+      // ADR-0016.
+      addLabel: firstTransferPair(plan) ? '+ Overførsel' : undefined,
       onAdd: () => onChange(addTransfer(plan)),
     },
   ]

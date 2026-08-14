@@ -323,13 +323,13 @@ export function withTransferEnd(
   })
 }
 
-/** Den tyndeste overførsel, der kan tilføjes: fra og til de to første
-    beholdninger, hele horisonten, hvert år. Brugeren retter dem i skuffen
-    bagefter. Kræver to beholdninger at flytte penge mellem — knappen der
-    kalder den, er selv skjult ellers. */
+/** Den tyndeste overførsel, der kan tilføjes: fra og til det første lovlige
+    par, hele horisonten, hvert år. Brugeren retter enderne i skuffen
+    bagefter. Findes intet par, er der ingenting at tilføje, og knappen der
+    kalder her, er selv skjult. */
 export function addTransfer(plan: Plan): Plan {
-  const holdings = plan.household.persons.flatMap((person) => person.holdings)
-  if (holdings.length < 2) return plan
+  const pair = firstTransferPair(plan)
+  if (!pair) return plan
 
   return {
     ...plan,
@@ -337,8 +337,8 @@ export function addTransfer(plan: Plan): Plan {
       ...plan.transfers,
       {
         id: freshTransferId(plan),
-        from: holdings[0]!.id,
-        to: holdings[1]!.id,
+        from: pair.from,
+        to: pair.to,
         amountInRealKroner: 0,
         timing: 'Even',
         period: {},
@@ -346,6 +346,20 @@ export function addTransfer(plan: Plan): Plan {
       },
     ],
   }
+}
+
+/** De to første beholdninger, en overførsel kan gå mellem — og dermed også
+    svaret på, om en overførsel overhovedet kan tilføjes.
+
+    Begge ender er frie midler: penge ind i en ordning er en indbetaling, og
+    penge ud af en er en udbetaling, jf. ADR-0016. Enderne behøver derimod
+    ikke samme ejer — en overførsel flytter penge inden for husstandens frie
+    midler, og `validatePlan` stiller ikke det krav, indbetalingen har. */
+export function firstTransferPair(plan: Plan): { from: string; to: string } | undefined {
+  const free = plan.household.persons.flatMap((person) => person.holdings).filter(isFreeAssets)
+  const [from, to] = free
+  if (!from || !to) return undefined
+  return { from: from.id, to: to.id }
 }
 
 function freshTransferId(plan: Plan): string {

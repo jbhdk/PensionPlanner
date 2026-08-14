@@ -36,6 +36,23 @@ function aFreeHolding(id: string, name: string): Holding {
   return { id, name, variant: 'SavingsAccount', balance: 0, grossReturn: 0, annualCostRate: 0 }
 }
 
+/** Fixturens buffer, en ordning og endnu en beholdning med frie midler — i
+    den rækkefølge, så ordningen står som husstandens anden beholdning. En
+    overførsel, der tager de to første beholdninger den ligger i, rammer
+    ordningen her, og listerne har noget at udelade. */
+function aPlanWithPensionBetweenFreeHoldings(): Plan {
+  return aPlan({
+    holdings: [
+      aPensionHolding('ratepension', 'Ratepension'),
+      aFreeHolding('anden-beholdning', 'Anden beholdning'),
+    ],
+  })
+}
+
+function aPensionHolding(id: string, name: string): Holding {
+  return { id, name, variant: 'InstalmentPension', balance: 0, grossReturn: 0, annualCostRate: 0 }
+}
+
 /** Fixturens buffer plus en ratepension, så skuffen har en pensionsbeholdning
     at vise. */
 function aPlanWithPension(): Plan {
@@ -1540,6 +1557,71 @@ describe('fladen', () => {
 
     await user.selectOptions(screen.getByLabelText('Fra'), 'Frie midler')
     expect(ender()).toEqual(['Frie midler', 'Tredje beholdning'])
+  })
+
+  it('viser kun beholdninger med frie midler i en overførsels to lister', async () => {
+    // En overførsel flytter penge mellem husstandens frie midler. Stod
+    // ordningen i listen, kunne ét klik skrive en plan, `validatePlan`
+    // afviser — og hele resultatspalten forsvandt, jf. ADR-0016.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...aPlanWithPensionBetweenFreeHoldings(),
+          transfers: [
+            aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 50_000 }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+
+    const valg = (label: string) =>
+      Array.from((screen.getByLabelText(label) as HTMLSelectElement).options).map(
+        (option) => option.value,
+      )
+
+    expect(valg('Fra')).toEqual(['Frie midler', 'Anden beholdning'])
+    expect(valg('Til')).toEqual(['Frie midler', 'Anden beholdning'])
+  })
+
+  it('bytter en overførsels ender om, også når listerne kun rummer frie midler', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...aPlanWithPensionBetweenFreeHoldings(),
+          transfers: [
+            aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 50_000 }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+
+    await user.selectOptions(screen.getByLabelText('Til'), 'Frie midler')
+
+    expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Anden beholdning')
+    expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Frie midler')
+    expect(screen.queryByText(/kan ikke simuleres/i)).toBeNull()
+  })
+
+  it('tilføjer en overførsel mellem to beholdninger med frie midler, når ordningen står imellem dem', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithPensionBetweenFreeHoldings()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Overførsel' }))
+
+    expect(navigatorButton(/Frie midler.*Anden beholdning/)).toBeTruthy()
+    expect(screen.queryByText(/kan ikke simuleres/i)).toBeNull()
+  })
+
+  it('skjuler "+ Overførsel", når husstanden kun har én beholdning med frie midler', () => {
+    render(<App initialPlan={aPlanWithPension()} />)
+
+    expect(screen.queryByRole('button', { name: '+ Overførsel' })).toBeNull()
   })
 
   it('tilføjer en overførsel via overførselsgruppen, og dens inspektør kan åbnes', async () => {

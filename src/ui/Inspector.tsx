@@ -964,11 +964,19 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
   if (!transfer) return null
 
   const holdings = plan.household.persons.flatMap((person) => person.holdings)
-  const holdingByName: Record<string, string> = Object.fromEntries(
-    holdings.map((holding) => [holding.name, holding.id]),
-  )
   const holdingName = (holdingId: string) =>
     holdings.find((holding) => holding.id === holdingId)?.name ?? holdingId
+
+  // En overførsel flytter penge mellem husstandens frie midler: ind i en
+  // ordning er det en indbetaling, og ud af en er det en udbetaling, jf.
+  // ADR-0016. Listerne tilbyder kun det, der kan vælges, frem for at lade
+  // motoren afvise planen bagefter — navneopslaget ovenfor står stadig på
+  // alle beholdninger, så en importeret plans ulovlige ende vises med sit
+  // navn og ikke med sit id.
+  const ends = holdings.filter(isFreeAssets)
+  const holdingByName: Record<string, string> = Object.fromEntries(
+    ends.map((holding) => [holding.name, holding.id]),
+  )
 
   return (
     <>
@@ -991,13 +999,13 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
         <SelectField
           label="Fra"
           value={holdingName(transfer.from)}
-          options={holdings.map((holding) => holding.name)}
+          options={ends.map((holding) => holding.name)}
           onChange={(name) => onChange(withTransferEnd(plan, id, 'from', holdingByName[name]!))}
         />
         <SelectField
           label="Til"
           value={holdingName(transfer.to)}
-          options={holdings.map((holding) => holding.name)}
+          options={ends.map((holding) => holding.name)}
           onChange={(name) => onChange(withTransferEnd(plan, id, 'to', holdingByName[name]!))}
         />
         <NumberField
