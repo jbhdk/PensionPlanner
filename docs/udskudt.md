@@ -42,6 +42,16 @@ Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog 
 
 **Hvad der skal bygges, når det tages op:** Et fradragsregnskab pr. indbetaling med restsaldo og valgt fordeling, opfyldningsfradraget som satstal i `RateYear`, og et felt på livrenten der skiller den privattegnede fra den arbejdsgiveradministrerede. Så længe kun den arbejdsgiveradministrerede findes, findes den skelnen ikke, og det er den billige del af fravalget.
 
+## Afledte aldre i `AgeBound`
+
+**Status:** Fravalgt. `AgeBound` er en fast alder eller `'WorkEndAge'`, og den får hverken `'StatePensionAge'` eller `'PayoutAge'` ved siden af.
+
+**Hvorfor det betyder noget:** Begge de aldre kan flytte sig, uden at brugeren rører planen. Folkepensionsalderen er kun et skøn for de årgange, Folketinget endnu ikke har vedtaget — hustruens er en af dem — og en ordnings `PayoutAge` følger med den for to af de tre udbetalingsregimer. Et endepunkt, der pegede på dem, ville flytte sig af sig selv: ATP'ens start, en udgiftspost fra folkepensionsalderen, en udbetalingsplan sat til at begynde så tidligt loven tillader.
+
+**Prisen ved at lade det ligge:** Rykker et skøn, står tallet forkert i planen, indtil brugeren selv retter det. Det er accepteret. Skønnene rykker sig sjældent — et par gange i et helt planforløb — og et felt i det gemte skema koster for altid, hvor rettelsen koster ét minut de gange, det sker. `'WorkEndAge'` bliver stående, fordi den er det modsatte: den er hele værktøjets håndtag og ændres hver gang et scenarie sammenlignes.
+
+**Hvad der skal bygges, hvis det tages op:** Kun et nyt medlem i `AgeBound` og opløsningen af det i `resolveAgeBound`. `'StatePensionAge'` ville være billig — enhver person har præcis én, så den giver mening alle de steder `AgeBound` bruges. `'PayoutAge'` ville ikke: den er en egenskab ved ordningen og ikke ved personen, og den ville være meningsløs på en post.
+
 ## Efterladtescenarie (dødsfald)
 
 **Status:** Udskudt til efter v1. `Person` har et slutår fra dag ét, så mekanikken kan slås til uden at rive domænemodellen op.

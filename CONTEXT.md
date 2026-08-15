@@ -10,19 +10,20 @@ PRD'er og issues ligger på GitHub, ikke i repoet: [hoved-PRD'en](https://github
 
 Hver term har et dansk navn — det vi taler — og et engelsk identifier i backticks, som er det navn koden, typerne og diagrammerne bruger. Parret er bindende begge veje: findes ordet ikke her, findes det heller ikke i koden.
 
-Fem navnefælder, der er lette at falde i:
+Seks navnefælder, der er lette at falde i:
 
 - Dansk **rate** (én årlig udbetaling fra en ratepension) hedder `instalment` på engelsk. Dansk **sats** hedder `rate`. De to må aldrig bytte plads.
 - Dansk **udbetaling** dækker både `payout` (penge ud af en beholdning) og `benefit` (en ydelse uden saldo). Vælg det snævre ord.
 - `Allowance` er de tre ligningsmæssige fradrag under ét. `PersonalAllowance` er ikke et af dem, selv om det deler ordet — personfradraget nedsætter også bundskattens grundlag.
 - `Annuity` optræder i to ubeslægtede sammenhænge: `LifeAnnuity` (livrente, en beholdning der omsættes) og `AnnuityPrinciple` (annuitetsprincippet, en beregningsmåde for en ratepension). De har intet med hinanden at gøre.
+- `PensionIncome` er ikke `TaperBase`. De to summer overlapper, men aftrapningsgrundlaget indeholder også positiv kapitalindkomst og aktieindkomst, og det indeholder ikke folkepensionen selv. Kaldes de begge „pensionsindkomst“, er den forskel væk.
 - `Deductibility` (fradragsretten på en indbetaling) er ikke et `Allowance`. Den nedsætter den **personlige** indkomst og dermed alle lag ovenpå, hvor et ligningsmæssigt fradrag kun rører den skattepligtige indkomst. Kaldes begge bare "fradrag", er den forskel væk.
 
 Ordninger og beskatningsformer, der ikke har en egen term herunder, men som koden navngiver:
 `InstalmentPension` (ratepension), `OldAgeSavings` (aldersopsparing), `ShareSavingsAccount` (aktiesparekonto), `ShareDepot` (aktiedepot) og `SavingsAccount` (opsparingskonto), `StatePension` (folkepension), `BasicAmount` (grundbeløb), `PensionSupplement` (pensionstillæg), `PalTax` (PAL-skat), `AnnualCostRate` (ÅOP), `BottomBracketTax` / `MiddleBracketTax` / `TopBracketTax` / `AdditionalTopBracketTax` (bund-, mellem-, top- og top-topskat, efter skat.dk's egne engelske betegnelser), `LabourMarketContribution` (AM-bidrag), `PersonalAllowance` (personfradrag), `MunicipalTax` (kommuneskat), `ChurchTax` (kirkeskat), `EarnedIncome` (arbejdsindkomst), `PersonalIncome` (personlig indkomst) og `TaxableIncome` (skattepligtig indkomst).
 
 Fradrag, lofter og øvrige satsbegreber, som koden navngiver:
-`TaxCeiling` (skråt skatteloft), `EmploymentAllowance` (beskæftigelsesfradrag), `JobAllowance` (jobfradrag), `ExtraPensionAllowance` (ekstra pensionsfradrag), `Taper` (aftrapningen af pensionstillægget) og `CivilStatus` (civilstand).
+`TaxCeiling` (skråt skatteloft), `EmploymentAllowance` (beskæftigelsesfradrag), `JobAllowance` (jobfradrag), `ExtraPensionAllowance` (ekstra pensionsfradrag), `Taper` (aftrapningen af pensionstillægget, hvis `spouseDisregard` er de 54 % af ægtefællens indtægt, der ses bort fra, så længe hun ikke selv modtager social pension), `AmortisationRate` (amortisationsrenten) og `CivilStatus` (civilstand).
 
 ### Husstanden
 
@@ -75,8 +76,8 @@ Bruttoafkast minus ÅOP — den sats motoren rent faktisk forrenter saldoen med.
 _Avoid_: Nettoafkast brugt som et felt på `Holding`, realafkast
 
 **Ydelse** · `Benefit`:
-En årlig strøm uden en saldo du ejer, fastlagt af regler eller af et selskabs tilsagn. Folkepension og ATP er ydelser.
-_Avoid_: Udbetaling, indtægt, ret
+En årlig strøm uden en saldo du ejer, fastlagt af regler eller af et selskabs tilsagn. Aldrig en selvstændig figur i planen: livrentens ydelse udledes af omsætningen, folkepensionens grundbeløb og pensionstillæg af satsåret og folkepensionsalderen, og ATP skrives som en indtægtspost med `TaxTreatment` `PensionIncome`, fordi beløbet er brugerens eget tal fra PensionsInfo og ikke en sats. Ordet navngiver strømmen, og det eneste ydelsestal brugeren taster, er livrentens `quotedAnnualBenefit`.
+_Avoid_: Udbetaling, indtægt, ret. Ydelse brugt om en type i planen
 
 **Livrente** · `LifeAnnuity`:
 En beholdning, der ved udbetalingsstart omsættes én gang til en garanteret livsvarig årlig ydelse. Depotet forrentes og modtager indbetalinger indtil da, men styrer intet bagefter.
@@ -87,7 +88,7 @@ Engangshandlingen hvor en livrentes saldo ved udbetalingsstart bliver til en liv
 _Avoid_: Kapitalisering, annuitisering, konvertering, ophør
 
 **Omsætningsfaktor** · `ConversionFactor`:
-Forholdet mellem selskabets oplyste årlige ydelse og dets oplyste depot ved udbetalingsstart. Anvendes én gang på det faktisk fremskrevne depot og ændres aldrig derefter.
+Forholdet mellem selskabets oplyste årlige ydelse og dets oplyste depot ved udbetalingsstart. Anvendes én gang på det faktisk fremskrevne depot og ændres aldrig derefter. De to oplyste tal er hverken dagens kroner eller løbende priser, men enhedsløse: de bruges kun som kvotient, og prisniveauet går ud med sig selv i divisionen. Brugeren taster dem, som selskabet oplyser dem, og fladen hverken deflaterer eller fremskriver dem.
 _Avoid_: Annuitetsdivisor, annuitetsfaktor, kapitaliseringsfaktor
 
 **Frie midler** · `FreeAssets`:
@@ -103,11 +104,11 @@ En plan hvor bufferen aldrig går negativt inden for horisonten. En negativ buff
 _Avoid_: Bæredygtig, gyldig, robust
 
 **Bufferens tilstand** · `BufferState`:
-Hvorfor bufferen er negativ i ét simuleringsår: `Incomplete`, når husstanden har likviditet andetsteds og blot mangler en overførsel, eller `Unsustainable`, når husstandens samlede frie midler også er negative. Et resultat på linje med resten af `YearResult`, ikke en valideringsfejl, og afgjort år for år — samme plan kan være `Incomplete` i de tidlige år og `Unsustainable` senere, jf. ADR-0008.
+Hvorfor bufferen er negativ i ét simuleringsår: `Incomplete`, når husstanden har likviditet andetsteds og blot mangler en overførsel, eller `Unsustainable`, når den ikke har. Likviditet andetsteds er præcis de beholdninger, en overførsel kan nå i netop det år — de øvrige frie midler, aktiesparekontoen, og en aldersopsparing, hvis året har passeret dens `PayoutAge`. En ratepension tæller ikke med: den kan kun nås af en udbetalingsplan, der binder ti år frem, og det er en anden plan og ikke en manglende overførsel. Et resultat på linje med resten af `YearResult`, ikke en valideringsfejl, og afgjort år for år — samme plan kan være `Incomplete` i de tidlige år og `Unsustainable` senere, jf. ADR-0008.
 _Avoid_: Ufuldstændig og uholdbar brugt om hele planen frem for om ét år, fejltilstand, valideringsfejl
 
 **Udbetalingsplan** · `PayoutSchedule`:
-Angivelsen af hvornår en beholdning begynder at blive tømt, over hvor mange år, og efter hvilket beregningsprincip. Brugeren vælger start og varighed — ikke det årlige beløb, som følger af princippet og saldoen.
+Angivelsen af hvornår en beholdning begynder at blive tømt, over hvor mange år, og efter hvilket beregningsprincip. Findes kun på de varianter, hvis `PayoutTaxation` er `PersonalIncome` — ratepensionen, som bærer alle tre, og livrenten, som kun bærer starten, fordi den er livsvarig. De skattefri ordninger har ingen: de tømmes af en overførsel. Starten er en `AgeBound` og aldrig et kalenderår: en beholdning har en ejer at måle alderen fra, og en plan, hvis udbetalinger ikke flytter sig med `WorkEndAge`, kan ikke sammenlignes med sig selv. Brugeren vælger start og varighed — ikke det årlige beløb, som følger af princippet og saldoen. Den sidste rate er resten: når årets afkast er tilskrevet og beholdningsskatten trukket, fejes det, der står tilbage, med i den, så beholdningen lukker på nul. En plan, der efterlod en splint, ville lade den stå i formuegrafen for evigt.
 _Avoid_: Udbetalingsstrategi, hæveplan, profil
 
 **Serieprincippet** · `SerialPrinciple`:
@@ -115,7 +116,7 @@ Beregningsprincip hvor årets rate er saldoen ved årets begyndelse divideret me
 _Avoid_: Lineær udbetaling, ligedeling
 
 **Annuitetsprincippet** · `AnnuityPrinciple`:
-Beregningsprincip hvor årets rate beregnes som en annuitet ud fra saldoen ved årets begyndelse og en lovfastsat amortisationsrente. Giver tilnærmelsesvis lige store rater.
+Beregningsprincip hvor årets rate beregnes som en annuitet ud fra saldoen ved årets begyndelse og en lovfastsat amortisationsrente. Amortisationsrenten er satsdata og aldrig beholdningens eget nettoafkast: den fastsættes for hvert udbetalingsår af Finans Danmark efter PBL § 11 A, stk. 3, og hører derfor i `RateYear`. Er nettoafkastet højere end den, stiger raterne let år for år — deraf tilnærmelsesvis lige store rater og ikke lige store.
 _Avoid_: Fast rate, konstant udbetaling
 
 ### Skat og satser
@@ -125,12 +126,12 @@ Et komplet sæt af officielle satser og beløbsgrænser gældende for ét kalend
 _Avoid_: Skatteår, satssæt, parametre
 
 **§ 20-fremskrivning** · `Section20ProjectionAssumption`:
-Planens antagelse om den årlige stigning i de beløbsgrænser, personskattelovens § 20 regulerer, for simuleringsår efter det sidst kendte satsår. Andel pr. år, ikke procent. Selvstændig af `inflationAssumption` og `BenefitProjectionAssumption`, fordi de tre følger hvert sit indeks.
+Planens antagelse om den årlige stigning i de beløbsgrænser, personskattelovens § 20 regulerer, for simuleringsår efter det sidst kendte satsår. Andel pr. år, ikke procent. Selvstændig af `inflationAssumption` og `StatePensionProjectionAssumption`, fordi de tre følger hvert sit indeks.
 _Avoid_: Fremskrivning, beløbsregulering, indeksering
 
-**Satsregulering** · `BenefitProjectionAssumption`:
-Planens antagelse om den årlige stigning i satsregulerede ydelser — folkepensionens grundbeløb og pensionstillæg — for simuleringsår efter det sidst kendte satsår. Andel pr. år, ikke procent. Rører kun ydelsernes kronebeløb, aldrig aftrapningens procent.
-_Avoid_: Ydelsesregulering, satsfremskrivning
+**Folkepensionsregulering** · `StatePensionProjectionAssumption`:
+Planens antagelse om den årlige stigning i folkepensionens grundbeløb og pensionstillæg for simuleringsår efter det sidst kendte satsår. Andel pr. år, ikke procent. Rører kun de to kronebeløb, aldrig aftrapningens procent. Navnet siger folkepension og ikke ydelser, fordi det er det eneste, feltet løfter: ATP bærer sin egen `RegulationRate` som enhver anden indtægtspost, og livrentens ydelse følger sin bonusantagelse.
+_Avoid_: Satsregulering brugt om feltet — satsreguleringsprocenten regulerer meget mere end folkepensionen. Ydelsesregulering, satsfremskrivning
 
 **Satsgrundlag** · `RateBasis`:
 Om et `YearResult` er regnet på et kendt satsår eller på et fremskrevet, og i så fald hvilket kendt satsår fremskrivningen løber fra. Tilføjes et nyt kendt satsår, overtager det automatisk de simuleringsår, der før blev fremskrevet.
@@ -160,6 +161,14 @@ _Avoid_: Fradrag, ligningsfradrag, deduction
 Den virkning at en indbetaling holdes uden for den personlige indkomst. Loven har to hjemler for den — bortseelsesret for den arbejdsgiveradministrerede ordning, fradragsret for den private — men de er numerisk identiske, og modellen skelner ikke. Hvorvidt en indbetaling har den, følger af destinationens variant: `InstalmentPension` og `LifeAnnuity` har den, `OldAgeSavings` og `ShareSavingsAccount` har den ikke. Er den loftbelagt, gælder den kun op til loftet; resten af indbetalingen går stadig ind i beholdningen, men uden virkning på skatten.
 _Avoid_: Bortseelse, bortseelsesret brugt som modsætning til fradragsret, fradrag brugt alene
 
+**Udbetalingsbeskatning** · `PayoutTaxation`:
+Hvad der sker i skatten, når penge forlader en beholdning: `PersonalIncome` for ratepensionen og livrenten, `TaxFree` for aldersopsparingen, aktiesparekontoen og de to frie varianter. En egenskab ved varianten og aldrig ved den enkelte udbetaling, ligesom `Deductibility` på vejen ind. `PersonalIncome` er ikke `EarnedIncome`: en pensionsudbetaling er personlig indkomst uden AM-bidrag og giver hverken beskæftigelsesfradrag eller jobfradrag. Den afgør også, hvad der kan tømme beholdningen — kun en `TaxFree` kan tømmes af en overførsel.
+_Avoid_: Udbetalingsskat, hæveskat, exit-beskatning
+
+**Pensionsindkomst** · `PensionIncome`:
+Personlig indkomst, der ikke er AM-bidragspligtig — i denne model udelukkende udbetalinger fra ratepension og livrente samt folkepension og ATP. Den indgår i den personlige indkomst og dermed i alle lag ovenpå, men den udløser hverken AM-bidrag, beskæftigelsesfradrag eller jobfradrag: bidraget er betalt på vejen ind, og de to fradrag følger arbejde. Det er derfor, den krydser skattesømmet som sit eget tal og ikke lagt sammen med `EarnedIncome`.
+_Avoid_: Pensionsudbetaling brugt om summen, ikke-arbejdsindkomst, øvrig personlig indkomst
+
 **Skatteopgørelse** · `TaxAssessment`:
 Skatten for ét simuleringsår og én person, opgjort med hvert lag for sig og stemplet med det satsår, den er regnet på. Totalen er summen af lagene, ikke et felt ved siden af dem.
 _Avoid_: Skatteberegning, årsopgørelse, skattetotal
@@ -187,7 +196,7 @@ Om en post lægger til eller trækker fra husstandens pengestrøm: `Income` elle
 _Avoid_: Fortegn, type, ind/ud
 
 **Skattebehandling** · `TaxTreatment`:
-Det skattemæssige spor en indtægtspost lander i: `EarnedIncome`, som er AM-pligtig og indgår i den personlige indkomst, eller `TaxFree`, som ikke beskattes. Kun indtægtsposter bærer den — en udgiftspost har ikke feltet.
+Det skattemæssige spor en indtægtspost lander i: `EarnedIncome`, som er AM-pligtig, indgår i den personlige indkomst, giver beskæftigelses- og jobfradrag og ikke aftrapper pensionstillægget; `PensionIncome`, som indgår i den personlige indkomst uden AM-bidrag, giver ingen af de to fradrag og tæller i `TaperBase`; eller `TaxFree`, som ikke beskattes. Hver værdi bærer hele indkomstens skattemæssige opførsel og ikke ét enkelt træk — derfor er de tre værdier og ikke tre felter. Kun indtægtsposter bærer den — en udgiftspost har ikke feltet.
 _Avoid_: Skattetype, skattekode, indkomstart
 
 **Forankring** · `Anchor`:
@@ -199,7 +208,7 @@ Den tidsstrækning en post er aktiv i. Formen på dens endepunkter følger `Anch
 _Avoid_: Interval, tidsrum. Forveksl den ikke med et enkelt `SimulationYear`.
 
 **Aldersendepunkt** · `AgeBound`:
-Et periodeendepunkt ved aldersforankring: enten en fast alder, eller en henvisning til `WorkEndAge`. Sat til erhvervsophør følger endepunktet `Person.workEndAge` og flytter sig automatisk, uden at posten selv redigeres. Alderen behøver ikke være et helt år — folkepensionsalderen er 65,5 for én årgang og 72,5 for en anden — og hvilket kalenderår endepunktet rammer, afhænger derfor også af fødselsmåneden.
+Et tidspunkt angivet ved alder: enten en fast alder, eller en henvisning til `WorkEndAge`. Bruges to steder — som endepunkt i en posts periode, og som start på en beholdnings udbetalingsplan. Sat til erhvervsophør følger punktet `Person.workEndAge` og flytter sig automatisk, uden at posten eller planen selv redigeres. Alderen behøver ikke være et helt år — folkepensionsalderen er 65,5 for én årgang og 72,5 for en anden — og hvilket kalenderår endepunktet rammer, afhænger derfor også af fødselsmåneden.
 _Avoid_: Aldersgrænse, tidspunkt
 
 **Indbetaling** · `Contribution`:
@@ -219,7 +228,7 @@ Om ordningen kan oprettes og administreres af en arbejdsgiver, så en indbetalin
 _Avoid_: Firmaordning, arbejdsgiverordning, bortseelsesret
 
 **Overførsel** · `Transfer`:
-En dateret flytning af penge mellem husstandens frie midler. Hverken en indtægt eller en udgift, og uden skattevirkning. Destinationen er det, der skiller den fra en indbetaling: går pengene ind i en ordning, er det en indbetaling, uanset hvor de kom fra.
+En dateret flytning af penge fra én af husstandens beholdninger til dens frie midler. Hverken en indtægt eller en udgift, og uden skattevirkning — afgiveren skal derfor være en variant, hvis `PayoutTaxation` er `TaxFree`. Det er også den, der tømmer en aldersopsparing og en aktiesparekonto: efter pensionsudbetalingsalderen er de konti, ejeren hæver af som hun vil, og en udbetalingsplan ville påstå en lovregel, der ikke findes, jf. [ADR-0022](./docs/adr/0022-den-skattefri-ordning-toemmes-af-en-overfoersel-ikke-af-en-udbetalingsplan.md). Destinationen er det, der skiller overførslen fra en indbetaling: går pengene ind i en ordning, er det en indbetaling, uanset hvor de kom fra. Perioden kan aldersforankres som en posts, og alderen måles på afgiverbeholdningens ejer — en beholdning har præcis én. Beløbet afkortes til afgiverens saldo, og forskellen står på `TransferYear`. Fladen må skrive "udbetaling" om en overførsel ud af en ordning, fordi det er det, den er i virkeligheden; det er en etiket og ikke et begreb.
 _Avoid_: Flytning, indskud, indbetaling, omplacering
 
 **Forfald** · `Timing`:
@@ -245,7 +254,7 @@ Motorens fulde output for ét simuleringsår, inklusive alle mellemregninger og 
 _Avoid_: Række, resultat, output, snapshot
 
 **Beholdningsår** · `HoldingYear`:
-Én beholdnings tal for ét simuleringsår: primo- og ultimosaldo, årets afkast, og den vægtede strøm afkastet blev regnet af. Beholdningens navn og satser står i planen og gentages ikke her.
+Én beholdnings tal for ét simuleringsår: primo- og ultimosaldo, årets afkast, den vægtede strøm afkastet blev regnet af, og årets udbetaling, når en udbetalingsplan tømmer den. En omsat livrentes ydelse står ikke her — den har ingen saldo at forlade og er en `Benefit`, ikke en `payout`. Beholdningens navn og satser står i planen og gentages ikke her.
 _Avoid_: Beholdningsresultat, saldolinje, kontoudtog
 
 **Postår** · `EntryYear`:
@@ -256,8 +265,12 @@ _Avoid_: Postresultat, årspost, betaling
 Én indbetalings to beløb i ét simuleringsår, i årets egne løbende priser — kun for de indbetalinger der faktisk falder i året. Det ene er, hvad der forlod kilden; det andet, hvad der landede i beholdningen. Forskellen er AM-bidraget, som allerede står i personens eget skattelag og derfor ikke gentages her.
 _Avoid_: Bidragsår, indbetalingsresultat, indskud
 
+**Overførselsår** · `TransferYear`:
+Én overførsels to beløb i ét simuleringsår, i årets egne løbende priser — kun for de overførsler der faktisk falder i året. Det ene er, hvad planen bad om; det andet, hvad der faktisk blev flyttet, når afgiverens saldo ikke rakte. De to er ens i næsten alle år, og linjen findes for de år, hvor de ikke er: en tavs afkortning er den slags fejl, der aldrig viser sig. Forfaldet står ikke her; det er en egenskab ved overførslen selv.
+_Avoid_: Overførselsresultat, flytning, hævning
+
 **Personår** · `PersonYear`:
-Én persons skatteopgørelse for ét simuleringsår, sammen med årets aktie- og kapitalindkomst og personens marginalskat. Aktieindkomstens skat står ikke her: den er en husstandsberegning.
+Én persons skatteopgørelse for ét simuleringsår, sammen med årets aktie- og kapitalindkomst, personens marginalskat på hver sin indkomstart — hvad næste krone `EarnedIncome` koster, og hvad næste krone `PensionIncome` koster, hvor aftrapningen af pensionstillægget lægger sig oveni — og de ydelser uden saldo, personen modtog: folkepensionens grundbeløb, det aftrappede pensionstillæg med det aftrapningsgrundlag, det blev aftrappet af, og hver omsat livrentes årlige ydelse. Aktieindkomstens skat står ikke her: den er en husstandsberegning.
 _Avoid_: Personresultat, skatteår, opgørelse
 
 **Loftår** · `CapYear`:
@@ -269,7 +282,7 @@ Hvorfor et loft er brudt i ét simuleringsår: `LostDeductibility`, når det ove
 _Avoid_: Overskridelse, loftfejl, brudt loft brugt om planen frem for om ét år
 
 **Aftrapningsgrundlag** · `TaperBase`:
-Den indkomst der reducerer pensionstillægget. Omfatter ATP, livrente- og ratepensionsudbetalinger, positiv kapitalindkomst og aktieindkomst — men hverken arbejdsindkomst, udbetalinger fra aldersopsparing eller afkast på en aktiesparekonto. Kapitalindkomsten tæller kun når den er positiv: en negativ nettokapitalindkomst lemper ikke grundlaget. Ægtefællens indkomst indgår med 54 % bortseelse, og ægtefællens arbejdsindkomst indgår slet ikke.
+Den indkomst der reducerer pensionstillægget. Omfatter ATP, livrente- og ratepensionsudbetalinger, positiv kapitalindkomst og aktieindkomst — men hverken arbejdsindkomst, udbetalinger fra aldersopsparing eller afkast på en aktiesparekonto. Kapitalindkomsten tæller kun når den er positiv: en negativ nettokapitalindkomst lemper ikke grundlaget. Folkepensionen indgår ikke i sit eget grundlag, jf. PL § 29, stk. 4, nr. 1 — hvilket er det, der gør husstandskoblingen til ét gennemløb frem for en iteration: den ene persons tillæg afhænger aldrig af den andens tillæg, kun af den andens øvrige indkomst. Ægtefællens arbejdsindkomst indgår slet ikke, og af hendes øvrige indkomst ses bort fra 54 %, men kun så længe hun ikke selv modtager social pension, jf. PL § 49, stk. 1, nr. 4. Gør hun det, indgår hendes indkomst fuldt ud — og aftrapningsprocenten halveres samtidig. Bortseelsen er en ren procent uden maksimumbeløb.
 _Avoid_: Modregningsgrundlag, indtægtsgrundlag
 
 ### Aldre
@@ -279,7 +292,7 @@ Det år en person holder op med at arbejde. En fri beslutning, ikke en lovbestem
 _Avoid_: Pensionsalder, pensionering, tilbagetrækning
 
 **Pensionsudbetalingsalder** · `PayoutAge`:
-Den tidligste alder hvor en bestemt ordning lovligt må udbetales. En egenskab ved ordningen, ikke ved personen — samme person kan have flere ordninger med hver sin.
+Den tidligste alder hvor en bestemt ordning lovligt må udbetales. En egenskab ved ordningen, ikke ved personen — samme person kan have flere ordninger med hver sin. Ofte en brøkalder, fordi to af de tre regimer er folkepensionsalderen minus fem eller tre år, og sammenligningen sker derfor i kalenderår og ikke i aldre: året, hvor personen fylder 62,5, indeholder lovlige udbetalingsmåneder, og en plan, der starter dér, findes i virkeligheden.
 _Avoid_: Udbetalingsalder, pensionsalder
 
 **Udbetalingsregime** · `PayoutRegime`:

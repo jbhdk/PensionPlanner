@@ -64,13 +64,13 @@ flowchart TD
 
     Ret --> Pal --> Balances
     Balances -- PayoutSchedule --> Instal
-    Balances -- PayoutSchedule --> OldAge
+    Balances -- Transfer --> OldAge
     CapInc --> Gross
 ```
 
 ## Hvad diagrammet gør krav på
 
-- **`OldAgeSavings` går uden om to ting på én gang:** den beskattes ikke ved udbetaling, og den tæller ikke med i `TaperBase`. Det er hele grunden til at have den som selvstændig variant.
+- **`OldAgeSavings` går uden om to ting på én gang:** den beskattes ikke ved udbetaling, og den tæller ikke med i `TaperBase`. Det er hele grunden til at have den som selvstændig variant — og grunden til, at den tømmes af en `Transfer` og ikke af en `PayoutSchedule`: uden skat på vejen ud er der ingen lovregel at binde en plan til, jf. [ADR-0022](../adr/0022-den-skattefri-ordning-toemmes-af-en-overfoersel-ikke-af-en-udbetalingsplan.md).
 - **Arbejdsindkomst beskattes, men aftrapper ikke.** Derfor kan det betale sig at arbejde videre som folkepensionist, mens en ratepensionsudbetaling i samme år koster dobbelt.
 - **En `Contribution` er en bevægelse, ikke en udgift.** Den forlader pengestrømmen og lander som saldo — bogført som udgift ville den tælles to gange og knække balanceinvarianten.
 - **Afkastet er en sidesløjfe.** Det passerer aldrig gennem årets pengestrøm — det tilskrives saldoen og beskattes med PAL undervejs. Kun ved udbetaling bliver det til penge, husstanden kan bruge.
