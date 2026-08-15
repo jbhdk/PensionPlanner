@@ -269,6 +269,26 @@ describe('fladen', () => {
     expect(screen.queryByRole('button', { name: /beregn/i })).toBeNull()
   })
 
+  it('kalder folkepensionens fremskrivning ved sit rette navn i planens skuffe', async () => {
+    // Feltet løfter folkepensionens grundbeløb og pensionstillæg og intet
+    // andet — ATP bærer sin egen sats som enhver anden indtægtspost, jf.
+    // ADR-0023. Hed det stadig satsregulering, lovede navnet mere, end det
+    // holder.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan({ startYear: 2026 })} />)
+
+    await user.click(screen.getByRole('button', { name: /Ophør som 58/ }))
+
+    const felt = screen.getByLabelText(/Folkepensionsregulering/) as HTMLInputElement
+    expect(screen.queryByLabelText(/Satsregulering/)).toBeNull()
+
+    await user.clear(felt)
+    await user.type(felt, '2,5')
+    expect((screen.getByLabelText(/Folkepensionsregulering/) as HTMLInputElement).value).toBe(
+      '2,5',
+    )
+  })
+
   it('giver kun indtægtsposten en skattebehandling, og siger at lønnen er brutto', async () => {
     const user = userEvent.setup()
     render(

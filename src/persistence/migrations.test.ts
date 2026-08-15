@@ -345,3 +345,46 @@ describe('v7 → v8: pensionsordningerne bærer et oprettelsestidspunkt', () => 
     expect(holdings[2]!.name).toBe('Ratepension')
   })
 })
+
+describe('v8 → v9: satsreguleringen hedder det, den løfter', () => {
+  it('omdøber feltet uden at røre satsen eller resten af planen', () => {
+    // Feltet skalerede i forvejen kun folkepensionens grundbeløb og
+    // pensionstillæg, så det gamle navn lovede mere, end det holdt — ATP
+    // bærer sin egen sats som enhver anden indtægtspost, jf. ADR-0023. Det
+    // er en ren omdøbning: værdien betyder præcis det samme bagefter, og der
+    // er intet at gætte.
+    const v8: unknown = {
+      name: 'Gammel plan',
+      startYear: 2026,
+      inflationAssumption: 0.02,
+      section20ProjectionAssumption: 0.02,
+      benefitProjectionAssumption: 0.031,
+      buffer: 'free-assets',
+      entries: [],
+      transfers: [],
+      contributions: [],
+      household: { persons: [] },
+    }
+
+    const migrated = runMigrations(v8, 8, 9, migrations) as Record<string, unknown>
+
+    expect(migrated.statePensionProjectionAssumption).toBe(0.031)
+    expect('benefitProjectionAssumption' in migrated).toBe(false)
+    // Naboen med det næsten ens navn står urørt — de to er selvstændige og
+    // følger hvert sit indeks.
+    expect(migrated.section20ProjectionAssumption).toBe(0.02)
+    expect(migrated.inflationAssumption).toBe(0.02)
+    expect(migrated.name).toBe('Gammel plan')
+  })
+
+  it('lader en plan uden feltet passere frem for at skrive et nul ind', () => {
+    // Feltet har været der siden v1, så tilfældet burde ikke findes — men et
+    // led i kæden, der opfinder en sats, er værre end et, der lader være.
+    const migrated = runMigrations({ name: 'Uden feltet' }, 8, 9, migrations) as Record<
+      string,
+      unknown
+    >
+
+    expect('statePensionProjectionAssumption' in migrated).toBe(false)
+  })
+})

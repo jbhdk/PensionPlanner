@@ -73,9 +73,10 @@ describe('planFile', () => {
     // noget faktisk krævede et led i kæden. At de tre varianter kom til,
     // gjorde det ikke — det gjorde derimod v5 → v6, hvor overstyringen af
     // folkepensionsalderen forsvandt, v6 → v7, hvor planen fik sine
-    // indbetalinger, og v7 → v8, hvor de tre ordninger fik det
-    // oprettelsestidspunkt, deres udbetalingsalder udledes af.
-    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(8)
+    // indbetalinger, v7 → v8, hvor de tre ordninger fik det
+    // oprettelsestidspunkt, deres udbetalingsalder udledes af, og v8 → v9,
+    // hvor satsreguleringen kom til at hedde det, den løfter.
+    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(9)
   })
 
   it('bærer en plan med indbetalinger hele vejen rundt', () => {

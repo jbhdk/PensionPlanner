@@ -941,7 +941,7 @@ describe('satsfremskrivning', () => {
       aPlan({
         horizon: 54,
         section20ProjectionAssumption: 0.02,
-        benefitProjectionAssumption: 0.02,
+        statePensionProjectionAssumption: 0.02,
         entries: [
           aSalary({ amountInRealKroner: 950_000 }),
           anExpense({ amountInRealKroner: 200_000 }),

@@ -196,6 +196,28 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    // v8 → v9, jf. ADR-0023: feltet hedder nu det, det løfter. Det skalerede
+    // i forvejen kun folkepensionens grundbeløb og pensionstillæg og aldrig
+    // ydelser i almindelighed — ATP bærer sin egen reguleringssats som
+    // enhver anden indtægtspost, og livrentens ydelse følger sin
+    // bonusantagelse. Navnet lovede altså mere, end det holdt.
+    //
+    // En ren omdøbning: værdien betyder præcis det samme bagefter, og der er
+    // intet at gætte. Mangler feltet, skrives der intet — et led, der
+    // opfinder en sats, er værre end et, der lader være.
+    from: 8,
+    migrate: (data) => {
+      const { benefitProjectionAssumption, ...rest } = data as {
+        benefitProjectionAssumption?: unknown
+        [key: string]: unknown
+      }
+
+      return benefitProjectionAssumption === undefined
+        ? rest
+        : { ...rest, statePensionProjectionAssumption: benefitProjectionAssumption }
+    },
+  },
 ]
 
 /** Kører kæden fra `fromVersion` til `toVersion`, ét led ad gangen. Rent og

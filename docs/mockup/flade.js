@@ -39,7 +39,7 @@ function tegnPlanspalte() {
     felt('Kommuneskat', input('number', pct.format(PLAN.kommuneskat * 100)), '%'),
     felt('Kirkeskat', input('number', pct.format(PLAN.kirkeskat * 100)), '%'),
     felt('§ 20-regulering', input('number', pct.format(PLAN.paragraf20 * 100)), '% p.a.'),
-    felt('Satsregulering', input('number', pct.format(PLAN.satsregulering * 100)), '% p.a.'),
+    felt('Folkepensionsregulering', input('number', pct.format(PLAN.satsregulering * 100)), '% p.a.'),
     '<div class="hint">Sidst kendte satsår er ' + PLAN.sidstKendteSatsaar +
       '. Årene efter regnes på fremskrevne satser og er mærket ≈ i tabellen.</div>'
   ].join('')));

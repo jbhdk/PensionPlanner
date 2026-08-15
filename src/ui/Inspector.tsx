@@ -195,12 +195,12 @@ function PlanFields({ plan, onChange, onClose }: FieldsProps) {
           }
         />
         <NumberField
-          label="Satsregulering"
-          help="Plan.benefitProjectionAssumption"
+          label="Folkepensionsregulering"
+          help="Plan.statePensionProjectionAssumption"
           unit="% p.a."
-          value={asPercent(plan.benefitProjectionAssumption)}
+          value={asPercent(plan.statePensionProjectionAssumption)}
           onChange={(percent) =>
-            onChange({ ...plan, benefitProjectionAssumption: percent / 100 })
+            onChange({ ...plan, statePensionProjectionAssumption: percent / 100 })
           }
         />
       </Section>

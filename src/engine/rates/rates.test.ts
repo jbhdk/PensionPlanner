@@ -3,7 +3,7 @@ import type { RateYear } from './rateYear'
 import { rateYear2026 } from './rateYear2026'
 import { rateYearFor } from './rates'
 
-const noProjection = { section20ProjectionAssumption: 0, benefitProjectionAssumption: 0 }
+const noProjection = { section20ProjectionAssumption: 0, statePensionProjectionAssumption: 0 }
 
 describe('rateYearFor', () => {
   it('bruger det kendte satsår uændret, når simuleringsåret rammer det', () => {
@@ -16,7 +16,7 @@ describe('rateYearFor', () => {
   it('fremskriver § 20-grænserne med § 20-satsen sammensat over årene siden det kendte satsår', () => {
     const { rates, basis } = rateYearFor(2030, {
       section20ProjectionAssumption: 0.02,
-      benefitProjectionAssumption: 0,
+      statePensionProjectionAssumption: 0,
     })
 
     expect(basis).toEqual({ knownYear: 2026, projected: true })
@@ -33,7 +33,7 @@ describe('rateYearFor', () => {
   it('fremskriver satsregulerede ydelser med satsreguleringen, uden at røre aftrapningens procent', () => {
     const { rates } = rateYearFor(2030, {
       section20ProjectionAssumption: 0,
-      benefitProjectionAssumption: 0.03,
+      statePensionProjectionAssumption: 0.03,
     })
 
     const factor = 1.03 ** 4
@@ -53,7 +53,7 @@ describe('rateYearFor', () => {
   it('holder alle procenter uændret, når der fremskrives', () => {
     const { rates } = rateYearFor(2040, {
       section20ProjectionAssumption: 0.02,
-      benefitProjectionAssumption: 0.02,
+      statePensionProjectionAssumption: 0.02,
     })
 
     expect(rates.bracketTaxRates).toEqual(rateYear2026.bracketTaxRates)

@@ -15,17 +15,17 @@ export function latestRateYear(): RateYear {
 }
 
 /** Fremskrivningens to selvstændige antagelser — § 20-grænser og
-    satsregulerede ydelser — hver med sin egen sats, jf. CONTEXT.md. */
+    folkepensionens kronebeløb — hver med sin egen sats, jf. CONTEXT.md. */
 export type ProjectionAssumptions = {
   section20ProjectionAssumption: number
-  benefitProjectionAssumption: number
+  statePensionProjectionAssumption: number
 }
 
 /** Satserne for ét simuleringsår, sammen med hvilket satsgrundlag de hviler
     på. Er `year` selv et kendt satsår, returneres det uændret. Ellers
     fremskrives det seneste kendte satsår før `year`: § 20-regulerede
-    beløbsgrænser løftes med `section20ProjectionAssumption`, satsregulerede
-    ydelser med `benefitProjectionAssumption`, og alle procenter — bracket-,
+    beløbsgrænser løftes med `section20ProjectionAssumption`, folkepensionens
+    kronebeløb med `statePensionProjectionAssumption`, og alle procenter — bracket-,
     afkast- og fradragssatser samt det skrå skatteloft — holdes uændrede. */
 export function rateYearFor(
   year: SimulationYear,
@@ -39,13 +39,14 @@ export function rateYearFor(
 
   const yearsSince = year - base.year
   const section20Factor = (1 + assumptions.section20ProjectionAssumption) ** yearsSince
-  const benefitFactor = (1 + assumptions.benefitProjectionAssumption) ** yearsSince
+  const statePensionFactor =
+    (1 + assumptions.statePensionProjectionAssumption) ** yearsSince
 
   const rates: RateYear = {
     ...base,
     year,
     thresholds: scaleThresholds(base.thresholds, section20Factor),
-    statePension: scaleStatePension(base.statePension, benefitFactor),
+    statePension: scaleStatePension(base.statePension, statePensionFactor),
   }
   return { rates, basis: { knownYear: base.year, projected: true } }
 }
@@ -86,8 +87,8 @@ function scaleThresholds(thresholds: Sourced<Thresholds>, factor: number): Sourc
   }
 }
 
-/** Ydelsernes kronebeløb skaleres; `Taper.rate` er en procent og holdes
-    uændret, jf. `BenefitProjectionAssumption`. */
+/** Folkepensionens kronebeløb skaleres; `Taper.rate` er en procent og
+    holdes uændret, jf. `StatePensionProjectionAssumption`. */
 function scaleStatePension(
   statePension: Sourced<StatePension>,
   factor: number,

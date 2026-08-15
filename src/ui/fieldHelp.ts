@@ -70,8 +70,8 @@ export const fieldHelp = {
   'Plan.section20ProjectionAssumption':
     'Hvor meget skattens beløbsgrænser ventes at stige om året, efter det sidste år hvor de officielle satser kendes. Den afgør, hvornår en voksende indkomst rammer topskatten — sat lavt rammer den tidligere.',
 
-  'Plan.benefitProjectionAssumption':
-    'Hvor meget folkepensionens grundbeløb og pensionstillæg ventes at stige om året, efter det sidste år hvor de officielle satser kendes. Den løfter kun kronebeløbene; hvor hårdt tillægget skæres af anden indkomst, ligger fast.',
+  'Plan.statePensionProjectionAssumption':
+    'Hvor meget folkepensionens grundbeløb og pensionstillæg ventes at stige om året, efter det sidste år hvor de officielle satser kendes. Den løfter kun de to kronebeløb — ATP og andre indtægter har hver deres egen sats, og hvor hårdt tillægget skæres af anden indkomst, ligger fast.',
 
   'Plan.buffer':
     'Den ene beholdning, hvor årets over- eller underskud lander. Alt, der bliver til overs, samler sig dér, og alt, der mangler, tages derfra — derfor er det den, man aflæser for at se, om planen holder hele vejen.',

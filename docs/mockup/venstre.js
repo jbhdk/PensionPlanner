@@ -293,7 +293,7 @@ function inspektor() {
       felt('Kirkeskat', inp('0,74', 'tal'), '%') +
       '<h4>Fremskrivning</h4>' +
       felt('§ 20-regulering', inp('2,00', 'tal'), '% p.a.') +
-      felt('Satsregulering', inp('2,00', 'tal'), '% p.a.') +
+      felt('Folkepensionsregulering', inp('2,00', 'tal'), '% p.a.') +
       '<div class="hint">Sidst kendte satsår er 2026.</div></div>';
   }
   return '<div class="spaltehoved">Inspektør</div><div class="inspektor">' +

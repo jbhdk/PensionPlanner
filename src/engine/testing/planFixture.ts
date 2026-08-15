@@ -18,7 +18,7 @@ type Options = {
   startYear?: number
   inflationAssumption?: number
   section20ProjectionAssumption?: number
-  benefitProjectionAssumption?: number
+  statePensionProjectionAssumption?: number
   birthYear?: number
   birthMonth?: number
   workEndAge?: number
@@ -56,7 +56,7 @@ export function aPlan(options: Options = {}): Plan {
     startYear = 2026,
     inflationAssumption = 0,
     section20ProjectionAssumption = 0,
-    benefitProjectionAssumption = 0,
+    statePensionProjectionAssumption = 0,
     birthYear = 1973,
     birthMonth = 6,
     workEndAge = 58,
@@ -79,7 +79,7 @@ export function aPlan(options: Options = {}): Plan {
     startYear,
     inflationAssumption,
     section20ProjectionAssumption,
-    benefitProjectionAssumption,
+    statePensionProjectionAssumption,
     buffer: 'free-assets',
     entries,
     transfers,

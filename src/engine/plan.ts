@@ -250,10 +250,15 @@ export type Plan = {
   /** Andel pr. år. Løfter § 20-regulerede beløbsgrænser (`Thresholds`) for
       simuleringsår efter det sidst kendte satsår, jf. `RateBasis`. */
   section20ProjectionAssumption: number
-  /** Andel pr. år. Løfter satsregulerede ydelser (folkepensionens grundbeløb
-      og pensionstillæg) for simuleringsår efter det sidst kendte satsår —
-      rører aldrig aftrapningens procent. */
-  benefitProjectionAssumption: number
+  /** Andel pr. år. Løfter folkepensionens grundbeløb og pensionstillæg for
+      simuleringsår efter det sidst kendte satsår — rører aldrig
+      aftrapningens procent.
+
+      Navnet siger folkepension og ikke ydelser, fordi det er det eneste,
+      feltet løfter: ATP bærer sin egen `regulationRate` som enhver anden
+      indtægtspost, og livrentens ydelse følger sin bonusantagelse, jf.
+      ADR-0023. */
+  statePensionProjectionAssumption: number
   household: Household
   entries: Entry[]
   transfers: Transfer[]

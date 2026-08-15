@@ -425,7 +425,7 @@ function planFelterN() {
     felt('Lønregulering', inp('3,00', 'tal'), '% p.a.')) +
   afsnitN('Fremskrivning',
     felt('§ 20-regulering', inp('2,00', 'tal'), '% p.a.') +
-    felt('Satsregulering', inp('2,00', 'tal'), '% p.a.') +
+    felt('Folkepensionsregulering', inp('2,00', 'tal'), '% p.a.') +
     '<div class="hint">Sidst kendte satsår er 2026. Årene efter regnes på fremskrevne satser.</div>');
 }
 

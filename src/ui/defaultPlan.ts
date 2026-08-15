@@ -8,7 +8,7 @@ export function defaultPlan(): Plan {
     startYear: new Date().getFullYear(),
     inflationAssumption: 0.02,
     section20ProjectionAssumption: 0.02,
-    benefitProjectionAssumption: 0.02,
+    statePensionProjectionAssumption: 0.02,
     buffer: 'free-assets',
     transfers: [],
     contributions: [],
