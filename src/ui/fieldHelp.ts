@@ -137,6 +137,23 @@ export const fieldHelp = {
   'PayoutSchedule.principle':
     'Hvordan årets beløb regnes af det, der står på ordningen ved årets begyndelse. Serieprincippet deler saldoen med de resterende år og giver stigende beløb, når afkastet er positivt; annuitetsprincippet regner med en lovfastsat rente og giver beløb, der er næsten lige store.',
 
+  // ---------- Livrentens omsætning ----------
+
+  'LifeAnnuity.payoutStart':
+    'Den alder, hvor opsparingen bliver til en garanteret livsvarig ydelse. Tidligere end lovens egen grænse kan den ikke sættes, og bundet til erhvervsophør flytter tidspunktet sig, hvis året for arbejdets ophør senere ændres.',
+
+  'LifeAnnuity.quotedReserve':
+    'Selskabets eget tal for, hvad ordningen står i, når den livsvarige ydelse begynder. Kun forholdet mellem det og beløbet ved siden af bruges, og begge tal skrives derfor præcis som de står på pensionsoverblikket.',
+
+  'LifeAnnuity.quotedAnnualBenefit':
+    'Selskabets eget tal for, hvad ordningen udbetaler hvert år fra det tidspunkt, den begynder. Sammen med depottallet ved siden af giver det den brøk, den faktisk opsparede saldo ganges med — og fordi kun brøken bruges, går prisniveauet i de to ud med sig selv.',
+
+  'LifeAnnuity.conversionFactor':
+    'Forholdet mellem selskabets to tal ovenfor: hvor stor en del af opsparingen der bliver til et beløb om året. Det ganges én gang på det, ordningen faktisk er vokset til, og derefter ligger det livsvarige beløb fast.',
+
+  'LifeAnnuity.bonusRate':
+    'Hvor meget den livsvarige ydelse ventes at stige om året, efter at den er begyndt. Det er det eneste, der løfter beløbet — hverken planens inflation eller folkepensionens regulering rører det.',
+
   'Holding.annualCostRate':
     'Den samlede årlige pris for at have pengene stående hos selskabet eller banken, opgjort i procent af saldoen. Den trækkes fra det forventede afkast, før pengene forrentes.',
 
@@ -309,6 +326,15 @@ export const fieldHelp = {
 
   'CapYear.note':
     'De tal, de faste kolonner ikke har plads til. For aktiesparekontoen står her, hvad der stod på den ved årets begyndelse, hvor meget der var plads til, og hvad der faktisk kom ind.',
+
+  'LifeAnnuityBenefit.holding':
+    'Hvilken af husstandens livrenter det årlige beløb kom af. Ordningen selv står med saldo nul fra det år, den blev omsat — pengene er byttet til en indtægt og findes ikke længere som en opsparing.',
+
+  'LifeAnnuityBenefit.owner':
+    'Hvem i husstanden der modtager beløbet. Det afgør, hvis skat det indgår i — pengene lander samme sted uanset hvem, men skatten af dem gør ikke.',
+
+  'LifeAnnuityBenefit.amount':
+    'Hvad ordningen udbetaler i netop dette år. Beløbet blev lagt fast, da opsparingen blev omsat, og stiger derefter kun med den bonus, der er regnet med — det kan hverken løbe tør eller falde.',
 
   'HoldingYear.holding':
     'Hvilken af husstandens beholdninger linjen gælder. Alle står her, også dem der hverken fik eller mistede noget i året.',

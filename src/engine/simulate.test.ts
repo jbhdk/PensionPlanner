@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import type { Contribution, Holding, HoldingVariant, PayoutSchedule, Plan } from './plan'
+import type {
+  AgeBound,
+  Contribution,
+  Holding,
+  HoldingVariant,
+  PayoutSchedule,
+  Plan,
+} from './plan'
 import { simulate } from './simulate'
 import { totalTax } from './tax/assessTax'
 import { validatePlan } from './validatePlan'
 import {
   aContribution,
+  aHolding,
   aHoldingContribution,
   aPlan,
   aPensionIncome,
@@ -45,17 +53,7 @@ function aPlanWithPensionScheme(
   return aPlan({
     balance: 1_000_000,
     ...options,
-    holdings: [
-      {
-        id: 'ordning',
-        name: 'Ordning',
-        variant,
-        openedOn: { year: 2018, month: 1 },
-        balance: 1_000_000,
-        grossReturn: 0,
-        annualCostRate: 0,
-      },
-    ],
+    holdings: [aHolding({ id: 'ordning', name: 'Ordning', variant, balance: 1_000_000 })],
   })
 }
 
@@ -1256,7 +1254,7 @@ describe('pensionsbeholdninger', () => {
     // kapitalindkomst i den ene og ingen personindkomst i den anden. Det er
     // varianten alene, der afgør det, jf. ADR-0010 — beskatningen er ikke et
     // felt ved siden af den.
-    const holding = {
+    const scheme = {
       id: 'ordning',
       name: 'Ordning',
       balance: 1_000_000,
@@ -1265,10 +1263,7 @@ describe('pensionsbeholdninger', () => {
     }
     const first = (variant: HoldingVariant) =>
       simulateChecked(
-        aPlan({
-          balance: 0,
-          holdings: [{ ...holding, variant, openedOn: { year: 2018, month: 1 } }],
-        }),
+        aPlan({ balance: 0, holdings: [aHolding({ ...scheme, variant })] }),
       )[0]!
 
     const fri = first('SavingsAccount')
@@ -1395,15 +1390,14 @@ describe('beholdningsskat', () => {
       const plan = aPlan({
         balance: 0,
         holdings: [
-          {
+          aHolding({
             id: 'ordning',
             name: 'Ordning',
             variant,
-            openedOn: { year: 2018, month: 1 },
             balance: 500_000,
             grossReturn: 0.06,
             annualCostRate: 0.01,
-          },
+          }),
         ],
       })
 
@@ -2116,13 +2110,12 @@ describe('indbetalinger', () => {
     return aPlan({
       ...options,
       holdings: [
-        {
+        aHolding({
           ...scheme,
-          openedOn: { year: 2018, month: 1 },
           balance: 0,
           grossReturn: options.grossReturn ?? 0,
           annualCostRate: options.annualCostRate ?? 0,
-        },
+        }),
       ],
     })
   }
@@ -3799,5 +3792,257 @@ describe('overførsel ud af en skattefri ordning', () => {
 
     expect(stateIn(oldAgeSavingsPayoutYear - 1)).toBe('Unsustainable')
     expect(stateIn(oldAgeSavingsPayoutYear)).toBe('Incomplete')
+  })
+})
+
+describe('livrentens omsætning', () => {
+  /** Fixturens buffer plus én livrente. Fødselsåret giver folkepensionsalder
+      70 og dermed pensionsudbetalingsalder 67, så omsætningsåret er 2040,
+      med mindre testen flytter starten.
+
+      Selskabet oplyser et depot på 1.000.000 kr. og en årlig ydelse på
+      55.000 kr. — kvotienten er 0,055, og den er alt, de to tal bruges til. */
+  function aPlanWithLifeAnnuity(
+    annuity: {
+      balance?: number
+      grossReturn?: number
+      quotedReserve?: number
+      quotedAnnualBenefit?: number
+      bonusRate?: number
+      /** Udeladt betyder ingen udbetalingsplan: livrenten bliver stående og
+          vokser, ganske som en ratepension uden plan. */
+      start?: AgeBound | 'none'
+    } = {},
+    options: Parameters<typeof aPlan>[0] = {},
+  ): Plan {
+    const start = annuity.start ?? 67
+    return aPlan({
+      balance: 0,
+      ...options,
+      holdings: [
+        {
+          id: 'livrente',
+          name: 'Livrente',
+          variant: 'LifeAnnuity',
+          openedOn: { year: 2018, month: 1 },
+          balance: annuity.balance ?? 2_000_000,
+          grossReturn: annuity.grossReturn ?? 0,
+          annualCostRate: 0,
+          quotedReserve: annuity.quotedReserve ?? 1_000_000,
+          quotedAnnualBenefit: annuity.quotedAnnualBenefit ?? 55_000,
+          bonusRate: annuity.bonusRate ?? 0,
+          ...(start === 'none' ? {} : { payout: { start } }),
+        },
+        ...(options.holdings ?? []),
+      ],
+    })
+  }
+
+  /** Året hvor fixturens livrente omsættes: personen fylder 67 i 2040. */
+  const conversionYear = 2040
+
+  const benefitsIn = (year: YearResult) => year.persons[0]!.lifeAnnuityBenefits
+
+  it('omsætter primosaldoen til en livsvarig ydelse ved udbetalingsstart', () => {
+    // Kvotienten ganget på det faktisk fremskrevne depot er ydelsen, jf.
+    // ADR-0009: 2.000.000 × 0,055 = 110.000 kr. om året, livsvarigt.
+    const years = simulateChecked(aPlanWithLifeAnnuity())
+
+    const year = years.find((y) => y.year === conversionYear)!
+
+    // Depotet forlader husstandens formue uden at være hverken en udgift
+    // eller en skat. Uden `conversion`-leddet går regnestykket ikke op, og
+    // det er `simulateChecked`, der prøver det for hvert eneste år.
+    expect(year.conversion).toBeCloseTo(2_000_000, 6)
+    expect(holding(year, 'livrente').closingBalance).toBeCloseTo(0, 6)
+
+    expect(benefitsIn(year)).toEqual([{ holding: 'livrente', amount: 110_000 }])
+  })
+
+  it('omsætter præcis én gang og lader beholdningen stå på nul bagefter', () => {
+    // Depotet forrenter sig helt frem til omsætningen — det er dét, der får
+    // ydelsen til at reagere på, hvor længe der er betalt ind — og det er
+    // netop derfor, nullet bagefter ikke er et trivielt nul.
+    const years = simulateChecked(aPlanWithLifeAnnuity({ grossReturn: 0.05 }))
+
+    expect(years.filter((year) => year.conversion !== 0).map((year) => year.year)).toEqual([
+      conversionYear,
+    ])
+
+    const before = holding(years.find((y) => y.year === conversionYear - 1)!, 'livrente')
+    expect(before.closingBalance).toBeGreaterThan(2_000_000)
+
+    const after = years.filter((year) => year.year > conversionYear)
+    expect(after.every((year) => holding(year, 'livrente').closingBalance === 0)).toBe(true)
+    expect(after.every((year) => holding(year, 'livrente').return === 0)).toBe(true)
+  })
+
+  it('lader en livrente uden udbetalingsstart stå og vokse', () => {
+    // Feltet er valgfrit af samme grund som ratepensionens: en livrente,
+    // brugeren endnu ikke har besluttet sig om, skal kunne stå i planen uden
+    // at motoren nægter at regne. Uden en start er der ingen omsætning.
+    const years = simulateChecked(
+      aPlanWithLifeAnnuity({ start: 'none', grossReturn: 0.05 }),
+    )
+
+    expect(years.every((year) => year.conversion === 0)).toBe(true)
+    expect(years.every((year) => benefitsIn(year).length === 0)).toBe(true)
+    expect(holding(years.at(-1)!, 'livrente').closingBalance).toBeGreaterThan(2_000_000)
+  })
+
+  it('lader ydelsen komme udefra og beskatter den som pensionsindkomst', () => {
+    // Samme 400.000 kr. som ATP-posten og ratepensionens rate længere oppe,
+    // og samme skat på kronen: ydelsen er `PensionIncome` og krydser
+    // skattesømmet som sit eget tal.
+    //
+    // Men modsat raten er den indkomst **udefra**. En rate flytter penge fra
+    // beholdningen til bufferen og lader formuen uændret; ydelsen har ingen
+    // saldo bag sig og indgår derfor i `income`, jf. ADR-0009 og diagram 02.
+    const years = simulateChecked(
+      aPlanWithLifeAnnuity({ balance: 4_000_000, quotedAnnualBenefit: 100_000 }),
+    )
+
+    const year = years.find((y) => y.year === conversionYear)!
+    const { tax } = year.persons[0]!
+
+    expect(benefitsIn(year)).toEqual([{ holding: 'livrente', amount: 400_000 }])
+    expect(year.income).toBeCloseTo(400_000, 6)
+
+    expect(tax.layers.labourMarketContribution.amount).toBe(0)
+    expect(tax.personalIncome).toBeCloseTo(400_000, 6)
+    expect(tax.allowances.employmentAllowance).toBe(0)
+    expect(year.tax).toBeCloseTo(131_891.67, 2)
+
+    // Ydelsen står ikke som en udbetaling fra beholdningen: efter
+    // omsætningen har livrenten ingen saldo at forlade, og strømmen er en
+    // `Benefit` og ikke en `payout` — glossarets første navnefælde.
+    expect(holding(year, 'livrente').payout).toBe(0)
+
+    expect(bufferBalance(year)).toBeCloseTo(400_000 - 131_891.67, 2)
+  })
+
+  it('regulerer ydelsen alene med bonusantagelsen derefter', () => {
+    // Planens inflation og folkepensionsreguleringen står højere end
+    // bonussatsen og rører den ikke: ydelsen er garanteret og følger sin
+    // egen antagelse, jf. ADR-0023. Der er hverken aldersskalering eller
+    // genberegning — depotet er væk, og der er intet tilbage at regne af.
+    const years = simulateChecked(
+      aPlanWithLifeAnnuity(
+        { bonusRate: 0.02 },
+        { inflationAssumption: 0.03, statePensionProjectionAssumption: 0.05 },
+      ),
+    )
+
+    const benefitIn = (year: number) =>
+      benefitsIn(years.find((y) => y.year === year)!)[0]!.amount
+
+    expect(benefitIn(conversionYear)).toBeCloseTo(110_000, 6)
+    expect(benefitIn(conversionYear + 1)).toBeCloseTo(110_000 * 1.02, 6)
+    expect(benefitIn(conversionYear + 2)).toBeCloseTo(110_000 * 1.02 ** 2, 6)
+    expect(benefitIn(conversionYear + 20)).toBeCloseTo(110_000 * 1.02 ** 20, 6)
+  })
+
+  it('sænker den livsvarige ydelse, når der er betalt ind i færre år', () => {
+    // Det er hele grunden til, at depotet bliver i opsparingsfasen, jf.
+    // ADR-0009: uden det ville otte års manglende indbetalinger ikke sænke
+    // ydelsen, og scenariesammenligningen ville være forkert på planens
+    // længstløbende indkomststrøm.
+    const benefitWhenWorkEndsAt = (workEndAge: number) => {
+      const years = simulateChecked(
+        aPlanWithLifeAnnuity(
+          { balance: 0, grossReturn: 0.05 },
+          {
+            workEndAge,
+            entries: [
+              aSalary({
+                amountInRealKroner: 600_000,
+                period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+              }),
+            ],
+            contributions: [
+              aContribution({
+                source: 'salary',
+                to: 'livrente',
+                percentageOfEntry: 0.15,
+              }),
+            ],
+          },
+        ),
+      )
+      return benefitsIn(years.find((y) => y.year === conversionYear)!)[0]!.amount
+    }
+
+    expect(benefitWhenWorkEndsAt(58)).toBeLessThan(benefitWhenWorkEndsAt(66))
+  })
+
+  it('lader depotet forlade beholdningen ved årets begyndelse, uden noget tilbage at forrente', () => {
+    // Omsætningen har vægt 1: det, der omsættes, er saldoen ved årets
+    // begyndelse, og det forlader beholdningen der. Afkastgrundlaget er
+    // derfor kun det, der ellers faldt i året — her indbetalingens halve.
+    const years = simulateChecked(
+      aPlanWithLifeAnnuity(
+        { grossReturn: 0.05 },
+        {
+          balance: 1_000_000,
+          contributions: [
+            aHoldingContribution({
+              source: 'free-assets',
+              to: 'livrente',
+              amountInRealKroner: 100_000,
+              period: { anchor: 'CalendarYear', from: conversionYear, to: conversionYear },
+            }),
+          ],
+        },
+      ),
+    )
+
+    const year = years.find((y) => y.year === conversionYear)!
+    const livrente = holding(year, 'livrente')
+
+    // Havde depotet forrentet sig, ville afkastet være hundredvis af tusinder.
+    expect(livrente.return).toBeCloseTo(0.05 * 50_000, 6)
+
+    // Ydelsen er regnet af primosaldoen — det depot, selskabet omsætter — og
+    // ikke af det, indbetalingen lagde oveni bagefter.
+    expect(benefitsIn(year)[0]!.amount).toBeCloseTo(livrente.openingBalance * 0.055, 6)
+
+    // Fejningen tager indbetalingens rest med i omsætningen efter afkastet
+    // og beholdningsskatten, ganske som den sidste rates gør, så livrenten
+    // lukker på præcis nul frem for at lade en splint stå i formuegrafen.
+    expect(livrente.closingBalance).toBeCloseTo(0, 6)
+    expect(year.conversion).toBeCloseTo(
+      livrente.openingBalance + 100_000 + livrente.return - livrente.tax,
+      6,
+    )
+  })
+
+  it('lader ydelsen forrente sig på bufferen som enhver anden indtægt', () => {
+    // Ydelsen lander på bufferen og vejer halvt ind i dens afkastgrundlag,
+    // som en jævn strøm gør. Er bufferen en opsparingskonto, er det afkast
+    // personens kapitalindkomst — og skatten af det skal regnes af det samme
+    // afkast, som beholdningsrækken viser, jf. ADR-0012.
+    const years = simulateChecked(
+      aPlanWithLifeAnnuity({}, { grossReturn: 0.05 }),
+    )
+
+    const year = years.find((y) => y.year === conversionYear)!
+
+    expect(holding(year, 'free-assets').return).toBeCloseTo(0.05 * 110_000 * 0.5, 6)
+    expect(year.persons[0]!.capitalIncome).toBeCloseTo(
+      holding(year, 'free-assets').return,
+      6,
+    )
+  })
+
+  it('afviser en omsætning, der begynder før pensionsudbetalingsalderen', () => {
+    // Lovens ene regel, ratepensionen og livrenten deler: udbetalingen må
+    // tidligst begynde ved ordningens `PayoutAge`. De to øvrige — ti år og
+    // tredive år — måler på en varighed, livrenten ikke har.
+    const early = aPlanWithLifeAnnuity({ start: 66 })
+    const legal = aPlanWithLifeAnnuity({ start: 67 })
+
+    expect(validatePlan(early)).toMatch(/pensionsudbetalingsalder/i)
+    expect(() => simulate(early)).toThrow(/pensionsudbetalingsalder/i)
+    expect(validatePlan(legal)).toBeUndefined()
   })
 })

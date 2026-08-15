@@ -105,15 +105,31 @@ export function YearExplanation({
       </div>
 
       {/* Balanceinvarianten som synlig stribe, jf. CLAUDE.md:
-          closingWealth − openingWealth = income + return − tax − expenses. */}
+          closingWealth − openingWealth
+            = income + return − tax − expenses − conversion.
+
+          Omsætningsleddet står kun i det ene år, det er noget: en post på
+          nul i alle andre år ville lade striben påstå, at der var noget at
+          se hvert år. */}
       <div className="balancestribe">
         <StripePost label="Formue primo" amount={display(year.openingWealth)} />
         <StripePost label="Indtægter" amount={display(year.income)} />
         <StripePost label="Afkast" amount={display(year.return)} />
         <StripePost label="Skat" amount={display(-year.tax)} />
         <StripePost label="Udgifter" amount={display(-year.expenses)} />
+        {year.conversion !== 0 && (
+          <StripePost label="Omsat livrentedepot" amount={display(-year.conversion)} />
+        )}
         <StripePost label="Formue ultimo" amount={display(year.closingWealth)} />
       </div>
+      {year.conversion !== 0 && (
+        <p className="hint stribenote">
+          Livrentens depot forlader formuen i {year.year} og bliver til en
+          garanteret livsvarig ydelse. Pengene er hverken brugt eller betalt i
+          skat — de er byttet til en indtægt, der ikke kan løbe tør, og som
+          derfor ikke længere står nogen steder som en saldo.
+        </p>
+      )}
 
       <div className="blokke">
         {plan.household.persons.map((person) => {
@@ -127,6 +143,7 @@ export function YearExplanation({
 
       <ShareIncomeTaxBlock year={year} display={display} />
 
+      <BenefitsBlock plan={plan} year={year} display={display} />
       <HoldingsBlock plan={plan} year={year} display={display} />
       <EntriesBlock plan={plan} year={year} display={display} />
       <ContributionsBlock plan={plan} year={year} display={display} />
@@ -527,6 +544,66 @@ function HoldingsBlock({
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/** De ydelser uden saldo, husstanden modtog i året — i denne skive de omsatte
+    livrenters.
+
+    Blokken findes, fordi ydelsen ikke står nogen andre steder. Den er
+    indkomst udefra og indgår i årets indtægter, men den er ingen post i
+    planen og ingen udbetaling fra en beholdning: efter omsætningen har
+    livrenten ingen saldo at forlade. Uden linjen her kunne indtægten i
+    striben ikke føres tilbage til noget.
+
+    Modtageren står på linjen, fordi skatten er personens: pengene lander på
+    bufferen uanset ejer, men beskatningen gør ikke. Blokken udebliver, når
+    ingen i husstanden modtog en ydelse. */
+function BenefitsBlock({
+  plan,
+  year,
+  display,
+}: {
+  plan: Plan
+  year: YearResult
+  display: (amount: number) => number
+}) {
+  const holdings = plan.household.persons.flatMap((person) => person.holdings)
+  const rows = year.persons.flatMap((personYear) =>
+    personYear.lifeAnnuityBenefits.map((benefit) => ({
+      ...benefit,
+      owner: plan.household.persons.find((person) => person.id === personYear.person),
+    })),
+  )
+  if (rows.length === 0) return null
+
+  return (
+    <div className="blok">
+      <h3>Ydelserne</h3>
+      <table className="ydelsestabel">
+        <thead>
+          <tr>
+            <th title={fieldHelp['LifeAnnuityBenefit.holding']}>Ydelse</th>
+            <th title={fieldHelp['LifeAnnuityBenefit.owner']}>Modtager</th>
+            <th title={fieldHelp['LifeAnnuityBenefit.amount']}>Beløb</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.holding}>
+              <td>{holdings.find((holding) => holding.id === row.holding)?.name ?? row.holding}</td>
+              <td>{row.owner?.name ?? ''}</td>
+              <td>{kroner(display(row.amount))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="hint">
+        En ydelse har ingen saldo bag sig. Den kommer udefra og indgår derfor i
+        årets indtægter, hvor en udbetaling fra en ordning blot flytter penge
+        fra beholdningen over på bufferen.
+      </p>
     </div>
   )
 }

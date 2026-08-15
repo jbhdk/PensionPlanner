@@ -172,6 +172,21 @@ export type HoldingYear = {
   weightedFlow: Nominal
 }
 
+/** Én omsat livrentes årlige ydelse i ét simuleringsår, i årets egne
+    løbende priser. Beholdningen står med saldo nul fra omsætningsåret og
+    frem, og linjen er dermed det eneste spor, ordningen sætter i et
+    årsresultat bagefter — derfor bærer den beholdningens id, så ydelsen kan
+    føres tilbage til den livrente, den kom af.
+
+    Beløbet er depotet ved omsætningen ganget med `ConversionFactor` og
+    derefter alene reguleret med `bonusRate`. Der er hverken en
+    aldersskalering eller en genberegning: ydelsen er garanteret, jf.
+    ADR-0009. */
+export type LifeAnnuityBenefit = {
+  holding: HoldingId
+  amount: Nominal
+}
+
 /** Årets skatteopgørelse for én person. Indkomsten føres pr. person og aldrig
     som husstandssum, jf. ADR-0010: skatten summerer over husstanden, men
     aftrapningen bruger persongrundlaget, og en gemt sum kan ikke splittes.
@@ -195,6 +210,19 @@ export type PersonYear = {
       Aktie- og kapitalindkomst har flade satser og har ikke en marginal at
       vise. */
   marginal: MarginalTaxRates
+  /** De ydelser uden saldo, personen modtog i året: én linje pr. livrente,
+      der er omsat, fra omsætningsåret og resten af forløbet.
+
+      Den står her og ikke som `HoldingYear.payout`, fordi en omsat livrente
+      ingen saldo har at forlade. Strømmen er en `Benefit` og ikke en
+      `payout` — glossarets første navnefælde, og livrenten er netop stedet,
+      hvor den kan gå galt. Den er derfor også penge udefra og indgår i
+      `YearResult.income`, hvor en rate blot flytter penge mellem husstandens
+      egne lommer, jf. ADR-0009.
+
+      Tom i alle år før omsætningen, og i alle år for en livrente uden en
+      udbetalingsstart. */
+  lifeAnnuityBenefits: LifeAnnuityBenefit[]
   /** Årets loftlinjer, én pr. slags loftbelagt ordning personen indbetalte
       til. Tom, når året ingen sådan indbetaling havde. Konklusionen — om et
       loft rent faktisk er brudt — står ét sted, på `YearResult`, så fladen

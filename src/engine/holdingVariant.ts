@@ -1,4 +1,5 @@
 import type {
+  AgeBound,
   Holding,
   HoldingVariant,
   Nominal,
@@ -32,13 +33,23 @@ export type CappedVariant = (typeof cappedVariants)[number]
 const table: {
   [V in HoldingVariant]: Row & {
     cap: V extends CappedVariant ? CapRule : undefined
-    /** Om varianten bærer en `PayoutSchedule` i det gemte skema. Cellen kan
-        ikke komme ud af trit med typen: den er sand netop for de medlemmer af
-        unionen, der har feltet, og falsk for alle andre. Får livrenten sin
-        plan, skifter cellen af sig selv — og gør den ikke, er det en
-        oversætterfejl og ikke et afsnit i skuffen, der tegner felter, planen
-        ikke kan tage imod. */
-    payoutSchedule: 'payout' extends keyof Extract<Holding, { variant: V }> ? true : false
+    /** Om varianten bærer en hel `PayoutSchedule` — start, varighed og
+        princip. Livrenten står med falsk: dens `payout` bærer kun en start,
+        fordi ydelsen er livsvarig, og de to øvrige felter ville påstå en
+        varighed, der ikke findes.
+
+        Cellen kan ikke komme ud af trit med typen. De to medlemmers felt
+        deler navn og er ikke det samme, og prøven er derfor gensidig
+        tildelbarhed: kun det felt, der både rummer og rummes af en
+        `PayoutSchedule`, er en. En variant helt uden feltet falder ud på den
+        første af de to prøver. Skifter et medlems form, skifter cellen af
+        sig selv — og gør den ikke, er det en oversætterfejl og ikke et
+        afsnit i skuffen, der tegner felter, planen ikke kan tage imod. */
+    payoutSchedule: PayoutSchedule extends PayoutFieldOf<V>
+      ? PayoutFieldOf<V> extends PayoutSchedule
+        ? true
+        : false
+      : false
   }
 } = {
   InstalmentPension: {
@@ -114,6 +125,13 @@ const table: {
     cap: undefined,
   },
 }
+
+/** Variantens `payout`-felt uden `undefined`, eller `never` når varianten
+    ikke bærer feltet. Indekseringen går gennem `'payout' & keyof …`, så
+    opslaget også er lovligt for de fire varianter, der ingen plan har. */
+type PayoutFieldOf<V extends HoldingVariant> = NonNullable<
+  Extract<Holding, { variant: V }>['payout' & keyof Extract<Holding, { variant: V }>]
+>
 
 type Row = {
   freeAssets: boolean
@@ -279,6 +297,21 @@ export function isEmployerAdministered(holding: Holding): boolean {
     lader skuffen tilbyde en plan dér, hvor der endnu ingen er. */
 export function bearsPayoutSchedule(holding: Holding): holding is PayoutScheduleHolding {
   return table[holding.variant].payoutSchedule
+}
+
+/** Startpunktet på beholdningens udbetaling, eller `undefined` når varianten
+    ingen plan kan bære, eller når brugeren ikke har lagt en.
+
+    Det ene, ratepensionen og livrenten deler: den ene tømmes fra det
+    tidspunkt, den anden omsættes på det. Begge medlemmer erklærer feltet, og
+    opslaget læser derfor unionen direkte frem for at gå om varianttabellen —
+    en variant, der ikke har feltet, kan ikke nå hertil, og en, der får det,
+    er med af sig selv.
+
+    Indgangskontrollens ene fælles regel hænger her: udbetalingen må tidligst
+    begynde ved ordningens `PayoutAge`, og det gælder begge lige meget. */
+export function payoutStartOf(holding: Holding): AgeBound | undefined {
+  return 'payout' in holding ? holding.payout?.start : undefined
 }
 
 /** Beholdningens udbetalingsplan, eller `undefined` når varianten ingen kan

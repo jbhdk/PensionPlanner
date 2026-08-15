@@ -247,6 +247,45 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    // v10 → v11, jf. issue #42: livrenten bærer sine omsætningsfelter.
+    // Etape 2 tilføjede værdien `LifeAnnuity` uden dem, fordi
+    // opsparingsfasen ikke havde brug for dem, og et dødt felt i et gemt
+    // skema er en løgn, der aldrig fejler, jf. ADR-0015.
+    //
+    // Der er intet at gætte. Selskabets oplyste depot og årlige ydelse står
+    // på pensionsoverblikket, og et opfundet standardtal ville se ud som et
+    // svar, brugeren ikke har givet: alle tre felter lander på nul, og indtil
+    // de er tastet, er kvotienten nul og ydelsen nul. Udbetalingsstarten
+    // tilføjes ikke — den er valgfri, ganske som ratepensionens plan.
+    from: 10,
+    migrate: (data) => {
+      const plan = data as {
+        household?: { persons?: Array<Record<string, unknown>> }
+        [key: string]: unknown
+      }
+
+      return {
+        ...plan,
+        household: {
+          persons: (plan.household?.persons ?? []).map((person) => ({
+            ...person,
+            holdings: ((person.holdings ?? []) as Array<Record<string, unknown>>).map(
+              (holding) =>
+                holding.variant === 'LifeAnnuity'
+                  ? {
+                      ...holding,
+                      quotedReserve: 0,
+                      quotedAnnualBenefit: 0,
+                      bonusRate: 0,
+                    }
+                  : holding,
+            ),
+          })),
+        },
+      }
+    },
+  },
 ]
 
 /** Kører kæden fra `fromVersion` til `toVersion`, ét led ad gangen. Rent og

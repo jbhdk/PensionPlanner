@@ -95,7 +95,15 @@ export function aPlan(options: Options = {}): Plan {
           municipality,
           churchMember,
           holdings: [
-            bufferHolding({ variant, balance, grossReturn, annualCostRate, openedOn }),
+            aHolding({
+              id: 'free-assets',
+              name: 'Frie midler',
+              variant,
+              balance,
+              grossReturn,
+              annualCostRate,
+              openedOn,
+            }),
             ...holdings,
           ],
         },
@@ -104,23 +112,45 @@ export function aPlan(options: Options = {}): Plan {
   }
 }
 
-/** Fixturens første beholdning. Oprettelsestidspunktet skrives kun, når
-    varianten er en pensionsordning: de tre øvrige varianter har ikke feltet,
-    og en fixture, der gav dem det alligevel, ville skrive en plan, typen
-    ikke tillader — og dermed skjule netop det, felternes plads i unionen er
-    til for. */
-function bufferHolding(options: {
+/** En beholdning af den ønskede variant. Opslaget på varianten er det
+    eneste, der kan skrive unionen, når varianten først kendes ved kaldet —
+    uden et cast, som netop ville skjule det, felternes plads i unionen er
+    til for.
+
+    Oprettelsestidspunktet skrives kun for de tre pensionsordninger, og
+    livrentens tre omsætningsfelter kun for den. En fixture, der gav dem til
+    de øvrige, ville skrive en plan, typen ikke tillader.
+
+    De to oplyste tal står som nul, med mindre testen beder om andet: en
+    livrente uden dem har kvotienten nul og dermed ingen ydelse, og en test,
+    der handler om omsætningen, siger selv hvad selskabet oplyste. */
+export function aHolding(options: {
+  id: string
+  name: string
   variant: HoldingVariant
   balance: number
-  grossReturn: number
-  annualCostRate: number
-  openedOn: OpenedOn
+  grossReturn?: number
+  annualCostRate?: number
+  openedOn?: OpenedOn
+  quotedReserve?: number
+  quotedAnnualBenefit?: number
+  bonusRate?: number
 }): Holding {
-  const { variant, openedOn, ...rest } = options
-  const base = { id: 'free-assets', name: 'Frie midler', ...rest }
+  const {
+    variant,
+    openedOn = { year: 2018, month: 1 },
+    grossReturn = 0,
+    annualCostRate = 0,
+    quotedReserve = 0,
+    quotedAnnualBenefit = 0,
+    bonusRate = 0,
+    ...rest
+  } = options
+  const base = { ...rest, grossReturn, annualCostRate }
   switch (variant) {
-    case 'InstalmentPension':
     case 'LifeAnnuity':
+      return { ...base, variant, openedOn, quotedReserve, quotedAnnualBenefit, bonusRate }
+    case 'InstalmentPension':
     case 'OldAgeSavings':
       return { ...base, variant, openedOn }
     default:

@@ -78,10 +78,10 @@ export type PayoutSchedule = {
 }
 
 /** En diskrimineret union på `variant`. De tre pensionsordninger bærer
-    `PensionScheme`, de tre øvrige gør ikke — og formen er valgt for det, den
-    bliver: livrentens omsætningsfelter hænger på sit eget medlem i etape 3,
-    hvor de først har noget at lave. Et dødt felt i det gemte skema er en
-    løgn, der aldrig fejler, jf. ADR-0015. */
+    `PensionScheme`, de tre øvrige gør ikke, og hvert medlem bærer kun det,
+    dets egen variant har: livrentens omsætningsfelter hænger på dens eget
+    medlem og kan ikke skrives på nogen anden. Et dødt felt i det gemte
+    skema er en løgn, der aldrig fejler, jf. ADR-0015. */
 export type Holding =
   | (HoldingBase &
       PensionScheme & {
@@ -96,20 +96,49 @@ export type Holding =
             en plan at bære, jf. ADR-0022. */
         payout?: PayoutSchedule
       })
-  | (HoldingBase & PensionScheme & { variant: 'LifeAnnuity' })
+  | (HoldingBase &
+      PensionScheme & {
+        variant: 'LifeAnnuity'
+        /** Selskabets oplyste depot ved udbetalingsstart, som det står på
+            pensionsoverblikket. Enhedsløst: det bruges udelukkende som
+            nævner i `ConversionFactor`, og prisniveauet går ud med sig selv i
+            divisionen. Derfor hverken `Real` eller `Nominal` — fladen
+            hverken deflaterer eller fremskriver det. */
+        quotedReserve: number
+        /** Selskabets oplyste årlige ydelse ved samme tidspunkt, og tælleren
+            i kvotienten. Enhedsløst af samme grund som `quotedReserve`.
+
+            De to gemmes frem for den udledte faktor, fordi begge står på
+            pensionsoverblikket: faktoren kan efterprøves, hvor et enkelt tal
+            ikke kunne, jf. ADR-0009. */
+        quotedAnnualBenefit: number
+        /** Andel pr. år, ikke procent. Det eneste, den omsatte ydelse
+            reguleres med — hverken planens inflation eller folkepensionens
+            regulering rører den, jf. ADR-0023. */
+        bonusRate: number
+        /** Udbetalingsplanen. Kun starten: ydelsen er livsvarig, og der er
+            hverken en varighed eller et princip at bære, jf. ADR-0009.
+            Valgfri af samme grund som ratepensionens — en livrente, brugeren
+            endnu ikke har besluttet sig om, bliver stående og vokser. */
+        payout?: { start: AgeBound }
+      })
   | (HoldingBase & PensionScheme & { variant: 'OldAgeSavings' })
   | (HoldingBase & { variant: 'ShareSavingsAccount' })
   | (HoldingBase & { variant: 'ShareDepot' })
   | (HoldingBase & { variant: 'SavingsAccount' })
 
-/** De medlemmer af unionen, der bærer en `PayoutSchedule`. I dag
-    ratepensionen alene; livrenten får sin — med start og intet andet, fordi
-    den er livsvarig — når omsætningen bygges, jf. ADR-0022, og bliver da et
-    led mere her.
+/** De medlemmer af unionen, der bærer en hel `PayoutSchedule` — start,
+    varighed og princip. Ratepensionen alene.
+
+    Livrenten er ikke med. Dens `payout` bærer kun en start, fordi ydelsen er
+    livsvarig, og de to øvrige felter ville påstå en varighed, der ikke
+    findes. Det ene, de to deler, er startpunktet, og det læses gennem
+    `payoutStartOf` — lovens ene fælles regel hænger dér, mens de to regler
+    om varighed hænger her.
 
     Varianttabellens egen celle udleder sig af unionen og ikke af denne liste,
-    så de to ikke kan komme ud af trit: en variant, der får feltet, får
-    tabelcellen af sig selv. */
+    så de to ikke kan komme ud af trit: et medlem, hvis felt holder op med at
+    være en hel plan, mister tabelcellen af sig selv. */
 export type PayoutScheduleHolding = Extract<Holding, { variant: 'InstalmentPension' }>
 
 /** De medlemmer af unionen, der er en `PensionScheme`. Udledt af unionen selv

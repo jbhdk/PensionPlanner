@@ -510,6 +510,7 @@ table.aar th,
 .postertabel th,
 .indbetalingstabel th,
 .overfoerselstabel th,
+.ydelsestabel th,
 .lofttabel th {
   cursor: help;
 }
@@ -980,6 +981,13 @@ table.aar td .fremskrevet {
   color: var(--ink);
 }
 
+/* Omsætningsårets note hører til striben ovenfor og ikke til blokken
+   nedenunder. Den rykkes op i det mellemrum, striben efterlader, så den
+   læses som en fodnote til leddet og ikke som en overskrift til det næste. */
+.stribenote {
+  margin: -12px 10px 16px;
+}
+
 .blokke {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -1044,6 +1052,7 @@ table.aar td .fremskrevet {
 .postertabel,
 .indbetalingstabel,
 .overfoerselstabel,
+.ydelsestabel,
 .lofttabel {
   width: 100%;
   margin-top: 10px;
@@ -1057,6 +1066,7 @@ table.aar td .fremskrevet {
 .postertabel th,
 .indbetalingstabel th,
 .overfoerselstabel th,
+.ydelsestabel th,
 .lofttabel th {
   text-align: right;
   padding: 4px 8px;
@@ -1075,6 +1085,7 @@ table.aar td .fremskrevet {
 .postertabel td,
 .indbetalingstabel td,
 .overfoerselstabel td,
+.ydelsestabel td,
 .lofttabel td {
   text-align: right;
   padding: 3px 8px;
@@ -1093,8 +1104,18 @@ table.aar td .fremskrevet {
 .indbetalingstabel td:first-child,
 .overfoerselstabel th:first-child,
 .overfoerselstabel td:first-child,
+.ydelsestabel th:first-child,
+.ydelsestabel td:first-child,
 .lofttabel th:first-child,
 .lofttabel td:first-child {
+  text-align: left;
+  font-family: var(--f-broed);
+}
+
+/* Ydelsestabellens modtager er et navn og ingen talkolonne. Den står
+   venstrestillet i brødskriften som beholdningsnavnet ved siden af. */
+.ydelsestabel th:nth-child(2),
+.ydelsestabel td:nth-child(2) {
   text-align: left;
   font-family: var(--f-broed);
 }

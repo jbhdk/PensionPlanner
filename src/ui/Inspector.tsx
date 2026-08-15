@@ -23,6 +23,8 @@ import type {
   Timing,
 } from '../engine/plan'
 import { latestRateYear } from '../engine/rates/rates'
+import { conversionFactor, isLifeAnnuity } from '../engine/lifeAnnuity'
+import type { LifeAnnuityHolding } from '../engine/lifeAnnuity'
 import { payoutAge, payoutRegime, payoutYear } from '../engine/payoutAge'
 import { payoutDurationBounds } from '../engine/validatePlan'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
@@ -59,6 +61,7 @@ import {
 import { procent } from './format'
 import {
   addPayoutSchedule,
+  addPayoutStart,
   findContribution,
   findEntry,
   findHolding,
@@ -70,6 +73,7 @@ import {
   removeEntry,
   removeHolding,
   removePayoutSchedule,
+  removePayoutStart,
   removePerson,
   removeTransfer,
   transferEndOptions,
@@ -78,6 +82,7 @@ import {
   withEntry,
   withHolding,
   withHoldingOwner,
+  withLifeAnnuity,
   withPayoutSchedule,
   withPerson,
   withPensionScheme,
@@ -434,6 +439,9 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
           <PayoutFields plan={plan} holding={holding} owner={owner} onChange={onChange} />
         </Section>
       )}
+      {isLifeAnnuity(holding) && (
+        <ConversionSection plan={plan} holding={holding} owner={owner} onChange={onChange} />
+      )}
       {bearsPayoutSchedule(holding) && (
         <PayoutScheduleSection
           plan={plan}
@@ -530,6 +538,125 @@ function PayoutFields({
         </Hint>
       )}
     </>
+  )
+}
+
+/** Omsætningen: hvornår livrentens depot bliver til en livsvarig ydelse, og
+    de to tal, forholdet mellem dem regnes af.
+
+    Starten slås til og fra som ratepensionens plan — er den der, gælder den;
+    skal den væk, slettes den. De to oplyste tal står derimod altid: de hører
+    til ordningen og ikke til beslutningen om, hvornår den skal omsættes.
+
+    Faktoren er udledt og aldrig et gemt felt, jf. ADR-0012. Begge tal bag
+    den står på pensionsoverblikket, og det er dét, der gør den
+    efterprøvelig — hvor et enkelt gemt tal ikke kunne efterregnes. */
+function ConversionSection({
+  plan,
+  holding,
+  owner,
+  onChange,
+}: {
+  plan: Plan
+  holding: LifeAnnuityHolding
+  owner: Person
+  onChange: (plan: Plan) => void
+}) {
+  const earliest = payoutAge(holding, owner)
+  const start = holding.payout?.start
+  const factor = conversionFactor(holding)
+
+  return (
+    <Section
+      title="Omsætning"
+      action={
+        start === undefined ? (
+          <button
+            type="button"
+            className="afsnit-tilfoej"
+            title="Læg en udbetalingsstart på livrenten"
+            onClick={() => onChange(addPayoutStart(plan, holding.id, earliest))}
+          >
+            + Tilføj
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="slet"
+            aria-label="Fjern udbetalingsstart"
+            title="Fjern udbetalingsstart — livrenten bliver stående og vokser"
+            onClick={() => onChange(removePayoutStart(plan, holding.id))}
+          >
+            <TrashIcon />
+          </button>
+        )
+      }
+    >
+      {start === undefined ? (
+        <Hint>
+          Uden en udbetalingsstart bliver livrenten stående og vokser hele
+          forløbet igennem, ganske som en ordning uden en plan for at blive
+          tømt.
+        </Hint>
+      ) : (
+        <AgeBoundField
+          label="Udbetalingsstart"
+          help="LifeAnnuity.payoutStart"
+          value={start}
+          workEndAge={owner.workEndAge}
+          bounds={{ min: earliest }}
+          onChange={(next) =>
+            onChange(
+              withLifeAnnuity(plan, holding.id, (h) => ({
+                ...h,
+                payout: { start: next ?? earliest },
+              })),
+            )
+          }
+        />
+      )}
+      <NumberField
+        label="Oplyst depot"
+        help="LifeAnnuity.quotedReserve"
+        unit="kr."
+        value={holding.quotedReserve}
+        onChange={(quotedReserve) =>
+          onChange(withLifeAnnuity(plan, holding.id, (h) => ({ ...h, quotedReserve })))
+        }
+      />
+      <NumberField
+        label="Oplyst årlig ydelse"
+        help="LifeAnnuity.quotedAnnualBenefit"
+        unit="kr."
+        value={holding.quotedAnnualBenefit}
+        onChange={(quotedAnnualBenefit) =>
+          onChange(withLifeAnnuity(plan, holding.id, (h) => ({ ...h, quotedAnnualBenefit })))
+        }
+      />
+      <LockedField
+        label="Omsætningsfaktor"
+        help="LifeAnnuity.conversionFactor"
+        value={procent(factor)}
+        unit="udledt"
+      />
+      <NumberField
+        label="Bonus"
+        help="LifeAnnuity.bonusRate"
+        unit="% p.a."
+        value={asPercent(holding.bonusRate)}
+        onChange={(percent) =>
+          onChange(
+            withLifeAnnuity(plan, holding.id, (h) => ({ ...h, bonusRate: percent / 100 })),
+          )
+        }
+      />
+      {factor === 0 && (
+        <Hint>
+          Uden selskabets to tal er der intet forhold at gange depotet med, og
+          ydelsen bliver nul. Begge står på pensionsoverblikket.
+        </Hint>
+      )}
+    </Section>
   )
 }
 

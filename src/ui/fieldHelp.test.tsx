@@ -22,9 +22,11 @@ import { fieldHelp } from './fieldHelp'
     Stilreglerne prøves også, men kun de mekaniske af dem. Om anden sætning
     svarer på "hvad betyder det for mig", må et menneske afgøre. */
 
-/** En plan, der er rig nok til at tegne alle seks tabeller i forklar-året:
+/** En plan, der er rig nok til at tegne alle syv tabeller i forklar-året:
     aktieindkomst til husstandens skattetabel, en ordning med et loft, et
-    lønkildet bidrag, og poster i begge retninger. */
+    lønkildet bidrag, poster i begge retninger, og en livrente, der omsættes
+    i planens allerførste år — den bevarede udbetalingsalder er 53, den
+    alder ejeren fylder i startåret. */
 function aRichPlan(): Plan {
   return aPlan({
     variant: 'ShareDepot',
@@ -40,6 +42,20 @@ function aRichPlan(): Plan {
         balance: 1_000_000,
         grossReturn: 0.04,
         annualCostRate: 0.005,
+      },
+      {
+        id: 'livrente',
+        name: 'Livrente',
+        variant: 'LifeAnnuity',
+        openedOn: { year: 2018, month: 1 },
+        payoutAgeOverride: 53,
+        balance: 800_000,
+        grossReturn: 0.045,
+        annualCostRate: 0.006,
+        quotedReserve: 1_000_000,
+        quotedAnnualBenefit: 51_200,
+        bonusRate: 0.01,
+        payout: { start: 53 },
       },
       {
         id: 'anden-beholdning',
@@ -201,6 +217,7 @@ describe('feltforklaringerne', () => {
       'Indbetalingerne',
       'Lofterne',
       'Overførslerne',
+      'Ydelserne',
       'Beholdningerne',
     ]) {
       expect(

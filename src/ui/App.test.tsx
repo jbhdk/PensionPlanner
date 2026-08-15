@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Holding, PayoutSchedule, Plan } from '../engine/plan'
+import type { AgeBound, Holding, PayoutSchedule, Plan } from '../engine/plan'
 import {
   aContribution,
   aHoldingContribution,
@@ -246,6 +246,38 @@ function aPlanWithRatepension(payout?: PayoutSchedule) {
 /** Den samme plan med serieprincippet over ti år. */
 function aPlanWithPayoutFromStart() {
   return aPlanWithRatepension({ start: 53, duration: 10, principle: 'SerialPrinciple' })
+}
+
+/** En plan med en livrente, der omsættes i planens allerførste år. Den
+    bevarede udbetalingsalder er 53 — den alder, ejeren fylder i 2026 — så
+    omsætningen kan ses uden at rulle fjorten år frem.
+
+    Selskabet oplyser et depot på 1.000.000 kr. og en årlig ydelse på 51.200
+    kr.: kvotienten er 5,12 %, og på det fremskrevne depot på 1.000.000 kr.
+    giver den en livsvarig ydelse på 51.200 kr. */
+function aPlanWithLifeAnnuity(payout?: { start: AgeBound }) {
+  return aPlan({
+    startYear: 2026,
+    birthYear: 1973,
+    horizon: 55,
+    balance: 500_000,
+    holdings: [
+      {
+        id: 'livrente',
+        name: 'Livrente',
+        variant: 'LifeAnnuity',
+        openedOn: { year: 2018, month: 1 },
+        payoutAgeOverride: 53,
+        balance: 1_000_000,
+        grossReturn: 0,
+        annualCostRate: 0,
+        quotedReserve: 1_000_000,
+        quotedAnnualBenefit: 51_200,
+        bonusRate: 0.01,
+        ...(payout === undefined ? {} : { payout }),
+      },
+    ],
+  })
 }
 
 describe('fladen', () => {
@@ -2483,6 +2515,86 @@ describe('fladen', () => {
     })
   })
 
+  describe('livrentens omsætning i skuffen', () => {
+    it('lægger en udbetalingsstart på en livrente, der ingen har, og fjerner den igen', async () => {
+      // Starten slås ikke til og fra: er den der, gælder den, og skal den
+      // væk, slettes den — samme greb som ratepensionens plan. De to oplyste
+      // tal står derimod altid, for de hører til ordningen og ikke til
+      // beslutningen om, hvornår den skal omsættes.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithLifeAnnuity()} />)
+      await user.click(navigatorButton(/Livrente/))
+
+      expect(sectionLabels('Omsætning')).toEqual([
+        'Oplyst depot',
+        'Oplyst årlig ydelse',
+        'Omsætningsfaktor',
+        'Bonus',
+      ])
+
+      await user.click(screen.getByRole('button', { name: '+ Tilføj' }))
+
+      // Den tidligste alder, loven tillader for netop denne ordning.
+      expect(sectionLabels('Omsætning')).toEqual([
+        'Udbetalingsstart',
+        ' Følger erhvervsophør',
+        'Oplyst depot',
+        'Oplyst årlig ydelse',
+        'Omsætningsfaktor',
+        'Bonus',
+      ])
+      expect((screen.getByLabelText('Udbetalingsstart') as HTMLInputElement).value).toBe('53')
+
+      // Planen regner med det samme: depotet forlader formuen, og ydelsen
+      // står som en indtægt udefra.
+      await showYearTable(user)
+      expect(yearCell(1, 'Indtægter')).toBe('51.200')
+
+      await user.click(navigatorButton(/Livrente/))
+      await user.click(screen.getByRole('button', { name: 'Fjern udbetalingsstart' }))
+
+      expect(sectionLabels('Omsætning')).toEqual([
+        'Oplyst depot',
+        'Oplyst årlig ydelse',
+        'Omsætningsfaktor',
+        'Bonus',
+      ])
+      expect(yearCell(1, 'Indtægter')).toBe('0')
+    })
+
+    it('udleder omsætningsfaktoren af de to oplyste tal', async () => {
+      // Faktoren gemmes ikke: begge tal står på pensionsoverblikket, og det
+      // er dét, der gør den efterprøvelig. Fladen læser den, hvor den
+      // regnes, frem for at gentage divisionen.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithLifeAnnuity({ start: 53 })} />)
+      await user.click(navigatorButton(/Livrente/))
+
+      expect(lockedField('Omsætningsfaktor').textContent).toContain('5,12 %')
+
+      const benefit = screen.getByLabelText('Oplyst årlig ydelse') as HTMLInputElement
+      await user.clear(benefit)
+      await user.type(benefit, '60000')
+      await user.tab()
+
+      expect(lockedField('Omsætningsfaktor').textContent).toContain('6,00 %')
+    })
+
+    it('starter ikke omsætningen før ordningens pensionsudbetalingsalder', async () => {
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithLifeAnnuity({ start: 53 })} />)
+      await user.click(navigatorButton(/Livrente/))
+
+      const start = screen.getByLabelText('Udbetalingsstart') as HTMLInputElement
+      await user.clear(start)
+      await user.type(start, '40')
+      await user.tab()
+
+      expect(start.value).toBe('53')
+      expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+    })
+  })
+
   it('viser årets udbetalinger i deres egen kolonne i årstabellen', async () => {
     // Kolonnen er beholdningernes rater lagt sammen. Ligesom indbetalingerne
     // er de penge, husstanden stadig har — de er blot flyttet — og de indgår
@@ -2611,6 +2723,48 @@ describe('fladen', () => {
     expect(post('Skat')).toBe('0')
     expect(post('Udgifter')).toBe('-40.000')
     expect(post('Formue ultimo')).toBe('960.000')
+  })
+
+  it('forklarer omsætningsåret, så formuefaldet ikke ligner et tab', async () => {
+    // Depotet forlader husstandens formue uden at være hverken en udgift
+    // eller en skat. Striben ville ellers vise en formue, der falder med en
+    // million, mens hverken skatten eller udgifterne kan forklare det.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithLifeAnnuity({ start: 53 })} />)
+    await showYearTable(user)
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!) // 2026
+
+    const stribe = document.querySelector('.balancestribe') as HTMLElement
+    const post = (label: string) =>
+      Array.from(stribe.querySelectorAll('.stribepost')).find(
+        (el) => el.querySelector('.m')?.textContent === label,
+      )!.querySelector('.v')!.textContent
+
+    expect(post('Omsat livrentedepot')).toBe('-1.000.000')
+    expect(post('Indtægter')).toBe('51.200')
+    expect(screen.getByText(/forlader formuen/)).toBeTruthy()
+
+    // Ydelsen kommer udefra og står derfor ikke blandt planens poster. Uden
+    // sin egen linje kunne indtægten i striben ikke føres tilbage til noget.
+    const ydelser = screen.getByRole('heading', { name: 'Ydelserne', level: 3 })
+      .parentElement as HTMLElement
+    expect(within(ydelser).getByText('Livrente')).toBeTruthy()
+    expect(within(ydelser).getByText('51.200')).toBeTruthy()
+  })
+
+  it('lader striben stå uden omsætningsposten i de år, hvor intet omsættes', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithLifeAnnuity({ start: 53 })} />)
+    await showYearTable(user)
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[2]!) // 2027
+
+    const stribe = document.querySelector('.balancestribe') as HTMLElement
+    expect(stribe.textContent).not.toContain('Omsat livrentedepot')
+
+    // Ydelsen bliver ved, reguleret med bonussatsen på 1 %.
+    const ydelser = screen.getByRole('heading', { name: 'Ydelserne', level: 3 })
+      .parentElement as HTMLElement
+    expect(within(ydelser).getByText('51.712')).toBeTruthy()
   })
 
   it('viser skattelagene pr. person som en lodret opstilling af grundlag, sats og beløb', async () => {

@@ -53,6 +53,9 @@ describe('planFile', () => {
           balance: 1_000_000,
           grossReturn: 0.05,
           annualCostRate: 0.004,
+          quotedReserve: 1_000_000,
+          quotedAnnualBenefit: 51_200,
+          bonusRate: 0.01,
         },
         {
           id: 'aldersopsparing',
@@ -74,9 +77,11 @@ describe('planFile', () => {
     // gjorde det ikke — det gjorde derimod v5 → v6, hvor overstyringen af
     // folkepensionsalderen forsvandt, v6 → v7, hvor planen fik sine
     // indbetalinger, v7 → v8, hvor de tre ordninger fik det
-    // oprettelsestidspunkt, deres udbetalingsalder udledes af, og v8 → v9,
-    // hvor satsreguleringen kom til at hedde det, den løfter.
-    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(10)
+    // oprettelsestidspunkt, deres udbetalingsalder udledes af, v8 → v9, hvor
+    // satsreguleringen kom til at hedde det, den løfter, v9 → v10, hvor
+    // overførslens periode blev en fuld periode, og v10 → v11, hvor
+    // livrenten fik sine omsætningsfelter.
+    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(11)
   })
 
   it('bærer en plan med indbetalinger hele vejen rundt', () => {

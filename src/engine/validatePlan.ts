@@ -4,6 +4,7 @@ import {
   isFreeAssets,
   isPensionScheme,
   isUniquePerPerson,
+  payoutStartOf,
   payoutTaxation,
 } from './holdingVariant'
 import { payoutStartYear, payoutYear, transferAllowedFrom } from './payoutAge'
@@ -53,6 +54,12 @@ export function validatePlan(plan: Plan): string | undefined {
     være mindst ti år, og den sidste rate skal falde senest tredive år efter
     den alder.
 
+    Den første af de tre gælder både ratepensionen og livrenten: den ene
+    tømmes fra tidspunktet, den anden omsættes på det, og loven låser døren
+    lige hårdt begge steder. De to øvrige måler på en varighed, og livrenten
+    har ingen — dens plan bærer kun en start, fordi ydelsen er livsvarig, jf.
+    ADR-0009.
+
     De hører ved indgangen og ikke i årsresultatet, jf. ADR-0020: svaret
     afhænger ikke af et satsår, kun af planen selv, og en plan, der beskrev
     en ordning, loven ikke ville oprette, ville regne uden at kaste.
@@ -64,21 +71,32 @@ export function validatePlan(plan: Plan): string | undefined {
 function payoutSchedules(plan: Plan): string | undefined {
   for (const person of plan.household.persons) {
     for (const holding of person.holdings) {
-      // Varianttabellen indsnævrer typen, og de varianter, der kan bære en
-      // plan, er alle en `PensionScheme` — det er dét, der giver reglerne
-      // herunder en `PayoutAge` at måle mod uden en antagelse undervejs.
+      // Startreglen gælder begge de varianter, der overhovedet har en
+      // udbetaling at lægge: ratepensionen, der tømmes fra det tidspunkt, og
+      // livrenten, der omsættes på det. Begge er en `PensionScheme` — det er
+      // dét, der giver reglen en `PayoutAge` at måle mod uden en antagelse
+      // undervejs.
+      const start = payoutStartOf(holding)
+      if (start !== undefined && isPensionScheme(holding)) {
+        const legal = payoutYear(holding, person)
+        const begins = payoutStartYear(start, person)
+        if (begins < legal) {
+          return (
+            `Beholdningen ${holding.id} udbetales fra ${begins}, men dens ` +
+            `pensionsudbetalingsalder nås først i ${legal}.`
+          )
+        }
+      }
+
+      // De to øvrige regler måler på en varighed. Livrenten har ingen — den
+      // er livsvarig — og reglerne herunder gælder derfor kun den variant,
+      // hvis plan bærer alle tre felter.
       if (!bearsPayoutSchedule(holding)) continue
       const schedule = holding.payout
       if (schedule === undefined) continue
 
       const legal = payoutYear(holding, person)
-      const start = payoutStartYear(schedule.start, person)
-      if (start < legal) {
-        return (
-          `Beholdningen ${holding.id} udbetales fra ${start}, men dens ` +
-          `pensionsudbetalingsalder nås først i ${legal}.`
-        )
-      }
+      const begins = payoutStartYear(schedule.start, person)
       if (schedule.duration < minimumPayoutYears) {
         return (
           `Beholdningen ${holding.id} udbetales over ${schedule.duration} år. ` +
@@ -89,7 +107,7 @@ function payoutSchedules(plan: Plan): string | undefined {
       // Den sidste rate falder i startårets `duration`-te år og altså
       // `duration − 1` år efter starten. Ét år galt her ville lade en plan,
       // loven afviser, regne igennem.
-      const last = start + schedule.duration - 1
+      const last = begins + schedule.duration - 1
       const latest = legal + latestPayoutYearsAfterPayoutAge
       if (last > latest) {
         return (

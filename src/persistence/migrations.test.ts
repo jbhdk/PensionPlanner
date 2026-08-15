@@ -421,3 +421,53 @@ describe('v9 → v10: overførslens periode bliver en fuld periode', () => {
     expect(v10).toEqual({ name: 'Plan', transfers: [] })
   })
 })
+
+describe('v10 → v11: livrenten bærer sine omsætningsfelter', () => {
+  it('giver hver gemt livrente de tre felter med nul i, og lader de øvrige stå urørt', () => {
+    // Etape 2 tilføjede værdien `LifeAnnuity` uden ekstra felter, fordi
+    // opsparingsfasen ikke havde brug for dem; omsætningen tilføjer dem her,
+    // jf. ADR-0015. Selskabets to tal står på pensionsoverblikket og kan
+    // ikke gættes — nul betyder, at brugeren endnu ikke har tastet dem, og
+    // et opfundet standardtal ville se ud som et svar.
+    const v10: unknown = {
+      household: {
+        persons: [
+          {
+            id: 'jesper',
+            holdings: [
+              { id: 'livrente', variant: 'LifeAnnuity', balance: 760_000 },
+              { id: 'ratepension', variant: 'InstalmentPension', balance: 900_000 },
+              { id: 'frie', variant: 'SavingsAccount', balance: 100_000 },
+            ],
+          },
+        ],
+      },
+    }
+
+    const v11 = runMigrations(v10, 10, 11, migrations) as {
+      household: { persons: Array<{ holdings: Array<Record<string, unknown>> }> }
+    }
+    const holdings = v11.household.persons[0]!.holdings
+
+    expect(holdings[0]).toEqual({
+      id: 'livrente',
+      variant: 'LifeAnnuity',
+      balance: 760_000,
+      quotedReserve: 0,
+      quotedAnnualBenefit: 0,
+      bonusRate: 0,
+    })
+    expect(holdings[1]).toEqual({
+      id: 'ratepension',
+      variant: 'InstalmentPension',
+      balance: 900_000,
+    })
+    expect(holdings[2]).toEqual({ id: 'frie', variant: 'SavingsAccount', balance: 100_000 })
+  })
+
+  it('lader en plan uden personer stå med en tom husstand', () => {
+    const v11 = runMigrations({ name: 'Plan' }, 10, 11, migrations)
+
+    expect(v11).toEqual({ name: 'Plan', household: { persons: [] } })
+  })
+})

@@ -30,7 +30,14 @@ import type {
 } from './plan'
 import { periodBounds } from './age'
 import { payoutStartYear, transferAllowedFrom } from './payoutAge'
-import { cap, cappedVariant, hasDeductibility, payoutScheduleOf } from './holdingVariant'
+import {
+  cap,
+  cappedVariant,
+  hasDeductibility,
+  payoutScheduleOf,
+  payoutStartOf,
+} from './holdingVariant'
+import { conversionFactor, isLifeAnnuity } from './lifeAnnuity'
 import { rateYearFor } from './rates/rates'
 import type { RateYear } from './rates/rateYear'
 import { statePensionYear } from './statePensionAge'
@@ -43,6 +50,7 @@ import type {
   CapBreach,
   CapYear,
   HoldingYear,
+  LifeAnnuityBenefit,
   RateBasis,
   YearResult,
 } from './yearResult'
@@ -89,6 +97,28 @@ type ActivePayout = {
   final: boolean
 }
 
+/** Én livrentes to tal i ét simuleringsår: det depot, der forlader
+    husstandens formue, og den livsvarige ydelse, personen modtager.
+
+    De to står på samme linje, fordi det ene bliver til det andet. I
+    omsætningsåret er depotet primosaldoen og ydelsen den ganget med
+    `ConversionFactor`; i alle år derefter er depotet nul, og ydelsen er
+    sidste års reguleret med `bonusRate`. Ingen af de to kan regnes uden den
+    anden, og et årsresultat, hvor de sagde hver sit, ville lade brugeren
+    efterregne en ydelse, der ikke passer til det depot, den kom af.
+
+    Ejeren står her af samme grund som på `ActivePayout`: ydelsen er
+    `PensionIncome` hos beholdningens ejer, og en beholdning har præcis én.
+    Pengene lander på bufferen uanset ejer, som al anden indkomst. */
+type ActiveAnnuity = {
+  holding: HoldingId
+  owner: PersonId
+  /** Depotet, der omsættes. Nul i alle andre år end omsætningsåret — det er
+      dét, der gør `YearResult.conversion` til det ene år, det er. */
+  conversion: Nominal
+  benefit: Nominal
+}
+
 /** Fremskriver planen år for år i løbende priser. Ren funktion: samme plan
     giver altid samme årsrække, og planen røres ikke.
 
@@ -108,7 +138,7 @@ export function simulate(plan: Plan): YearResult[] {
       previous === undefined
         ? fromBalances(holdings)
         : fromPreviousYear(holdings, previous.holdings)
-    results.push(simulateYear(plan, year, opening, rates, basis))
+    results.push(simulateYear(plan, year, opening, rates, basis, previous))
   }
   return results
 }
@@ -120,6 +150,11 @@ function simulateYear(
   years: HoldingYears,
   rates: RateYear,
   rateBasis: RateBasis,
+  /** Forrige års resultat, eller `undefined` i planens første år. Det bæres
+      alene for den omsatte livrentes ydelse: depotet er væk, saldoen er nul,
+      og ydelsen findes derfor ikke andre steder end i det år, den sidst blev
+      opgjort. Alt andet bæres i beholdningsrækkerne, jf. `simulate`. */
+  previous: YearResult | undefined,
 ): YearResult {
   const entries = entriesInYear(plan, year)
   const requested = contributionsInYear(plan, year, entries, rates)
@@ -147,7 +182,6 @@ function simulateYear(
   )
   const contributions = inPlanOrder(requested, contributionsByPersonId)
 
-  const income = sumOf(entries, 'Income')
   const expenses = sumOf(entries, 'Expense')
 
   // Raten regnes af primosaldoen, jf. diagram 02 og PBL § 11 A: saldoen ved
@@ -156,6 +190,14 @@ function simulateYear(
   // rate, der først blev regnet undervejs, ville måle mod en saldo, loven
   // ikke peger på.
   const payouts = payoutsInYear(plan, year, rates, opening)
+
+  // Omsætningen står samme sted som raten og af samme grund, jf. diagram 02:
+  // depotet er saldoen ved årets begyndelse, og ydelsen skal være kendt, før
+  // noget vejes ind. Ydelsen er penge udefra og lægges derfor til årets
+  // indtægter, hvor en rate blot flytter penge mellem husstandens egne
+  // lommer, jf. ADR-0009.
+  const annuities = lifeAnnuitiesInYear(plan, year, opening, previous)
+  const income = sumOf(entries, 'Income') + sumOfBenefits(annuities)
 
   // Afkastet regnes først, på primosaldi og årets strømme alene efter
   // Modified Dietz, jf. ADR-0006 — det afhænger aldrig af skatten, kun
@@ -188,12 +230,31 @@ function simulateYear(
     return withFlow(withFlow(years, holding, -weighted), plan.buffer, weighted)
   }, afterContributions)
 
+  // Omsætningen har vægt 1: depotet forlader beholdningen ved årets
+  // begyndelse, og der er intet af det tilbage at forrente. Livrenten lukker
+  // derfor på nul af sig selv, uden at fejningen skal træde til. Ydelsen
+  // vejer til gengæld ind på bufferen som en jævn strøm — en livrente
+  // udbetales månedsvis, og `'Even'` er det matematisk rigtige, jf. ADR-0006.
+  //
+  // Det er den sidste vægtning: herefter flytter året kun saldi, og
+  // afkastgrundlaget står fast. `annuitised` er derfor bogen, afkastet
+  // spørges af.
+  const annuitised = annuities.reduce(
+    (years, { holding, conversion, benefit }) =>
+      withFlow(
+        withFlow(years, holding, -conversion * conversionWeight),
+        plan.buffer,
+        benefit * returnWeight('Even'),
+      ),
+    flowed,
+  )
+
   // En overførsel flytter sit fulde beløb mellem afgiver og modtager. Den
   // rammer aldrig skatten eller pengestrømmen, jf. `Transfer`.
   const moved = transfers.reduce(
     (years, { transfer, amount }) =>
       withMovement(withMovement(years, transfer.from, -amount), transfer.to, amount),
-    flowed,
+    annuitised,
   )
 
   // Indbetalingen tilføjer intet led til balanceinvarianten: den er en
@@ -221,15 +282,25 @@ function simulateYear(
   // cirkularitet, og rækkefølgen i diagram 02 holder.
   const swept = sweepFinalInstalment(payouts, paid, plan.buffer, rates)
 
-  const shareIncomeByPerson = incomeByVariant(plan, flowed, 'ShareDepot')
-  const capitalIncomeByPerson = incomeByVariant(plan, flowed, 'SavingsAccount')
+  // Depotet forlader husstandens formue her — ingen modtager, og hverken en
+  // udgift eller en skat. Det er dét, `conversion`-leddet i
+  // balanceinvarianten er til for.
+  const converted = convert(annuities, swept.years, rates)
+
+  // Afkastet spørges af den bog, hvor alle årets strømme er vejet ind —
+  // ydelsen med. Bufferen kan være et aktiedepot eller en opsparingskonto,
+  // og dens afkast er da personens egen aktie- eller kapitalindkomst: læste
+  // opgørelsen her et andet afkast end det, beholdningsrækken viser, ville
+  // skatten være regnet af et tal, brugeren ikke kan finde nogen steder.
+  const shareIncomeByPerson = incomeByVariant(plan, annuitised, 'ShareDepot')
+  const capitalIncomeByPerson = incomeByVariant(plan, annuitised, 'SavingsAccount')
 
   // Hele husstandens skat bag ét søm, jf. ADR-0014. Motoren lægger intet
   // sammen selv: aktieindkomstens skat er husstandens og hører ikke til
   // nogen enkelt person, og totalen er modulets egen sum af sine dele.
   //
   // Raterne kommer med fejningen lagt til: den er en krone, personen
-  // beskattes af, som enhver anden rate. Afkastet spørges af `flowed` og
+  // beskattes af, som enhver anden rate. Afkastet spørges af `annuitised` og
   // ikke af bogen her — det er det samme tal begge steder, fordi hverken
   // primosaldoen eller den vægtede strøm ændrer sig af en bevægelse.
   const household = assessHousehold(
@@ -239,6 +310,7 @@ function simulateYear(
           capitalIncome: capitalIncomeByPerson.get(person.id)!,
           withDeductibility: contributionsByPersonId.get(person.id)!.withDeductibility,
           payouts: payoutOf(swept.payouts, person),
+          benefits: sumOfBenefits(annuitiesOf(annuities, person)),
         }),
         shareIncome: shareIncomeByPerson.get(person.id)!,
       })),
@@ -254,7 +326,7 @@ function simulateYear(
   // trukket af beholdningen selv ved lukningen og passerer aldrig
   // pengestrømmen; trak bufferen den også, ville den være betalt to gange.
   const settled = withMovement(
-    swept.years,
+    converted.years,
     plan.buffer,
     income - totalHouseholdTax(household) - expenses,
   )
@@ -274,7 +346,7 @@ function simulateYear(
     return: sumOver(holdings, (holding) => holding.return),
     tax,
     expenses,
-    conversion: 0,
+    conversion: converted.conversion,
     holdings,
     entries: entries.map(({ entry, amount }) => ({ entry: entry.id, amount })),
     contributions: contributions.map(({ contribution, fromSource, intoHolding }) => ({
@@ -293,6 +365,7 @@ function simulateYear(
       capitalIncome: capitalIncomeByPerson.get(person.id)!,
       tax: household.persons[index]!.tax,
       marginal: household.persons[index]!.marginal,
+      lifeAnnuityBenefits: benefitsOf(annuities, person),
       caps: contributionsByPersonId.get(person.id)!.caps,
     })),
     shareIncomeTax: household.shareIncomeTax,
@@ -692,7 +765,12 @@ function taxInput(
   person: Person,
   rates: RateYear,
   year: SimulationYear,
-  ofPerson: { capitalIncome: Nominal; withDeductibility: Nominal; payouts: Nominal },
+  ofPerson: {
+    capitalIncome: Nominal
+    withDeductibility: Nominal
+    payouts: Nominal
+    benefits: Nominal
+  },
 ): TaxAssessmentInput {
   const ownIncome = (taxTreatment: TaxTreatment) =>
     entries
@@ -704,7 +782,7 @@ function taxInput(
       )
       .reduce((sum, { amount }) => sum + amount, 0)
 
-  const pensionIncome = ownIncome('PensionIncome') + ofPerson.payouts
+  const pensionIncome = ownIncome('PensionIncome') + ofPerson.payouts + ofPerson.benefits
   const municipalTax = rates.municipalTax.rates[person.municipality]!
 
   return {
@@ -845,6 +923,137 @@ function sweepFinalInstalment(
     },
     { payouts: [], years },
   )
+}
+
+/** Omsætningens afkastvægt. Depotet forlader beholdningen ved årets
+    begyndelse — det er dét, "ved udbetalingsstart" betyder, når året er den
+    mindste tidsenhed, motoren regner i — og der er derfor intet af det
+    tilbage at forrente. Livrenten lukker på præcis nul uden hjælp fra andet.
+
+    Vægten er ikke et `Timing`. Forfaldet er noget, brugeren lægger på en
+    strøm, og omsætningen er ingen strøm: den er et trin, jf. ADR-0006 og
+    diagram 02. */
+const conversionWeight = 1
+
+/** Årets livrenter: én linje pr. livrente, hvis udbetaling er begyndt — det
+    depot, der omsættes, og den ydelse, året giver.
+
+    En livrente uden en udbetalingsstart giver ingen linje, af samme grund
+    som en ratepension uden plan: brugeren har endnu ikke besluttet sig, og
+    ordningen bliver stående og vokser.
+
+    I omsætningsåret er depotet primosaldoen, og ydelsen er den ganget med
+    `ConversionFactor`. Fordi året er udledt af ejerens alder, sker
+    omsætningen præcis én gang inden for én kørsel: `year === start` er sand
+    i nøjagtig ét år. I alle år derefter er depotet nul, og ydelsen er sidste
+    års reguleret med `bonusRate` — garanteret og fast, uden aldersskalering
+    og uden genberegning, jf. ADR-0009.
+
+    Ligger udbetalingsstarten før planens startår, er livrenten allerede
+    omsat i virkeligheden, og der findes intet depot at regne ydelsen af. En
+    sådan ordning skrives som en indtægtspost med `PensionIncome`, præcis som
+    ATP, jf. ADR-0023 — ikke som en beholdning med en saldo, motoren ikke kan
+    genskabe. */
+function lifeAnnuitiesInYear(
+  plan: Plan,
+  year: SimulationYear,
+  opening: ReadonlyMap<HoldingId, Nominal>,
+  previous: YearResult | undefined,
+): ActiveAnnuity[] {
+  return plan.household.persons.flatMap((person) =>
+    person.holdings.flatMap((holding) => {
+      if (!isLifeAnnuity(holding)) return []
+
+      const start = payoutStartOf(holding)
+      if (start === undefined) return []
+
+      const startYear = payoutStartYear(start, person)
+      if (year < startYear) return []
+
+      const line = { holding: holding.id, owner: person.id }
+      if (year === startYear) {
+        const reserve = opening.get(holding.id)!
+        return [{ ...line, conversion: reserve, benefit: reserve * conversionFactor(holding) }]
+      }
+      return [
+        {
+          ...line,
+          conversion: 0,
+          benefit: benefitLastYear(previous, holding.id) * (1 + holding.bonusRate),
+        },
+      ]
+    }),
+  )
+}
+
+/** Den ydelse, livrenten gav i det foregående år — det, `bonusRate`
+    regulerer. Nul, når året ikke findes: planens første år har intet
+    foregående, og en livrente, hvis omsætningsår ligger før det, har derfor
+    ingen ydelse at føre videre.
+
+    Ydelsen læses af forrige `PersonYear` frem for at blive regnet forfra af
+    et gemt depot. Depotet er væk efter omsætningen — det er hele pointen i
+    ADR-0009 — og et tal, der skulle bæres ved siden af årsrækken, ville
+    være en tilstand, motoren ellers ikke har. */
+function benefitLastYear(previous: YearResult | undefined, holding: HoldingId): Nominal {
+  return (
+    previous?.persons
+      .flatMap((person) => person.lifeAnnuityBenefits)
+      .find((benefit) => benefit.holding === holding)?.amount ?? 0
+  )
+}
+
+/** Omsætningen bogført, og årets samlede omsætning.
+
+    De to svar kommer af samme opgørelse af samme grund som den sidste rates
+    fejning: beløbet er både det, beholdningen forlader, og det led,
+    balanceinvarianten skal have for at gå op. Regnet hver sit sted kunne de
+    komme til at sige hver sit.
+
+    Depotet er allerede vejet ud med vægt 1, og livrenten lukker derfor på
+    nul i et år, hvor intet andet faldt i den. Faldt der en indbetaling,
+    bliver dens rest stående, og fejningen tager den med i omsætningen —
+    efter afkastet og beholdningsskatten, og dermed med vægt nul, ganske som
+    den sidste rates. Ydelsen røres ikke af det: den er regnet af
+    primosaldoen, som er det depot, selskabet omsætter. */
+function convert(
+  annuities: ActiveAnnuity[],
+  years: HoldingYears,
+  rates: RateYear,
+): { conversion: Nominal; years: HoldingYears } {
+  return annuities.reduce<{ conversion: Nominal; years: HoldingYears }>(
+    (converted, { holding, conversion }) => {
+      if (conversion === 0) return converted
+
+      const emptied = withMovement(converted.years, holding, -conversion)
+      const remainder = closingBalanceOf(emptied, holding, rates)
+      return {
+        conversion: converted.conversion + conversion + remainder,
+        years: withMovement(emptied, holding, -remainder),
+      }
+    },
+    { conversion: 0, years },
+  )
+}
+
+/** Personens egne livrenter blandt årets. Ydelsen er `PensionIncome` hos
+    beholdningens ejer, og ejeren står allerede på linjen — pengene lander på
+    bufferen uanset hvem det er, men skatten gør ikke, ganske som for en
+    rate. */
+function annuitiesOf(annuities: ActiveAnnuity[], person: Person): ActiveAnnuity[] {
+  return annuities.filter((annuity) => annuity.owner === person.id)
+}
+
+/** Personens ydelseslinjer, som de står i `PersonYear`. */
+function benefitsOf(annuities: ActiveAnnuity[], person: Person): LifeAnnuityBenefit[] {
+  return annuitiesOf(annuities, person).map(({ holding, benefit }) => ({
+    holding,
+    amount: benefit,
+  }))
+}
+
+function sumOfBenefits(annuities: ActiveAnnuity[]): Nominal {
+  return annuities.reduce((sum, annuity) => sum + annuity.benefit, 0)
 }
 
 /** Summen af de rater, personens egne beholdninger blev tømt med i året.

@@ -7,6 +7,8 @@ import {
   payoutScheduleOf,
   payoutTaxation,
 } from '../engine/holdingVariant'
+import { isLifeAnnuity, newLifeAnnuity } from '../engine/lifeAnnuity'
+import type { LifeAnnuityHolding } from '../engine/lifeAnnuity'
 import { periodBounds } from '../engine/age'
 import { payoutYear } from '../engine/payoutAge'
 import { minimumPayoutYears } from '../engine/validatePlan'
@@ -266,6 +268,37 @@ export function addPayoutSchedule(plan: Plan, id: string, start: AgeBound): Plan
 /** Fjerner udbetalingsplanen igen. Feltet forsvinder helt frem for at stå som
     `undefined`: et felt, der ligger og venter i det gemte skema, er en løgn,
     der aldrig fejler, jf. ADR-0015. */
+/** Lægger en udbetalingsstart på livrenten — det tidspunkt, depotet
+    omsættes på. Der er hverken en varighed eller et princip at sætte: ydelsen
+    er livsvarig, jf. ADR-0009.
+
+    Starten er ordningens tidligste lovlige, af samme grund som
+    ratepensionens: det ene tidspunkt, der med sikkerhed er lovligt, uanset
+    hvornår ordningen må udbetales. */
+export function addPayoutStart(plan: Plan, id: string, start: AgeBound): Plan {
+  return withLifeAnnuity(plan, id, (holding) => ({ ...holding, payout: { start } }))
+}
+
+/** Fjerner udbetalingsstarten igen. Livrenten bliver stående og vokser, som
+    en ratepension uden plan — de to oplyste tal bliver, for de hører til
+    ordningen og ikke til beslutningen om, hvornår den skal omsættes. */
+export function removePayoutStart(plan: Plan, id: string): Plan {
+  return withLifeAnnuity(plan, id, ({ payout: _payout, ...rest }) => rest)
+}
+
+/** Retter en livrente. Er beholdningen ikke en, står den urørt: de tre
+    omsætningsfelter hænger på dens eget medlem af unionen og kan ikke
+    skrives på nogen anden variant. */
+export function withLifeAnnuity(
+  plan: Plan,
+  id: string,
+  change: (holding: LifeAnnuityHolding) => Holding,
+): Plan {
+  return withHolding(plan, id, (holding) =>
+    isLifeAnnuity(holding) ? change(holding) : holding,
+  )
+}
+
 export function removePayoutSchedule(plan: Plan, id: string): Plan {
   return withHolding(plan, id, (holding) => {
     if (!bearsPayoutSchedule(holding)) return holding
@@ -306,15 +339,45 @@ export function withPayoutSchedule(
     beskatningen på vejen ud, ikke hvornår ordningen blev oprettet. */
 export function withVariant(plan: Plan, id: string, variant: HoldingVariant): Plan {
   return withHolding(plan, id, (holding) => {
-    const { openedOn, payoutAgeOverride, ...base } = holding as PensionSchemeHolding
-    if (!isPensionSchemeVariant(variant)) return { ...base, variant }
-    return {
-      ...base,
-      variant,
-      openedOn: openedOn ?? { year: plan.startYear, month: 1 },
-      ...(payoutAgeOverride === undefined ? {} : { payoutAgeOverride }),
+    // Grundformen skrives ud felt for felt frem for at blive skrabet af det,
+    // beholdningen var. Et restfelt, ingen huskede at tage med, ville følge
+    // med over på en variant, der ikke har det — en udbetalingsplan på en
+    // opsparingskonto, eller et oplyst depot på en ratepension — og et dødt
+    // felt i det gemte skema er en løgn, der aldrig fejler.
+    const base = {
+      id: holding.id,
+      name: holding.name,
+      balance: holding.balance,
+      grossReturn: holding.grossReturn,
+      annualCostRate: holding.annualCostRate,
     }
+    if (!isPensionSchemeVariant(variant)) return { ...base, variant }
+
+    const scheme = {
+      ...base,
+      openedOn: isPensionScheme(holding)
+        ? holding.openedOn
+        : { year: plan.startYear, month: 1 },
+      ...(isPensionScheme(holding) && holding.payoutAgeOverride !== undefined
+        ? { payoutAgeOverride: holding.payoutAgeOverride }
+        : {}),
+    }
+    // De tre omsætningsfelter er livrentens egne. Bliver beholdningen en
+    // livrente, skal den have dem — er den det allerede, står de urørt.
+    if (variant !== 'LifeAnnuity') return { ...scheme, variant }
+    return { ...scheme, variant, ...(isLifeAnnuity(holding) ? quoteOf(holding) : newLifeAnnuity) }
   })
+}
+
+/** Livrentens tre omsætningsfelter, læst af en livrente. Skrevet ud som
+    `newLifeAnnuity`s modstykke, så et felt, der kommer til, ikke tavst kan
+    falde ud af et typeskift. */
+function quoteOf(holding: LifeAnnuityHolding) {
+  return {
+    quotedReserve: holding.quotedReserve,
+    quotedAnnualBenefit: holding.quotedAnnualBenefit,
+    bonusRate: holding.bonusRate,
+  }
 }
 
 export function withHoldingOwner(plan: Plan, holdingId: string, newOwnerId: string): Plan {

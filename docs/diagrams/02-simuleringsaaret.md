@@ -37,6 +37,8 @@ sequenceDiagram
     T-->>H: deduct HoldingTax from balance
     E->>H: in the last payout year, sweep the remainder into the instalment
     H-->>E: holding closes at exactly zero
+    E->>L: in the conversion year, sweep the remainder into the conversion
+    L-->>E: holding closes at exactly zero
 
     Note over E,T: Husstandskobling — kan ikke deles i to uafhængige personberegninger
     E->>T: TaperBase = own + (1 − spouseDisregard) × spouse's, spouse's earned income excluded
@@ -57,6 +59,7 @@ sequenceDiagram
 
 - **Strømmene først, afkastet bagefter.** Afkastet regnes på den vægtede gennemsnitssaldo, så alle årets bevægelser og deres `timing` skal være kendt, før det kan beregnes. Se [ADR-0006](../adr/0006-maaneden-er-en-afkastvaegt-ikke-et-tidsskridt.md).
 - **Raten regnes altid af primosaldoen.** Det er en lovregel — saldoen ved årets begyndelse divideret med resterende udbetalingsår — ikke en konvention, og den påvirkes derfor ikke af vægtningen.
+- **Omsætningen har vægt 1, og fejningen efter den har vægt nul.** Depotet er saldoen ved årets begyndelse, og det forlader beholdningen dér — der er derfor intet af det tilbage at forrente, og livrenten lukker af sig selv på nul i et år, hvor intet andet faldt i den. Faldt der en indbetaling, tager fejningen dens rest med i omsætningen efter afkastet og beholdningsskatten, ganske som den sidste rates gør. Ydelsen røres ikke af fejningen: den er regnet af primosaldoen, som er det depot, selskabet omsætter.
 - **Den sidste rate fejer resten med, og den fejning har vægt nul.** Den sker efter afkastet og beholdningsskatten og kan derfor ikke flytte det grundlag, den selv er regnet af — uden den rækkefølge var regnestykket cirkulært. Beløbet kan være negativt, når annuitetsprincippets sidste rate overstiger saldoen; begge veje lukker beholdningen på nul.
 - **`HoldingTax` af årets faktiske afkast.** Når afkastet er vægtet korrekt, er der ikke længere et spørgsmål om, hvad skatten rammer. Afkastet forbliver brutto — skatten trækkes af saldoen og tælles med i årets `tax`, så balanceinvarianten læser som den gør.
 - **Aftrapning før skat.** `PensionSupplement` er skattepligtig indkomst, så det aftrappede beløb — ikke det fulde — skal ind i skatteopgørelsen.
