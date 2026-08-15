@@ -212,12 +212,15 @@ function simulateYear(
   // Modified Dietz, jf. ADR-0006 — det afhænger aldrig af skatten, kun
   // omvendt: aktiedepotets og opsparingskontoens afkast beskattes hos
   // personen som netop dette afkast.
-  // Kun bufferen modtager poster; en overførsel vejer ind i afkastgrundlaget
-  // i begge ender, jf. ADR-0004.
-  const afterEntries = withFlow(years, plan.buffer, weightedNetFlow(entries))
+  // Kun bufferen modtager poster, og strømmen vejes i dens ende, jf.
+  // ADR-0004 og `weightAt`.
+  const afterEntries = withFlow(years, plan.buffer, weightedNetFlow(entries, plan.buffer))
+  // Overførslen vejer ind i begge ender, jf. ADR-0004 — men enderne spørges
+  // hver for sig: en jævn overførsel til eller fra bufferen vejer nul i
+  // bufferens ende og fuldt i den andens, jf. ADR-0024.
   const afterTransfers = transfers.reduce((years, { transfer, amount }) => {
-    const weighted = amount * returnWeight(transfer.timing)
-    return withFlow(withFlow(years, transfer.from, -weighted), transfer.to, weighted)
+    const { from, to, timing } = transfer
+    return withWeightedFlow(years, from, to, amount, timing, plan.buffer)
   }, afterEntries)
   // Indbetalingen vejer ind i begge ender som en overførsel. Bufferen fik
   // hele bruttolønnen vægtet ind med posten, og uden modposten her ville de
@@ -225,46 +228,40 @@ function simulateYear(
   // Det er nettobeløbet, der vejes: AM-delen forlader bufferen som skat, og
   // skat rører aldrig afkastgrundlaget.
   const afterContributions = contributions.reduce(
-    (years, { contribution, from, intoHolding, timing }) => {
-      const weighted = intoHolding * returnWeight(timing)
-      return withFlow(withFlow(years, from, -weighted), contribution.to, weighted)
-    },
+    (years, { contribution, from, intoHolding, timing }) =>
+      withWeightedFlow(years, from, contribution.to, intoHolding, timing, plan.buffer),
     afterTransfers,
   )
-  // Raten vejer ind i begge ender som en overførsel. Forfaldet er ikke et
-  // felt på udbetalingsplanen: en rate udbetales månedsvis, og `'Even'` er
-  // det matematisk rigtige for en jævn strøm, jf. ADR-0006.
-  const flowed = payouts.reduce((years, { holding, amount }) => {
-    const weighted = amount * returnWeight('Even')
-    return withFlow(withFlow(years, holding, -weighted), plan.buffer, weighted)
-  }, afterContributions)
-
-  // Folkepensionen vejer ind på bufferen som en jævn strøm. Den udbetales
-  // månedsvis, og `'Even'` er det matematisk rigtige for den slags, jf.
-  // ADR-0006 — der er intet forfald at bære, for beløbet er ingen post.
-  const collected = withFlow(
-    flowed,
-    plan.buffer,
-    sumOfStatePensions(statePensions) * returnWeight('Even'),
+  // Raten vejer kun ind i afgiverens ende. Forfaldet er ikke et felt på
+  // udbetalingsplanen: en rate udbetales månedsvis, og `'Even'` er det
+  // matematisk rigtige for en jævn strøm, jf. ADR-0006. Pengene forlader
+  // faktisk ordningen månedsvis, så dens afkastgrundlag mister `½ × raten` —
+  // men de forrenter sig ingen steder undervejs, for de lander på bufferen,
+  // hvor en jævn strøm vejer nul, jf. ADR-0024 og `weightAt`.
+  const flowed = payouts.reduce(
+    (years, { holding, amount }) =>
+      withFlow(years, holding, -amount * weightAt(holding, 'Even', plan.buffer)),
+    afterContributions,
   )
+
+  // Folkepensionen vejer ingen steder. Den udbetales månedsvis og lander på
+  // bufferen, hvor en jævn strøm giver nul, jf. ADR-0024 — der er ingen
+  // anden ende at veje i, for beløbet kommer udefra og forlader ingen
+  // beholdning.
 
   // Omsætningen har vægt 1: depotet forlader beholdningen ved årets
   // begyndelse, og der er intet af det tilbage at forrente. Livrenten lukker
   // derfor på nul af sig selv, uden at fejningen skal træde til. Ydelsen
-  // vejer til gengæld ind på bufferen som en jævn strøm — en livrente
-  // udbetales månedsvis, og `'Even'` er det matematisk rigtige, jf. ADR-0006.
+  // vejer derimod ingen steder: den udbetales månedsvis og lander på
+  // bufferen, hvor en jævn strøm giver nul, jf. ADR-0024.
   //
   // Det er den sidste vægtning: herefter flytter året kun saldi, og
   // afkastgrundlaget står fast. `annuitised` er derfor bogen, afkastet
   // spørges af.
   const annuitised = annuities.reduce(
-    (years, { holding, conversion, benefit }) =>
-      withFlow(
-        withFlow(years, holding, -conversion * conversionWeight),
-        plan.buffer,
-        benefit * returnWeight('Even'),
-      ),
-    collected,
+    (years, { holding, conversion }) =>
+      withFlow(years, holding, -conversion * conversionWeight),
+    flowed,
   )
 
   // En overførsel flytter sit fulde beløb mellem afgiver og modtager. Den
@@ -453,20 +450,64 @@ function incomeByVariant(
   )
 }
 
-/** Summen af årets strømme, hver vægtet efter sit forfald — grundlaget der
-    lægges til primosaldoen i Modified Dietz. */
-function weightedNetFlow(entries: ActiveEntry[]): Nominal {
+/** Summen af årets poster, hver vægtet efter sit forfald — grundlaget der
+    lægges til primosaldoen i Modified Dietz. Posterne lander alle på
+    bufferen, og strømmen vejes derfor i bufferens ende: en jævn post bliver
+    til nul, en dateret beholder sin vægt, jf. `weightAt`. */
+function weightedNetFlow(entries: ActiveEntry[], buffer: HoldingId): Nominal {
   return entries.reduce((sum, { entry, amount }) => {
     const signed = entry.direction === 'Income' ? amount : -amount
-    return sum + signed * returnWeight(entry.timing)
+    return sum + signed * weightAt(buffer, entry.timing, buffer)
   }, 0)
+}
+
+/** Vejer en strøm ind i begge ender af sit forløb: afgiveren mister sin
+    vægtede del af afkastgrundlaget, og modtageren får sin.
+
+    De to ender spørges hver for sig, og de kan svare forskelligt, jf.
+    `weightAt`. Det er ikke en inkonsistens: vægten er en egenskab ved enden
+    og ikke ved strømmen, og en jævn rate mister derfor `½ × beløbet` i
+    ordningen uden at give noget som helst på bufferen. */
+function withWeightedFlow(
+  years: HoldingYears,
+  from: HoldingId,
+  to: HoldingId,
+  amount: Nominal,
+  timing: Timing,
+  buffer: HoldingId,
+): HoldingYears {
+  return withFlow(
+    withFlow(years, from, -amount * weightAt(from, timing, buffer)),
+    to,
+    amount * weightAt(to, timing, buffer),
+  )
+}
+
+/** Afkastvægten i den ende af en strøm, der rammer `end`. Vægten er en
+    egenskab ved enden og ikke ved strømmen, jf. ADR-0024: på bufferens ende
+    giver et jævnt forfald nul, fordi bufferen er husstandens
+    transaktionskonto — en jævn strøm passerer den blot og efterlader først
+    over- eller underskuddet ved årets slutning, hvor det lander som en
+    bevægelse uden vægt.
+
+    Reglen gælder kun bufferens ende, og kun de jævne strømme. Enhver anden
+    beholdning vejer som før, og en strøm med et forfald i en bestemt måned
+    beholder sin vægt hele vejen — også på bufferen. En jævn strøm er ikke en
+    begivenhed, den er et niveau, og en transaktionskonto beholder ikke et
+    niveau.
+
+    Eksporteret så fladen kan vise en posts afkastvægt uden at regne den om
+    — og uden at kunne komme til at vise en anden vægt, end den motoren
+    regnede med. */
+export function weightAt(end: HoldingId, timing: Timing, buffer: HoldingId): number {
+  return end === buffer && timing === 'Even' ? 0 : returnWeight(timing)
 }
 
 /** `Even` er det matematisk rigtige for jævnt fordelte strømme, ikke en
     tilnærmelse; måned N vejer strømmen efter, hvor meget af året der er
-    tilbage, jf. ADR-0006. Eksporteret så fladen kan vise afkastvægten for en
-    post uden at regne den om. */
-export function returnWeight(timing: Timing): number {
+    tilbage, jf. ADR-0006. Vægten i én ende spørges gennem `weightAt`, som
+    er den, der kender bufferens undtagelse. */
+function returnWeight(timing: Timing): number {
   return timing === 'Even' ? 0.5 : (12 - timing + 1) / 12
 }
 

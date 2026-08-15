@@ -2973,14 +2973,15 @@ describe('fladen', () => {
         .getAllByRole('cell')
         .map((cell) => cell.textContent)
 
-    // Jævnt forfald vejer overførslen halvt: 200.000 bliver 100.000, negativt
-    // hos afgiveren og positivt hos modtageren. Begge beholdninger har 0 %
-    // nettoafkast i fixturen, så afkastet er 0 uanset grundlaget.
+    // Vægten er en egenskab ved enden, jf. ADR-0024: modtageren får de
+    // 200.000 vejet halvt, mens bufferens ende giver nul, fordi overførslen
+    // er jævn. Begge beholdninger har 0 % nettoafkast i fixturen, så
+    // afkastet er 0 uanset grundlaget.
     expect(cells('Frie midler')).toEqual([
       'Frie midler',
       '1.000.000',
       '—',
-      '-100.000',
+      '0',
       '0,00 %',
       '0',
       '0',
@@ -3073,9 +3074,12 @@ describe('fladen', () => {
         .getAllByRole('cell')
         .map((cell) => cell.textContent)
 
-    expect(cells('Løn')).toEqual(['Løn', '600.000', 'Jævnt fordelt', '50,00 %'])
-    // Juni-forfald: (12 − 6 + 1) / 12 = 58,33 %. Udgiften vises negativ, som i
-    // navigatoren og balancestriben.
+    // Lønnen er jævnt fordelt og lander på bufferen, hvor en jævn strøm
+    // vejer nul — kolonnen skal vise det tal, motoren faktisk regnede med.
+    expect(cells('Løn')).toEqual(['Løn', '600.000', 'Jævnt fordelt', '0,00 %'])
+    // Juni-forfald: (12 − 6 + 1) / 12 = 58,33 %. En dateret post beholder sin
+    // vægt, også på bufferen. Udgiften vises negativ, som i navigatoren og
+    // balancestriben.
     expect(cells('Faste udgifter')).toEqual(['Faste udgifter', '-40.000', 'Juni', '58,33 %'])
   })
 

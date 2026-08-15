@@ -1,6 +1,6 @@
 import { payoutScheduleOf } from '../engine/holdingVariant'
 import type { Holding, Person, Plan } from '../engine/plan'
-import { returnWeight } from '../engine/simulate'
+import { weightAt } from '../engine/simulate'
 import type { ShareIncomeLayer } from '../engine/tax/assessHousehold'
 import type { LayerAmount, TaxLayer } from '../engine/tax/assessTax'
 import { totalTax } from '../engine/tax/assessTax'
@@ -241,7 +241,9 @@ function EntriesBlock({
                 <td>{entry.name}</td>
                 <td>{kroner(display(signed))}</td>
                 <td>{danishTiming(entry.timing)}</td>
-                <td>{procent(returnWeight(entry.timing))}</td>
+                {/* Posterne lander alle på bufferen, og vægten spørges
+                    derfor i dens ende — en jævn post vejer nul. */}
+                <td>{procent(weightAt(plan.buffer, entry.timing, plan.buffer))}</td>
               </tr>
             )
           })}

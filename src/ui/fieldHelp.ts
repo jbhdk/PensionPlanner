@@ -301,7 +301,7 @@ export const fieldHelp = {
     'Hvad posten var værd i netop dette år. Det er ikke det tal, der er tastet: beløbet er vokset fra planens første år med postens egen regulering eller med inflationen.',
 
   'EntryYear.returnWeight':
-    'Hvor stor en del af året pengene nåede at være med i. Falder de i januar, tæller de næsten et helt års afkast med; falder de i december, næsten intet.',
+    'Hvor stor en del af året pengene nåede at være med i. Falder de i januar, tæller de næsten et helt års afkast med; falder de i december, næsten intet. Er de fordelt jævnt over året, tæller de slet ikke med: de passerer blot kontoen og efterlader først noget ved årets slutning.',
 
   'ContributionYear.contribution':
     'Hvilken indbetaling linjen gælder, skrevet som hvor pengene kom fra, og hvor de gik hen.',

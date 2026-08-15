@@ -727,9 +727,10 @@ describe('simulate', () => {
     const years = simulateChecked(plan)
 
     // Indtægten er kun lønnen — afkastet står i sit eget felt. Lønnen er
-    // jævnt fordelt og vejer derfor med ½ i afkastgrundlaget.
+    // jævnt fordelt og lander på bufferen, hvor den vejer nul: afkastet er
+    // nettoafkastsatsen af primosaldoen og intet andet, jf. ADR-0024.
     expect(years[0]!.income).toBeCloseTo(600_000, 6)
-    expect(years[0]!.return).toBeCloseTo(0.06 * (1_000_000 + 0.5 * 600_000), 6)
+    expect(years[0]!.return).toBeCloseTo(0.06 * 1_000_000, 6)
   })
 
   it('vejer en strøm i januar tungere end den samme strøm i december, efter Modified Dietz', () => {
@@ -758,18 +759,38 @@ describe('simulate', () => {
     expect(early[0]!.return).toBeGreaterThan(late[0]!.return)
   })
 
-  it('giver en jævnt fordelt strøm vægten ½', () => {
+  it('giver en jævnt fordelt strøm vægten ½ uden for bufferen', () => {
+    // ADR-0006's vægt står uændret; ADR-0024 indsnævrer den kun i bufferens
+    // ende. En jævn overførsel ud af en anden beholdning mister derfor
+    // fortsat halvdelen af sit beløb fra dens afkastgrundlag.
     const years = simulateChecked(
       aPlan({
-        balance: 1_000_000,
+        balance: 0,
         inflationAssumption: 0,
-        grossReturn: 0.07,
-        annualCostRate: 0.01,
-        entries: [aTaxFreeIncome({ amountInRealKroner: 600_000, timing: 'Even' })],
+        holdings: [
+          aHolding({
+            id: 'anden-beholdning',
+            name: 'Anden beholdning',
+            variant: 'SavingsAccount',
+            balance: 1_000_000,
+            grossReturn: 0.07,
+            annualCostRate: 0.01,
+          }),
+        ],
+        transfers: [
+          aTransfer({
+            from: 'anden-beholdning',
+            to: 'free-assets',
+            amountInRealKroner: 600_000,
+          }),
+        ],
       }),
     )
 
-    expect(years[0]!.return).toBeCloseTo(0.06 * (1_000_000 + 0.5 * 600_000), 6)
+    expect(holding(years[0]!, 'anden-beholdning').return).toBeCloseTo(
+      0.06 * (1_000_000 - 0.5 * 600_000),
+      6,
+    )
   })
 
   it('bærer afkastet pr. beholdning i YearResult, ikke kun husstandens samlede', () => {
@@ -1136,9 +1157,11 @@ describe('overførsler', () => {
     const buffer = year.holdings.find((h) => h.holding === 'free-assets')!
     const anden = year.holdings.find((h) => h.holding === 'anden-beholdning')!
 
-    // Jævnt forfald vejer halvt: 200.000 kr. bliver til 100.000 i grundlaget,
-    // negativt hos afgiveren og positivt hos modtageren.
-    expect(buffer.weightedFlow).toBeCloseTo(-100_000, 6)
+    // Vægten er en egenskab ved enden, jf. ADR-0024: modtageren får de
+    // 200.000 kr. vejet halvt, mens bufferens ende giver nul, fordi
+    // overførslen er jævn. Rækken bærer altså to forskellige tal om den
+    // samme strøm, og det er hele påstanden.
+    expect(buffer.weightedFlow).toBeCloseTo(0, 6)
     expect(anden.weightedFlow).toBeCloseTo(100_000, 6)
   })
 
@@ -2414,10 +2437,10 @@ describe('indbetalinger', () => {
 
     const year = simulateChecked(plan)[0]!
 
-    // Lønposten lagde hele sit bruttobeløb vægtet på bufferen: 600.000 × ½.
-    // Bidraget tager de 44.160 × ½ ud igen og lægger dem i ordningen. Uden
-    // modposten på bufferen ville de samme kroner forrente sig to steder.
-    expect(holding(year, 'free-assets').weightedFlow).toBeCloseTo(277_920, 6)
+    // Lønnen og bidraget er begge jævne og passerer bufferen uden at veje
+    // noget dér, jf. ADR-0024. Ordningen får derimod sine 44.160 × ½: de
+    // penge bliver faktisk investeret ved ankomsten.
+    expect(holding(year, 'free-assets').weightedFlow).toBeCloseTo(0, 6)
     expect(holding(year, 'ratepension').weightedFlow).toBeCloseTo(22_080, 6)
   })
 
@@ -3863,6 +3886,23 @@ describe('livrentens omsætning', () => {
     expect(benefitsIn(year)).toEqual([{ holding: 'livrente', amount: 110_000 }])
   })
 
+  it('vejer omsætningen fuldt i depotets ende og ydelsen ingen steder', () => {
+    // De to ender af omsætningsåret spørges hver for sig. Depotet forlader
+    // livrenten ved årets begyndelse og vejer derfor fuldt — det er dét, der
+    // lader beholdningen lukke på nul af sig selv. Ydelsen udbetales
+    // månedsvis og lander på bufferen, hvor en jævn strøm vejer nul, jf.
+    // ADR-0024; bufferens afkast er derfor nøjagtig satsen af primosaldoen.
+    const years = simulateChecked(
+      aPlanWithLifeAnnuity({}, { balance: 1_000_000, grossReturn: 0.04 }),
+    )
+
+    const year = years.find((y) => y.year === conversionYear)!
+    const buffer = holding(year, 'free-assets')
+    expect(holding(year, 'livrente').weightedFlow).toBeCloseTo(-2_000_000, 6)
+    expect(buffer.weightedFlow).toBeCloseTo(0, 6)
+    expect(buffer.return).toBeCloseTo(0.04 * buffer.openingBalance, 6)
+  })
+
   it('omsætter præcis én gang og lader beholdningen stå på nul bagefter', () => {
     // Depotet forrenter sig helt frem til omsætningen — det er dét, der får
     // ydelsen til at reagere på, hvor længe der er betalt ind — og det er
@@ -4020,22 +4060,25 @@ describe('livrentens omsætning', () => {
     )
   })
 
-  it('lader ydelsen forrente sig på bufferen som enhver anden indtægt', () => {
-    // Ydelsen lander på bufferen og vejer halvt ind i dens afkastgrundlag,
-    // som en jævn strøm gør. Er bufferen en opsparingskonto, er det afkast
-    // personens kapitalindkomst — og skatten af det skal regnes af det samme
-    // afkast, som beholdningsrækken viser, jf. ADR-0012.
+  it('lader ydelsen forrente sig først året efter, den er landet', () => {
+    // Ydelsen er en jævn strøm på bufferen og vejer derfor nul i
+    // omsætningsåret, jf. ADR-0024 — den efterlader kun sit overskud ved
+    // årets slutning. Året efter er de penge primosaldo og forrenter sig
+    // fuldt. Er bufferen en opsparingskonto, er det afkast personens
+    // kapitalindkomst, og skatten af det regnes af det samme afkast, som
+    // beholdningsrækken viser, jf. ADR-0012.
     const years = simulateChecked(
       aPlanWithLifeAnnuity({}, { grossReturn: 0.05 }),
     )
 
-    const year = years.find((y) => y.year === conversionYear)!
+    const conversion = years.find((y) => y.year === conversionYear)!
+    expect(holding(conversion, 'free-assets').return).toBeCloseTo(0, 6)
 
-    expect(holding(year, 'free-assets').return).toBeCloseTo(0.05 * 110_000 * 0.5, 6)
-    expect(year.persons[0]!.capitalIncome).toBeCloseTo(
-      holding(year, 'free-assets').return,
-      6,
-    )
+    const after = years.find((y) => y.year === conversionYear + 1)!
+    const buffer = holding(after, 'free-assets')
+    expect(buffer.openingBalance).toBeGreaterThan(0)
+    expect(buffer.return).toBeCloseTo(0.05 * buffer.openingBalance, 6)
+    expect(after.persons[0]!.capitalIncome).toBeCloseTo(buffer.return, 6)
   })
 
   it('afviser en omsætning, der begynder før pensionsudbetalingsalderen', () => {
@@ -4117,17 +4160,15 @@ describe('folkepensionen', () => {
     )
   })
 
-  it('vejer folkepensionen ind på bufferen som en jævn strøm', () => {
-    // Folkepensionen udbetales månedsvis, og strømmen vejes derfor som
-    // `'Even'` — vægt ½, jf. ADR-0006. Uden vægtningen ville årets afkast
-    // blive regnet af en primosaldo, folkepensionen aldrig nåede frem til.
+  it('lader folkepensionen passere bufferen uden at forrente sig', () => {
+    // Folkepensionen udbetales månedsvis, og en jævn strøm vejer nul i
+    // bufferens ende, jf. ADR-0024. Pengene passerer transaktionskontoen og
+    // efterlader først over- eller underskuddet ved årets slutning, hvor det
+    // lander som en bevægelse uden vægt.
     const years = simulateChecked(aPlan({ horizon: 70, grossReturn: 0.05, balance: 0 }))
 
     const year = years.find((y) => y.year === statePensionYear)!
-    expect(holding(year, 'free-assets').weightedFlow).toBeCloseTo(
-      (90_528 + 104_748) / 2,
-      6,
-    )
+    expect(holding(year, 'free-assets').weightedFlow).toBeCloseTo(0, 6)
   })
 
   it('beskatter folkepensionen som pensionsindkomst', () => {
@@ -4218,5 +4259,140 @@ describe('folkepensionen', () => {
     expect(year.rateBasis).toEqual({ knownYear: 2026, projected: true })
     expect(statePensionIn(year)!.basicAmount).toBeCloseTo(90_528 * factor, 6)
     expect(statePensionIn(year)!.pensionSupplement).toBeCloseTo(104_748 * factor, 6)
+  })
+})
+
+describe('bufferens jævne strømme', () => {
+  it('lader den jævne drift passere bufferen uden at forrente sig', () => {
+    // ADR-0024's første værn: bufferen er husstandens transaktionskonto, og
+    // en jævn strøm efterlader intet på den før årets slutning. Afkastet er
+    // derfor nøjagtig nettoafkastsatsen af primosaldoen, og den vægtede
+    // strøm er nul. Falder prøven, har nogen lagt en vægtning tilbage.
+    const [year] = simulateChecked(
+      aPlan({
+        balance: 1_000_000,
+        grossReturn: 0.04,
+        entries: [
+          aTaxFreeIncome({ amountInRealKroner: 100_000 }),
+          anExpense({ amountInRealKroner: 60_000 }),
+        ],
+      }),
+    )
+
+    expect(holding(year!, 'free-assets').weightedFlow).toBeCloseTo(0, 6)
+    expect(holding(year!, 'free-assets').return).toBeCloseTo(40_000, 6)
+  })
+
+  it('lader raten miste sin vægt i ratepensionen og ingen få i bufferen', () => {
+    // ADR-0024's andet værn: vægten er en egenskab ved enden. Pengene
+    // forlader faktisk ratepensionen månedsvis, så dens afkastgrundlag mister
+    // `½ × raten` — de forrenter sig blot ingen steder i det halve år, de er
+    // undervejs. Asymmetrien er hele påstanden; falder prøven, har nogen
+    // "rettet" den.
+    const years = simulateChecked(
+      aPlan({
+        balance: 1_000_000,
+        grossReturn: 0.04,
+        holdings: [
+          {
+            id: 'ratepension',
+            name: 'Ratepension',
+            variant: 'InstalmentPension',
+            openedOn: { year: 2018, month: 1 },
+            balance: 1_000_000,
+            grossReturn: 0,
+            annualCostRate: 0,
+            payout: { start: 67, duration: 10, principle: 'SerialPrinciple' },
+          },
+        ],
+      }),
+    )
+
+    const year = years.find((y) => y.year === 2040)!
+    expect(holding(year, 'ratepension').payout).toBeCloseTo(100_000, 6)
+    expect(holding(year, 'ratepension').weightedFlow).toBeCloseTo(-50_000, 6)
+    expect(holding(year, 'free-assets').weightedFlow).toBeCloseTo(0, 6)
+  })
+
+  it('lader et boligsalg i februar beholde sin vægt på bufferen', () => {
+    // ADR-0024's tredje værn: reglen rammer kun de jævne strømme. En post
+    // med et forfald er en begivenhed og ikke et niveau, og de 2 mio. kr.
+    // ligger der i elleve tolvtedele af året — præcis det tilfælde, ADR-0006
+    // købte måneden for. Den jævne udgift ved siden af vejer nul og må ikke
+    // trække fra. Falder prøven, har nogen generaliseret reglen.
+    const [year] = simulateChecked(
+      aPlan({
+        balance: 0,
+        grossReturn: 0.04,
+        entries: [
+          aTaxFreeIncome({
+            amountInRealKroner: 2_000_000,
+            timing: 2,
+            period: { anchor: 'CalendarYear', from: 2026 },
+            recurrence: { kind: 'Once' },
+          }),
+          anExpense({ amountInRealKroner: 300_000 }),
+        ],
+      }),
+    )
+
+    expect(holding(year!, 'free-assets').weightedFlow).toBeCloseTo(
+      (2_000_000 * 11) / 12,
+      6,
+    )
+  })
+
+  it('lader en jævn overførsel til bufferen veje nul i bufferens ende', () => {
+    // Reglen gælder begge retninger: den er ikke en regel om penge, der
+    // forlader bufferen, men om bufferens ende. Afgiveren mister sine
+    // `½ × beløbet` som før — pengene forlader den faktisk månedsvis.
+    const [year] = simulateChecked(
+      aPlan({
+        balance: 0,
+        grossReturn: 0.04,
+        holdings: [
+          aHolding({
+            id: 'anden-beholdning',
+            name: 'Anden beholdning',
+            variant: 'SavingsAccount',
+            balance: 1_000_000,
+            grossReturn: 0.04,
+          }),
+        ],
+        transfers: [
+          aTransfer({ from: 'anden-beholdning', to: 'free-assets', amountInRealKroner: 100_000 }),
+        ],
+      }),
+    )
+
+    expect(holding(year!, 'anden-beholdning').weightedFlow).toBeCloseTo(-50_000, 6)
+    expect(holding(year!, 'free-assets').weightedFlow).toBeCloseTo(0, 6)
+  })
+
+  it('lader indbetalingen veje nul i bufferen og fuldt i ordningen', () => {
+    // Den anden retning: pengene forlader bufferen jævnt og vejer derfor nul
+    // dér, men de bliver faktisk investeret i ordningen ved ankomsten og
+    // vejer fuldt i dens ende. Det er nettobeløbet, der vejes — AM-delen
+    // forlader bufferen som skat, og skat rører aldrig afkastgrundlaget.
+    const [year] = simulateChecked(
+      aPlan({
+        balance: 0,
+        grossReturn: 0.04,
+        entries: [aSalary({ amountInRealKroner: 500_000 })],
+        holdings: [
+          aHolding({
+            id: 'ordning',
+            name: 'Ordning',
+            variant: 'InstalmentPension',
+            balance: 0,
+            grossReturn: 0.04,
+          }),
+        ],
+        contributions: [aContribution({ source: 'salary', to: 'ordning', percentageOfEntry: 0.1 })],
+      }),
+    )
+
+    expect(holding(year!, 'ordning').weightedFlow).toBeCloseTo((50_000 * 0.92) / 2, 6)
+    expect(holding(year!, 'free-assets').weightedFlow).toBeCloseTo(0, 6)
   })
 })
