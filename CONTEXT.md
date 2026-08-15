@@ -63,6 +63,10 @@ _Avoid_: Reale kroner, faste priser, nutidskroner
 En pensions- eller opsparingspost med en saldo, du ejer: den forrentes, beskattes løbende og tømmes af en udbetalingsplan. Ratepension, aldersopsparing, aktiesparekonto og frie midler er beholdninger.
 _Avoid_: Konto, depot, opsparing brugt som samlebetegnelse for dem alle. De to ord er derimod de rigtige i `ShareDepot` og `SavingsAccount`, som er navne på hver sin variant.
 
+**Pensionsordning** · `PensionScheme`:
+De tre varianter, hvis udbetaling loven binder til en alder: `InstalmentPension`, `LifeAnnuity` og `OldAgeSavings`. En kategori og ikke en variant, ganske som `FreeAssets` er det, og den er hverken det ene eller det andet af de to skel, den ligner: aktiesparekontoen er ikke frie midler, men den er heller ingen pensionsordning — den har intet `OpenedOn` og ingen `PayoutAge`, og ejeren hæver af den, når hun vil.
+_Avoid_: Pension, ordning brugt om alt der ikke er frie midler, pensionsprodukt
+
 **Afkast** · `Return`:
 Årets forrentning af en beholdnings saldo. Tilskrives saldoen som en sidesløjfe og passerer aldrig årets pengestrøm — det bliver først til penge, husstanden kan bruge, når der hæves.
 _Avoid_: Rente, gevinst, forrentning brugt om andet end selve tilskrivningen
@@ -296,8 +300,16 @@ Den tidligste alder hvor en bestemt ordning lovligt må udbetales. En egenskab v
 _Avoid_: Udbetalingsalder, pensionsalder
 
 **Udbetalingsregime** · `PayoutRegime`:
-Det regelsæt der fastlægger en ordnings pensionsudbetalingsalder, afgjort af oprettelsestidspunktet: før 1. maj 2007 giver fast 60 år, 1. maj 2007 til 31. december 2017 giver fem år før folkepensionsalderen, og fra 1. januar 2018 tre år før. Det er aftaletidspunktet for oprettelsen der tæller, ikke hvornår der er indbetalt.
+Det regelsæt der fastlægger en ordnings pensionsudbetalingsalder, afgjort af oprettelsestidspunktet: `BeforeMay2007` giver fast 60 år, `May2007ToDecember2017` giver fem år før folkepensionsalderen, og `FromJanuary2018` tre år før. Det er aftaletidspunktet for oprettelsen der tæller, ikke hvornår der er indbetalt. De to sidste er relative, og en ordnings alder retter sig derfor af sig selv, når skønnet for ejerens folkepensionsalder ændres.
 _Avoid_: Overgangsregel, aldersgrænse, grandfathering
+
+**Oprettelsestidspunkt** · `OpenedOn`:
+År og måned for den aftale, der oprettede en pensionsordning. Det er den, `PayoutRegime` slås op på, og derfor står den kun på de tre varianter, der har et regime — en aktiesparekonto og frie midler har intet at have den i. Måneden er med, fordi begge lovskel falder midt i et år; dagen er ikke, fordi ingen af dem falder midt i en måned.
+_Avoid_: Oprettelsesdato, startdato, tegningstidspunkt, første indbetaling
+
+**Bevaret udbetalingsalder** · `PayoutAgeOverride`:
+Den lavere pensionsudbetalingsalder, en ordning har taget med sig gennem en overførsel, sat direkte på ordningen frem for udledt af dens `PayoutRegime`. Er den sat, vinder den. Findes, fordi en overført ordning kan bevare den alder, den blev oprettet under, uden at bære det oprettelsestidspunkt, der ville udlede den.
+_Avoid_: Manuel udbetalingsalder, undtagelse, dispensation
 
 **Folkepensionsalder** · `StatePensionAge`:
 Den lovbestemte alder hvor folkepensionen begynder, fastsat efter fødselsår. For fødselsår hvor den endnu ikke er vedtaget, er den et fremskrevet skøn, som bruges som det står — ændres skønnet, er det tabellen der rettes, ikke den enkelte person.

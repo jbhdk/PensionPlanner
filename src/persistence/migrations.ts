@@ -159,6 +159,43 @@ export const migrations: Migration[] = [
       return { ...plan, contributions: [] }
     },
   },
+  {
+    // v7 → v8, jf. issue #38: en pensionsordning bærer det tidspunkt, den
+    // blev oprettet på, og det er dét, der afgør, hvornår den lovligt må
+    // udbetales. En gemt plan har det ikke, og migrationen kan ikke gætte
+    // det — den vælger 1. januar 2018, det nyeste regime, som giver tre år
+    // før folkepensionsalderen. Det er den seneste af de tre aldre, så en
+    // gammel plan aldrig kommer til at se mere fri ud, end den er.
+    // Brugeren retter tidspunktet i beholdningens inspektør, hvis ordningen
+    // er ældre — samme greb som Hvidovre i v1 → v2.
+    //
+    // Varianterne står som tekst her og slås ikke op i varianttabellen: et
+    // led i kæden skal blive ved med at gøre det samme ved de samme data,
+    // også når tabellen ændrer sig.
+    from: 7,
+    migrate: (data) => {
+      const pensionSchemes = ['InstalmentPension', 'LifeAnnuity', 'OldAgeSavings']
+      const plan = data as {
+        household?: { persons?: Array<Record<string, unknown>> }
+        [key: string]: unknown
+      }
+
+      return {
+        ...plan,
+        household: {
+          persons: (plan.household?.persons ?? []).map((person) => ({
+            ...person,
+            holdings: ((person.holdings ?? []) as Array<Record<string, unknown>>).map(
+              (holding) =>
+                pensionSchemes.includes(holding.variant as string)
+                  ? { ...holding, openedOn: { year: 2018, month: 1 } }
+                  : holding,
+            ),
+          })),
+        },
+      }
+    },
+  },
 ]
 
 /** Kører kæden fra `fromVersion` til `toVersion`, ét led ad gangen. Rent og

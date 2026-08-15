@@ -1,4 +1,10 @@
-import type { Holding, HoldingVariant, Nominal } from './plan'
+import type {
+  Holding,
+  HoldingVariant,
+  Nominal,
+  PensionSchemeHolding,
+  PensionSchemeVariant,
+} from './plan'
 import type { RateYear, TaxRates } from './rates/rateYear'
 
 /** De varianter, der har et `Cap`. Ikke et begreb ved siden af
@@ -145,6 +151,38 @@ export type Cap = {
     derfor `<=` og ikke et interval, ganske som det ekstra pensionsfradrags
     egen 15-årsgrænse i `assessTax`. */
 const oldAgeSavingsHighCapFrom = 7
+
+/** De varianter, der er en `PensionScheme`. Skrevet som en udtømmende
+    tabel og ikke som en liste: en syvende variant med et oprettelsestidspunkt
+    får unionen til at kræve en række her, hvor en liste tavst kunne mangle
+    den. Rækkerne bærer ingen data — spørgsmålet er, om varianten står i
+    tabellen. */
+const pensionSchemeVariants: Record<PensionSchemeVariant, true> = {
+  InstalmentPension: true,
+  LifeAnnuity: true,
+  OldAgeSavings: true,
+}
+
+/** Om beholdningen er en pensionsordning — altså om den har et
+    oprettelsestidspunkt og dermed en `PayoutAge`. Svaret indsnævrer typen,
+    så `payoutAge` kan kaldes uden et cast.
+
+    Kategorien er hverken "ikke frie midler" eller "har et loft":
+    aktiesparekontoen er ingen af delene og har hverken regime eller
+    udbetalingsalder — ejeren hæver af den, når hun vil. */
+export function isPensionScheme(holding: Holding): holding is PensionSchemeHolding {
+  return isPensionSchemeVariant(holding.variant)
+}
+
+/** Samme spørgsmål stillet om varianten alene, ganske som
+    `isFreeAssetsVariant`: fladen spørger, før beholdningen har varianten —
+    et typeskift skal vide, om ordningen skal have et oprettelsestidspunkt
+    med, mens beholdningen endnu er den, den var. */
+export function isPensionSchemeVariant(
+  variant: HoldingVariant,
+): variant is PensionSchemeVariant {
+  return variant in pensionSchemeVariants
+}
 
 /** Om beholdningen er frie midler. `FreeAssets` er en kategori og ikke en
     variant, jf. ADR-0010: den dækker `ShareDepot` og `SavingsAccount` under

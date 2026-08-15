@@ -50,7 +50,15 @@ function aPlanWithPensionBetweenFreeHoldings(): Plan {
 }
 
 function aPensionHolding(id: string, name: string): Holding {
-  return { id, name, variant: 'InstalmentPension', balance: 0, grossReturn: 0, annualCostRate: 0 }
+  return {
+    id,
+    name,
+    variant: 'InstalmentPension',
+    openedOn: { year: 2018, month: 1 },
+    balance: 0,
+    grossReturn: 0,
+    annualCostRate: 0,
+  }
 }
 
 /** En aktiesparekonto. Personen kan kun have én, og en lønpost kan ikke være
@@ -82,6 +90,7 @@ function aPlanWithPension(): Plan {
         id: 'ratepension',
         name: 'Ratepension',
         variant: 'InstalmentPension',
+        openedOn: { year: 2018, month: 1 },
         balance: 2_000_000,
         grossReturn: 0.07,
         annualCostRate: 0.005,
@@ -646,6 +655,72 @@ describe('fladen', () => {
     const nettoafkast = lockedField('Nettoafkast')
     expect(nettoafkast.querySelector('.laast')!.textContent).toBe('6,50 %')
     expect(nettoafkast.textContent).toContain('udledt')
+  })
+
+  it('viser ordningens udbetalingsregime og den alder, det giver, som udledte felter', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithPension()} />)
+
+    await user.click(navigatorButton(/Ratepension/))
+
+    // Ordningen er oprettet i januar 2018, og ejeren er født i 1973 og har
+    // folkepensionsalder 70. Det nyeste regime giver tre år før — 67.
+    const regime = lockedField('Udbetalingsregime')
+    expect(regime.querySelector('.laast')!.textContent).toBe('1. januar 2018 eller senere')
+    expect(regime.textContent).toContain('udledt')
+
+    const alder = lockedField('Pensionsudbetalingsalder')
+    expect(alder.querySelector('.laast')!.textContent).toBe('67 år')
+    expect(alder.textContent).toContain('udledt')
+  })
+
+  it('flytter begge udledte felter, når oprettelsesåret skifter regime', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithPension()} />)
+
+    await user.click(navigatorButton(/Ratepension/))
+    const aar = screen.getByLabelText('Oprettet (år)')
+    await user.clear(aar)
+    await user.type(aar, '2005')
+
+    // Før 1. maj 2007 er alderen fast 60 og ser ikke på ejeren overhovedet.
+    expect(lockedField('Udbetalingsregime').querySelector('.laast')!.textContent).toBe(
+      'Før 1. maj 2007',
+    )
+    expect(lockedField('Pensionsudbetalingsalder').querySelector('.laast')!.textContent).toBe(
+      '60 år',
+    )
+  })
+
+  it('lader en bevaret udbetalingsalder slå igennem på det viste tal', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithPension()} />)
+
+    await user.click(navigatorButton(/Ratepension/))
+    await user.type(screen.getByLabelText('Bevaret udbetalingsalder'), '60')
+
+    // Regimet står stadig — det er jo det, ordningen blev oprettet under —
+    // men alderen er den bevarede.
+    expect(lockedField('Udbetalingsregime').querySelector('.laast')!.textContent).toBe(
+      '1. januar 2018 eller senere',
+    )
+    expect(lockedField('Pensionsudbetalingsalder').querySelector('.laast')!.textContent).toBe(
+      '60 år',
+    )
+  })
+
+  it('viser hverken oprettelsestidspunkt eller udbetalingsalder på en aktiesparekonto', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan({ holdings: [aShareSavingsAccount()] })} />)
+
+    await user.click(navigatorButton(/Aktiesparekonto/))
+
+    // Kontoen har intet regime: ejeren hæver af den, når hun vil, og et felt
+    // om en udbetalingsalder ville påstå en lovregel, der ikke findes.
+    expect(screen.queryByLabelText('Oprettet (år)')).toBeNull()
+    expect(
+      Array.from(document.querySelectorAll('.etiket')).map((e) => e.textContent),
+    ).not.toContain('Pensionsudbetalingsalder')
   })
 
   it('lader ikke bufferen udpeges til en pensionsbeholdning, og siger hvorfor', async () => {
@@ -1323,6 +1398,7 @@ describe('fladen', () => {
                     id: 'aldersopsparing',
                     name: 'Aldersopsparing',
                     variant: 'OldAgeSavings',
+                    openedOn: { year: 2018, month: 1 },
                     balance: 0,
                     grossReturn: 0,
                     annualCostRate: 0,
@@ -2329,6 +2405,7 @@ describe('fladen', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
+          openedOn: { year: 2018, month: 1 },
           balance: 1_000_000,
           grossReturn: 0.07,
           annualCostRate: 0.005,

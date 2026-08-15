@@ -30,16 +30,17 @@ describe('planFile', () => {
     expect(result.kind).toBe('Failed')
   })
 
-  it('bærer en plan med de tre pensionsvarianter hele vejen rundt, uden et nyt led i kæden', () => {
+  it('bærer en plan med de tre pensionsvarianter hele vejen rundt', () => {
     // En udvidet union er bagudkompatibel: en gemt plan fra etape 1 kender
     // ingen af de tre og skal indlæses uændret, og en plan der gør, skal
-    // kunne gemmes og hentes på samme skemaversion.
+    // kunne gemmes og hentes igen med sine egne felter i behold.
     const plan = aPlan({
       holdings: [
         {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
+          openedOn: { year: 2018, month: 1 },
           balance: 2_000_000,
           grossReturn: 0.06,
           annualCostRate: 0.005,
@@ -48,6 +49,7 @@ describe('planFile', () => {
           id: 'livrente',
           name: 'Livrente',
           variant: 'LifeAnnuity',
+          openedOn: { year: 2018, month: 1 },
           balance: 1_000_000,
           grossReturn: 0.05,
           annualCostRate: 0.004,
@@ -56,6 +58,7 @@ describe('planFile', () => {
           id: 'aldersopsparing',
           name: 'Aldersopsparing',
           variant: 'OldAgeSavings',
+          openedOn: { year: 2018, month: 1 },
           balance: 300_000,
           grossReturn: 0.07,
           annualCostRate: 0.006,
@@ -67,11 +70,12 @@ describe('planFile', () => {
 
     expect(result).toEqual({ kind: 'Loaded', plan })
     // Tallet er hårdkodet med vilje: flytter det sig, skal det være, fordi
-    // noget faktisk krævede et led i kæden. De tre varianter gjorde det ikke
-    // — det gjorde derimod v5 → v6, hvor overstyringen af
-    // folkepensionsalderen forsvandt, og v6 → v7, hvor planen fik sine
-    // indbetalinger.
-    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(7)
+    // noget faktisk krævede et led i kæden. At de tre varianter kom til,
+    // gjorde det ikke — det gjorde derimod v5 → v6, hvor overstyringen af
+    // folkepensionsalderen forsvandt, v6 → v7, hvor planen fik sine
+    // indbetalinger, og v7 → v8, hvor de tre ordninger fik det
+    // oprettelsestidspunkt, deres udbetalingsalder udledes af.
+    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(8)
   })
 
   it('bærer en plan med indbetalinger hele vejen rundt', () => {
@@ -97,6 +101,7 @@ describe('planFile', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
+          openedOn: { year: 2018, month: 1 },
           balance: 500_000,
           grossReturn: 0.06,
           annualCostRate: 0.005,
@@ -124,6 +129,7 @@ describe('planFile', () => {
           id: 'aldersopsparing',
           name: 'Aldersopsparing',
           variant: 'OldAgeSavings',
+          openedOn: { year: 2018, month: 1 },
           balance: 0,
           grossReturn: 0.04,
           annualCostRate: 0.004,

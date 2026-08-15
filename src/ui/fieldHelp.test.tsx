@@ -36,6 +36,7 @@ function aRichPlan(): Plan {
         id: 'ratepension',
         name: 'Ratepension',
         variant: 'InstalmentPension',
+        openedOn: { year: 2018, month: 1 },
         balance: 1_000_000,
         grossReturn: 0.04,
         annualCostRate: 0.005,

@@ -1,9 +1,16 @@
-import { isEmployerAdministered, isFreeAssets } from '../engine/holdingVariant'
+import {
+  isEmployerAdministered,
+  isFreeAssets,
+  isPensionScheme,
+  isPensionSchemeVariant,
+} from '../engine/holdingVariant'
 import type {
   Contribution,
   Direction,
   Entry,
   Holding,
+  HoldingVariant,
+  PensionSchemeHolding,
   Person,
   Plan,
   Transfer,
@@ -214,6 +221,46 @@ export function findHoldingOwner(plan: Plan, holdingId: string): Person | undefi
 
 /** Flytter en beholdning til en anden person: ud af den gamle ejers
     `holdings`, ind i den nyes. Beholdningen selv rører sig ikke. */
+/** Redigerer en beholdning, der er en pensionsordning, og lader den stå, hvis
+    den ikke er en. Formen findes, fordi `withHolding` giver hele unionen ind:
+    et oprettelsestidspunkt skrevet dér ville være et felt, halvdelen af
+    varianterne ikke har, og skuffen ville skulle caste sig ud af det. */
+export function withPensionScheme(
+  plan: Plan,
+  id: string,
+  change: (holding: PensionSchemeHolding) => PensionSchemeHolding,
+): Plan {
+  return withHolding(plan, id, (holding) =>
+    isPensionScheme(holding) ? change(holding) : holding,
+  )
+}
+
+/** Skifter beholdningens variant, og flytter med det de felter, den nye
+    variant har og den gamle ikke havde — eller omvendt.
+
+    Bliver beholdningen en pensionsordning, skal den have et
+    oprettelsestidspunkt: uden det er der intet regime at udlede
+    udbetalingsalderen af. Gættet er planens startår og januar, det nyeste
+    regime, og brugeren retter det i skuffen ved siden af. Bliver den til
+    noget, der ikke er en ordning, forsvinder både tidspunktet og en bevaret
+    alder igen — et felt, varianten ikke har, må ikke ligge og vente i det
+    gemte skema.
+
+    Skiftet fra én ordning til en anden bevarer begge dele: det ændrer
+    beskatningen på vejen ud, ikke hvornår ordningen blev oprettet. */
+export function withVariant(plan: Plan, id: string, variant: HoldingVariant): Plan {
+  return withHolding(plan, id, (holding) => {
+    const { openedOn, payoutAgeOverride, ...base } = holding as PensionSchemeHolding
+    if (!isPensionSchemeVariant(variant)) return { ...base, variant }
+    return {
+      ...base,
+      variant,
+      openedOn: openedOn ?? { year: plan.startYear, month: 1 },
+      ...(payoutAgeOverride === undefined ? {} : { payoutAgeOverride }),
+    }
+  })
+}
+
 export function withHoldingOwner(plan: Plan, holdingId: string, newOwnerId: string): Plan {
   const holding = findHolding(plan, holdingId)
   if (!holding) return plan

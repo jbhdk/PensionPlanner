@@ -1069,7 +1069,12 @@ describe('pensionsbeholdninger', () => {
       annualCostRate: 0.005,
     }
     const first = (variant: HoldingVariant) =>
-      simulateChecked(aPlan({ balance: 0, holdings: [{ ...holding, variant }] }))[0]!
+      simulateChecked(
+        aPlan({
+          balance: 0,
+          holdings: [{ ...holding, variant, openedOn: { year: 2018, month: 1 } }],
+        }),
+      )[0]!
 
     const fri = first('SavingsAccount')
     const ratepension = first('InstalmentPension')
@@ -1092,6 +1097,7 @@ describe('pensionsbeholdninger', () => {
             id: 'ratepension',
             name: 'Ratepension',
             variant: 'InstalmentPension' as const,
+            openedOn: { year: 2018, month: 1 },
             balance: 1_000_000,
             grossReturn: 0,
             annualCostRate: 0,
@@ -1116,6 +1122,7 @@ describe('pensionsbeholdninger', () => {
             id: 'ratepension',
             name: 'Ratepension',
             variant: 'InstalmentPension' as const,
+            openedOn: { year: 2018, month: 1 },
             balance: 1_000_000,
             grossReturn: 0,
             annualCostRate: 0,
@@ -1144,6 +1151,7 @@ describe('beholdningsskat', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
+          openedOn: { year: 2018, month: 1 },
           balance: 1_000_000,
           grossReturn: 0.07,
           annualCostRate: 0.005,
@@ -1174,6 +1182,7 @@ describe('beholdningsskat', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
+          openedOn: { year: 2018, month: 1 },
           balance: 1_000_000,
           grossReturn: 0.07,
           annualCostRate: 0.005,
@@ -1197,6 +1206,7 @@ describe('beholdningsskat', () => {
             id: 'ordning',
             name: 'Ordning',
             variant,
+            openedOn: { year: 2018, month: 1 },
             balance: 500_000,
             grossReturn: 0.06,
             annualCostRate: 0.01,
@@ -1298,6 +1308,7 @@ describe('beholdningsskat', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
+          openedOn: { year: 2018, month: 1 },
           balance: 1_000_000,
           grossReturn: -0.1,
           annualCostRate: 0,
@@ -1323,6 +1334,7 @@ describe('beholdningsskat', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
+          openedOn: { year: 2018, month: 1 },
           balance: 1_000_000,
           grossReturn: 0.07,
           annualCostRate: 0.005,
@@ -1540,6 +1552,7 @@ describe('aktiesparekontoen', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
+          openedOn: { year: 2018, month: 1 },
           balance: 0,
           grossReturn: 0,
           annualCostRate: 0,
@@ -1778,6 +1791,7 @@ describe('aktiesparekontoen', () => {
             id: 'ratepension',
             name: 'Ratepension',
             variant: 'InstalmentPension',
+            openedOn: { year: 2018, month: 1 },
             balance: 0,
             grossReturn: 0,
             annualCostRate: 0,
@@ -1889,12 +1903,14 @@ describe('indbetalinger', () => {
     id: 'ratepension',
     name: 'Ratepension',
     variant: 'InstalmentPension',
+    openedOn: { year: 2018, month: 1 },
   } as const
   const lifeAnnuity = { id: 'livrente', name: 'Livrente', variant: 'LifeAnnuity' } as const
   const oldAgeSavings = {
     id: 'aldersopsparing',
     name: 'Aldersopsparing',
     variant: 'OldAgeSavings',
+    openedOn: { year: 2018, month: 1 },
   } as const
 
   /** Fixturens buffer plus én ordning at betale ind i. Uden afkast, med
@@ -1908,6 +1924,7 @@ describe('indbetalinger', () => {
       holdings: [
         {
           ...scheme,
+          openedOn: { year: 2018, month: 1 },
           balance: 0,
           grossReturn: options.grossReturn ?? 0,
           annualCostRate: options.annualCostRate ?? 0,
@@ -2324,6 +2341,7 @@ describe('indbetalinger', () => {
             id: 'ratepension-2',
             name: 'Ratepension 2',
             variant: 'InstalmentPension',
+            openedOn: { year: 2018, month: 1 },
             balance: 0,
             grossReturn: 0,
             annualCostRate: 0,
@@ -2831,6 +2849,7 @@ describe('indbetalingens pegere', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
+          openedOn: { year: 2018, month: 1 },
           balance: 0,
           grossReturn: 0,
           annualCostRate: 0,
@@ -2902,6 +2921,7 @@ describe('indbetalingens pegere', () => {
                 id: 'marias-ratepension',
                 name: 'Marias ratepension',
                 variant: 'InstalmentPension',
+                openedOn: { year: 2018, month: 1 },
                 balance: 0,
                 grossReturn: 0,
                 annualCostRate: 0,
@@ -2952,6 +2972,7 @@ describe('indbetalingens pegere', () => {
                 id: 'aldersopsparing',
                 name: 'Aldersopsparing',
                 variant: 'OldAgeSavings',
+                openedOn: { year: 2018, month: 1 },
                 balance: 0,
                 grossReturn: 0,
                 annualCostRate: 0,
@@ -2994,6 +3015,7 @@ describe('indbetalingens pegere', () => {
                 id: 'marias-ratepension',
                 name: 'Marias ratepension',
                 variant: 'InstalmentPension',
+                openedOn: { year: 2018, month: 1 },
                 balance: 0,
                 grossReturn: 0,
                 annualCostRate: 0,

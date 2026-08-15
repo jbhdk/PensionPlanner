@@ -1,3 +1,4 @@
+import type { PayoutRegime } from '../engine/payoutAge'
 import type {
   Anchor,
   Direction,
@@ -28,6 +29,14 @@ export const variants: Record<string, HoldingVariant> = {
   Aktiesparekonto: 'ShareSavingsAccount',
   Aktiedepot: 'ShareDepot',
   Opsparingskonto: 'SavingsAccount',
+}
+
+/** Udbetalingsregimerne, skrevet som de lovskel de er. Kortet går kun én vej:
+    et regime vælges ikke, det følger af, hvornår ordningen blev oprettet. */
+export const payoutRegimes: Record<PayoutRegime, string> = {
+  BeforeMay2007: 'Før 1. maj 2007',
+  May2007ToDecember2017: '1. maj 2007 – 31. december 2017',
+  FromJanuary2018: '1. januar 2018 eller senere',
 }
 
 export const treatments: Record<string, TaxTreatment> = {

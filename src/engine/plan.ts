@@ -39,17 +39,44 @@ type HoldingBase = {
   annualCostRate: number
 }
 
-/** En diskrimineret union på `variant`. De seks medlemmer er ens i dag, og
-    formen er valgt for det, de bliver: livrentens omsætningsfelter hænger på
-    sit eget medlem i etape 3, hvor de først har noget at lave. Et dødt felt i
-    det gemte skema er en løgn, der aldrig fejler, jf. ADR-0015. */
+/** År og måned for den aftale, der oprettede en pensionsordning. Dagen er
+    ikke med: begge lovskel falder på den første i en måned, og en dag mere
+    ville være et felt, ingen kan svare rigtigt på. */
+export type OpenedOn = { year: number; month: number }
+
+/** Det, en `PensionScheme` bærer ud over `HoldingBase`. Felterne hænger på de
+    tre varianter og aldrig på grundformen: en aktiesparekonto og frie midler
+    har ingen udbetalingsalder, og et felt, de aldrig bruger, er en løgn i det
+    gemte skema, jf. ADR-0015. */
+type PensionScheme = {
+  openedOn: OpenedOn
+  /** Sat alene i de overførselstilfælde, hvor en lavere alder er bevaret.
+      Er den sat, vinder den over den udledte. */
+  payoutAgeOverride?: number
+}
+
+/** En diskrimineret union på `variant`. De tre pensionsordninger bærer
+    `PensionScheme`, de tre øvrige gør ikke — og formen er valgt for det, den
+    bliver: livrentens omsætningsfelter hænger på sit eget medlem i etape 3,
+    hvor de først har noget at lave. Et dødt felt i det gemte skema er en
+    løgn, der aldrig fejler, jf. ADR-0015. */
 export type Holding =
-  | (HoldingBase & { variant: 'InstalmentPension' })
-  | (HoldingBase & { variant: 'LifeAnnuity' })
-  | (HoldingBase & { variant: 'OldAgeSavings' })
+  | (HoldingBase & PensionScheme & { variant: 'InstalmentPension' })
+  | (HoldingBase & PensionScheme & { variant: 'LifeAnnuity' })
+  | (HoldingBase & PensionScheme & { variant: 'OldAgeSavings' })
   | (HoldingBase & { variant: 'ShareSavingsAccount' })
   | (HoldingBase & { variant: 'ShareDepot' })
   | (HoldingBase & { variant: 'SavingsAccount' })
+
+/** De medlemmer af unionen, der er en `PensionScheme`. Udledt af unionen selv
+    frem for skrevet som en liste ved siden af den: en syvende variant med et
+    oprettelsestidspunkt er med af sig selv, og en liste kunne komme ud af
+    trit med det, typen bærer. */
+export type PensionSchemeHolding = Extract<Holding, { openedOn: OpenedOn }>
+
+/** De varianter, en `PensionSchemeHolding` kan have. Udledt af unionen på
+    samme måde og af samme grund. */
+export type PensionSchemeVariant = PensionSchemeHolding['variant']
 
 export type Person = {
   id: PersonId

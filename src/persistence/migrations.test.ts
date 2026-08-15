@@ -294,3 +294,54 @@ describe('v6 → v7: planen bærer indbetalinger', () => {
     expect(migrated.entries).toHaveLength(1)
   })
 })
+
+describe('v7 → v8: pensionsordningerne bærer et oprettelsestidspunkt', () => {
+  it('giver de tre pensionsvarianter 1. januar 2018 og lader de øvrige stå uden', () => {
+    // Oprettelsestidspunktet afgør, hvilket regime ordningen falder i, og
+    // en gemt plan har det ikke. Gættet er det nyeste regime — tre år før
+    // folkepensionsalderen, den seneste af de tre aldre — så en plan aldrig
+    // bliver mere optimistisk, end virkeligheden tillader. Brugeren retter
+    // tidspunktet i inspektøren, som hun retter kommunen efter v1 → v2.
+    //
+    // En aktiesparekonto og frie midler får ingenting: de har ingen
+    // udbetalingsalder, og et felt, de aldrig bruger, er en løgn i skemaet.
+    const v7: unknown = {
+      name: 'Gammel plan',
+      startYear: 2026,
+      buffer: 'free-assets',
+      transfers: [],
+      entries: [],
+      contributions: [],
+      household: {
+        persons: [
+          {
+            id: 'jesper',
+            holdings: [
+              { id: 'free-assets', name: 'Frie midler', variant: 'SavingsAccount', balance: 100 },
+              { id: 'aktiesparekonto', name: 'ASK', variant: 'ShareSavingsAccount', balance: 200 },
+              { id: 'ratepension', name: 'Ratepension', variant: 'InstalmentPension', balance: 300 },
+              { id: 'livrente', name: 'Livrente', variant: 'LifeAnnuity', balance: 400 },
+              { id: 'aldersopsparing', name: 'Aldersopsparing', variant: 'OldAgeSavings', balance: 500 },
+            ],
+          },
+        ],
+      },
+    }
+
+    const migrated = runMigrations(v7, 7, 8, migrations) as {
+      household: { persons: Array<{ holdings: Array<Record<string, unknown>> }> }
+    }
+
+    const holdings = migrated.household.persons[0]!.holdings
+    expect(holdings.map((holding) => holding.openedOn)).toEqual([
+      undefined,
+      undefined,
+      { year: 2018, month: 1 },
+      { year: 2018, month: 1 },
+      { year: 2018, month: 1 },
+    ])
+    // Migrationen tilføjer ét felt og bygger ikke beholdningen om.
+    expect(holdings[2]!.balance).toBe(300)
+    expect(holdings[2]!.name).toBe('Ratepension')
+  })
+})

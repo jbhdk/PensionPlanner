@@ -3,6 +3,7 @@ import type {
   Entry,
   Holding,
   HoldingVariant,
+  OpenedOn,
   Municipality,
   Period,
   Plan,
@@ -29,6 +30,9 @@ type Options = {
   holdings?: Holding[]
   grossReturn?: number
   annualCostRate?: number
+  /** Bufferbeholdningens oprettelsestidspunkt. Bruges kun, når `variant` er
+      en pensionsordning — de tre øvrige varianter har ikke feltet. */
+  openedOn?: OpenedOn
   entries?: Entry[]
   transfers?: Transfer[]
   contributions?: Contribution[]
@@ -59,6 +63,7 @@ export function aPlan(options: Options = {}): Plan {
     horizon = 90,
     balance = 1_000_000,
     variant = 'SavingsAccount',
+    openedOn = { year: 2018, month: 1 },
     holdings = [],
     grossReturn = 0,
     annualCostRate = 0,
@@ -91,19 +96,36 @@ export function aPlan(options: Options = {}): Plan {
           municipality,
           churchMember,
           holdings: [
-            {
-              id: 'free-assets',
-              name: 'Frie midler',
-              variant,
-              balance,
-              grossReturn,
-              annualCostRate,
-            },
+            bufferHolding({ variant, balance, grossReturn, annualCostRate, openedOn }),
             ...holdings,
           ],
         },
       ],
     },
+  }
+}
+
+/** Fixturens første beholdning. Oprettelsestidspunktet skrives kun, når
+    varianten er en pensionsordning: de tre øvrige varianter har ikke feltet,
+    og en fixture, der gav dem det alligevel, ville skrive en plan, typen
+    ikke tillader — og dermed skjule netop det, felternes plads i unionen er
+    til for. */
+function bufferHolding(options: {
+  variant: HoldingVariant
+  balance: number
+  grossReturn: number
+  annualCostRate: number
+  openedOn: OpenedOn
+}): Holding {
+  const { variant, openedOn, ...rest } = options
+  const base = { id: 'free-assets', name: 'Frie midler', ...rest }
+  switch (variant) {
+    case 'InstalmentPension':
+    case 'LifeAnnuity':
+    case 'OldAgeSavings':
+      return { ...base, variant, openedOn }
+    default:
+      return { ...base, variant }
   }
 }
 
