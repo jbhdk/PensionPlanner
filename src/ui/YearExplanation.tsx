@@ -328,7 +328,8 @@ function CapsBlock({
             <th>Indbetalt</th>
             <th>Loft</th>
             <th>Med fradragsret</th>
-            <th>Note</th>
+            {/* Noten er prosa og venstrestillet — hovedet følger sin kolonne. */}
+            <th className="note">Note</th>
           </tr>
         </thead>
         <tbody>

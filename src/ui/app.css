@@ -778,56 +778,6 @@ table.aar td.formue {
   font-weight: 600;
 }
 
-/* Loftlinjerne står under indbetalingerne i forklar-året: samme bredde og
-   samme talkolonner, så de tre tal kan læses ned ad siden sammen med det,
-   der landede. */
-table.lofttabel {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 6px;
-}
-
-table.lofttabel th,
-table.lofttabel td {
-  padding: 3px 8px 3px 0;
-  text-align: right;
-  border-bottom: 1px solid var(--linje-svag);
-}
-
-table.lofttabel th:first-child,
-table.lofttabel td:first-child {
-  text-align: left;
-}
-
-table.lofttabel th {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--label);
-  letter-spacing: 0.04em;
-}
-
-table.lofttabel td {
-  font-family: var(--f-tal);
-  font-size: 11.5px;
-}
-
-table.lofttabel td:first-child {
-  font-family: var(--f-broed);
-}
-
-/* Noten står som prosa ved siden af tallene: venstrestillet og dæmpet, så
-   den ikke læses som en fjerde talkolonne. */
-table.lofttabel td.note {
-  text-align: left;
-  font-family: var(--f-broed);
-  font-size: 11px;
-  color: var(--muted);
-}
-
-table.lofttabel .enhed {
-  color: var(--muted);
-}
-
 /* Et brudt loft markeres i den kolonne, det handler om, og i sin egen tone.
    Rød er forbeholdt den negative buffer: et brudt loft er ikke en
    fejltilstand, men en oplysning om, at en del af indbetalingen ikke
@@ -1018,6 +968,14 @@ table.aar td .fremskrevet {
   color: #8e99a6;
 }
 
+/* En kasse med to afsnit — indbetalingerne og lofterne under dem — skal
+   have luft mellem tabellen og den næste overskrift, ellers klistrer
+   overskriften op ad rækken over den. Kun den første overskrift hugger
+   kassens overkant. */
+.blok > h3:not(:first-child) {
+  margin-top: 16px;
+}
+
 /* Stribeposten genbruges inde i en blok som en almindelig etiket/værdi-række
    i stedet for stribens segmenter, jf. `.balancestribe .stribepost`. */
 .stribepost {
@@ -1039,7 +997,9 @@ table.aar td .fremskrevet {
 
 .lagtabel,
 .beholdningstabel,
-.postertabel {
+.postertabel,
+.indbetalingstabel,
+.lofttabel {
   width: 100%;
   margin-top: 10px;
   border-collapse: collapse;
@@ -1049,7 +1009,9 @@ table.aar td .fremskrevet {
 
 .lagtabel th,
 .beholdningstabel th,
-.postertabel th {
+.postertabel th,
+.indbetalingstabel th,
+.lofttabel th {
   text-align: right;
   padding: 4px 8px;
   font-family: var(--f-broed);
@@ -1064,7 +1026,9 @@ table.aar td .fremskrevet {
 
 .lagtabel td,
 .beholdningstabel td,
-.postertabel td {
+.postertabel td,
+.indbetalingstabel td,
+.lofttabel td {
   text-align: right;
   padding: 3px 8px;
   font-size: 12px;
@@ -1077,9 +1041,32 @@ table.aar td .fremskrevet {
 .beholdningstabel th:first-child,
 .beholdningstabel td:first-child,
 .postertabel th:first-child,
-.postertabel td:first-child {
+.postertabel td:first-child,
+.indbetalingstabel th:first-child,
+.indbetalingstabel td:first-child,
+.lofttabel th:first-child,
+.lofttabel td:first-child {
   text-align: left;
   font-family: var(--f-broed);
+}
+
+/* Loftlinjernes note er prosa og ikke en talkolonne: venstrestillet, dæmpet
+   og den eneste celle i forklar-året, der må ombryde. */
+.lofttabel th.note,
+.lofttabel td.note {
+  text-align: left;
+}
+
+.lofttabel td.note {
+  font-family: var(--f-broed);
+  white-space: normal;
+  color: var(--muted);
+}
+
+/* Ejeren står som en dæmpet tilføjelse til ordningens navn, ikke som en
+   kolonne for sig — loftet er personens, og navnet bærer begge dele. */
+.lofttabel .enhed {
+  color: var(--muted);
 }
 
 .lagtabel tr.sum td {
