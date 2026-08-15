@@ -30,9 +30,9 @@ function assess(input: Partial<TaxAssessmentInput>) {
   return household(input).tax
 }
 
-/** Personens egen marginalskat. */
+/** Personens to marginalskatter — én pr. indkomstart. */
 function marginal(input: Partial<TaxAssessmentInput>) {
-  return household(input).marginalTaxRate
+  return household(input).marginal
 }
 
 describe('skatteopgørelsen', () => {
@@ -47,6 +47,42 @@ describe('skatteopgørelsen', () => {
     // den kolonne, § 20 regulerer. Bytter man de to om, flytter topskattens
     // start sig med 67.600 kr.
     expect(assess({ earnedIncome: 500_000 }).personalIncome).toBeCloseTo(460_000, 6)
+  })
+
+  it('lægger pensionsindkomsten til den personlige indkomst', () => {
+    // Pensionsindkomsten går ind i den personlige indkomst uden om
+    // AM-bidraget: bidraget er betalt på vejen ind i ordningen. 500.000 i
+    // løn giver 460.000 efter AM-bidrag, og de 200.000 lægges oveni hele.
+    expect(
+      assess({ earnedIncome: 500_000, pensionIncome: 200_000 }).personalIncome,
+    ).toBeCloseTo(660_000, 6)
+  })
+
+  it('udløser hverken AM-bidrag eller de to arbejdsfradrag af pensionsindkomst', () => {
+    // Bidraget er betalt på vejen ind i ordningen, og de to fradrag følger
+    // arbejde. Målte de på pensionsindkomsten, fik en pensionist
+    // beskæftigelsesfradrag, og et arbejdsår kunne ikke sammenlignes med et
+    // pensionsår.
+    const assessment = assess({ pensionIncome: 400_000 })
+
+    expect(assessment.layers.labourMarketContribution.amount).toBe(0)
+    expect(assessment.allowances.employmentAllowance).toBe(0)
+    expect(assessment.allowances.jobAllowance).toBe(0)
+    // Og den er stadig fuldt ud personlig indkomst: intet af de tre nul
+    // skyldes, at beløbet aldrig kom ind.
+    expect(assessment.personalIncome).toBeCloseTo(400_000, 6)
+  })
+
+  it('lader pensionsindkomsten løfte progressionslagene som arbejdsindkomst gør', () => {
+    // Lagene måler på den personlige indkomst og spørger ikke, hvor den kom
+    // fra. 800.000 i ren pensionsindkomst ligger over både mellem- og
+    // topskattegrænsen, og grænserne er de samme som for en lønmodtager —
+    // uden kommuneskat binder loftet ikke.
+    const { layers } = assess({ pensionIncome: 800_000 })
+
+    expect(layers.middleBracketTax.base).toBeCloseTo(800_000 - 641_200, 6)
+    expect(layers.topBracketTax.base).toBeCloseTo(800_000 - 777_900, 6)
+    expect(layers.additionalTopBracketTax.base).toBe(0)
   })
 
   it('beregner bundskat af den personlige indkomst efter personfradrag', () => {
@@ -584,7 +620,7 @@ describe('lagenes grundlag og sats', () => {
   })
 })
 
-describe('marginalTaxRate', () => {
+describe('marginalTaxRates', () => {
   it('regner den sammensatte marginalskat som skatten af én krone mere lønindkomst', () => {
     // 900.000 kr. i løn ligger over begge fradragslofter (jf. "stopper
     // beskæftigelsesfradraget/jobfradraget ved sit maksimum" ovenfor) og over
@@ -596,6 +632,7 @@ describe('marginalTaxRate', () => {
     // 8 % AM-bidrag + 92 % × (12,01 % bund + 7,50 % mellem + 7,50 % top + 22 % kommune)
     // = 8 % + 92 % × 49,01 % = 53,0892 %.
     const rate = marginal({ earnedIncome: 900_000, municipalTaxRate: 0.22, churchTaxRate: 0 })
+      .earnedIncome
 
     expect(rate).toBeCloseTo(0.530892, 6)
   })
@@ -604,8 +641,16 @@ describe('marginalTaxRate', () => {
     // 641.199 kr. i personlig indkomst (697.999,89 i løn) ligger lige under
     // mellemskattegrænsen; én krone mere krydser den. Marginalskatten skal
     // derfor være højere end AM-bidraget plus bundskatten alene.
-    const belowThreshold = marginal({ earnedIncome: 600_000, municipalTaxRate: 0.254, churchTaxRate: 0.0074 })
-    const acrossThreshold = marginal({ earnedIncome: 750_000, municipalTaxRate: 0.254, churchTaxRate: 0.0074 })
+    const belowThreshold = marginal({
+      earnedIncome: 600_000,
+      municipalTaxRate: 0.254,
+      churchTaxRate: 0.0074,
+    }).earnedIncome
+    const acrossThreshold = marginal({
+      earnedIncome: 750_000,
+      municipalTaxRate: 0.254,
+      churchTaxRate: 0.0074,
+    }).earnedIncome
 
     expect(acrossThreshold).toBeGreaterThan(belowThreshold)
   })
@@ -620,18 +665,41 @@ describe('marginalTaxRate', () => {
 
     // 690.000 i personlig indkomst — over mellemskattegrænsen, under
     // topskattens.
-    expect(marginal({ earnedIncome: 750_000, municipalTaxRate: 0.254, churchTaxRate: 0 })).toBeCloseTo(
-      ceiling(0.4457),
-      6,
-    )
+    expect(
+      marginal({ earnedIncome: 750_000, municipalTaxRate: 0.254, churchTaxRate: 0 })
+        .earnedIncome,
+    ).toBeCloseTo(ceiling(0.4457), 6)
     // 874.000 — over topskattegrænsen, under top-topskattens.
-    expect(marginal({ earnedIncome: 950_000, municipalTaxRate: 0.254, churchTaxRate: 0 })).toBeCloseTo(
-      ceiling(0.5207),
-      6,
-    )
+    expect(
+      marginal({ earnedIncome: 950_000, municipalTaxRate: 0.254, churchTaxRate: 0 })
+        .earnedIncome,
+    ).toBeCloseTo(ceiling(0.5207), 6)
     // 2.760.000 — over top-topskattegrænsen.
     expect(
-      marginal({ earnedIncome: 3_000_000, municipalTaxRate: 0.254, churchTaxRate: 0 }),
+      marginal({ earnedIncome: 3_000_000, municipalTaxRate: 0.254, churchTaxRate: 0 })
+        .earnedIncome,
     ).toBeCloseTo(ceiling(0.5707), 6)
+  })
+
+  it('svarer med hver sin sats på de to indkomstarter', () => {
+    // De to spørgsmål er ikke det samme, og forskellen er hele grunden til,
+    // at der står to satser: 900.000 i løn og 200.000 i pensionsindkomst
+    // giver 1.028.000 i personlig indkomst — over topskattegrænsen, under
+    // top-topskattens — og 22 % kommuneskat lader loftet være.
+    //
+    // Næste lønkrone:      8 % AM + 92 % × (12,01 + 7,50 + 7,50 + 22) %
+    // Næste pensionskrone: (12,01 + 7,50 + 7,50 + 22) %, uden AM-bidrag
+    //
+    // Begge fradragslofter er nået ved 900.000 i løn, så ingen af fradragene
+    // rører sig med kronen i nogen af de to retninger.
+    const rates = marginal({
+      earnedIncome: 900_000,
+      pensionIncome: 200_000,
+      municipalTaxRate: 0.22,
+      churchTaxRate: 0,
+    })
+
+    expect(rates.earnedIncome).toBeCloseTo(0.08 + 0.92 * 0.4901, 6)
+    expect(rates.pensionIncome).toBeCloseTo(0.4901, 6)
   })
 })

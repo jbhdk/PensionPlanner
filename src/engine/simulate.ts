@@ -22,6 +22,7 @@ import type {
   Plan,
   Recurrence,
   SimulationYear,
+  TaxTreatment,
   Timing,
   Transfer,
 } from './plan'
@@ -219,7 +220,7 @@ function simulateYear(
       shareIncome: shareIncomeByPerson.get(person.id)!,
       capitalIncome: capitalIncomeByPerson.get(person.id)!,
       tax: household.persons[index]!.tax,
-      marginalTaxRate: household.persons[index]!.marginalTaxRate,
+      marginal: household.persons[index]!.marginal,
       caps: contributionsByPersonId.get(person.id)!.caps,
     })),
     shareIncomeTax: household.shareIncomeTax,
@@ -568,6 +569,13 @@ function shortenToHeadroom(
     personens bopælskommune. Kirkeskatten slås fra ved at regne med nul, når
     personen ikke er medlem af folkekirken.
 
+    Årets indtægtsposter deles op efter deres skattebehandling og krydser
+    sømmet som hver sit tal: arbejdsindkomsten bærer AM-bidrag og de to
+    arbejdsfradrag, pensionsindkomsten ingen af delene. Lagt sammen ville en
+    pensionist få beskæftigelsesfradrag. En `TaxFree`-post krydser slet ikke
+    — den har intet at gøre i nogen af de to summer. Pensionsindkomsten
+    udelades, når året ingen har, ligesom indbetalingen gør.
+
     Årets indbetaling med `Deductibility` går med som ét tal og udelades, når
     den er nul — så står året uden indbetaling, og fradraget følger
     indbetalingen frem for personen. Årstællingen frem til
@@ -586,22 +594,25 @@ function taxInput(
   year: SimulationYear,
   ofPerson: { capitalIncome: Nominal; withDeductibility: Nominal },
 ): TaxAssessmentInput {
-  const earnedIncome = entries
-    .filter(
-      ({ entry }) =>
-        entry.direction === 'Income' &&
-        entry.owner === person.id &&
-        entry.taxTreatment === 'EarnedIncome',
-    )
-    .reduce((sum, { amount }) => sum + amount, 0)
+  const ownIncome = (taxTreatment: TaxTreatment) =>
+    entries
+      .filter(
+        ({ entry }) =>
+          entry.direction === 'Income' &&
+          entry.owner === person.id &&
+          entry.taxTreatment === taxTreatment,
+      )
+      .reduce((sum, { amount }) => sum + amount, 0)
 
+  const pensionIncome = ownIncome('PensionIncome')
   const municipalTax = rates.municipalTax.rates[person.municipality]!
 
   return {
-    earnedIncome,
+    earnedIncome: ownIncome('EarnedIncome'),
     municipalTaxRate: municipalTax.municipalTaxRate,
     churchTaxRate: person.churchMember ? municipalTax.churchTaxRate : 0,
     capitalIncome: ofPerson.capitalIncome,
+    ...(pensionIncome > 0 ? { pensionIncome } : {}),
     ...(ofPerson.withDeductibility > 0
       ? {
           contribution: {

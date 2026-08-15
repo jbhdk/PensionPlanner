@@ -8,7 +8,7 @@ import type {
 } from './plan'
 import type { CappedVariant } from './holdingVariant'
 import type { ShareIncomeLayer } from './tax/assessHousehold'
-import type { LayerAmount, TaxAssessment } from './tax/assessTax'
+import type { LayerAmount, MarginalTaxRates, TaxAssessment } from './tax/assessTax'
 
 /** Hvorfor bufferen er negativ i ét simuleringsår, jf. ADR-0008:
     `Incomplete`, når husstanden har likviditet andetsteds og blot mangler en
@@ -148,10 +148,15 @@ export type PersonYear = {
   shareIncome: Nominal
   capitalIncome: Nominal
   tax: TaxAssessment
-  /** Hvad næste krone lønindkomst koster netop denne person i netop dette
-      år — se `marginalTaxRate`. Aktie- og kapitalindkomst har flade satser
-      og har ikke en marginal at vise. */
-  marginalTaxRate: number
+  /** Personens marginalskat på hver sin indkomstart — hvad næste krone
+      arbejdsindkomst koster, og hvad næste krone pensionsindkomst koster.
+      De to er sjældent ens: lønkronen bærer AM-bidrag og kan flytte et af
+      arbejdsfradragene, hvor pensionskronen gør ingen af delene. Se
+      `marginalTaxRates`.
+
+      Aktie- og kapitalindkomst har flade satser og har ikke en marginal at
+      vise. */
+  marginal: MarginalTaxRates
   /** Årets loftlinjer, én pr. slags loftbelagt ordning personen indbetalte
       til. Tom, når året ingen sådan indbetaling havde. Konklusionen — om et
       loft rent faktisk er brudt — står ét sted, på `YearResult`, så fladen

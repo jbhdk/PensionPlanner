@@ -105,9 +105,20 @@ export type Household = {
 /** Om en post lægger til eller trækker fra husstandens pengestrøm. */
 export type Direction = 'Income' | 'Expense'
 
-/** Det skattemæssige spor en indtægtspost lander i. `EarnedIncome` er
-    AM-pligtig og indgår i den personlige indkomst; `TaxFree` beskattes ikke. */
-export type TaxTreatment = 'EarnedIncome' | 'TaxFree'
+/** Det skattemæssige spor en indtægtspost lander i. Hver værdi bærer hele
+    indkomstens skattemæssige opførsel og ikke ét enkelt træk — derfor er de
+    tre værdier og ikke tre felter.
+
+    `EarnedIncome` er AM-pligtig, indgår i den personlige indkomst, giver
+    beskæftigelses- og jobfradrag og aftrapper ikke pensionstillægget.
+    `PensionIncome` indgår i den personlige indkomst uden AM-bidrag, giver
+    ingen af de to fradrag og tæller i `TaperBase` — det sidste har endnu
+    ingen virkning, men værdien bærer det fra starten, så den ikke skal
+    omdefineres, når aftrapningen bygges. `TaxFree` beskattes ikke.
+
+    ATP skrives med `PensionIncome`; der findes ingen `Benefit`-figur i
+    planen, jf. ADR-0023. */
+export type TaxTreatment = 'EarnedIncome' | 'PensionIncome' | 'TaxFree'
 
 /** Hvornår inden for året en strøm falder. Oversættes til en vægt på årets
     afkast, aldrig til et tidsskridt: `'Even'` giver ½, måned N giver

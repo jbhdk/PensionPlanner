@@ -43,6 +43,21 @@ export type TaxAssessmentInput = {
       indkomst, og positiv kapitalindkomst tillægges desuden bundskattens og
       topskattens grundlag, jf. ADR-0010. */
   capitalIncome?: Nominal
+  /** Årets personlige indkomst, der ikke er AM-bidragspligtig — udbetalinger
+      fra ratepension og livrente, folkepension og ATP. Udelades, når året
+      ingen har.
+
+      Den krydser sømmet som sit eget tal og ikke lagt sammen med
+      `earnedIncome`, fordi de to opfører sig forskelligt: AM-bidraget,
+      beskæftigelsesfradraget og jobfradraget måler på arbejdsindkomsten
+      alene. Lagt sammen ville en pensionist få beskæftigelsesfradrag, og
+      hele sammenligningen mellem et arbejdsår og et pensionsår ville være
+      skæv.
+
+      Det er den skatterelevante gruppering og aldrig beholdningsmodellen,
+      der krydser sømmet — ganske som `contribution.withDeductibility`:
+      opgørelsen her ser aldrig en `HoldingVariant`. */
+  pensionIncome?: Nominal
 }
 
 /** Trappen: hvert progressionslag parret med det trin på det skrå skatteloft,
@@ -108,6 +123,13 @@ export type TaxAssessment = {
       for at fladen skal udlede den som en difference, jf. ADR-0012. Nul i et
       år uden en indbetaling med `Deductibility`. */
   contributionWithDeductibility: Nominal
+  /** Den del af den personlige indkomst, der ikke bar AM-bidrag. Står ved
+      siden af `personalIncome` af samme grund som
+      `contributionWithDeductibility`: vejen dertil skal kunne efterregnes i
+      hånden — bruttoløn − AM-bidrag − fradragsret + denne — frem for at
+      fladen skal udlede den som en difference, jf. ADR-0012. Nul i et år
+      uden pensionsindkomst. */
+  pensionIncome: Nominal
   /** Personlig indkomst efter de ligningsmæssige fradrag. Grundlaget for
       kommune- og kirkeskat alene. */
   taxableIncome: Nominal
@@ -137,8 +159,15 @@ export function assessTax(
   // allerede regnet af hele bruttolønnen ovenfor og rører sig ikke — det er
   // sådan loven måler, og det er derfor de to tal ikke er det samme.
   const contributionWithDeductibility = input.contribution?.withDeductibility ?? 0
+  // Pensionsindkomsten lægges til efter AM-bidraget og efter fradragsretten:
+  // ingen af de to måler på den. Bidraget er betalt på vejen ind i
+  // ordningen, og en indbetaling nedsætter kun det, den blev holdt uden for.
+  const pensionIncome = input.pensionIncome ?? 0
   const personalIncome =
-    input.earnedIncome - labourMarketContribution - contributionWithDeductibility
+    input.earnedIncome -
+    labourMarketContribution -
+    contributionWithDeductibility +
+    pensionIncome
 
   const allowances = {
     employmentAllowance: employmentAllowance(input, rates),
@@ -161,6 +190,7 @@ export function assessTax(
     rateYear: rates.year,
     personalIncome,
     contributionWithDeductibility,
+    pensionIncome,
     taxableIncome,
     allowances,
     layers: {
@@ -259,22 +289,35 @@ export function totalTax(assessment: TaxAssessment): Nominal {
   return fromLayers + fromCapitalIncome
 }
 
-/** Den sammensatte marginalskat af den næste krone lønindkomst: hvad en
-    ekstra krone koster netop denne person i netop dette år. Regnet ved at
-    gentage skatteopgørelsen med `earnedIncome + 1` og tage differencen fra
-    den oprindelige — aldrig ved at udlede den analytisk af satserne, så den
-    ikke kan komme til at sige noget andet end selve opgørelsen ville. Kun
-    lønindkomstens marginal: aktie- og kapitalindkomst beskattes med flade
-    satser, der ikke har en marginal at vise. */
-export function marginalTaxRate(
+/** Personens to marginalskatter, én pr. indkomstart. De svarer på hvert sit
+    spørgsmål — hvad koster den næste lønkrone, og hvad koster den næste
+    krone pensionsindkomst — og de to er sjældent ens: lønkronen bærer
+    AM-bidrag og kan flytte et af arbejdsfradragene, hvor pensionskronen gør
+    ingen af delene.
+
+    Aktie- og kapitalindkomst har ingen sats her: de beskattes fladt og har
+    ikke en marginal at vise. */
+export type MarginalTaxRates = {
+  earnedIncome: number
+  pensionIncome: number
+}
+
+/** De to satser, hver regnet ved at gentage skatteopgørelsen med én krone
+    mere af sin egen indkomstart og tage differencen fra den oprindelige —
+    aldrig ved at udlede dem analytisk af satserne, så de ikke kan komme til
+    at sige noget andet end selve opgørelsen ville. */
+export function marginalTaxRates(
   input: TaxAssessmentInput,
   rates: RateYear,
-): number {
+): MarginalTaxRates {
   const at = totalTax(assessTax(input, rates))
-  const atNextKrone = totalTax(
-    assessTax({ ...input, earnedIncome: input.earnedIncome + 1 }, rates),
-  )
-  return atNextKrone - at
+  const withOneMore = (of: Partial<TaxAssessmentInput>) =>
+    totalTax(assessTax({ ...input, ...of }, rates)) - at
+
+  return {
+    earnedIncome: withOneMore({ earnedIncome: input.earnedIncome + 1 }),
+    pensionIncome: withOneMore({ pensionIncome: (input.pensionIncome ?? 0) + 1 }),
+  }
 }
 
 /** Summen af en række beløb, der står hver for sig — brugt til fradragene,

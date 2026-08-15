@@ -528,12 +528,26 @@ function PersonTaxBlock({
           amount={display(-year.tax.contributionWithDeductibility)}
         />
       )}
+      {/* Pensionsindkomsten lægges til efter AM-bidraget og efter
+          fradragsretten — ingen af de to måler på den. Linjen udebliver i et
+          år uden pensionsindkomst, som linjen om fradragsret gør: en linje
+          på nul ville påstå en udbetaling, der ikke var. */}
+      {year.tax.pensionIncome > 0 && (
+        <StripePost label="Pensionsindkomst" amount={display(year.tax.pensionIncome)} />
+      )}
       <StripePost label="Personlig indkomst" amount={display(year.tax.personalIncome)} />
       <StripePost label="Aktieindkomst" amount={display(year.shareIncome)} />
       <StripePost label="Kapitalindkomst" amount={display(year.capitalIncome)} />
+      {/* Begge satser står altid, også i et rent arbejdsår. Spørgsmålet om,
+          hvad den næste krone pensionsindkomst koster, er netop det, der
+          stilles, mens der stadig er noget at lægge til side. */}
       <div className="stribepost">
-        <span className="m">Marginalskat</span>
-        <span className="v">{procent(year.marginalTaxRate)}</span>
+        <span className="m">Marginalskat, arbejdsindkomst</span>
+        <span className="v">{procent(year.marginal.earnedIncome)}</span>
+      </div>
+      <div className="stribepost">
+        <span className="m">Marginalskat, pensionsindkomst</span>
+        <span className="v">{procent(year.marginal.pensionIncome)}</span>
       </div>
       <table className="lagtabel">
         <thead>

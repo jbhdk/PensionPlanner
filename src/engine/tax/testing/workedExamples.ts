@@ -525,4 +525,58 @@ export const workedExamples: readonly WorkedExample[] = [
       total: 223_607.19,
     },
   },
+
+  {
+    name: 'pensionist uden arbejdsindkomst, 350.000 kr. i pensionsindkomst',
+    source:
+      'docs/satser/2026.md — beløbsgrænser efter PSL § 20 (skm.dk) og de fire ' +
+      'lag på personlig indkomst (skat.dk). Fradragene måler efter LL § 9 J ' +
+      'og § 9 K på grundlaget for arbejdsmarkedsbidrag, som her er nul.',
+    verifiedOn: '2026-08-15',
+    dependsOnUnconfirmed: [],
+
+    // Folkepension, ATP og en rateudbetaling på tilsammen 350.000 kr. Det er
+    // casen, der holder de tre led, arbejde udløser, ude: bidraget er betalt
+    // på vejen ind i ordningen, og begge arbejdsfradrag måler på et grundlag,
+    // der er nul. Beskæftigelsesfradraget alene ville ellers have kostet
+    // 25,40 % af 44.625 kr. = knap 11.300 kr. for lidt i skat, og hele
+    // sammenligningen mellem et arbejdsår og et pensionsår ville være skæv.
+    //
+    // AM-bidrag             8,00 % af 0             =       0,00
+    // Personlig indkomst                            = 350.000,00  (< 641.200)
+    // Beskæftigelsesfradrag 12,75 % af 0            =       0,00
+    // Jobfradrag             4,50 % af 0            =       0,00
+    // Skattepligtig indkomst                        = 350.000,00
+    // Bundskat   12,01 % af (350.000 − 54.100)      =  35.537,59
+    // Kommuneskat 25,40 % af (350.000 − 54.100)     =  75.158,60
+    // Kirkeskat    0,74 % af (350.000 − 54.100)     =   2.189,66
+    //                                                 ──────────
+    //                                                 112.885,85
+    input: {
+      earnedIncome: 0,
+      pensionIncome: 350_000,
+      municipalTaxRate: 0.254,
+      churchTaxRate: 0.0074,
+    },
+    expected: {
+      personalIncome: 350_000,
+      // Uden et ligningsmæssigt fradrag at trække fra er de to grundlag ens.
+      taxableIncome: 350_000,
+      allowances: {
+        employmentAllowance: 0,
+        jobAllowance: 0,
+        extraPensionAllowance: 0,
+      },
+      layers: {
+        labourMarketContribution: 0,
+        bottomBracketTax: 35_537.59,
+        municipalTax: 75_158.6,
+        churchTax: 2_189.66,
+        middleBracketTax: 0,
+        topBracketTax: 0,
+        additionalTopBracketTax: 0,
+      },
+      total: 112_885.85,
+    },
+  },
 ]

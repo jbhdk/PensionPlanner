@@ -6,6 +6,7 @@ import {
   aContribution,
   aHoldingContribution,
   aPlan,
+  aPensionIncome,
   aSalary,
   aTransfer,
   anExpense,
@@ -311,6 +312,35 @@ describe('fladen', () => {
 
     const behandling = screen.getByLabelText(/Skattebehandling/) as HTMLSelectElement
     expect(behandling.value).toBe('Arbejdsindkomst')
+  })
+
+  it('lader en indtægtspost skifte til pensionsindkomst, og brutto-etiketten falder væk', async () => {
+    // ATP skrives sådan her: en almindelig indtægtspost med den tredje
+    // skattebehandling. Der er ingen ydelsesfigur at vælge i stedet, jf.
+    // ADR-0023.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          startYear: 2026,
+          inflationAssumption: 0,
+          entries: [aSalary({ amountInRealKroner: 400_000 })],
+        })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Løn/ }))
+    await user.selectOptions(screen.getByLabelText(/Skattebehandling/), 'Pensionsindkomst')
+
+    // Løftet om arbejdsgiverbidrag hører til arbejdsindkomsten alene — en
+    // pensionsudbetaling har intet i sig.
+    expect(screen.getByLabelText('Beløb (dagens kroner)')).toBeTruthy()
+    expect(screen.queryByText(/brutto inklusive arbejdsgiverbidrag/i)).toBeNull()
+
+    // Og skatten følger med: 400.000 uden AM-bidrag og uden arbejdsfradrag
+    // koster 131.892 kr., hvor de samme 400.000 i løn koster 133.395.
+    await showYearTable(user)
+    expect(yearCell(1, 'Skat')).toBe('-131.892')
   })
 
   it('sætter kommune og kirkemedlemskab i personens inspektør, og årstabellen følger med', async () => {
@@ -2280,8 +2310,51 @@ describe('fladen', () => {
     // 8 % AM-bidrag + 92 % × (12,01 % bund + 25,40 % kommune + 0,72 % kirke)
     // — begge fradrag er i loft ved 600.000, og indkomsten ligger under
     // mellemskattegrænsen, så ingen af dem rører næste krone.
-    expect(within(blok).getByText('Marginalskat')).toBeTruthy()
+    expect(within(blok).getByText('Marginalskat, arbejdsindkomst')).toBeTruthy()
     expect(within(blok).getByText('43,08 %')).toBeTruthy()
+  })
+
+  it('viser en marginalskat pr. indkomstart, og pensionsindkomsten på vej til den personlige', async () => {
+    // De to satser svarer på hvert sit spørgsmål, og forskellen er hele
+    // grunden til, at der står to: skal den næste krone komme fra arbejde
+    // eller fra en udbetaling, koster de ikke det samme. Begge står altid,
+    // også i et rent arbejdsår — det er dér, spørgsmålet stilles.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          startYear: 2026,
+          inflationAssumption: 0,
+          entries: [
+            aSalary({ amountInRealKroner: 600_000 }),
+            aPensionIncome({ amountInRealKroner: 200_000 }),
+          ],
+        })}
+      />,
+    )
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2026
+
+    const blok = screen
+      .getByRole('heading', { name: 'Jesper', level: 3 })
+      .closest('.blok') as HTMLElement
+    const post = (label: string) =>
+      within(blok).getByText(label).closest('.stribepost')!.querySelector('.v')!.textContent
+
+    // Pensionsindkomsten lægges til efter AM-bidraget, ikke før: bidraget
+    // måles af lønnen alene. 600.000 − 48.000 + 200.000 = 752.000.
+    expect(post('Løn og skattepligtige poster')).toBe('600.000')
+    expect(post('AM-bidrag, 8,00 %')).toBe('-48.000')
+    expect(post('Pensionsindkomst')).toBe('200.000')
+    expect(post('Personlig indkomst')).toBe('752.000')
+
+    // 752.000 ligger over mellemskattegrænsen, og Hvidovres 25,40 % lader
+    // trappens første trin binde ved 44,57 %. Pensionskronen koster det plus
+    // kirkeskatten; lønkronen koster 8 % AM-bidrag og 92 % af det samme.
+    expect(post('Marginalskat, pensionsindkomst')).toBe('45,29 %')
+    expect(post('Marginalskat, arbejdsindkomst')).toBe('49,67 %')
   })
 
   it('viser hvordan den personlige indkomst kommer fra bruttolønnen og indbetalingen', async () => {

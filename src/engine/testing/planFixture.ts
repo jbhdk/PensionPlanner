@@ -221,6 +221,33 @@ export function aTaxFreeIncome(options: {
   }
 }
 
+/** En pensionsindkomstpost — ATP, for eksempel. Den beskattes som personlig
+    indkomst uden AM-bidrag og giver hverken beskæftigelses- eller
+    jobfradrag. Der findes ingen `Benefit`-figur at skrive den som, jf.
+    ADR-0023. */
+export function aPensionIncome(options: {
+  amountInRealKroner: number
+  name?: string
+  owner?: string
+  timing?: Timing
+  period?: Period
+  recurrence?: Recurrence
+  regulationRate?: number
+}): Entry {
+  return {
+    id: 'atp',
+    name: options.name ?? 'ATP',
+    amountInRealKroner: options.amountInRealKroner,
+    owner: options.owner ?? 'jesper',
+    direction: 'Income',
+    taxTreatment: 'PensionIncome',
+    timing: options.timing ?? 'Even',
+    period: options.period ?? wholeHorizon,
+    recurrence: options.recurrence ?? annually,
+    regulationRate: options.regulationRate ?? 0,
+  }
+}
+
 /** Et lønkildet bidrag. Det bærer hverken periode, forankring, gentagelse
     eller forfald — dem arver det fra sin lønpost, jf. ADR-0016. */
 export function aContribution(

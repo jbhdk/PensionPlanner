@@ -11,7 +11,7 @@ import { totalTax } from './assessTax'
     prøves i `assessTax.test.ts`, gennem det samme søm. */
 
 describe('husstandsskatteopgørelsen', () => {
-  it('fører personens egen opgørelse og marginalskat igennem', () => {
+  it('fører personens egen opgørelse og begge marginalskatter igennem', () => {
     const assessment = assessHousehold(
       {
         persons: [
@@ -30,7 +30,10 @@ describe('husstandsskatteopgørelsen', () => {
     // 460.000 kr. ligger under mellemskattegrænsen, og begge fradrag er i
     // loft ved 500.000 kr., så ingen af dem ændrer sig med den næste krone:
     // 8 % AM-bidrag + 92 % × (12,01 % bund + 22 % kommune) = 39,2892 %.
-    expect(person.marginalTaxRate).toBeCloseTo(0.392892, 6)
+    expect(person.marginal.earnedIncome).toBeCloseTo(0.392892, 6)
+    // Den næste krone pensionsindkomst bærer intet AM-bidrag og rører
+    // ingen af de to arbejdsfradrag: 12,01 % + 22 % = 34,01 %.
+    expect(person.marginal.pensionIncome).toBeCloseTo(0.3401, 6)
   })
 
   it('lader husstandens total være personens egen, når ingen har aktieindkomst', () => {

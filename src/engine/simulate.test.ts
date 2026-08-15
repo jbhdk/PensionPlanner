@@ -6,6 +6,7 @@ import {
   aContribution,
   aHoldingContribution,
   aPlan,
+  aPensionIncome,
   aSalary,
   aTaxFreeIncome,
   anExpense,
@@ -405,6 +406,80 @@ describe('simulate', () => {
     expect(bufferBalance(years[0]!)).toBeCloseTo(1_900_000, 6)
   })
 
+  it('beskatter en pensionsindkomstpost som personlig indkomst uden AM-bidrag', () => {
+    const plan = aPlan({
+      inflationAssumption: 0,
+      entries: [aPensionIncome({ amountInRealKroner: 400_000 })],
+    })
+
+    const year = simulateChecked(plan)[0]!
+    const { tax } = year.persons[0]!
+
+    // 400.000 kr. pensionsindkomst, Hvidovres 25,40 % kommuneskat og 0,72 %
+    // kirkeskat. Ingen af de tre led, arbejde udløser, er der:
+    // AM-bidrag                                      =       0,00
+    // Personlig indkomst                             = 400.000,00
+    // Beskæftigelses- og jobfradrag                  =       0,00
+    // Skattepligtig indkomst                         = 400.000,00
+    // Bundskat    12,01 % af (400.000 − 54.100)      =  41.542,59
+    // Kommuneskat 25,40 % af (400.000 − 54.100)      =  87.858,60
+    // Kirkeskat    0,72 % af (400.000 − 54.100)      =   2.490,48
+    //                                                  ──────────
+    //                                                  131.891,67
+    expect(tax.layers.labourMarketContribution.amount).toBe(0)
+    expect(tax.personalIncome).toBeCloseTo(400_000, 6)
+    expect(tax.allowances.employmentAllowance).toBe(0)
+    expect(tax.allowances.jobAllowance).toBe(0)
+    expect(year.tax).toBeCloseTo(131_891.67, 2)
+
+    // Samme beløb som løn ville have kostet noget helt andet — det er dét,
+    // den tredje skattebehandling er til for.
+    const somLoen = simulateChecked(
+      aPlan({ inflationAssumption: 0, entries: [aSalary({ amountInRealKroner: 400_000 })] }),
+    )[0]!
+    expect(somLoen.tax).not.toBeCloseTo(year.tax, 2)
+  })
+
+  it('skriver ATP som en indtægtspost med aldersforankret start og egen reguleringssats', () => {
+    // ATP har ingen figur i planen — den er en post som enhver anden, jf.
+    // ADR-0023. Beløbet er brugerens eget tal fra PensionsInfo, starten er
+    // en alder, og satsen er postens egen: ATP er ikke satsreguleret og
+    // følger derfor hverken planens inflation eller folkepensionens
+    // regulering.
+    const plan = aPlan({
+      startYear: 2026,
+      inflationAssumption: 0.02,
+      entries: [
+        aPensionIncome({
+          amountInRealKroner: 30_000,
+          regulationRate: 0.03,
+          period: { anchor: 'PersonAge', from: 68 },
+        }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+    // Personen er født i 1973, så det 68. år er 2041.
+    const foer = years.find((year) => year.year === 2040)!
+    const foerste = years.find((year) => year.year === 2041)!
+
+    expect(foer.entries).toEqual([])
+    expect(foer.persons[0]!.tax.personalIncome).toBe(0)
+
+    // 15 år med postens egne 3 %, ikke planens 2 %.
+    expect(foerste.entries).toEqual([{ entry: 'atp', amount: expect.closeTo(46_739.02, 2) }])
+    expect(foerste.income).toBeCloseTo(30_000 * 1.03 ** 15, 6)
+    expect(foerste.income).not.toBeCloseTo(30_000 * 1.02 ** 15, 2)
+
+    // Og den er pensionsindkomst hele vejen igennem: fuldt ud personlig
+    // indkomst, uden AM-bidrag og uden nogen af de to arbejdsfradrag.
+    const { tax } = foerste.persons[0]!
+    expect(tax.personalIncome).toBeCloseTo(foerste.income, 6)
+    expect(tax.layers.labourMarketContribution.amount).toBe(0)
+    expect(tax.allowances.employmentAllowance).toBe(0)
+    expect(tax.allowances.jobAllowance).toBe(0)
+  })
+
   it('regner uden kirkeskat, når personen ikke er medlem af folkekirken', () => {
     const entries = [aSalary({ amountInRealKroner: 600_000 })]
     const medlem = simulateChecked(aPlan({ entries }))
@@ -469,7 +544,35 @@ describe('simulate', () => {
     // under mellemskattegrænsen: næste krone koster kun AM-bidrag, bundskat,
     // kommune- og kirkeskat, ingen af dem loftbegrænsede ved denne kommunesats.
     // 8 % + 92 % × (12,01 % + 25,40 % + 0,72 %) = 43,0796 %.
-    expect(year.persons[0]!.marginalTaxRate).toBeCloseTo(0.430796, 5)
+    expect(year.persons[0]!.marginal.earnedIncome).toBeCloseTo(0.430796, 5)
+  })
+
+  it('bærer begge marginalskatter pr. person, og lader dem være forskellige', () => {
+    // De to satser svarer på hvert sit spørgsmål — hvad koster den næste
+    // lønkrone, og hvad koster den næste krone pensionsindkomst. For en
+    // person med begge slags indkomst er de aldrig ens: lønkronen bærer
+    // AM-bidrag, pensionskronen gør ikke.
+    //
+    // 600.000 i løn giver 552.000 efter AM-bidrag, plus 200.000 i
+    // pensionsindkomst = 752.000 i personlig indkomst. Det er over
+    // mellemskattegrænsen på 641.200 og under topskattens, og Hvidovres
+    // 25,40 % lader trappens første trin binde ved 44,57 %.
+    //
+    // Næste pensionskrone:  44,57 % (loftet) + 0,72 % kirkeskat
+    // Næste lønkrone:       8 % AM + 92 % × det samme
+    const year = simulateChecked(
+      aPlan({
+        inflationAssumption: 0,
+        entries: [
+          aSalary({ amountInRealKroner: 600_000 }),
+          aPensionIncome({ amountInRealKroner: 200_000 }),
+        ],
+      }),
+    )[0]!
+    const { marginal } = year.persons[0]!
+
+    expect(marginal.pensionIncome).toBeCloseTo(0.4457 + 0.0072, 5)
+    expect(marginal.earnedIncome).toBeCloseTo(0.08 + 0.92 * (0.4457 + 0.0072), 5)
   })
 
   it('krediterer nettoafkastet på beholdningens primosaldo, når planen ingen strømme har', () => {

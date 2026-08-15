@@ -1,7 +1,12 @@
 import type { Nominal } from '../plan'
 import type { RateYear } from '../rates/rateYear'
-import { assessTax, marginalTaxRate, totalTax } from './assessTax'
-import type { LayerAmount, TaxAssessment, TaxAssessmentInput } from './assessTax'
+import { assessTax, marginalTaxRates, totalTax } from './assessTax'
+import type {
+  LayerAmount,
+  MarginalTaxRates,
+  TaxAssessment,
+  TaxAssessmentInput,
+} from './assessTax'
 
 /** Aktieindkomstskattens to lag. Ikke et `TaxLayer`: de lag er en persons, og
     aktieindkomstens skat er husstandens. Sidestykket til `CapitalIncomeLayer`,
@@ -28,7 +33,7 @@ export type HouseholdTaxInput = {
 /** Husstandens samlede skat for ét simuleringsår. Totalen er ikke et felt:
     se `totalHouseholdTax`, af samme grund som `totalTax`. */
 export type HouseholdTaxAssessment = {
-  persons: { tax: TaxAssessment; marginalTaxRate: number }[]
+  persons: { tax: TaxAssessment; marginal: MarginalTaxRates }[]
   /** Aktieindkomstens skat, opgjort for husstanden under ét. */
   shareIncomeTax: Partial<Record<ShareIncomeLayer, LayerAmount>>
 }
@@ -41,7 +46,7 @@ export function assessHousehold(
   return {
     persons: input.persons.map((person) => ({
       tax: assessTax(person.tax, rates),
-      marginalTaxRate: marginalTaxRate(person.tax, rates),
+      marginal: marginalTaxRates(person.tax, rates),
     })),
     shareIncomeTax: shareIncomeTax(input.persons, rates),
   }

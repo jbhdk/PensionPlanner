@@ -149,7 +149,7 @@ export const fieldHelp = {
     'Hvem af husstandens personer beløbet tilhører. For en indtægt afgør det, hvis skat den indgår i, og hvis aldre perioden kan måles fra.',
 
   'Entry.taxTreatment':
-    'Hvordan indtægten beskattes. Arbejdsindkomst betaler AM-bidrag og indgår i den personlige indkomst; skattefri gør ingen af delene og går ubeskåret ind i husstandens økonomi.',
+    'Hvordan indtægten beskattes. Arbejdsindkomst betaler AM-bidrag og giver til gengæld beskæftigelses- og jobfradrag; en pension er beskattet på vejen ind og gør ingen af delene, men tæller med i indkomsten på lige fod; skattefri beskattes slet ikke.',
 
   'Entry.regulationRate':
     'Hvor meget denne indtægt stiger om året. Den er uafhængig af planens inflation, netop fordi en løn typisk stiger hurtigere end priserne — og den forskel afgør, hvor meget der når at blive lagt til side inden erhvervsophøret.',

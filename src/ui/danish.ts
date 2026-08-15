@@ -39,8 +39,12 @@ export const payoutRegimes: Record<PayoutRegime, string> = {
   FromJanuary2018: '1. januar 2018 eller senere',
 }
 
+/** Rækkefølgen er indkomstens vej gennem livet: arbejdsindkomsten først,
+    pensionsindkomsten efter den, og den skattefri til sidst — den er ingen
+    af de to. */
 export const treatments: Record<string, TaxTreatment> = {
   Arbejdsindkomst: 'EarnedIncome',
+  Pensionsindkomst: 'PensionIncome',
   Skattefri: 'TaxFree',
 }
 
