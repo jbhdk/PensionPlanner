@@ -26,9 +26,16 @@ function aPlanWithSecondHolding(): Plan {
 
 /** En plan, der knækker begge veje: bufferen er tom fra første år, mens der
     står rigelig likviditet på den anden beholdning uden en overførsel til at
-    hente den — ufuldstændig først, uholdbar når pengene er brugt. */
+    hente den — ufuldstændig først, uholdbar når pengene er brugt.
+
+    Horisonten stopper året før folkepensionsalderen. Folkepensionen kommer af
+    sig selv og ville ellers gøre underskuddet indhenteligt igen, så planen
+    knækkede tre gange frem for to — og det er de to, testen handler om. */
 function aPlanWithBufferFault(): Plan {
-  const base = aPlanWithSecondHolding()
+  const base = aPlan({
+    horizon: 69,
+    holdings: aPlanWithSecondHolding().household.persons[0]!.holdings.slice(1),
+  })
   return {
     ...base,
     entries: [anExpense({ amountInRealKroner: 40_000 })],
@@ -198,7 +205,10 @@ describe('WealthChart', () => {
   })
 
   it('skriver y-aksens enhed i hele kroner, når formuen er under en million', () => {
-    const plan = aPlan({ balance: 400_000 })
+    // Horisonten stopper året før folkepensionsalderen: folkepensionen kommer
+    // af sig selv og ville lægge formuen over en million, som er netop det
+    // skel, testen handler om.
+    const plan = aPlan({ balance: 400_000, horizon: 69 })
     const years = simulate(plan)
     render(<WealthChart years={years} plan={plan} unit="Real" />)
 

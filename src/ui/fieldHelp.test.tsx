@@ -233,6 +233,24 @@ describe('feltforklaringerne', () => {
     }
   })
 
+  it('giver folkepensionens kolonneoverskrifter i forklar-året en forklaring', async () => {
+    // Folkepensionsblokken kan ikke stå i den rige plans første år: fixturens
+    // person er født i 1973 og når folkepensionsalderen i 2043. Planen
+    // begynder derfor dér, så blokken står i den første række.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan({ startYear: 2043, holdings: [aFreeHolding()] })} />)
+    await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!)
+
+    const blok = screen.getByRole('heading', { name: 'Folkepensionen', level: 3 })
+      .parentElement as HTMLElement
+    const headers = within(blok).getAllByRole('columnheader')
+    expect(headers.length).toBe(3)
+    for (const header of headers) {
+      expect(header.title, `Folkepensionen › ${header.textContent}`).not.toBe('')
+    }
+  })
+
   describe('stilen', () => {
     const entries = Object.entries(fieldHelp)
 

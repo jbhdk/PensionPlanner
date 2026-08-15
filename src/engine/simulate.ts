@@ -40,6 +40,8 @@ import {
 import { conversionFactor, isLifeAnnuity } from './lifeAnnuity'
 import { rateYearFor } from './rates/rates'
 import type { RateYear } from './rates/rateYear'
+import { statePensionsInYear } from './statePension'
+import type { ActiveStatePension } from './statePension'
 import { statePensionYear } from './statePensionAge'
 import { assessHousehold, totalHouseholdTax } from './tax/assessHousehold'
 import type { TaxAssessmentInput } from './tax/assessTax'
@@ -52,6 +54,7 @@ import type {
   HoldingYear,
   LifeAnnuityBenefit,
   RateBasis,
+  StatePensionYear,
   YearResult,
 } from './yearResult'
 
@@ -197,7 +200,13 @@ function simulateYear(
   // indtægter, hvor en rate blot flytter penge mellem husstandens egne
   // lommer, jf. ADR-0009.
   const annuities = lifeAnnuitiesInYear(plan, year, opening, previous)
-  const income = sumOf(entries, 'Income') + sumOfBenefits(annuities)
+
+  // Folkepensionen står intet sted i planen: begge kronebeløb læses af
+  // satsåret, og året, de begynder i, udledes af fødselsdatoen, jf. ADR-0023.
+  const statePensions = statePensionsInYear(plan.household, year, rates)
+
+  const income =
+    sumOf(entries, 'Income') + sumOfBenefits(annuities) + sumOfStatePensions(statePensions)
 
   // Afkastet regnes først, på primosaldi og årets strømme alene efter
   // Modified Dietz, jf. ADR-0006 — det afhænger aldrig af skatten, kun
@@ -230,6 +239,15 @@ function simulateYear(
     return withFlow(withFlow(years, holding, -weighted), plan.buffer, weighted)
   }, afterContributions)
 
+  // Folkepensionen vejer ind på bufferen som en jævn strøm. Den udbetales
+  // månedsvis, og `'Even'` er det matematisk rigtige for den slags, jf.
+  // ADR-0006 — der er intet forfald at bære, for beløbet er ingen post.
+  const collected = withFlow(
+    flowed,
+    plan.buffer,
+    sumOfStatePensions(statePensions) * returnWeight('Even'),
+  )
+
   // Omsætningen har vægt 1: depotet forlader beholdningen ved årets
   // begyndelse, og der er intet af det tilbage at forrente. Livrenten lukker
   // derfor på nul af sig selv, uden at fejningen skal træde til. Ydelsen
@@ -246,7 +264,7 @@ function simulateYear(
         plan.buffer,
         benefit * returnWeight('Even'),
       ),
-    flowed,
+    collected,
   )
 
   // En overførsel flytter sit fulde beløb mellem afgiver og modtager. Den
@@ -311,6 +329,7 @@ function simulateYear(
           withDeductibility: contributionsByPersonId.get(person.id)!.withDeductibility,
           payouts: payoutOf(swept.payouts, person),
           benefits: sumOfBenefits(annuitiesOf(annuities, person)),
+          statePension: statePensionIncomeOf(statePensions, person),
         }),
         shareIncome: shareIncomeByPerson.get(person.id)!,
       })),
@@ -366,6 +385,7 @@ function simulateYear(
       tax: household.persons[index]!.tax,
       marginal: household.persons[index]!.marginal,
       lifeAnnuityBenefits: benefitsOf(annuities, person),
+      ...statePensionOf(statePensions, person),
       caps: contributionsByPersonId.get(person.id)!.caps,
     })),
     shareIncomeTax: household.shareIncomeTax,
@@ -770,6 +790,7 @@ function taxInput(
     withDeductibility: Nominal
     payouts: Nominal
     benefits: Nominal
+    statePension: Nominal
   },
 ): TaxAssessmentInput {
   const ownIncome = (taxTreatment: TaxTreatment) =>
@@ -782,7 +803,11 @@ function taxInput(
       )
       .reduce((sum, { amount }) => sum + amount, 0)
 
-  const pensionIncome = ownIncome('PensionIncome') + ofPerson.payouts + ofPerson.benefits
+  const pensionIncome =
+    ownIncome('PensionIncome') +
+    ofPerson.payouts +
+    ofPerson.benefits +
+    ofPerson.statePension
   const municipalTax = rates.municipalTax.rates[person.municipality]!
 
   return {
@@ -1050,6 +1075,51 @@ function benefitsOf(annuities: ActiveAnnuity[], person: Person): LifeAnnuityBene
     holding,
     amount: benefit,
   }))
+}
+
+/** Personens folkepension blandt årets, formet så den kan spredes ind i et
+    `PersonYear`: et tomt objekt i årene før folkepensionsalderen, hvor feltet
+    skal være fraværende, og ét felt bagefter.
+
+    Spredningen frem for en valgfri værdi, så det fraværende felt ikke kan
+    blive til et felt med værdien `undefined` — de to ser ens ud i TypeScript,
+    men ikke i den JSON, en plan eksporteres og importeres som. */
+function statePensionOf(
+  statePensions: ActiveStatePension[],
+  person: Person,
+): { statePension?: StatePensionYear } {
+  const line = statePensions.find((statePension) => statePension.owner === person.id)
+  if (line === undefined) return {}
+  return {
+    statePension: {
+      basicAmount: line.basicAmount,
+      pensionSupplement: line.pensionSupplement,
+    },
+  }
+}
+
+/** Personens egen folkepension som ét tal. Den er `PensionIncome` hos den,
+    der modtager den, ganske som en rate og en livrenteydelse er det hos
+    beholdningens ejer — pengene lander på bufferen uanset hvem det er, men
+    skatten gør ikke. Nul i årene før personens folkepensionsalder. */
+function statePensionIncomeOf(
+  statePensions: ActiveStatePension[],
+  person: Person,
+): Nominal {
+  return sumOfStatePensions(
+    statePensions.filter((statePension) => statePension.owner === person.id),
+  )
+}
+
+/** Summen af årets folkepension i husstanden. Begge kronebeløb er penge
+    udefra og lægges sammen her — de står hver for sig i `PersonYear`, hvor
+    udregningen skal kunne ses, og som ét tal her, hvor det er husstandens
+    pengestrøm, der opgøres. */
+function sumOfStatePensions(statePensions: ActiveStatePension[]): Nominal {
+  return statePensions.reduce(
+    (sum, statePension) => sum + statePension.basicAmount + statePension.pensionSupplement,
+    0,
+  )
 }
 
 function sumOfBenefits(annuities: ActiveAnnuity[]): Nominal {

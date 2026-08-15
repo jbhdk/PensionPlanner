@@ -327,6 +327,15 @@ export const fieldHelp = {
   'CapYear.note':
     'De tal, de faste kolonner ikke har plads til. For aktiesparekontoen står her, hvad der stod på den ved årets begyndelse, hvor meget der var plads til, og hvad der faktisk kom ind.',
 
+  'StatePensionYear.owner':
+    'Hvem i husstanden der modtager folkepensionen. Det afgør, hvis skat den indgår i, og om beløbene er en enlig persons eller en samlevendes — en enlig får et markant større tillæg.',
+
+  'StatePensionYear.basicAmount':
+    'Den del af folkepensionen, alle får. Den er den samme uanset hvor stor en indkomst der er ved siden af, og den kan hverken skæres ned af arbejde eller af udbetalinger fra en ordning.',
+
+  'StatePensionYear.pensionSupplement':
+    'Den del af folkepensionen, der afhænger af, om man bor alene: en enlig får omtrent det dobbelte af en samlevende. Den står som sit eget beløb ved siden af grundbeløbet, fordi de to er sat efter hver sin regel.',
+
   'LifeAnnuityBenefit.holding':
     'Hvilken af husstandens livrenter det årlige beløb kom af. Ordningen selv står med saldo nul fra det år, den blev omsat — pengene er byttet til en indtægt og findes ikke længere som en opsparing.',
 

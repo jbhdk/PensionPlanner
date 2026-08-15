@@ -1749,7 +1749,13 @@ describe('fladen', () => {
   })
 
   it('mærker en ufuldstændig og en uholdbar buffer forskelligt i årstabellen', async () => {
-    const base = aPlanWithSecondHolding()
+    // Horisonten stopper året før folkepensionsalderen. Folkepensionen kommer
+    // af sig selv og ville gøre underskuddet indhenteligt igen, så det sidste
+    // år stod ufuldstændigt frem for uholdbart.
+    const base = aPlan({
+      horizon: 69,
+      holdings: [aFreeHolding('anden-beholdning', 'Anden beholdning')],
+    })
     const plan: Plan = {
       ...base,
       entries: [anExpense({ amountInRealKroner: 40_000 })],
@@ -2765,6 +2771,35 @@ describe('fladen', () => {
     const ydelser = screen.getByRole('heading', { name: 'Ydelserne', level: 3 })
       .parentElement as HTMLElement
     expect(within(ydelser).getByText('51.712')).toBeTruthy()
+  })
+
+  it('viser folkepensionens to beløb i forklar-året', async () => {
+    // Hverken beløbene eller året står i planen: de læses af satsåret, og
+    // året udledes af fødselsdatoen. Uden blokken kunne indtægten i striben
+    // ikke føres tilbage til noget — der er ingen post og ingen beholdning
+    // at finde den i.
+    //
+    // Fixturens person er født i juni 1973 og når folkepensionsalderen 70 i
+    // 2043; planen begynder dér, så året står i den første række.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan({ startYear: 2043 })} />)
+    await showYearTable(user)
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!) // 2043
+
+    const folkepension = screen.getByRole('heading', { name: 'Folkepensionen', level: 3 })
+      .parentElement as HTMLElement
+    expect(within(folkepension).getByText('Jesper')).toBeTruthy()
+    expect(within(folkepension).getByText('90.528')).toBeTruthy()
+    expect(within(folkepension).getByText('104.748')).toBeTruthy()
+  })
+
+  it('lader folkepensionsblokken være væk i årene før folkepensionsalderen', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+    await showYearTable(user)
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!) // 2026
+
+    expect(screen.queryByRole('heading', { name: 'Folkepensionen', level: 3 })).toBeNull()
   })
 
   it('viser skattelagene pr. person som en lodret opstilling af grundlag, sats og beløb', async () => {

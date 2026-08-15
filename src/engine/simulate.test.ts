@@ -169,7 +169,11 @@ describe('simulate', () => {
   })
 
   it('bærer formuen fra år til år, når planen ingen poster har', () => {
-    const plan = aPlan({ balance: 1_000_000, entries: [] })
+    // Horisonten stopper året før folkepensionsalderen. Folkepensionen står
+    // ikke i planen og kommer af sig selv, jf. ADR-0023 — en plan uden poster
+    // er derfor kun stillestående, så længe personen endnu ikke er
+    // folkepensionist.
+    const plan = aPlan({ balance: 1_000_000, entries: [], horizon: 69 })
 
     const years = simulateChecked(plan)
 
@@ -4044,5 +4048,175 @@ describe('livrentens omsætning', () => {
     expect(validatePlan(early)).toMatch(/pensionsudbetalingsalder/i)
     expect(() => simulate(early)).toThrow(/pensionsudbetalingsalder/i)
     expect(validatePlan(legal)).toBeUndefined()
+  })
+})
+
+describe('folkepensionen', () => {
+  /** Fixturens person er født i juni 1973. Folkepensionsalderen er 70 for
+      årgangen, og året er dermed 2043 — motorens eneste vej til det tal er
+      `statePensionAge`, og der står intet folkepensionsobjekt i planen, jf.
+      ADR-0023. */
+  const statePensionYear = 2043
+
+  const statePensionIn = (year: YearResult) => year.persons[0]!.statePension
+
+  /** Fixturens person plus en ægtefælle, der er folkepensionist i forvejen.
+      Husstanden er dermed to, og ingen af dem er enlig. */
+  function aPlanWithSpouse(): Plan {
+    const base = aPlan({ horizon: 70 })
+    return {
+      ...base,
+      household: {
+        persons: [
+          ...base.household.persons,
+          {
+            id: 'anne',
+            name: 'Anne',
+            birthYear: 1963,
+            birthMonth: 6,
+            workEndAge: 60,
+            horizon: 90,
+            municipality: 'Hvidovre',
+            churchMember: true,
+            holdings: [
+              aHolding({
+                id: 'annes-frie-midler',
+                name: 'Annes frie midler',
+                variant: 'SavingsAccount',
+                balance: 0,
+              }),
+            ],
+          },
+        ],
+      },
+    }
+  }
+
+  it('lader grundbeløbet og pensionstillægget begynde i folkepensionsåret', () => {
+    // Satsårets to kronebeløb for en enlig, jf. docs/satser/2026.md.
+    // Aftrapningen er ikke bygget, og tillægget udbetales derfor fuldt.
+    const years = simulateChecked(aPlan({ horizon: 70 }))
+
+    expect(statePensionIn(years.find((y) => y.year === statePensionYear - 1)!)).toBeUndefined()
+    expect(statePensionIn(years.find((y) => y.year === statePensionYear)!)).toEqual({
+      basicAmount: 90_528,
+      pensionSupplement: 104_748,
+    })
+  })
+
+  it('lader folkepensionen komme udefra og indgå i årets indtægter', () => {
+    // Folkepensionen er en ydelse uden saldo. Den kommer udefra, ganske som
+    // den omsatte livrentes, og indgår derfor i `income`, hvor en rate blot
+    // flytter penge mellem husstandens egne lommer, jf. diagram 02.
+    const years = simulateChecked(aPlan({ horizon: 70 }))
+
+    expect(years.find((y) => y.year === statePensionYear - 1)!.income).toBe(0)
+    expect(years.find((y) => y.year === statePensionYear)!.income).toBeCloseTo(
+      90_528 + 104_748,
+      6,
+    )
+  })
+
+  it('vejer folkepensionen ind på bufferen som en jævn strøm', () => {
+    // Folkepensionen udbetales månedsvis, og strømmen vejes derfor som
+    // `'Even'` — vægt ½, jf. ADR-0006. Uden vægtningen ville årets afkast
+    // blive regnet af en primosaldo, folkepensionen aldrig nåede frem til.
+    const years = simulateChecked(aPlan({ horizon: 70, grossReturn: 0.05, balance: 0 }))
+
+    const year = years.find((y) => y.year === statePensionYear)!
+    expect(holding(year, 'free-assets').weightedFlow).toBeCloseTo(
+      (90_528 + 104_748) / 2,
+      6,
+    )
+  })
+
+  it('beskatter folkepensionen som pensionsindkomst', () => {
+    // Det samme beløb to år i træk: i 2042 som en indtægtspost med
+    // `PensionIncome` — sådan ATP skrives, jf. ADR-0023 — og i 2043 som
+    // folkepensionen selv. Skatten er den samme på kronen: opgørelsen kender
+    // ikke ydelsen fra posten, den kender personlig indkomst uden AM-bidrag.
+    const amount = 90_528 + 104_748
+    const years = simulateChecked(
+      aPlan({
+        horizon: 70,
+        entries: [
+          aPensionIncome({
+            amountInRealKroner: amount,
+            period: { anchor: 'CalendarYear', from: 2042, to: 2042 },
+          }),
+        ],
+      }),
+    )
+
+    const asEntry = years.find((y) => y.year === statePensionYear - 1)!
+    const asStatePension = years.find((y) => y.year === statePensionYear)!
+
+    expect(asEntry.income).toBeCloseTo(amount, 6)
+    expect(asStatePension.income).toBeCloseTo(amount, 6)
+    expect(asStatePension.tax).toBeCloseTo(asEntry.tax, 6)
+
+    // Hverken AM-bidrag eller beskæftigelsesfradrag: bidraget er betalt på
+    // vejen ind, og de to arbejdsfradrag følger arbejde.
+    const { tax } = asStatePension.persons[0]!
+    expect(tax.layers.labourMarketContribution.amount).toBe(0)
+    expect(tax.personalIncome).toBeCloseTo(amount, 6)
+    expect(tax.allowances.employmentAllowance).toBe(0)
+  })
+
+  it('lader fødselsmåneden afgøre året, når folkepensionsalderen er en brøk', () => {
+    // Årgang 1979 har folkepensionsalder 71,5. Et halvt år lagt til en
+    // januarfødsel lander stadig i 2050; lagt til en julifødsel skubber det
+    // over årsskiftet. Alderen er en brøk for de fleste årgange, og
+    // sammenligningen sker derfor i kalenderår og aldrig i aldre.
+    const firstYear = (birthMonth: number) =>
+      simulateChecked(aPlan({ birthYear: 1979, birthMonth, horizon: 72 })).find(
+        (year) => year.persons[0]!.statePension !== undefined,
+      )!.year
+
+    expect(firstYear(1)).toBe(2050)
+    expect(firstYear(7)).toBe(2051)
+  })
+
+  it('lader grundbeløbet være fladt uanset arbejdsindkomst', () => {
+    // Aftrapningen af grundbeløbet efter egen arbejdsindkomst blev afskaffet
+    // med virkning fra 2023. En folkepensionist, der arbejder videre, får
+    // stadig hele grundbeløbet — og i denne skive også hele tillægget.
+    const years = simulateChecked(
+      aPlan({ horizon: 70, entries: [aSalary({ amountInRealKroner: 1_200_000 })] }),
+    )
+
+    expect(statePensionIn(years.find((y) => y.year === statePensionYear)!)).toEqual({
+      basicAmount: 90_528,
+      pensionSupplement: 104_748,
+    })
+  })
+
+  it('giver en husstand med to det lavere pensionstillæg', () => {
+    // Tillægget følger civilstanden: 104.748 kr. for en enlig, 53.604 kr.
+    // for en gift eller samlevende, jf. docs/satser/2026.md. Husstanden er
+    // én eller to personer, der er gift eller samlevende — er der to, er
+    // ingen af dem enlig.
+    const years = simulateChecked(aPlanWithSpouse())
+
+    expect(statePensionIn(years.find((y) => y.year === statePensionYear)!)).toEqual({
+      basicAmount: 90_528,
+      pensionSupplement: 53_604,
+    })
+  })
+
+  it('fremskriver begge beløb med folkepensionsreguleringen', () => {
+    // Satsåret 2026 er det sidst kendte, og 2043 er derfor fremskrevet.
+    // Antagelsen løfter de to kronebeløb og intet andet — aftrapningens
+    // procent er en sats og står stille.
+    const years = simulateChecked(
+      aPlan({ horizon: 70, statePensionProjectionAssumption: 0.02 }),
+    )
+
+    const year = years.find((y) => y.year === statePensionYear)!
+    const factor = 1.02 ** (statePensionYear - 2026)
+
+    expect(year.rateBasis).toEqual({ knownYear: 2026, projected: true })
+    expect(statePensionIn(year)!.basicAmount).toBeCloseTo(90_528 * factor, 6)
+    expect(statePensionIn(year)!.pensionSupplement).toBeCloseTo(104_748 * factor, 6)
   })
 })

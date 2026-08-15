@@ -187,6 +187,30 @@ export type LifeAnnuityBenefit = {
   amount: Nominal
 }
 
+/** Folkepensionens to kronebeløb for én person i ét simuleringsår, i årets
+    egne løbende priser. De står hver for sig og aldrig som én sum: grundbeløbet
+    er fladt, hvor tillægget aftrappes af anden indkomst, og lagt sammen kunne
+    hverken det ene eller det andet efterregnes.
+
+    Beløbene står intet sted i planen. De læses af satsåret, og året, de
+    begynder i, udledes af fødselsdatoen gennem folkepensionsalderen — en
+    udregning, brugeren aldrig har indtastet, og som derfor skal kunne ses i
+    årsresultatet, jf. ADR-0023.
+
+    Ligesom den omsatte livrentes ydelse er de penge udefra og indgår i
+    `YearResult.income`; de beskattes som `PensionIncome` hos den person, der
+    modtager dem.
+
+    Aftrapningen efter `TaperBase` er ikke bygget: `pensionSupplement` er
+    indtil videre det fulde tillæg for personens civilstand. */
+export type StatePensionYear = {
+  /** Fladt: aftrapningen efter egen arbejdsindkomst blev afskaffet med
+      virkning fra 2023, og hverken arbejdsindkomst eller anden indkomst
+      reducerer det. */
+  basicAmount: Nominal
+  pensionSupplement: Nominal
+}
+
 /** Årets skatteopgørelse for én person. Indkomsten føres pr. person og aldrig
     som husstandssum, jf. ADR-0010: skatten summerer over husstanden, men
     aftrapningen bruger persongrundlaget, og en gemt sum kan ikke splittes.
@@ -223,6 +247,11 @@ export type PersonYear = {
       Tom i alle år før omsætningen, og i alle år for en livrente uden en
       udbetalingsstart. */
   lifeAnnuityBenefits: LifeAnnuityBenefit[]
+  /** Folkepensionens to beløb, fra det år personen når folkepensionsalderen
+      og resten af forløbet. Fraværende i årene før — feltet siger dermed
+      selv, om personen var folkepensionist i året, uden at fladen skal
+      sammenligne en alder med en tabel, jf. ADR-0012. */
+  statePension?: StatePensionYear
   /** Årets loftlinjer, én pr. slags loftbelagt ordning personen indbetalte
       til. Tom, når året ingen sådan indbetaling havde. Konklusionen — om et
       loft rent faktisk er brudt — står ét sted, på `YearResult`, så fladen

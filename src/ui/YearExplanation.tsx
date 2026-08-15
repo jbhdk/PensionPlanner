@@ -143,6 +143,7 @@ export function YearExplanation({
 
       <ShareIncomeTaxBlock year={year} display={display} />
 
+      <StatePensionBlock plan={plan} year={year} display={display} />
       <BenefitsBlock plan={plan} year={year} display={display} />
       <HoldingsBlock plan={plan} year={year} display={display} />
       <EntriesBlock plan={plan} year={year} display={display} />
@@ -544,6 +545,69 @@ function HoldingsBlock({
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/** Folkepensionens to kronebeløb for de af husstandens personer, der har nået
+    folkepensionsalderen.
+
+    Blokken findes af samme grund som ydelsernes: beløbene står ingen andre
+    steder. Brugeren har hverken tastet dem eller året, de begynder i — de
+    første læses af satsåret, det sidste udledes af fødselsdatoen — og uden
+    blokken kunne indtægten i striben ikke føres tilbage til noget.
+
+    De to beløb står hver for sig og aldrig som én sum: det ene er fladt, det
+    andet skæres af anden indkomst, og lagt sammen kunne hverken det ene eller
+    det andet efterregnes. Blokken udebliver, når ingen i husstanden er
+    folkepensionist endnu. */
+function StatePensionBlock({
+  plan,
+  year,
+  display,
+}: {
+  plan: Plan
+  year: YearResult
+  display: (amount: number) => number
+}) {
+  const rows = year.persons.flatMap((personYear) =>
+    personYear.statePension === undefined
+      ? []
+      : [
+          {
+            ...personYear.statePension,
+            owner: plan.household.persons.find((person) => person.id === personYear.person),
+          },
+        ],
+  )
+  if (rows.length === 0) return null
+
+  return (
+    <div className="blok">
+      <h3>Folkepensionen</h3>
+      <table className="ydelsestabel">
+        <thead>
+          <tr>
+            <th title={fieldHelp['StatePensionYear.owner']}>Modtager</th>
+            <th title={fieldHelp['StatePensionYear.basicAmount']}>Grundbeløb</th>
+            <th title={fieldHelp['StatePensionYear.pensionSupplement']}>Pensionstillæg</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.owner?.id ?? ''}>
+              <td>{row.owner?.name ?? ''}</td>
+              <td>{kroner(display(row.basicAmount))}</td>
+              <td>{kroner(display(row.pensionSupplement))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="hint">
+        Folkepensionen står ikke i planen. Beløbene kommer fra årets officielle
+        satser, og året, de begynder i, følger af fødselsdatoen — den er hverken
+        tastet eller til at skrue på.
+      </p>
     </div>
   )
 }
