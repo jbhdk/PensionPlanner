@@ -115,6 +115,10 @@ _Avoid_: Ufuldstændig og uholdbar brugt om hele planen frem for om ét år, fej
 Angivelsen af hvornår en beholdning begynder at blive tømt, over hvor mange år, og efter hvilket beregningsprincip. Findes kun på de varianter, hvis `PayoutTaxation` er `PersonalIncome` — ratepensionen, som bærer alle tre, og livrenten, som kun bærer starten, fordi den er livsvarig. De skattefri ordninger har ingen: de tømmes af en overførsel. Starten er en `AgeBound` og aldrig et kalenderår: en beholdning har en ejer at måle alderen fra, og en plan, hvis udbetalinger ikke flytter sig med `WorkEndAge`, kan ikke sammenlignes med sig selv. Brugeren vælger start og varighed — ikke det årlige beløb, som følger af princippet og saldoen. Den sidste rate er resten: når årets afkast er tilskrevet og beholdningsskatten trukket, fejes det, der står tilbage, med i den, så beholdningen lukker på nul. En plan, der efterlod en splint, ville lade den stå i formuegrafen for evigt.
 _Avoid_: Udbetalingsstrategi, hæveplan, profil
 
+**Udbetalingsprincip** · `PayoutPrinciple`:
+Den af de to beregningsmåder, en udbetalingsplan regner årets rate efter: serieprincippet eller annuitetsprincippet. Et valg brugeren træffer og aldrig noget, der følger af ordningen — samme saldo og samme varighed giver hver sin ratekurve efter, hvad der er valgt. Livrenten har ingen: dens plan bærer kun starten.
+_Avoid_: Udbetalingsmetode, beregningsmetode, profil, strategi
+
 **Serieprincippet** · `SerialPrinciple`:
 Beregningsprincip hvor årets rate er saldoen ved årets begyndelse divideret med antallet af resterende udbetalingsår. Giver stigende rater ved positivt afkast.
 _Avoid_: Lineær udbetaling, ligedeling

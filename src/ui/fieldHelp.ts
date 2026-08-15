@@ -128,6 +128,15 @@ export const fieldHelp = {
   'Holding.payoutAgeOverride':
     'Den lavere grænse, en ordning har taget med sig fra en flytning mellem selskaber, sat direkte frem for udledt af tegningstidspunktet. Står feltet tomt, gælder det, regelsættet giver; står der et tal, er det tallet, der tæller.',
 
+  'PayoutSchedule.start':
+    'Den alder, hvor ordningen begynder at blive tømt. Bundet til erhvervsophør flytter hele forløbet sig, hvis året for arbejdets ophør senere ændres — og tidligere end lovens egen grænse kan den ikke sættes.',
+
+  'PayoutSchedule.duration':
+    'Hvor mange år ordningen tømmes over. Loven kræver mindst ti år, og den sidste rate skal falde senest tredive år efter den tidligste lovlige udbetaling. Flere år giver mindre om året og dermed en lavere skat af hvert enkelt beløb.',
+
+  'PayoutSchedule.principle':
+    'Hvordan årets beløb regnes af det, der står på ordningen ved årets begyndelse. Serieprincippet deler saldoen med de resterende år og giver stigende beløb, når afkastet er positivt; annuitetsprincippet regner med en lovfastsat rente og giver beløb, der er næsten lige store.',
+
   'Holding.annualCostRate':
     'Den samlede årlige pris for at have pengene stående hos selskabet eller banken, opgjort i procent af saldoen. Den trækkes fra det forventede afkast, før pengene forrentes.',
 
@@ -222,6 +231,9 @@ export const fieldHelp = {
   'YearTable.contributions':
     'Hvad der i alt landede i ordningerne i året. Det er penge, husstanden stadig har — de er blot flyttet — og de indgår derfor ikke i nettoresultatet længere til højre.',
 
+  'YearTable.payouts':
+    'Hvad ordningerne tilsammen tømte sig med i året. Pengene flytter sig blot over på bufferen, så husstanden har dem stadig — kun skatten af dem forsvinder, og derfor tæller de ikke med i nettoresultatet.',
+
   'YearResult.return':
     'Hvad alle beholdninger tilsammen forrentede sig med i året, før den skat beholdningerne selv betaler. Pengene bliver stående og bliver først til noget, der kan bruges, når der hæves.',
 
@@ -292,6 +304,9 @@ export const fieldHelp = {
 
   'HoldingYear.openingBalance':
     'Hvad der stod på beholdningen ved årets begyndelse — altså det, forrige år sluttede med.',
+
+  'HoldingYear.payout':
+    'Hvad ordningen tømte sig med i året — for en ratepension årets rate, som regnes af saldoen ved årets begyndelse. Pengene er ikke væk: de er flyttet over på bufferen, og kun skatten af dem forsvinder. En tankestreg betyder, at ordningen ikke har en plan for at blive tømt.',
 
   'HoldingYear.weightedFlow':
     'De penge, der kom til eller forsvandt undervejs i året, talt med efter hvor længe de nåede at være der. Sammen med saldoen ved årets begyndelse er det grundlaget, afkastet regnes af.',

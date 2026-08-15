@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import {
+  bearsPayoutSchedule,
   isEmployerAdministered,
   isFreeAssets,
   isFreeAssetsVariant,
@@ -13,6 +14,7 @@ import type {
   EntryId,
   Holding,
   HoldingId,
+  PayoutScheduleHolding,
   PensionSchemeHolding,
   Period,
   Person,
@@ -22,6 +24,7 @@ import type {
 } from '../engine/plan'
 import { latestRateYear } from '../engine/rates/rates'
 import { payoutAge, payoutRegime } from '../engine/payoutAge'
+import { payoutDurationBounds } from '../engine/validatePlan'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
 import type { YearResult } from '../engine/yearResult'
 import {
@@ -29,6 +32,7 @@ import {
   danish,
   danishTiming,
   directions,
+  payoutPrinciples,
   payoutRegimes,
   recurrences,
   timingForOnce,
@@ -54,6 +58,7 @@ import {
 } from './fields'
 import { procent } from './format'
 import {
+  addPayoutSchedule,
   findContribution,
   findEntry,
   findHolding,
@@ -64,6 +69,7 @@ import {
   removeContribution,
   removeEntry,
   removeHolding,
+  removePayoutSchedule,
   removePerson,
   removeTransfer,
   withContribution,
@@ -71,6 +77,7 @@ import {
   withEntry,
   withHolding,
   withHoldingOwner,
+  withPayoutSchedule,
   withPerson,
   withPensionScheme,
   withTransfer,
@@ -426,6 +433,14 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
           <PayoutFields plan={plan} holding={holding} owner={owner} onChange={onChange} />
         </Section>
       )}
+      {bearsPayoutSchedule(holding) && (
+        <PayoutScheduleSection
+          plan={plan}
+          holding={holding}
+          owner={owner}
+          onChange={onChange}
+        />
+      )}
     </>
   )
 }
@@ -514,6 +529,106 @@ function PayoutFields({
         </Hint>
       )}
     </>
+  )
+}
+
+/** Udbetalingsplanen: hvornår ordningen begynder at blive tømt, over hvor
+    mange år, og efter hvilket princip. Afsnittet står kun på de varianter,
+    varianttabellen giver en plan — ratepensionen i denne skive.
+
+    Planen slås ikke til og fra. Er den der, gælder den; skal den væk, slettes
+    den, ganske som en overførsel eller en indbetaling. En ratepension uden
+    plan er ikke en fejl: den bliver stående og vokser, og det ses i
+    formuegrafen. */
+function PayoutScheduleSection({
+  plan,
+  holding,
+  owner,
+  onChange,
+}: {
+  plan: Plan
+  holding: PayoutScheduleHolding
+  owner: Person
+  onChange: (plan: Plan) => void
+}) {
+  const payout = holding.payout
+  const earliest = payoutAge(holding, owner)
+
+  if (payout === undefined) {
+    return (
+      <Section
+        title="Udbetalingsplan"
+        action={
+          <button
+            type="button"
+            className="afsnit-tilfoej"
+            title="Læg en udbetalingsplan på ordningen"
+            onClick={() => onChange(addPayoutSchedule(plan, holding.id, earliest))}
+          >
+            + Tilføj
+          </button>
+        }
+      >
+        <Hint>
+          Uden en plan bliver ordningen stående og vokser hele forløbet
+          igennem. Den vises i formuegrafen som den formue, den er.
+        </Hint>
+      </Section>
+    )
+  }
+
+  return (
+    <Section
+      title="Udbetalingsplan"
+      action={
+        <button
+          type="button"
+          className="slet"
+          aria-label="Fjern udbetalingsplan"
+          title="Fjern udbetalingsplan — ordningen bliver stående og vokser"
+          onClick={() => onChange(removePayoutSchedule(plan, holding.id))}
+        >
+          <TrashIcon />
+        </button>
+      }
+    >
+      <AgeBoundField
+        label="Start"
+        help="PayoutSchedule.start"
+        value={payout.start}
+        workEndAge={owner.workEndAge}
+        bounds={{ min: earliest }}
+        onChange={(start) =>
+          onChange(
+            withPayoutSchedule(plan, holding.id, (p) => ({ ...p, start: start ?? earliest })),
+          )
+        }
+      />
+      <NumberField
+        label="Varighed"
+        help="PayoutSchedule.duration"
+        unit="år"
+        value={payout.duration}
+        bounds={payoutDurationBounds(holding, owner, payout.start)}
+        onChange={(duration) =>
+          onChange(withPayoutSchedule(plan, holding.id, (p) => ({ ...p, duration })))
+        }
+      />
+      <SelectField
+        label="Princip"
+        help="PayoutSchedule.principle"
+        value={danish(payoutPrinciples, payout.principle)}
+        options={Object.keys(payoutPrinciples)}
+        onChange={(choice) =>
+          onChange(
+            withPayoutSchedule(plan, holding.id, (p) => ({
+              ...p,
+              principle: payoutPrinciples[choice]!,
+            })),
+          )
+        }
+      />
+    </Section>
   )
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Contribution, Holding, HoldingVariant, Plan } from './plan'
+import type { Contribution, Holding, HoldingVariant, PayoutSchedule, Plan } from './plan'
 import { simulate } from './simulate'
 import { validatePlan } from './validatePlan'
 import {
@@ -3130,5 +3130,304 @@ describe('indbetalingens pegere', () => {
     }
 
     expect(() => simulate(plan)).toThrow(/samme person/i)
+  })
+})
+
+describe('ratepensionens udbetaling', () => {
+  it('deler primosaldoen med de resterende udbetalingsår og genberegner hvert år', () => {
+    // Serieprincippet, jf. `SerialPrinciple` i CONTEXT.md: raten er saldoen
+    // ved årets begyndelse divideret med antallet af resterende
+    // udbetalingsår, og den regnes forfra hvert år. Fødselsåret giver
+    // folkepensionsalder 70 og dermed pensionsudbetalingsalder 67 — året,
+    // ordningen tidligst må tømmes, er 2040.
+    const years = simulateChecked(
+      aPlan({
+        balance: 0,
+        holdings: [
+          {
+            id: 'ratepension',
+            name: 'Ratepension',
+            variant: 'InstalmentPension',
+            openedOn: { year: 2018, month: 1 },
+            balance: 1_000_000,
+            grossReturn: 0,
+            annualCostRate: 0,
+            payout: { start: 67, duration: 10, principle: 'SerialPrinciple' },
+          },
+        ],
+      }),
+    )
+
+    const inYear = (year: number) => holding(years.find((y) => y.year === year)!, 'ratepension')
+
+    expect(inYear(2039).payout).toBe(0)
+    expect(inYear(2040).payout).toBeCloseTo(100_000, 6)
+    expect(inYear(2040).closingBalance).toBeCloseTo(900_000, 6)
+    expect(inYear(2041).payout).toBeCloseTo(100_000, 6)
+    expect(inYear(2041).closingBalance).toBeCloseTo(800_000, 6)
+  })
+
+  it('beskatter raten som pensionsindkomst og holder den ude af årets indtægter', () => {
+    // Samme 400.000 kr. som ATP-posten længere oppe, og samme skat på kronen:
+    // raten er `PensionIncome` og krydser skattesømmet som sit eget tal, jf.
+    // ADR-0023. Men den er ikke `income` — den flytter penge fra
+    // beholdningen til bufferen og lader formuen uændret, præcis som en
+    // overførsel. Kun dens skat sætter aftryk i balanceinvarianten, som
+    // `simulateChecked` prøver for hvert år.
+    const years = simulateChecked(
+      aPlan({
+        balance: 0,
+        holdings: [
+          {
+            id: 'ratepension',
+            name: 'Ratepension',
+            variant: 'InstalmentPension',
+            openedOn: { year: 2018, month: 1 },
+            balance: 4_000_000,
+            grossReturn: 0,
+            annualCostRate: 0,
+            payout: { start: 67, duration: 10, principle: 'SerialPrinciple' },
+          },
+        ],
+      }),
+    )
+
+    const year = years.find((y) => y.year === 2040)!
+    const { tax } = year.persons[0]!
+
+    expect(holding(year, 'ratepension').payout).toBeCloseTo(400_000, 6)
+    expect(tax.layers.labourMarketContribution.amount).toBe(0)
+    expect(tax.personalIncome).toBeCloseTo(400_000, 6)
+    expect(tax.allowances.employmentAllowance).toBe(0)
+    expect(year.tax).toBeCloseTo(131_891.67, 2)
+
+    expect(year.income).toBe(0)
+    expect(bufferBalance(year)).toBeCloseTo(400_000 - 131_891.67, 2)
+  })
+
+  it('regner en ratepension uden udbetalingsplan uden at fejle, og lader den vokse', () => {
+    // Feltet er valgfrit: en ratepension, brugeren endnu ikke har besluttet
+    // sig om, skal kunne stå i planen. Uden plan bliver den stående og
+    // vokser, og det ses i formuegrafen.
+    const years = simulateChecked(
+      aPlan({
+        balance: 0,
+        holdings: [
+          {
+            id: 'ratepension',
+            name: 'Ratepension',
+            variant: 'InstalmentPension',
+            openedOn: { year: 2018, month: 1 },
+            balance: 1_000_000,
+            grossReturn: 0.05,
+            annualCostRate: 0,
+          },
+        ],
+      }),
+    )
+
+    expect(years.every((year) => holding(year, 'ratepension').payout === 0)).toBe(true)
+
+    // PAL-skatten tager 15,3 % af afkastet; saldoen vokser hele horisonten
+    // igennem og bliver aldrig tømt.
+    const last = holding(years.at(-1)!, 'ratepension')
+    expect(last.closingBalance).toBeGreaterThan(1_000_000)
+    expect(holding(years[0]!, 'ratepension').closingBalance).toBeCloseTo(
+      1_000_000 * (1 + 0.05 * (1 - 0.153)),
+      6,
+    )
+  })
+
+  it('fejer resten med i den sidste rate, så beholdningen lukker på præcis nul', () => {
+    // Året har både afkast og beholdningsskat, og de er netop det, fejningen
+    // skal tage med: når afkastet er tilskrevet og PAL-skatten trukket,
+    // lægges det resterende til sidste års rate. Fejningen sker efter
+    // afkastet og har derfor vægt nul — ingen cirkularitet, og rækkefølgen i
+    // diagram 02 holder.
+    const years = simulateChecked(
+      aPlan({
+        balance: 0,
+        holdings: [
+          {
+            id: 'ratepension',
+            name: 'Ratepension',
+            variant: 'InstalmentPension',
+            openedOn: { year: 2018, month: 1 },
+            balance: 1_000_000,
+            grossReturn: 0.05,
+            annualCostRate: 0,
+            payout: { start: 67, duration: 10, principle: 'SerialPrinciple' },
+          },
+        ],
+      }),
+    )
+
+    const last = holding(years.find((year) => year.year === 2049)!, 'ratepension')
+
+    expect(last.closingBalance).toBeCloseTo(0, 6)
+    // Uden fejningen ville serieprincippet have udbetalt primosaldoen selv og
+    // ladt årets afkast efter skat blive stående.
+    expect(last.payout).toBeCloseTo(last.openingBalance + last.return - last.tax, 6)
+    expect(last.payout).toBeGreaterThan(last.openingBalance)
+  })
+
+  it('lader en tømt ratepension blive stående med saldo nul', () => {
+    const years = simulateChecked(
+      aPlan({
+        balance: 0,
+        holdings: [
+          {
+            id: 'ratepension',
+            name: 'Ratepension',
+            variant: 'InstalmentPension',
+            openedOn: { year: 2018, month: 1 },
+            balance: 1_000_000,
+            grossReturn: 0.05,
+            annualCostRate: 0,
+            payout: { start: 67, duration: 10, principle: 'SerialPrinciple' },
+          },
+        ],
+      }),
+    )
+
+    // Rækken findes i hvert eneste år efter tømningen — også det sidste i
+    // horisonten — med saldo nul, ingen rate og intet afkast.
+    const after = years.filter((year) => year.year > 2049)
+    expect(after.length).toBeGreaterThan(0)
+    for (const year of after) {
+      const emptied = holding(year, 'ratepension')
+      expect(emptied.closingBalance).toBeCloseTo(0, 6)
+      expect(emptied.payout).toBe(0)
+      expect(emptied.return).toBeCloseTo(0, 6)
+    }
+  })
+
+  it('flytter en erhvervsophørsforankret udbetalingsstart, når WorkEndAge ændres', () => {
+    // Startpunktet er en `AgeBound`: sat til erhvervsophør følger hele
+    // forløbet `Person.workEndAge`, uden at planen redigeres. Det er dét, der
+    // gør to scenarier sammenlignelige ved at ændre ét tal. Erhvervsophøret
+    // skal ligge på eller efter pensionsudbetalingsalderen, som er 67 for
+    // denne årgang.
+    const firstPayoutYear = (workEndAge: number) => {
+      const years = simulateChecked(
+        aPlan({
+          balance: 0,
+          workEndAge,
+          holdings: [
+            {
+              id: 'ratepension',
+              name: 'Ratepension',
+              variant: 'InstalmentPension',
+              openedOn: { year: 2018, month: 1 },
+              balance: 1_000_000,
+              grossReturn: 0,
+              annualCostRate: 0,
+              payout: { start: 'WorkEndAge', duration: 10, principle: 'SerialPrinciple' },
+            },
+          ],
+        }),
+      )
+      return years.find((year) => holding(year, 'ratepension').payout > 0)!.year
+    }
+
+    expect(firstPayoutYear(67)).toBe(2040)
+    expect(firstPayoutYear(70)).toBe(2043)
+  })
+
+  it('regner annuitetsprincippets rate med satsårets amortisationsrente', () => {
+    // Annuiteten af primosaldoen over de resterende udbetalingsår, med
+    // satsårets amortisationsrente på 3,22 % — Finans Danmarks tal for
+    // udbetalingsåret 2026, jf. docs/satser/2026.md og PBL § 11 A, stk. 3:
+    //
+    //   1.000.000 × 0,0322 ÷ (1 − 1,0322⁻¹⁰) = 118.550,49
+    //
+    // Renten er ikke beholdningens nettoafkast: her er afkastet nul, og
+    // raten er alligevel de 118.550,49 og ikke seriens 100.000.
+    const years = simulateChecked(
+      aPlan({
+        balance: 0,
+        holdings: [
+          {
+            id: 'ratepension',
+            name: 'Ratepension',
+            variant: 'InstalmentPension',
+            openedOn: { year: 2018, month: 1 },
+            balance: 1_000_000,
+            grossReturn: 0,
+            annualCostRate: 0,
+            payout: { start: 67, duration: 10, principle: 'AnnuityPrinciple' },
+          },
+        ],
+      }),
+    )
+
+    const first = holding(years.find((year) => year.year === 2040)!, 'ratepension')
+    expect(first.payout).toBeCloseTo(118_550.49, 2)
+
+    // Andet år: samme annuitet af den nye primosaldo over ni år. Uden afkast
+    // falder raten, fordi saldoen faldt mere end nævneren voksede — det er
+    // først med et afkast, at raterne bliver tilnærmelsesvis lige store.
+    const second = holding(years.find((year) => year.year === 2041)!, 'ratepension')
+    expect(second.openingBalance).toBeCloseTo(1_000_000 - 118_550.49, 2)
+    expect(second.payout).toBeCloseTo((second.openingBalance * 0.0322) / (1 - 1.0322 ** -9), 6)
+  })
+})
+
+/** En plan med én ratepension og den udbetalingsplan, testen handler om.
+    Ordningen er oprettet i januar 2018 og ejeren født i juni 1973, så
+    pensionsudbetalingsalderen er 67 og året, den nås, 2040. */
+function aPlanWithPayout(payout: PayoutSchedule): Plan {
+  return aPlan({
+    balance: 0,
+    holdings: [
+      {
+        id: 'ratepension',
+        name: 'Ratepension',
+        variant: 'InstalmentPension',
+        openedOn: { year: 2018, month: 1 },
+        balance: 1_000_000,
+        grossReturn: 0,
+        annualCostRate: 0,
+        payout,
+      },
+    ],
+  })
+}
+
+/** De tre lovregler om udbetalingsplanen, jf. PBL § 11 A, stk. 1. De afvises
+    ved indgangen og ikke som et årsresultat: svaret er det samme i alle
+    simuleringsår og afhænger ikke af et satsår, jf. ADR-0020. Fladen
+    forhindrer dem desuden med et `min` på feltet, men en importeret JSON-fil
+    er ikke gået gennem et felt. */
+describe('udbetalingsplanens lovregler', () => {
+  it('afviser en udbetaling, der begynder før pensionsudbetalingsalderen', () => {
+    const early = aPlanWithPayout({ start: 66, duration: 10, principle: 'SerialPrinciple' })
+    const legal = aPlanWithPayout({ start: 67, duration: 10, principle: 'SerialPrinciple' })
+
+    expect(validatePlan(early)).toMatch(/pensionsudbetalingsalder/i)
+    expect(() => simulate(early)).toThrow(/pensionsudbetalingsalder/i)
+    expect(validatePlan(legal)).toBeUndefined()
+  })
+
+  it('afviser en udbetaling, der løber under ti år', () => {
+    const short = aPlanWithPayout({ start: 67, duration: 9, principle: 'SerialPrinciple' })
+    const legal = aPlanWithPayout({ start: 67, duration: 10, principle: 'SerialPrinciple' })
+
+    expect(validatePlan(short)).toMatch(/ti år|10 år/i)
+    expect(() => simulate(short)).toThrow(/ti år|10 år/i)
+    expect(validatePlan(legal)).toBeUndefined()
+  })
+
+  it('afviser en sidste rate, der falder mere end tredive år efter pensionsudbetalingsalderen', () => {
+    // Pensionsudbetalingsalderen nås i 2040, så den sidste rate må falde i
+    // 2070 og ikke senere. En udbetaling fra 2040 over 31 år slutter præcis
+    // dér; 32 år er ét år for meget. Grænsen måles i kalenderår og ikke i
+    // aldre, ganske som starten.
+    const legal = aPlanWithPayout({ start: 67, duration: 31, principle: 'SerialPrinciple' })
+    const late = aPlanWithPayout({ start: 67, duration: 32, principle: 'SerialPrinciple' })
+
+    expect(validatePlan(legal)).toBeUndefined()
+    expect(validatePlan(late)).toMatch(/2070|tredive|30 år/i)
+    expect(() => simulate(late)).toThrow(/2070|tredive|30 år/i)
   })
 })

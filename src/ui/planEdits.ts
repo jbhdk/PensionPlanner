@@ -1,15 +1,20 @@
 import {
+  bearsPayoutSchedule,
   isEmployerAdministered,
   isFreeAssets,
   isPensionScheme,
   isPensionSchemeVariant,
+  payoutScheduleOf,
 } from '../engine/holdingVariant'
+import { minimumPayoutYears } from '../engine/validatePlan'
 import type {
+  AgeBound,
   Contribution,
   Direction,
   Entry,
   Holding,
   HoldingVariant,
+  PayoutSchedule,
   PensionSchemeHolding,
   Person,
   Plan,
@@ -233,6 +238,54 @@ export function withPensionScheme(
   return withHolding(plan, id, (holding) =>
     isPensionScheme(holding) ? change(holding) : holding,
   )
+}
+
+/** Lægger en udbetalingsplan på beholdningen. Starten er den tidligste, loven
+    tillader, varigheden den korteste, og princippet det, der kan forstås uden
+    en sats — de tre er ikke et gæt på, hvad brugeren vil, men det eneste sæt,
+    der med sikkerhed er lovligt, uanset hvornår ordningen må udbetales.
+    Brugeren retter dem i skuffen ved siden af.
+
+    Beholdninger, der ikke kan bære en plan, står urørt: knappen tilbydes
+    aldrig for dem, og reglen spørger varianttabellen frem for at nævne
+    ratepensionen ved navn, jf. ADR-0010. */
+export function addPayoutSchedule(plan: Plan, id: string, start: AgeBound): Plan {
+  return withHolding(plan, id, (holding) =>
+    bearsPayoutSchedule(holding)
+      ? {
+          ...holding,
+          payout: { start, duration: minimumPayoutYears, principle: 'SerialPrinciple' },
+        }
+      : holding,
+  )
+}
+
+/** Fjerner udbetalingsplanen igen. Feltet forsvinder helt frem for at stå som
+    `undefined`: et felt, der ligger og venter i det gemte skema, er en løgn,
+    der aldrig fejler, jf. ADR-0015. */
+export function removePayoutSchedule(plan: Plan, id: string): Plan {
+  return withHolding(plan, id, (holding) => {
+    if (!bearsPayoutSchedule(holding)) return holding
+    const { payout: _payout, ...rest } = holding
+    return rest
+  })
+}
+
+/** Redigerer en beholdnings udbetalingsplan, og lader beholdningen stå, hvis
+    den ingen har. Samme form og samme grund som `withPensionScheme`:
+    `withHolding` giver hele unionen ind, og en plan skrevet dér ville være et
+    felt, fem af seks varianter ikke har. */
+export function withPayoutSchedule(
+  plan: Plan,
+  id: string,
+  change: (payout: PayoutSchedule) => PayoutSchedule,
+): Plan {
+  return withHolding(plan, id, (holding) => {
+    const payout = payoutScheduleOf(holding)
+    return bearsPayoutSchedule(holding) && payout !== undefined
+      ? { ...holding, payout: change(payout) }
+      : holding
+  })
 }
 
 /** Skifter beholdningens variant, og flytter med det de felter, den nye

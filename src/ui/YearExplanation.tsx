@@ -1,3 +1,4 @@
+import { payoutScheduleOf } from '../engine/holdingVariant'
 import type { Holding, Person, Plan } from '../engine/plan'
 import { returnWeight } from '../engine/simulate'
 import type { ShareIncomeLayer } from '../engine/tax/assessHousehold'
@@ -424,6 +425,12 @@ function HoldingsBlock({
           <tr>
             <th title={fieldHelp['HoldingYear.holding']}>Beholdning</th>
             <th title={fieldHelp['HoldingYear.openingBalance']}>Primosaldo</th>
+            {/* Raten står ved siden af den primosaldo, den er regnet af:
+                den relation er lovens egen, og læseren skal kunne se den
+                uden at lede. En beholdning uden udbetalingsplan får en
+                tankestreg og ikke et nul — der er ingen plan, ikke en plan
+                der gav nul. */}
+            <th title={fieldHelp['HoldingYear.payout']}>Udbetaling</th>
             <th title={fieldHelp['HoldingYear.weightedFlow']}>Vægtet strøm</th>
             {/* Samme sats som skuffens *Nettoafkast* og derfor samme
                 forklaring — ét tal, ét opslag. */}
@@ -440,6 +447,11 @@ function HoldingsBlock({
               <tr key={holding.id}>
                 <td>{holding.name}</td>
                 <td>{kroner(display(h.openingBalance))}</td>
+                <td>
+                  {payoutScheduleOf(holding) === undefined
+                    ? '—'
+                    : kroner(display(h.payout))}
+                </td>
                 <td>{kroner(display(h.weightedFlow))}</td>
                 <td>{procent(holding.grossReturn - holding.annualCostRate)}</td>
                 <td>{kroner(display(h.return))}</td>

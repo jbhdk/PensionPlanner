@@ -13,10 +13,27 @@ import { formatNumber, parseNumber } from './planEdits'
     total: et nyt felt uden forklaring skal fejle i oversætteren og ikke i
     et review. Teksten hænger på etiketten, som er det, man peger på. */
 
-export function Section({ title, children }: { title: string; children: ReactNode }) {
+/** Et afsnit i skuffen. `action` er den ene knap, afsnittet selv kan bære —
+    den, der lægger afsnittets figur til eller fjerner den igen. Den ligger på
+    overskriftslinjen og ikke mellem felterne, så det er tydeligt, hvad den
+    gælder: afsnittet, ikke det felt den tilfældigvis står nærmest. */
+export function Section({
+  title,
+  action,
+  children,
+}: {
+  title: string
+  action?: ReactNode
+  children: ReactNode
+}) {
   return (
     <section className="afsnit">
+      {/* Knappen står som overskriftens søskende og ikke inde i den:
+          overskriftens tekst er afsnittets navn og bruges som sådan, og en
+          knap inden i den ville lægge sin egen tekst til navnet. Den
+          placeres oven på overskriftslinjen af `.afsnit-handling`. */}
       <h3>{title}</h3>
+      {action && <span className="afsnit-handling">{action}</span>}
       {children}
     </section>
   )
@@ -129,6 +146,23 @@ function useNumberText<T>(
   }
 }
 
+/** Et talfelts nedre og øvre grænse. Værdien, feltet giver videre, klemmes
+    ind i dem, så almindelig indtastning ikke kan skrive en plan, motoren
+    afviser — reglen selv står i `validatePlan`, fordi en importeret fil ikke
+    er gået gennem et felt, og grænsen her er dens venlige udgave.
+
+    Det er værdien, der klemmes, og ikke teksten: den bliver stående, mens der
+    tastes, så et felt med en nedre grænse på ti stadig kan tastes ét ciffer
+    ad gangen. Først når feltet forlades, retter teksten sig ind efter den
+    værdi, planen faktisk fik. */
+export type Bounds = { min?: number; max?: number }
+
+function clampTo(value: number, bounds: Bounds | undefined): number {
+  if (bounds === undefined) return value
+  const atLeast = bounds.min === undefined ? value : Math.max(value, bounds.min)
+  return bounds.max === undefined ? atLeast : Math.min(atLeast, bounds.max)
+}
+
 /** Tomt betyder "ikke sat" — et åbent periodeendepunkt, altså fra planens
     start eller til horisontens slut. Modstykket til `formatNumber`, hvor tomt
     ville have parset til 0. */
@@ -145,15 +179,23 @@ export function NumberField({
   help,
   unit,
   value,
+  bounds,
   onChange,
 }: {
   label: string
   help: FieldHelpKey
   unit?: string
   value: number
+  /** Udeladt betyder et frit tal. Se `Bounds`. */
+  bounds?: Bounds
   onChange: (value: number) => void
 }) {
-  const tal = useNumberText(value, formatNumber, parseNumber, onChange)
+  const tal = useNumberText(
+    value,
+    formatNumber,
+    (text) => clampTo(parseNumber(text), bounds),
+    onChange,
+  )
 
   return (
     <Field label={label} help={help} unit={unit}>
@@ -195,6 +237,7 @@ export function AgeBoundField({
   help,
   value,
   workEndAge,
+  bounds,
   onChange,
 }: {
   label: string
@@ -205,13 +248,21 @@ export function AgeBoundField({
       det, spørgsmålet handler om, og den skal kunne læses uden at klikke
       tilvalget fra igen. */
   workEndAge: number
+  /** Udeladt betyder en fri alder, og feltet kan da også stå tomt — sådan
+      skrives et åbent periodeendepunkt. Er en nedre grænse sat, er
+      endepunktet påkrævet, og et tømt felt falder tilbage på grænsen: en
+      udbetalingsplan skal begynde et sted. Se `Bounds`. */
+  bounds?: Bounds
   onChange: (value: AgeBound | undefined) => void
 }) {
   const followsWorkEnd = value === 'WorkEndAge'
   const tal = useNumberText<AgeBound | undefined>(
     value,
     (bound) => (bound === 'WorkEndAge' ? formatNumber(workEndAge) : formatOptional(bound)),
-    parseOptional,
+    (text) => {
+      const parsed = parseOptional(text)
+      return parsed === undefined ? bounds?.min : clampTo(parsed, bounds)
+    },
     onChange,
   )
 

@@ -177,10 +177,10 @@ describe('feltforklaringerne', () => {
     render(<App initialPlan={aRichPlan()} />)
     await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
 
-    // Ni faste kolonner plus én pr. person. Tallet står her, så løkken ikke
+    // Ti faste kolonner plus én pr. person. Tallet står her, så løkken ikke
     // kan komme til at prøve ingenting.
     const headers = screen.getAllByRole('columnheader')
-    expect(headers.length).toBe(10)
+    expect(headers.length).toBe(11)
     for (const header of headers) {
       expect(header.title, `Årstabellen › ${header.textContent}`).not.toBe('')
     }

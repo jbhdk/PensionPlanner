@@ -3,6 +3,7 @@ import type {
   Anchor,
   Direction,
   HoldingVariant,
+  PayoutPrinciple,
   Recurrence,
   TaxTreatment,
   Timing,
@@ -37,6 +38,14 @@ export const payoutRegimes: Record<PayoutRegime, string> = {
   BeforeMay2007: 'Før 1. maj 2007',
   May2007ToDecember2017: '1. maj 2007 – 31. december 2017',
   FromJanuary2018: '1. januar 2018 eller senere',
+}
+
+/** De to måder, en udbetalingsplan kan regne årets rate på. Serieprincippet
+    står først, fordi det er det, en plan får, når den lægges: det deler
+    saldoen med de resterende år og kræver ingen sats at forstå. */
+export const payoutPrinciples: Record<string, PayoutPrinciple> = {
+  Serieprincippet: 'SerialPrinciple',
+  Annuitetsprincippet: 'AnnuityPrinciple',
 }
 
 /** Rækkefølgen er indkomstens vej gennem livet: arbejdsindkomsten først,

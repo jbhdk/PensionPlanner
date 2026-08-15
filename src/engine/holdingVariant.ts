@@ -2,6 +2,8 @@ import type {
   Holding,
   HoldingVariant,
   Nominal,
+  PayoutSchedule,
+  PayoutScheduleHolding,
   PensionSchemeHolding,
   PensionSchemeVariant,
 } from './plan'
@@ -26,14 +28,24 @@ export type CappedVariant = (typeof cappedVariants)[number]
     finde og rette — jf. ADR-0010, hvor varianten er aksen og beskatningen
     ikke et felt ved siden af den.
 
-    Denne skive bruger seks kolonner. */
+    Denne skive bruger syv kolonner. */
 const table: {
-  [V in HoldingVariant]: Row & { cap: V extends CappedVariant ? CapRule : undefined }
+  [V in HoldingVariant]: Row & {
+    cap: V extends CappedVariant ? CapRule : undefined
+    /** Om varianten bærer en `PayoutSchedule` i det gemte skema. Cellen kan
+        ikke komme ud af trit med typen: den er sand netop for de medlemmer af
+        unionen, der har feltet, og falsk for alle andre. Får livrenten sin
+        plan, skifter cellen af sig selv — og gør den ikke, er det en
+        oversætterfejl og ikke et afsnit i skuffen, der tegner felter, planen
+        ikke kan tage imod. */
+    payoutSchedule: 'payout' extends keyof Extract<Holding, { variant: V }> ? true : false
+  }
 } = {
   InstalmentPension: {
     freeAssets: false,
     holdingTaxRate: 'palTaxRate',
     deductibility: true,
+    payoutSchedule: true,
     uniquePerPerson: false,
     employerAdministered: true,
     cap: {
@@ -45,6 +57,7 @@ const table: {
     freeAssets: false,
     holdingTaxRate: 'palTaxRate',
     deductibility: true,
+    payoutSchedule: false,
     uniquePerPerson: false,
     employerAdministered: true,
     cap: undefined,
@@ -53,6 +66,7 @@ const table: {
     freeAssets: false,
     holdingTaxRate: 'palTaxRate',
     deductibility: false,
+    payoutSchedule: false,
     uniquePerPerson: false,
     employerAdministered: true,
     cap: {
@@ -67,6 +81,7 @@ const table: {
     freeAssets: false,
     holdingTaxRate: 'shareSavingsAccountTaxRate',
     deductibility: false,
+    payoutSchedule: false,
     uniquePerPerson: true,
     employerAdministered: false,
     cap: {
@@ -78,6 +93,7 @@ const table: {
     freeAssets: true,
     holdingTaxRate: undefined,
     deductibility: false,
+    payoutSchedule: false,
     uniquePerPerson: false,
     employerAdministered: false,
     cap: undefined,
@@ -86,6 +102,7 @@ const table: {
     freeAssets: true,
     holdingTaxRate: undefined,
     deductibility: false,
+    payoutSchedule: false,
     uniquePerPerson: false,
     employerAdministered: false,
     cap: undefined,
@@ -228,6 +245,27 @@ export function isUniquePerPerson(variant: HoldingVariant): boolean {
     ADR-0016. */
 export function isEmployerAdministered(holding: Holding): boolean {
   return table[holding.variant].employerAdministered
+}
+
+/** Om beholdningen kan bære en udbetalingsplan, jf. `PayoutSchedule` i
+    CONTEXT.md. Svaret indsnævrer typen, så planen kan skrives uden et cast.
+
+    Spørgsmålet er ikke, om beholdningen *har* en plan: feltet er valgfrit, og
+    en ratepension uden plan bliver stående og vokser. Det er dét skel, der
+    lader skuffen tilbyde en plan dér, hvor der endnu ingen er. */
+export function bearsPayoutSchedule(holding: Holding): holding is PayoutScheduleHolding {
+  return table[holding.variant].payoutSchedule
+}
+
+/** Beholdningens udbetalingsplan, eller `undefined` når varianten ingen kan
+    bære, eller når brugeren ikke har lagt en.
+
+    Det ene sted, feltet læses. Både motoren, indgangskontrollen og fladen
+    spørger herigennem, så ingen af dem nævner `InstalmentPension` ved navn
+    for at komme til en plan — hvilke varianter der har en, er variantens egen
+    viden, jf. ADR-0010 og ADR-0022. */
+export function payoutScheduleOf(holding: Holding): PayoutSchedule | undefined {
+  return bearsPayoutSchedule(holding) ? holding.payout : undefined
 }
 
 /** Satsnøglen for beholdningens egen skat på årets afkast, eller `undefined`

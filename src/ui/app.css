@@ -436,11 +436,38 @@ body {
 }
 
 .afsnit {
+  position: relative;
   margin: 10px 10px 0;
   padding: 13px 15px;
   background: var(--flade);
   border: 1px solid var(--linje);
   border-radius: 6px;
+}
+
+/* Afsnittets ene knap — den, der lægger afsnittets figur til eller fjerner
+   den igen. Den ligger oven på overskriftslinjen frem for inde i overskriften,
+   så overskriftens tekst bliver ved med at være afsnittets navn og intet
+   andet. */
+.afsnit-handling {
+  position: absolute;
+  top: 10px;
+  right: 13px;
+  display: flex;
+  align-items: center;
+}
+
+.afsnit-tilfoej {
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--f-broed);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.afsnit-tilfoej:hover {
+  color: var(--ink);
 }
 
 .afsnit > h3 {

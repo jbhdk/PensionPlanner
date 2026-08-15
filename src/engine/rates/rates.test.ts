@@ -58,6 +58,10 @@ describe('rateYearFor', () => {
 
     expect(rates.bracketTaxRates).toEqual(rateYear2026.bracketTaxRates)
     expect(rates.taxRates).toEqual(rateYear2026.taxRates)
+    // Amortisationsrenten er en procent som de øvrige og holdes uændret ved
+    // fremskrivning — også selv om Finans Danmark fastsætter den hvert år.
+    // Satsåret er stadig tilgængeligt for et fremskrevet år, jf. ADR-0005.
+    expect(rates.amortisationRate).toEqual(rateYear2026.amortisationRate)
     expect(rates.taxCeiling).toEqual(rateYear2026.taxCeiling)
     expect(rates.allowanceRates).toEqual(rateYear2026.allowanceRates)
   })

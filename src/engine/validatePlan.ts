@@ -1,5 +1,11 @@
-import { isEmployerAdministered, isFreeAssets, isUniquePerPerson } from './holdingVariant'
-import type { Holding, HoldingId, Plan } from './plan'
+import {
+  bearsPayoutSchedule,
+  isEmployerAdministered,
+  isFreeAssets,
+  isUniquePerPerson,
+} from './holdingVariant'
+import { payoutStartYear, payoutYear } from './payoutAge'
+import type { AgeBound, Holding, HoldingId, PensionSchemeHolding, Person, Plan } from './plan'
 
 /** Planen skal beskrive noget, der kan eksistere, før motoren kan regne på
     den. Hvervet er to slags regler.
@@ -33,8 +39,99 @@ export function validatePlan(plan: Plan): string | undefined {
     contributionEnds(plan) ??
     entryOwners(plan) ??
     oneOfEachUniqueVariant(plan) ??
-    entrySourcedDestination(plan)
+    entrySourcedDestination(plan) ??
+    payoutSchedules(plan)
   )
+}
+
+/** Udbetalingsplanens lovregler, jf. [PBL § 11 A, stk.
+    1](https://danskelove.dk/pensionsbeskatningsloven/11a): udbetalingen må
+    tidligst begynde ved ordningens pensionsudbetalingsalder, perioden skal
+    være mindst ti år, og den sidste rate skal falde senest tredive år efter
+    den alder.
+
+    De hører ved indgangen og ikke i årsresultatet, jf. ADR-0020: svaret
+    afhænger ikke af et satsår, kun af planen selv, og en plan, der beskrev
+    en ordning, loven ikke ville oprette, ville regne uden at kaste.
+
+    Alt måles i kalenderår og aldrig i aldre. Pensionsudbetalingsalderen er
+    ofte en brøk — folkepensionsalderen minus fem eller tre — og året, hvor
+    personen fylder 62,5, indeholder lovlige udbetalingsmåneder. En plan, der
+    starter dér, findes i virkeligheden, jf. `payoutYear`. */
+function payoutSchedules(plan: Plan): string | undefined {
+  for (const person of plan.household.persons) {
+    for (const holding of person.holdings) {
+      // Varianttabellen indsnævrer typen, og de varianter, der kan bære en
+      // plan, er alle en `PensionScheme` — det er dét, der giver reglerne
+      // herunder en `PayoutAge` at måle mod uden en antagelse undervejs.
+      if (!bearsPayoutSchedule(holding)) continue
+      const schedule = holding.payout
+      if (schedule === undefined) continue
+
+      const legal = payoutYear(holding, person)
+      const start = payoutStartYear(schedule.start, person)
+      if (start < legal) {
+        return (
+          `Beholdningen ${holding.id} udbetales fra ${start}, men dens ` +
+          `pensionsudbetalingsalder nås først i ${legal}.`
+        )
+      }
+      if (schedule.duration < minimumPayoutYears) {
+        return (
+          `Beholdningen ${holding.id} udbetales over ${schedule.duration} år. ` +
+          `En ratepension skal udbetales over mindst ${minimumPayoutYears} år.`
+        )
+      }
+
+      // Den sidste rate falder i startårets `duration`-te år og altså
+      // `duration − 1` år efter starten. Ét år galt her ville lade en plan,
+      // loven afviser, regne igennem.
+      const last = start + schedule.duration - 1
+      const latest = legal + latestPayoutYearsAfterPayoutAge
+      if (last > latest) {
+        return (
+          `Beholdningen ${holding.id} udbetaler sin sidste rate i ${last}. ` +
+          `Den skal falde senest i ${latest}, ${latestPayoutYearsAfterPayoutAge} år ` +
+          `efter pensionsudbetalingsalderen.`
+        )
+      }
+    }
+  }
+  return undefined
+}
+
+/** PBL § 11 A, stk. 1, nr. 4: udbetalingsperioden skal være mindst ti år.
+    Grænsen står i loven og ikke i § 20-tabellen og hører derfor ikke i
+    satsåret — samme sted som aldersopsparingens syvårsgrænse, og af samme
+    grund. Eksporteret, så skuffens standardvarighed er den samme værdi og
+    ikke et tal, der kan skille sig fra reglen. */
+export const minimumPayoutYears = 10
+
+/** PBL § 11 A, stk. 1, nr. 4: sidste rate skal falde senest tredive år efter
+    pensionsudbetalingsalderen. Står i loven af samme grund som
+    `minimumPayoutYears` og hører derfor samme sted. */
+const latestPayoutYearsAfterPayoutAge = 30
+
+/** Varighedens to grænser for en plan, der begynder ved `start`: mindst ti
+    år, og aldrig så mange at den sidste rate falder senere end tredive år
+    efter pensionsudbetalingsalderen.
+
+    Samme to regler som afvisningen ovenfor, udledt af de samme tal. De står
+    her frem for i fladen, så feltets grænser og motorens afvisning ikke kan
+    skille sig: en grænse regnet to steder er en grænse, der før eller siden
+    siger to ting.
+
+    Den øvre grænse falder aldrig under den nedre. Ligger starten så sent, at
+    de tredive år er brugt op, findes der ingen lovlig varighed — feltet har
+    da ingen at tilbyde, og afvisningen ovenfor er den, der siger hvorfor. */
+export function payoutDurationBounds(
+  holding: PensionSchemeHolding,
+  owner: Person,
+  start: AgeBound,
+): { min: number; max: number } {
+  const latest = payoutYear(holding, owner) + latestPayoutYearsAfterPayoutAge
+  const room = latest - payoutStartYear(start, owner) + 1
+  return { min: minimumPayoutYears, max: Math.max(minimumPayoutYears, room) }
 }
 
 /** En variant, personen kun kan have én af, må ikke stå to gange hos samme

@@ -29,6 +29,20 @@ function municipalTaxFromDoc(): Record<string, { municipalTaxRate: number; churc
   return result
 }
 
+/** Amortisationsrenten læst af docs/satser/2026.md, af samme grund som
+    kommunetabellen: dokumentet er forlægget, og satsårsfilen er en afskrift
+    af det. Renten er Finans Danmarks og hverken en § 20-grænse eller en
+    skattesats — den har sin egen kilde og sin egen tabel i dokumentet. */
+function amortisationRateFromDoc(): number {
+  const doc = readFileSync(
+    fileURLToPath(new URL('../../../docs/satser/2026.md', import.meta.url)),
+    'utf8',
+  )
+  const section = doc.split('## Amortisationsrenten')[1]!.split(/\n## /)[0]!
+  const match = /\| Amortisationsrente \| ([\d,]+) % \|/.exec(section)!
+  return Number(match[1]!.replace(',', '.')) / 100
+}
+
 /** Satsårets egen selvkontrol, jf. docs/satser/2026.md.
 
     Bortfaldsgrænsen er ikke et selvstændigt tal, men en konsekvens af de tre
@@ -116,6 +130,14 @@ describe('satsår 2026', () => {
     // Kommune- og kirkeskatteprocenterne er læst direkte af Skatteministeriets
     // egen Excel-eksport, ikke krydstjekket sekundært, så heller ikke den er ⚠︎.
     expect(rateYear2026.municipalTax.unconfirmed).toEqual([])
+  })
+
+  it('bærer amortisationsrenten med samme tal som docs/satser/2026.md', () => {
+    // Renten er ikke beholdningens nettoafkast, og de to må ikke bytte plads.
+    // Den fastsættes af Finans Danmark for hvert udbetalingsår efter PBL
+    // § 11 A, stk. 3, og hører derfor i satsåret.
+    expect(rateYear2026.amortisationRate.rate).toBeCloseTo(0.0322, 10)
+    expect(rateYear2026.amortisationRate.rate).toBeCloseTo(amortisationRateFromDoc(), 10)
   })
 
   it('slår op for alle ca. 98 kommuner, og med samme tal som docs/satser/2026.md', () => {

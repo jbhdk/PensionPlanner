@@ -49,6 +49,13 @@ export function YearTable({
             <th scope="col" title={fieldHelp['YearTable.contributions']}>
               Indbetalinger
             </th>
+            {/* Raterne ud af ordningerne, lagt sammen. De står ved siden af
+                indbetalingerne, fordi de er den samme slags: en bevægelse
+                inden for husstanden og ikke en indtægt. Kun deres skat
+                sætter aftryk, og de indgår derfor ikke i nettoresultatet. */}
+            <th scope="col" title={fieldHelp['YearTable.payouts']}>
+              Udbetalinger
+            </th>
             <th scope="col" title={fieldHelp['YearResult.return']}>
               Afkast
             </th>
@@ -125,6 +132,13 @@ export function YearTable({
                       loft der bandt, og med hvor meget, står i
                       forklar-året, jf. ADR-0012. */}
                   {breach && <span className="tilstand">{capBreachLabels[breach]}</span>}
+                </td>
+                <td>
+                  {kroner(
+                    display(
+                      year.holdings.reduce((sum, holding) => sum + holding.payout, 0),
+                    ),
+                  )}
                 </td>
                 <td>{kroner(display(year.return))}</td>
                 <td>{kroner(display(-year.tax))}</td>

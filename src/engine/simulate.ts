@@ -2,10 +2,12 @@ import {
   closeYear,
   fromBalances,
   fromPreviousYear,
+  closingBalanceOf,
   openingBalances,
   returnOf,
   withFlow,
   withMovement,
+  withPayout,
 } from './holdingYears'
 import type { HoldingYears } from './holdingYears'
 import type {
@@ -17,6 +19,8 @@ import type {
   Nominal,
   Period,
   HoldingId,
+  PayoutPrinciple,
+  PayoutSchedule,
   Person,
   PersonId,
   Plan,
@@ -27,7 +31,8 @@ import type {
   Transfer,
 } from './plan'
 import { yearAtAge } from './age'
-import { cap, cappedVariant, hasDeductibility } from './holdingVariant'
+import { payoutStartYear } from './payoutAge'
+import { cap, cappedVariant, hasDeductibility, payoutScheduleOf } from './holdingVariant'
 import { rateYearFor } from './rates/rates'
 import type { RateYear } from './rates/rateYear'
 import { statePensionYear } from './statePensionAge'
@@ -68,6 +73,22 @@ type ActiveContribution = {
   timing: Timing
 }
 
+/** Én beholdnings udbetaling i ét simuleringsår: hvad en `PayoutSchedule`
+    tømmer den med, og hvem der skal beskattes af det.
+
+    Ejeren står her frem for at blive slået op, hvor skatten regnes: raten er
+    `PensionIncome` hos beholdningens ejer, og en beholdning har præcis én.
+    Pengene lander derimod på bufferen uanset ejer, som al anden indkomst. */
+type ActivePayout = {
+  holding: HoldingId
+  owner: PersonId
+  amount: Nominal
+  /** Om året er planens sidste. Det er dét år, resten fejes med, så
+      beholdningen lukker på præcis nul — en plan, der efterlod en splint,
+      ville lade den stå i formuegrafen for evigt. */
+  final: boolean
+}
+
 /** Fremskriver planen år for år i løbende priser. Ren funktion: samme plan
     giver altid samme årsrække, og planen røres ikke.
 
@@ -96,7 +117,7 @@ export function simulate(plan: Plan): YearResult[] {
 function simulateYear(
   plan: Plan,
   year: SimulationYear,
-  opening: HoldingYears,
+  years: HoldingYears,
   rates: RateYear,
   rateBasis: RateBasis,
 ): YearResult {
@@ -104,22 +125,32 @@ function simulateYear(
   const transfers = transfersInYear(plan, year)
   const requested = contributionsInYear(plan, year, entries, rates)
 
+  // Primosaldiene står fast hele året igennem: de er forrige års ultimo og
+  // ændrer sig ikke af noget, der sker herefter. Både `OnBalance`-loftets
+  // råderum og årets rater måles mod netop dem, og de læses derfor ét sted.
+  const opening = openingBalances(years)
+
   // Lofterne opgøres, før noget vejes ind. En loftform, der afkorter selve
   // indbetalingen, skal være afgjort først — ellers forrenter penge sig et
-  // sted, de aldrig kom hen, jf. ADR-0019. Primosaldiene er netop dem,
-  // `OnBalance` måler råderummet af, og de står fast hele året igennem: de
-  // er forrige års ultimo og ændrer sig ikke af noget, der sker herefter.
+  // sted, de aldrig kom hen, jf. ADR-0019.
   const contributionsByPersonId = contributionsByPerson(
     plan,
     requested,
     rates,
     year,
-    openingBalances(opening),
+    opening,
   )
   const contributions = inPlanOrder(requested, contributionsByPersonId)
 
   const income = sumOf(entries, 'Income')
   const expenses = sumOf(entries, 'Expense')
+
+  // Raten regnes af primosaldoen, jf. diagram 02 og PBL § 11 A: saldoen ved
+  // årets begyndelse divideret med resterende udbetalingsår, eller
+  // annuiteten af den. Den skal derfor være kendt, før noget vejes ind: en
+  // rate, der først blev regnet undervejs, ville måle mod en saldo, loven
+  // ikke peger på.
+  const payouts = payoutsInYear(plan, year, rates, opening)
 
   // Afkastet regnes først, på primosaldi og årets strømme alene efter
   // Modified Dietz, jf. ADR-0006 — det afhænger aldrig af skatten, kun
@@ -127,7 +158,7 @@ function simulateYear(
   // personen som netop dette afkast.
   // Kun bufferen modtager poster; en overførsel vejer ind i afkastgrundlaget
   // i begge ender, jf. ADR-0004.
-  const afterEntries = withFlow(opening, plan.buffer, weightedNetFlow(entries))
+  const afterEntries = withFlow(years, plan.buffer, weightedNetFlow(entries))
   const afterTransfers = transfers.reduce((years, { transfer, amount }) => {
     const weighted = amount * returnWeight(transfer.timing)
     return withFlow(withFlow(years, transfer.from, -weighted), transfer.to, weighted)
@@ -137,48 +168,27 @@ function simulateYear(
   // penge, der gik videre til ordningen, forrente sig to steder på én gang.
   // Det er nettobeløbet, der vejes: AM-delen forlader bufferen som skat, og
   // skat rører aldrig afkastgrundlaget.
-  const flowed = contributions.reduce((years, { contribution, from, intoHolding, timing }) => {
-    const weighted = intoHolding * returnWeight(timing)
-    return withFlow(withFlow(years, from, -weighted), contribution.to, weighted)
-  }, afterTransfers)
-
-  const shareIncomeByPerson = incomeByVariant(plan, flowed, 'ShareDepot')
-  const capitalIncomeByPerson = incomeByVariant(plan, flowed, 'SavingsAccount')
-
-  // Hele husstandens skat bag ét søm, jf. ADR-0014. Motoren lægger intet
-  // sammen selv: aktieindkomstens skat er husstandens og hører ikke til
-  // nogen enkelt person, og totalen er modulets egen sum af sine dele.
-  const household = assessHousehold(
-    {
-      persons: plan.household.persons.map((person) => ({
-        tax: taxInput(entries, person, rates, year, {
-          capitalIncome: capitalIncomeByPerson.get(person.id)!,
-          withDeductibility: contributionsByPersonId.get(person.id)!.withDeductibility,
-        }),
-        shareIncome: shareIncomeByPerson.get(person.id)!,
-      })),
+  const afterContributions = contributions.reduce(
+    (years, { contribution, from, intoHolding, timing }) => {
+      const weighted = intoHolding * returnWeight(timing)
+      return withFlow(withFlow(years, from, -weighted), contribution.to, weighted)
     },
-    rates,
+    afterTransfers,
   )
-  // Årets restpost lander på bufferen. Den er det ene sted, over- og
-  // underskuddet må samle sig, og den må gerne gå negativt — det er modellens
-  // måde at sige, at planen ikke holder, jf. ADR-0002.
-  //
-  // Kun husstandens egen skat trækkes her. Beholdningsskatten er allerede
-  // trukket af beholdningen selv ved lukningen og passerer aldrig
-  // pengestrømmen; trak bufferen den også, ville den være betalt to gange.
-  const settled = withMovement(
-    flowed,
-    plan.buffer,
-    income - totalHouseholdTax(household) - expenses,
-  )
+  // Raten vejer ind i begge ender som en overførsel. Forfaldet er ikke et
+  // felt på udbetalingsplanen: en rate udbetales månedsvis, og `'Even'` er
+  // det matematisk rigtige for en jævn strøm, jf. ADR-0006.
+  const flowed = payouts.reduce((years, { holding, amount }) => {
+    const weighted = amount * returnWeight('Even')
+    return withFlow(withFlow(years, holding, -weighted), plan.buffer, weighted)
+  }, afterContributions)
 
   // En overførsel flytter sit fulde beløb mellem afgiver og modtager. Den
   // rammer aldrig skatten eller pengestrømmen, jf. `Transfer`.
   const moved = transfers.reduce(
     (years, { transfer, amount }) =>
       withMovement(withMovement(years, transfer.from, -amount), transfer.to, amount),
-    settled,
+    flowed,
   )
 
   // Indbetalingen tilføjer intet led til balanceinvarianten: den er en
@@ -192,10 +202,62 @@ function simulateYear(
     moved,
   )
 
+  // Raten er heller ikke et led i invarianten: den flytter penge fra
+  // beholdningen til bufferen og lader formuen uændret, præcis som en
+  // overførsel. Kun dens skat sætter aftryk.
+  const paid = payouts.reduce(
+    (years, { holding, amount }) =>
+      withMovement(withPayout(years, holding, amount), plan.buffer, amount),
+    contributed,
+  )
+
+  // Den sidste rate fejer resten med. Fejningen kommer efter afkastet, som
+  // allerede er noteret vægtet, og har derfor selv vægt nul — ingen
+  // cirkularitet, og rækkefølgen i diagram 02 holder.
+  const swept = sweepFinalInstalment(payouts, paid, plan.buffer, rates)
+
+  const shareIncomeByPerson = incomeByVariant(plan, flowed, 'ShareDepot')
+  const capitalIncomeByPerson = incomeByVariant(plan, flowed, 'SavingsAccount')
+
+  // Hele husstandens skat bag ét søm, jf. ADR-0014. Motoren lægger intet
+  // sammen selv: aktieindkomstens skat er husstandens og hører ikke til
+  // nogen enkelt person, og totalen er modulets egen sum af sine dele.
+  //
+  // Raterne kommer med fejningen lagt til: den er en krone, personen
+  // beskattes af, som enhver anden rate. Afkastet spørges af `flowed` og
+  // ikke af bogen her — det er det samme tal begge steder, fordi hverken
+  // primosaldoen eller den vægtede strøm ændrer sig af en bevægelse.
+  const household = assessHousehold(
+    {
+      persons: plan.household.persons.map((person) => ({
+        tax: taxInput(entries, person, rates, year, {
+          capitalIncome: capitalIncomeByPerson.get(person.id)!,
+          withDeductibility: contributionsByPersonId.get(person.id)!.withDeductibility,
+          payouts: payoutOf(swept.payouts, person),
+        }),
+        shareIncome: shareIncomeByPerson.get(person.id)!,
+      })),
+    },
+    rates,
+  )
+
+  // Årets restpost lander på bufferen. Den er det ene sted, over- og
+  // underskuddet må samle sig, og den må gerne gå negativt — det er modellens
+  // måde at sige, at planen ikke holder, jf. ADR-0002.
+  //
+  // Kun husstandens egen skat trækkes her. Beholdningsskatten er allerede
+  // trukket af beholdningen selv ved lukningen og passerer aldrig
+  // pengestrømmen; trak bufferen den også, ville den være betalt to gange.
+  const settled = withMovement(
+    swept.years,
+    plan.buffer,
+    income - totalHouseholdTax(household) - expenses,
+  )
+
   // Lukningen krediterer afkastet og trækker beholdningsskatten, jf. diagram
   // 02. Først dér er alle tre bærere af årets skat kendt, og først dér kan
   // de lægges sammen.
-  const holdings = closeYear(contributed, rates)
+  const holdings = closeYear(settled, rates)
   const tax = totalYearTax(household, holdings)
 
   return {
@@ -576,6 +638,11 @@ function shortenToHeadroom(
     — den har intet at gøre i nogen af de to summer. Pensionsindkomsten
     udelades, når året ingen har, ligesom indbetalingen gør.
 
+    Årets rater lægges til pensionsindkomsten og krydser sømmet i den. De er
+    hverken en post eller en ydelse, men skatten kender ingen af delene: den
+    kender personlig indkomst uden AM-bidrag, og en rate og et ATP-beløb er
+    det samme dér, jf. `PensionIncome` i CONTEXT.md.
+
     Årets indbetaling med `Deductibility` går med som ét tal og udelades, når
     den er nul — så står året uden indbetaling, og fradraget følger
     indbetalingen frem for personen. Årstællingen frem til
@@ -592,7 +659,7 @@ function taxInput(
   person: Person,
   rates: RateYear,
   year: SimulationYear,
-  ofPerson: { capitalIncome: Nominal; withDeductibility: Nominal },
+  ofPerson: { capitalIncome: Nominal; withDeductibility: Nominal; payouts: Nominal },
 ): TaxAssessmentInput {
   const ownIncome = (taxTreatment: TaxTreatment) =>
     entries
@@ -604,7 +671,7 @@ function taxInput(
       )
       .reduce((sum, { amount }) => sum + amount, 0)
 
-  const pensionIncome = ownIncome('PensionIncome')
+  const pensionIncome = ownIncome('PensionIncome') + ofPerson.payouts
   const municipalTax = rates.municipalTax.rates[person.municipality]!
 
   return {
@@ -622,6 +689,139 @@ function taxInput(
         }
       : {}),
   }
+}
+
+/** Årets rater: én pr. beholdning, hvis udbetalingsplan er i gang i året.
+
+    En beholdning uden plan giver ingen linje, og det er hele grunden til, at
+    feltet er valgfrit — en ratepension, brugeren endnu ikke har besluttet
+    sig om, bliver stående og vokser frem for at få motoren til at nægte at
+    regne.
+
+    Starten er en `AgeBound` og oversættes til et kalenderår gennem
+    `yearAtAge`, ganske som en posts periode: er den sat til erhvervsophør,
+    flytter hele forløbet sig, når `WorkEndAge` ændres, uden at planen
+    redigeres. Uden for de `duration` år, planen løber, falder ingen rate —
+    en tømt ratepension bliver stående med saldo nul. */
+function payoutsInYear(
+  plan: Plan,
+  year: SimulationYear,
+  rates: RateYear,
+  opening: ReadonlyMap<HoldingId, Nominal>,
+): ActivePayout[] {
+  return plan.household.persons.flatMap((person) =>
+    person.holdings.flatMap((holding) => {
+      const schedule = payoutScheduleOf(holding)
+      if (schedule === undefined) return []
+
+      const remaining = remainingPayoutYears(schedule, person, year)
+      if (remaining === undefined) return []
+
+      return [
+        {
+          holding: holding.id,
+          owner: person.id,
+          amount: instalment(
+            schedule.principle,
+            opening.get(holding.id)!,
+            remaining,
+            rates,
+          ),
+          final: remaining === 1,
+        },
+      ]
+    }),
+  )
+}
+
+/** Antallet af udbetalingsår, der er tilbage til og med dette — eller
+    `undefined`, når året ligger uden for planen. Det er den nævner, begge
+    principper regner med, og den tælles i kalenderår: udbetalingsalderen er
+    ofte en brøk, og året, hvor personen fylder 62,5, indeholder lovlige
+    udbetalingsmåneder. */
+function remainingPayoutYears(
+  schedule: PayoutSchedule,
+  owner: Person,
+  year: SimulationYear,
+): number | undefined {
+  const start = payoutStartYear(schedule.start, owner)
+  const remaining = start + schedule.duration - year
+  return year >= start && remaining > 0 ? remaining : undefined
+}
+
+/** Årets rate, regnet af primosaldoen efter planens princip.
+
+    Serieprincippet deler saldoen med de resterende udbetalingsår og giver
+    stigende rater ved positivt afkast. Annuitetsprincippet regner i stedet
+    annuiteten af saldoen over de samme år, med satsårets amortisationsrente
+    — den er satsdata efter PBL § 11 A, stk. 3, og aldrig beholdningens eget
+    nettoafkast. Er nettoafkastet højere end renten, stiger raterne let år
+    for år; deraf *tilnærmelsesvis* lige store rater og ikke lige store, jf.
+    `AnnuityPrinciple` i CONTEXT.md.
+
+    Ved rente nul er annuiteten serien: formlen går mod `saldo ÷ år`, men
+    divisionen ville være nul over nul, og grænsen skrives derfor ud. Det er
+    ikke et hypotetisk år — Finans Danmark kan fastsætte renten til nul, og
+    loftet i loven er en øvre og ikke en nedre grænse. */
+function instalment(
+  principle: PayoutPrinciple,
+  openingBalance: Nominal,
+  remaining: number,
+  rates: RateYear,
+): Nominal {
+  if (principle === 'SerialPrinciple') return openingBalance / remaining
+
+  const rate = rates.amortisationRate.rate
+  if (rate === 0) return openingBalance / remaining
+  return (openingBalance * rate) / (1 - (1 + rate) ** -remaining)
+}
+
+/** Årets rater efter den sidste rates fejning, og bogen med fejningen
+    bogført.
+
+    De to svar kommer af samme opgørelse med vilje. Fejningen er både et
+    beløb, beholdningen forlader, og en krone, personen beskattes af — regnet
+    hver sit sted kunne de komme til at sige hver sit, og brugeren ville se
+    en rate, der ikke kan efterregne den skat, den står ved siden af. Samme
+    greb som `PersonContributions`, jf. ADR-0018.
+
+    Resten er det, beholdningen ville lukke året med: saldoen som den står,
+    plus årets afkast, minus beholdningsskatten af det. Den kan være negativ
+    — annuitetsprincippets sidste rate overstiger saldoen — og fejningen
+    trækker så fra i stedet. Begge veje lukker beholdningen på nul, og det er
+    hele reglen. */
+function sweepFinalInstalment(
+  payouts: ActivePayout[],
+  years: HoldingYears,
+  buffer: HoldingId,
+  rates: RateYear,
+): { payouts: ActivePayout[]; years: HoldingYears } {
+  return payouts.reduce<{ payouts: ActivePayout[]; years: HoldingYears }>(
+    (swept, payout) => {
+      if (!payout.final) return { ...swept, payouts: [...swept.payouts, payout] }
+
+      const remainder = closingBalanceOf(swept.years, payout.holding, rates)
+      return {
+        payouts: [...swept.payouts, { ...payout, amount: payout.amount + remainder }],
+        years: withMovement(
+          withPayout(swept.years, payout.holding, remainder),
+          buffer,
+          remainder,
+        ),
+      }
+    },
+    { payouts: [], years },
+  )
+}
+
+/** Summen af de rater, personens egne beholdninger blev tømt med i året.
+    Raten er `PensionIncome` hos beholdningens ejer, og ejeren står allerede
+    på linjen — pengene lander på bufferen uanset hvem det er, men skatten
+    gør ikke. */
+function payoutOf(payouts: ActivePayout[], person: Person): Nominal {
+  return payouts
+    .filter((payout) => payout.owner === person.id)
+    .reduce((sum, payout) => sum + payout.amount, 0)
 }
 
 function sumOf(entries: ActiveEntry[], direction: Entry['direction']): Nominal {

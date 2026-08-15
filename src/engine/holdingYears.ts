@@ -6,10 +6,11 @@ import type { HoldingYear } from './yearResult'
 /** Årets beholdningsrækker under opbygning — én række pr. beholdning, ikke
     fire parallelle opslagstabeller over de samme beholdninger.
 
-    Rækken bærer de fire tal, `HoldingYear` lukker om: primosaldoen, den
-    vægtede strøm, saldoen som den står lige nu, og beholdningen selv, hvis
-    satser afkastet regnes af. Afkastet gemmes ikke — det er udledt af primo
-    og strøm og er derfor det samme, uanset hvornår i året man spørger.
+    Rækken bærer de tal, `HoldingYear` lukker om: primosaldoen, den vægtede
+    strøm, saldoen som den står lige nu, årets udbetaling, og beholdningen
+    selv, hvis satser afkastet regnes af. Afkastet gemmes ikke — det er
+    udledt af primo og strøm og er derfor det samme, uanset hvornår i året
+    man spørger.
 
     Beholdningerne er dem, bogen blev åbnet med, og ingen andre: et opslag på
     en beholdning, der ikke findes, er en peger, `validatePlan` skulle have
@@ -21,6 +22,7 @@ type Row = {
   openingBalance: Nominal
   weightedFlow: Nominal
   balance: Nominal
+  payout: Nominal
 }
 
 /** Årets rækker åbnet på beholdningernes egne saldi — planens startår. */
@@ -44,6 +46,7 @@ function open(holdings: Holding[], openingBalance: (holding: Holding) => Nominal
         openingBalance: openingBalance(holding),
         weightedFlow: 0,
         balance: openingBalance(holding),
+        payout: 0,
       },
     ]),
   )
@@ -71,6 +74,40 @@ export function withMovement(years: HoldingYears, holding: HoldingId, amount: No
   return replace(years, holding, (row) => ({ ...row, balance: row.balance + amount }))
 }
 
+/** Tømmer beholdningen med årets udbetaling: saldoen falder, og beløbet
+    noteres på rækken. To handlinger i én, fordi de aldrig må ske hver for
+    sig — en bevægelse uden en note ville lade `HoldingYear.payout` sige
+    noget andet end saldoen, og en note uden en bevægelse ville lade pengene
+    blive stående.
+
+    Lægges oveni det, der allerede er udbetalt, så det sidste udbetalingsårs
+    fejning kan komme som sit eget kald og alligevel stå i ét tal, jf.
+    `HoldingYear.payout`. Afkastgrundlaget røres ikke: strømmen vejes for sig
+    med `withFlow`, ganske som en overførsels. */
+export function withPayout(years: HoldingYears, holding: HoldingId, amount: Nominal): HoldingYears {
+  return replace(years, holding, (row) => ({
+    ...row,
+    balance: row.balance - amount,
+    payout: row.payout + amount,
+  }))
+}
+
+/** Det, beholdningen ville lukke året med, hvis intet mere skete: saldoen
+    som den står, plus årets afkast, minus beholdningsskatten af det.
+
+    Det er dét, den sidste rate fejer med. Fejningen sker efter afkastet og
+    har derfor vægt nul — hverken primosaldoen eller den vægtede strøm ændrer
+    sig af den, og svaret er det samme før og efter, ganske som `returnOf`s.
+    Ingen cirkularitet, og rækkefølgen i diagram 02 holder. */
+export function closingBalanceOf(
+  years: HoldingYears,
+  holding: HoldingId,
+  rates: RateYear,
+): Nominal {
+  const found = row(years, holding)
+  return found.balance + credited(found) - holdingTax(found, rates)
+}
+
 /** Beholdningens afkast i året: nettoafkastsatsen af primosaldoen plus årets
     vægtede strømme, jf. ADR-0006. Skatten spørger om det, før restposten er
     afregnet — og svaret er det samme før og efter, fordi hverken primo eller
@@ -93,6 +130,7 @@ export function closeYear(years: HoldingYears, rates: RateYear): HoldingYear[] {
       closingBalance: row.balance + credited(row) - tax,
       return: credited(row),
       tax,
+      payout: row.payout,
       weightedFlow: row.weightedFlow,
     }
   })

@@ -103,6 +103,22 @@ export type MunicipalTax = {
   rates: Record<Municipality, MunicipalTaxRates>
 }
 
+/** Amortisationsrenten: den rente, en rate beregnes som en annuitet med,
+    når en ratepension udbetales efter annuitetsprincippet.
+
+    Egen blok, fordi den har sin egen kilde — Finans Danmark beregner den
+    hver december for det kommende udbetalingsår, jf. PBL § 11 A, stk. 3,
+    2. pkt., som sætter loftet over, hvad den må være. Den står hverken i
+    § 20-tabellen eller blandt skattesatserne og kan derfor ikke dele kilde
+    med nogen af dem.
+
+    Den er **ikke** beholdningens nettoafkastsats, og de to må aldrig bytte
+    plads. Er nettoafkastet højere, stiger raterne let år for år — deraf
+    tilnærmelsesvis lige store rater og ikke lige store. */
+export type AmortisationRate = {
+  rate: number
+}
+
 export type CivilStatus = 'Single' | 'WithNonPensioner' | 'WithPensioner'
 
 /** Aftrapningen af pensionstillægget for én civilstand.
@@ -141,4 +157,5 @@ export type RateYear = {
   /** Kommune- og kirkeskatteprocenten pr. kommune, for alle landets ca. 98
       kommuner. */
   municipalTax: Sourced<MunicipalTax>
+  amortisationRate: Sourced<AmortisationRate>
 }

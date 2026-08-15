@@ -69,6 +69,14 @@ export const rateYear2026: RateYear = {
     extraPensionAllowanceLate: 0.32,
   },
 
+  amortisationRate: {
+    source:
+      'https://finansdanmark.dk/tal-og-data/renter/' +
+      'aktuel-rente-ved-udbetaling-af-ratepension/',
+    unconfirmed: [],
+    rate: 0.0322,
+  },
+
   municipalTax: {
     source: 'https://skm.dk/media/0oia30i5/kommuneskattesatser_2026.xlsx',
     unconfirmed: [],

@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Holding, Plan } from '../engine/plan'
+import type { Holding, PayoutSchedule, Plan } from '../engine/plan'
 import {
   aContribution,
   aHoldingContribution,
@@ -194,6 +194,38 @@ function aThreeYearPlan() {
   })
 }
 
+/** En plan med en ratepension, der må udbetales fra planens allerførste år.
+    Den bevarede udbetalingsalder er 53 — den alder, ejeren fylder i 2026 —
+    så udbetalingen kan ses uden at rulle fjorten år frem. Uden en
+    udbetalingsplan bliver ordningen stående; med serieprincippet over ti år
+    giver den en tiendedel af saldoen det første år. */
+function aPlanWithRatepension(payout?: PayoutSchedule) {
+  return aPlan({
+    startYear: 2026,
+    birthYear: 1973,
+    horizon: 55,
+    balance: 500_000,
+    holdings: [
+      {
+        id: 'ratepension',
+        name: 'Ratepension',
+        variant: 'InstalmentPension',
+        openedOn: { year: 2018, month: 1 },
+        payoutAgeOverride: 53,
+        balance: 1_000_000,
+        grossReturn: 0,
+        annualCostRate: 0,
+        ...(payout === undefined ? {} : { payout }),
+      },
+    ],
+  })
+}
+
+/** Den samme plan med serieprincippet over ti år. */
+function aPlanWithPayoutFromStart() {
+  return aPlanWithRatepension({ start: 53, duration: 10, principle: 'SerialPrinciple' })
+}
+
 describe('fladen', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -238,6 +270,7 @@ describe('fladen', () => {
       'Jesper',
       'Indtægter',
       'Indbetalinger',
+      'Udbetalinger',
       'Afkast',
       'Skat',
       'Udgifter',
@@ -2205,6 +2238,136 @@ describe('fladen', () => {
     expect((screen.getByLabelText(/Beløb/) as HTMLInputElement).value).toBe('40000')
   })
 
+  describe('udbetalingsplanen i skuffen', () => {
+    it('lægger en plan på en ratepension, der ingen har, og fjerner den igen', async () => {
+      // Planen slås ikke til og fra: er den der, gælder den, og skal den væk,
+      // slettes den — samme greb som en overførsel eller en indbetaling.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithRatepension()} />)
+      await user.click(navigatorButton(/Ratepension/))
+
+      expect(sectionLabels('Udbetalingsplan')).toEqual([])
+
+      await user.click(screen.getByRole('button', { name: '+ Tilføj' }))
+
+      // Den tidligste alder, loven tillader for netop denne ordning, og den
+      // korteste lovlige varighed — det eneste sæt, der med sikkerhed er
+      // lovligt, uanset hvornår ordningen må udbetales.
+      expect((screen.getByLabelText('Start') as HTMLInputElement).value).toBe('53')
+      expect((screen.getByLabelText('Varighed') as HTMLInputElement).value).toBe('10')
+      expect((screen.getByLabelText('Princip') as HTMLSelectElement).value).toBe(
+        'Serieprincippet',
+      )
+
+      // Planen regner med det samme: en tiendedel af saldoen i det første år.
+      await showYearTable(user)
+      expect(yearCell(1, 'Udbetalinger')).toBe('100.000')
+
+      await user.click(navigatorButton(/Ratepension/))
+      await user.click(screen.getByRole('button', { name: 'Fjern udbetalingsplan' }))
+
+      expect(sectionLabels('Udbetalingsplan')).toEqual([])
+      expect(yearCell(1, 'Udbetalinger')).toBe('0')
+    })
+
+    it('lader ikke felterne skrive en udbetalingsplan, loven afviser', async () => {
+      // De tre lovregler står i motoren, fordi en importeret fil ikke er gået
+      // gennem et felt. Felterne holder dem alligevel, så almindelig
+      // indtastning ikke slår resultatspalten ud undervejs. Teksten bliver
+      // stående, mens der tastes, og rettes, når feltet forlades — det er
+      // planen bag den, der aldrig bliver ulovlig.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithPayoutFromStart()} />)
+      await user.click(navigatorButton(/Ratepension/))
+
+      // Ordningens pensionsudbetalingsalder er 53, og starten kan ikke sættes
+      // før den.
+      const start = screen.getByLabelText('Start') as HTMLInputElement
+      await user.clear(start)
+      await user.type(start, '40')
+      await user.tab()
+      expect(start.value).toBe('53')
+
+      // Varigheden kan ikke sættes under ti år.
+      const duration = screen.getByLabelText('Varighed') as HTMLInputElement
+      await user.clear(duration)
+      await user.type(duration, '5')
+      await user.tab()
+      expect(duration.value).toBe('10')
+
+      // Og ikke så højt, at den sidste rate falder senere end tredive år
+      // efter: udbetalingsåret er 2026, den sidste rate skal falde senest
+      // 2056, og det er 31 år.
+      await user.clear(duration)
+      await user.type(duration, '40')
+      await user.tab()
+      expect(duration.value).toBe('31')
+
+      // Resultatspalten er aldrig blevet slået ud undervejs.
+      expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+    })
+
+    it('viser start, varighed og princip for en ratepension, der har en plan', async () => {
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithPayoutFromStart()} />)
+      await user.click(navigatorButton(/Ratepension/))
+
+      expect(sectionLabels('Udbetalingsplan')).toEqual([
+        'Start',
+        ' Følger erhvervsophør',
+        'Varighed',
+        'Princip',
+      ])
+      expect((screen.getByLabelText('Start') as HTMLInputElement).value).toBe('53')
+      expect((screen.getByLabelText('Varighed') as HTMLInputElement).value).toBe('10')
+      expect((screen.getByLabelText('Princip') as HTMLSelectElement).value).toBe(
+        'Serieprincippet',
+      )
+    })
+  })
+
+  it('viser årets udbetalinger i deres egen kolonne i årstabellen', async () => {
+    // Kolonnen er beholdningernes rater lagt sammen. Ligesom indbetalingerne
+    // er de penge, husstanden stadig har — de er blot flyttet — og de indgår
+    // derfor ikke i nettoresultatet.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithPayoutFromStart()} />)
+    await showYearTable(user)
+
+    expect(yearCell(1, 'Udbetalinger')).toBe('100.000')
+    expect(yearCell(2, 'Udbetalinger')).toBe('100.000')
+  })
+
+  it('viser hver ordnings rate på dens egen linje i forklar-året', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithPayoutFromStart()} />)
+    await showYearTable(user)
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!) // 2026
+
+    const holdingsTable = document.querySelector('table.beholdningstabel') as HTMLElement
+    const cells = (name: string) =>
+      within(within(holdingsTable).getByText(name).closest('tr') as HTMLElement)
+        .getAllByRole('cell')
+        .map((cell) => cell.textContent)
+
+    // Raten står ved siden af den primosaldo, den er regnet af — en tiendedel
+    // af 1.000.000 over ti år. Den vejer halvt ind i afkastgrundlaget, som en
+    // jævnt fordelt strøm gør, og står derfor som −50.000 i vægtet strøm.
+    expect(cells('Ratepension')).toEqual([
+      'Ratepension',
+      '1.000.000',
+      '100.000',
+      '-50.000',
+      '0,00 %',
+      '0',
+      '0',
+    ])
+
+    // En beholdning uden udbetalingsplan har en tom celle og ikke et nul: der
+    // er ingen plan, ikke en plan der gav nul.
+    expect(cells('Frie midler')[2]).toBe('—')
+  })
+
   it('viser Formuen som standardfane, og skifter til Årstabellen ved klik', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)
@@ -2470,6 +2633,7 @@ describe('fladen', () => {
     expect(cells('Frie midler')).toEqual([
       'Frie midler',
       '1.000.000',
+      '—',
       '-100.000',
       '0,00 %',
       '0',
@@ -2478,6 +2642,7 @@ describe('fladen', () => {
     expect(cells('Anden beholdning')).toEqual([
       'Anden beholdning',
       '0',
+      '—',
       '100.000',
       '0,00 %',
       '0',
@@ -2522,6 +2687,7 @@ describe('fladen', () => {
     expect(cells('Ratepension')).toEqual([
       'Ratepension',
       '1.000.000',
+      '—',
       '0',
       '6,50 %',
       '65.000',
@@ -2529,7 +2695,15 @@ describe('fladen', () => {
     ])
     // De frie midler har ingen beholdningsskat — deres afkast beskattes hos
     // personen i stedet, og satsen vælges ingen steder i fladen.
-    expect(cells('Frie midler')).toEqual(['Frie midler', '1.000.000', '0', '0,00 %', '0', '0'])
+    expect(cells('Frie midler')).toEqual([
+      'Frie midler',
+      '1.000.000',
+      '—',
+      '0',
+      '0,00 %',
+      '0',
+      '0',
+    ])
   })
 
   it('viser årets poster med forfald og afkastvægt', async () => {

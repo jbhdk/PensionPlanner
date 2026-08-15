@@ -127,6 +127,18 @@ export type HoldingYear = {
       varianter, der ingen har. Indgår i `YearResult.tax` — den passerer
       ingen persons indkomst, men den er en skat husstanden betaler. */
   tax: Nominal
+  /** Årets udbetaling fra beholdningen — det, en `PayoutSchedule` tømte den
+      med. Nul for de beholdninger og de år, hvor ingen plan tømmer noget.
+
+      Den er ikke `YearResult.income`: pengene flytter sig fra beholdningen
+      til bufferen og lader husstandens formue uændret, præcis som en
+      overførsel gør. Kun dens skat sætter aftryk i balanceinvarianten.
+
+      I det sidste udbetalingsår bærer tallet også fejningen — det, der stod
+      tilbage, når årets afkast er tilskrevet og beholdningsskatten trukket
+      — så beholdningen lukker på præcis nul. En omsat livrentes ydelse står
+      ikke her: den har ingen saldo at forlade. */
+  payout: Nominal
   /** Årets strømme ind og ud af beholdningen, hver vægtet efter sit forfald
       — bufferens andel af posterne, og enhver overførsel til eller fra
       beholdningen. Det, der lægges til primosaldoen i Modified Dietz, før

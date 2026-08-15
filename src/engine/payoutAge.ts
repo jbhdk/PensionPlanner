@@ -1,5 +1,5 @@
 import { yearAtAge } from './age'
-import type { OpenedOn, PensionSchemeHolding, Person, SimulationYear } from './plan'
+import type { AgeBound, OpenedOn, PensionSchemeHolding, Person, SimulationYear } from './plan'
 import { statePensionAge } from './statePensionAge'
 
 /** De tre regelsæt, en ordnings pensionsudbetalingsalder kan falde under,
@@ -62,4 +62,16 @@ export function payoutAge(holding: PensionSchemeHolding, owner: Person): number 
     giver. Samme grund som `statePensionYear`s, og samme formel. */
 export function payoutYear(holding: PensionSchemeHolding, owner: Person): SimulationYear {
   return yearAtAge(owner, payoutAge(holding, owner))
+}
+
+/** Det kalenderår, en udbetalingsplan begynder i. Et startpunkt sat til
+    erhvervsophør følger `Person.workEndAge`, ganske som en posts
+    periodeendepunkt gør, så hele forløbet flytter sig, når ét tal ændres.
+
+    Står her ved siden af `payoutYear`, fordi de to måles mod hinanden: den
+    ene er den tidligste, loven tillader, den anden den, planen beder om.
+    Regnet hver sit sted kunne de komme til at læse den samme brøkalder
+    forskelligt. */
+export function payoutStartYear(start: AgeBound, owner: Person): SimulationYear {
+  return yearAtAge(owner, start === 'WorkEndAge' ? owner.workEndAge : start)
 }
