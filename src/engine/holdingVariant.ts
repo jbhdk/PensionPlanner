@@ -28,7 +28,7 @@ export type CappedVariant = (typeof cappedVariants)[number]
     finde og rette — jf. ADR-0010, hvor varianten er aksen og beskatningen
     ikke et felt ved siden af den.
 
-    Denne skive bruger syv kolonner. */
+    Denne skive bruger otte kolonner. */
 const table: {
   [V in HoldingVariant]: Row & {
     cap: V extends CappedVariant ? CapRule : undefined
@@ -44,6 +44,7 @@ const table: {
   InstalmentPension: {
     freeAssets: false,
     holdingTaxRate: 'palTaxRate',
+    payoutTaxation: 'PersonalIncome',
     deductibility: true,
     payoutSchedule: true,
     uniquePerPerson: false,
@@ -56,6 +57,7 @@ const table: {
   LifeAnnuity: {
     freeAssets: false,
     holdingTaxRate: 'palTaxRate',
+    payoutTaxation: 'PersonalIncome',
     deductibility: true,
     payoutSchedule: false,
     uniquePerPerson: false,
@@ -65,6 +67,7 @@ const table: {
   OldAgeSavings: {
     freeAssets: false,
     holdingTaxRate: 'palTaxRate',
+    payoutTaxation: 'TaxFree',
     deductibility: false,
     payoutSchedule: false,
     uniquePerPerson: false,
@@ -80,6 +83,7 @@ const table: {
   ShareSavingsAccount: {
     freeAssets: false,
     holdingTaxRate: 'shareSavingsAccountTaxRate',
+    payoutTaxation: 'TaxFree',
     deductibility: false,
     payoutSchedule: false,
     uniquePerPerson: true,
@@ -92,6 +96,7 @@ const table: {
   ShareDepot: {
     freeAssets: true,
     holdingTaxRate: undefined,
+    payoutTaxation: 'TaxFree',
     deductibility: false,
     payoutSchedule: false,
     uniquePerPerson: false,
@@ -101,6 +106,7 @@ const table: {
   SavingsAccount: {
     freeAssets: true,
     holdingTaxRate: undefined,
+    payoutTaxation: 'TaxFree',
     deductibility: false,
     payoutSchedule: false,
     uniquePerPerson: false,
@@ -116,6 +122,18 @@ type Row = {
       satsåret siger, hvad satserne er, og motoren siger, hvilken variant der
       betaler hvilken. Samme idiom som lagenes `rates.taxRates[layer]`. */
   holdingTaxRate: keyof TaxRates | undefined
+  /** Hvad der sker i skatten, når penge forlader en beholdning af varianten.
+      Variantens akse på vejen ud, ganske som `deductibility` er det på vejen
+      ind, jf. ADR-0010 — og den kolonne, der afgør, hvem der kan tømme hvad:
+      kun en `TaxFree` kan tømmes af en `Transfer`, og kun en
+      `PersonalIncome` bærer en `PayoutSchedule`, jf. ADR-0022.
+
+      Skellet er ikke pension mod ikke-pension. Aldersopsparingen deler
+      kolonne med de frie varianter og med aktiesparekontoen, fordi der ingen
+      skat udløses, når pengene hentes — det, der skiller den fra en
+      opsparingskonto, er den låste dør indtil dens `PayoutAge`, PAL-skatten
+      på afkastet og loftet på vejen ind. */
+  payoutTaxation: PayoutTaxation
   /** Om en indbetaling til varianten har `Deductibility`. De to frie
       varianter står med falsk frem for med et hul: en indbetaling til frie
       midler er en overførsel og afvises af `validatePlan`, så feltet aldrig
@@ -132,6 +150,12 @@ type Row = {
       afvises i forvejen, så deres celle slås aldrig op. */
   employerAdministered: boolean
 }
+
+/** Hvad der sker i skatten, når penge forlader en beholdning:
+    `PersonalIncome` for ratepensionen og livrenten, `TaxFree` for
+    aldersopsparingen, aktiesparekontoen og de to frie varianter. En egenskab
+    ved varianten og aldrig ved den enkelte udbetaling. */
+export type PayoutTaxation = 'PersonalIncome' | 'TaxFree'
 
 /** Loftets form, og hvad det gælder i året — de to sider af `Cap`, jf.
     CONTEXT.md.
@@ -288,6 +312,18 @@ export function holdingTaxRate(holding: Holding): keyof TaxRates | undefined {
     skattesømmet, jf. ADR-0014. */
 export function hasDeductibility(holding: Holding): boolean {
   return table[holding.variant].deductibility
+}
+
+/** Hvad der sker i skatten, når penge forlader beholdningen. Det opslag,
+    både overførslens afgiverende og udbetalingsplanens plads hviler på: en
+    `Transfer` må kun hente, hvor svaret er `TaxFree`, fordi en udbetaling,
+    der er personlig indkomst, skal gennem en plan — loven binder både dens
+    start, dens længde og dens årlige beløb, jf. ADR-0022.
+
+    Reglen er dermed ét opslag i varianttabellen og ikke en liste af
+    varianter, der skulle holdes i takt med den. */
+export function payoutTaxation(holding: Holding): PayoutTaxation {
+  return table[holding.variant].payoutTaxation
 }
 
 /** Beholdningens loft i året, eller `undefined` når varianten ingen har.

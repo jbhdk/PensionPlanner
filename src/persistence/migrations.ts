@@ -218,6 +218,35 @@ export const migrations: Migration[] = [
         : { ...rest, statePensionProjectionAssumption: benefitProjectionAssumption }
     },
   },
+  {
+    // v9 → v10, jf. issue #41: overførslens periode er nu en fuld periode med
+    // en forankring. Indtil nu bar den kun to årstal, fordi begge ender var
+    // frie midler og der ingen ejer var at binde en alder til; afgiveren kan
+    // nu være en ordning, og alderen måles på dens ejer, jf. ADR-0022.
+    //
+    // Der er intet at gætte: en gemt periode betød kalenderår og bliver ved
+    // med at betyde det. Endepunkterne står urørt, også når de mangler — et
+    // udeladt endepunkt betyder stadig "fra planens start" henholdsvis "til
+    // horisontens slut".
+    from: 9,
+    migrate: (data) => {
+      const plan = data as {
+        transfers?: Array<Record<string, unknown>>
+        [key: string]: unknown
+      }
+
+      return {
+        ...plan,
+        transfers: (plan.transfers ?? []).map((transfer) => ({
+          ...transfer,
+          period: {
+            anchor: 'CalendarYear',
+            ...((transfer.period ?? {}) as Record<string, unknown>),
+          },
+        })),
+      }
+    },
+  },
 ]
 
 /** Kører kæden fra `fromVersion` til `toVersion`, ét led ad gangen. Rent og

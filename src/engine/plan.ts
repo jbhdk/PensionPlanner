@@ -222,18 +222,33 @@ export type Entry =
     })
   | (EntryBase & { direction: 'Expense' })
 
-/** En dateret flytning af penge fra én beholdning til en anden inden for
-    husstanden. Hverken en indtægt eller en udgift, og uden skattevirkning —
+/** En dateret flytning af penge fra én af husstandens beholdninger til dens
+    frie midler. Hverken en indtægt eller en udgift, og uden skattevirkning —
     to modgående `Entry`-poster ville nette til nul på bufferen og flytte
-    ingenting, jf. ADR-0004. Perioden er altid kalenderårsforankret: en
-    overførsel har ingen ejer at binde en alder til. */
+    ingenting, jf. ADR-0004.
+
+    Afgiveren skal være en variant, hvis `PayoutTaxation` er `TaxFree`, og
+    det er dermed også den, der tømmer en aldersopsparing og en
+    aktiesparekonto: efter pensionsudbetalingsalderen er de konti, ejeren
+    hæver af som hun vil, og en `PayoutSchedule` ville påstå en lovregel, der
+    ikke findes, jf. ADR-0022. Destinationen er det, der skiller overførslen
+    fra en `Contribution`: går pengene ind i en ordning, er det en
+    indbetaling, uanset hvor de kom fra.
+
+    Perioden kan aldersforankres som en posts, og alderen måles på
+    afgiverbeholdningens ejer — en beholdning har præcis én. Uden det ville
+    en aldersopsparings tømning ikke flytte sig med `WorkEndAge`, og det er
+    netop dét, en udbetalingsplans start blev aldersforankret for at kunne.
+
+    Beløbet er det, planen beder om. Hvad der faktisk flyttede sig, står i
+    `TransferYear`: afgiverens saldo rakte ikke nødvendigvis. */
 export type Transfer = {
   id: TransferId
   from: HoldingId
   to: HoldingId
   amountInRealKroner: Real
   timing: Timing
-  period: { from?: SimulationYear; to?: SimulationYear }
+  period: Period
   recurrence: Recurrence
 }
 

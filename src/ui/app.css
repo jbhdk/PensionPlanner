@@ -509,6 +509,7 @@ table.aar th,
 .beholdningstabel th,
 .postertabel th,
 .indbetalingstabel th,
+.overfoerselstabel th,
 .lofttabel th {
   cursor: help;
 }
@@ -1042,6 +1043,7 @@ table.aar td .fremskrevet {
 .beholdningstabel,
 .postertabel,
 .indbetalingstabel,
+.overfoerselstabel,
 .lofttabel {
   width: 100%;
   margin-top: 10px;
@@ -1054,6 +1056,7 @@ table.aar td .fremskrevet {
 .beholdningstabel th,
 .postertabel th,
 .indbetalingstabel th,
+.overfoerselstabel th,
 .lofttabel th {
   text-align: right;
   padding: 4px 8px;
@@ -1071,6 +1074,7 @@ table.aar td .fremskrevet {
 .beholdningstabel td,
 .postertabel td,
 .indbetalingstabel td,
+.overfoerselstabel td,
 .lofttabel td {
   text-align: right;
   padding: 3px 8px;
@@ -1087,6 +1091,8 @@ table.aar td .fremskrevet {
 .postertabel td:first-child,
 .indbetalingstabel th:first-child,
 .indbetalingstabel td:first-child,
+.overfoerselstabel th:first-child,
+.overfoerselstabel td:first-child,
 .lofttabel th:first-child,
 .lofttabel td:first-child {
   text-align: left;

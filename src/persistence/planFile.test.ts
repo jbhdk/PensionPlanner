@@ -76,7 +76,7 @@ describe('planFile', () => {
     // indbetalinger, v7 → v8, hvor de tre ordninger fik det
     // oprettelsestidspunkt, deres udbetalingsalder udledes af, og v8 → v9,
     // hvor satsreguleringen kom til at hedde det, den løfter.
-    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(9)
+    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(10)
   })
 
   it('bærer en plan med indbetalinger hele vejen rundt', () => {

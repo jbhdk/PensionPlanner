@@ -192,13 +192,15 @@ describe('feltforklaringerne', () => {
     await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
     await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!)
 
-    // Alle seks tabeller skal stå, ellers prøver testen mindre, end den ser
-    // ud til: uden aktieindkomst eller uden et loft udelades blokken helt.
+    // Alle tabellerne skal stå, ellers prøver testen mindre, end den ser ud
+    // til: uden aktieindkomst, uden et loft eller uden en overførsel
+    // udelades blokken helt.
     for (const overskrift of [
       'Husstandens aktieindkomstskat',
       'Posterne',
       'Indbetalingerne',
       'Lofterne',
+      'Overførslerne',
       'Beholdningerne',
     ]) {
       expect(

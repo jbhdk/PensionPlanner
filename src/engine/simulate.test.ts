@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Contribution, Holding, HoldingVariant, PayoutSchedule, Plan } from './plan'
 import { simulate } from './simulate'
+import { totalTax } from './tax/assessTax'
 import { validatePlan } from './validatePlan'
 import {
   aContribution,
@@ -33,6 +34,97 @@ function aPlanWithSecondHolding(options: Parameters<typeof aPlan>[0] = {}): Plan
       },
     ],
   })
+}
+
+/** Fixturens buffer plus én pensionsordning af den ønskede variant, kaldet
+    "ordning". Oprettet i januar 2018 og dermed under det nyeste regime. */
+function aPlanWithPensionScheme(
+  variant: 'InstalmentPension' | 'LifeAnnuity' | 'OldAgeSavings',
+  options: Parameters<typeof aPlan>[0] = {},
+): Plan {
+  return aPlan({
+    balance: 1_000_000,
+    ...options,
+    holdings: [
+      {
+        id: 'ordning',
+        name: 'Ordning',
+        variant,
+        openedOn: { year: 2018, month: 1 },
+        balance: 1_000_000,
+        grossReturn: 0,
+        annualCostRate: 0,
+      },
+    ],
+  })
+}
+
+/** Fixturens buffer plus en aktiesparekonto. Kontoen har hverken
+    oprettelsestidspunkt eller udbetalingsalder — den er ingen
+    pensionsordning. */
+function aPlanWithShareSavingsAccount(
+  options: Parameters<typeof aPlan>[0] & { shareSavingsAccount?: number } = {},
+): Plan {
+  const { shareSavingsAccount = 0, ...rest } = options
+  return aPlan({
+    balance: 0,
+    ...rest,
+    holdings: [
+      {
+        id: 'aktiesparekonto',
+        name: 'Aktiesparekonto',
+        variant: 'ShareSavingsAccount',
+        balance: shareSavingsAccount,
+        grossReturn: options.grossReturn ?? 0,
+        annualCostRate: options.annualCostRate ?? 0,
+      },
+    ],
+  })
+}
+
+/** To personer med hver sin ende af en overførsel: aldersopsparingen ejes af
+    den ældste, de frie midler af den yngste. Fixturen findes for at vise, at
+    aldersforankringen måles på afgiveren og ikke på modtageren. */
+function aPlanWithTwoOwners(): Plan {
+  const base = aPlan({ balance: 0 })
+  const [yngste] = base.household.persons
+  return {
+    ...base,
+    transfers: [
+      aTransfer({
+        from: 'aldersopsparing',
+        to: 'free-assets',
+        amountInRealKroner: 50_000,
+        period: { anchor: 'PersonAge', from: 70 },
+      }),
+    ],
+    household: {
+      persons: [
+        yngste!,
+        {
+          id: 'aeldste',
+          name: 'Ældste',
+          birthYear: 1963,
+          birthMonth: 6,
+          workEndAge: 60,
+          horizon: 90,
+          municipality: 'Hvidovre',
+          churchMember: true,
+          holdings: [
+            {
+              id: 'aldersopsparing',
+              name: 'Aldersopsparing',
+              variant: 'OldAgeSavings',
+              openedOn: { year: 2000, month: 1 },
+              balance: 500_000,
+              grossReturn: 0,
+              annualCostRate: 0,
+            },
+          ],
+        },
+      ],
+    },
+  }
 }
 
 /** Én beholdnings række i årets resultat. Beholdningen findes altid: planen
@@ -1142,7 +1234,7 @@ describe('overførsler', () => {
           from: 'free-assets',
           to: 'anden-beholdning',
           amountInRealKroner: 100_000,
-          period: { from: 2028, to: 2028 },
+          period: { anchor: 'CalendarYear', from: 2028, to: 2028 },
         }),
       ],
     })
@@ -1213,34 +1305,32 @@ describe('pensionsbeholdninger', () => {
     expect(() => simulate(plan)).toThrow(/frie midler/i)
   })
 
-  it('afviser en overførsel med en pensionsbeholdning i den ene eller den anden ende', () => {
+  it('afviser en overførsel ind i en ordning, uanset hvor pengene kom fra', () => {
     // En flytning ind i en ordning er en indbetaling og ikke en overførsel,
-    // uanset hvor pengene kom fra, jf. ADR-0016 — og den anden vej ud er en
-    // udbetaling, som hører i etape 3.
-    const withTransfer = (from: string, to: string) => ({
-      ...aPlan({
-        balance: 1_000_000,
-        holdings: [
-          {
-            id: 'ratepension',
-            name: 'Ratepension',
-            variant: 'InstalmentPension' as const,
-            openedOn: { year: 2018, month: 1 },
-            balance: 1_000_000,
-            grossReturn: 0,
-            annualCostRate: 0,
-          },
-        ],
-        transfers: [aTransfer({ from, to, amountInRealKroner: 10_000 })],
-      }),
+    // jf. ADR-0016. Destinationsreglen står urørt, hvor afgiverreglen er
+    // løsnet, jf. ADR-0022.
+    const plan = aPlanWithPensionScheme('InstalmentPension', {
+      transfers: [
+        aTransfer({ from: 'free-assets', to: 'ordning', amountInRealKroner: 10_000 }),
+      ],
     })
 
-    expect(() => simulate(withTransfer('free-assets', 'ratepension'))).toThrow(
-      /indbetaling/i,
-    )
-    expect(() => simulate(withTransfer('ratepension', 'free-assets'))).toThrow(
-      /frie midler/i,
-    )
+    expect(() => simulate(plan)).toThrow(/indbetaling/i)
+  })
+
+  it('afviser en overførsel ud af en ratepension og ud af en livrente', () => {
+    // De to har `PayoutTaxation` `PersonalIncome`, og loven binder både
+    // start, længde og årligt beløb på vejen ud. Den udbetaling skal gennem
+    // en udbetalingsplan og kan ikke skrives som en overførsel, jf. ADR-0022.
+    const outOf = (variant: 'InstalmentPension' | 'LifeAnnuity') =>
+      aPlanWithPensionScheme(variant, {
+        transfers: [
+          aTransfer({ from: 'ordning', to: 'free-assets', amountInRealKroner: 10_000 }),
+        ],
+      })
+
+    expect(() => simulate(outOf('InstalmentPension'))).toThrow(/udbetalingsplan/i)
+    expect(() => simulate(outOf('LifeAnnuity'))).toThrow(/udbetalingsplan/i)
   })
 })
 
@@ -1466,32 +1556,33 @@ describe('aktiesparekontoen', () => {
     expect(() => simulate(plan)).toThrow(/frie midler/i)
   })
 
-  it('afviser en overførsel med aktiesparekontoen i den ene eller den anden ende', () => {
-    // En flytning ind i kontoen er en indbetaling og ikke en overførsel, jf.
-    // ADR-0016 — indbetalingen er den form, der kender loftet. Den anden vej
-    // ud er en udbetaling, som hører i etape 3.
-    const withTransfer = (from: string, to: string) =>
-      aPlan({
-        balance: 1_000_000,
-        holdings: [
-          {
-            id: 'aktiesparekonto',
-            name: 'Aktiesparekonto',
-            variant: 'ShareSavingsAccount',
-            balance: 100_000,
-            grossReturn: 0,
-            annualCostRate: 0,
-          },
-        ],
-        transfers: [aTransfer({ from, to, amountInRealKroner: 10_000 })],
-      })
+  it('afviser en overførsel ind i aktiesparekontoen — den vej er en indbetaling', () => {
+    // Indbetalingen er den form, der kender indskudsloftet, jf. ADR-0016 og
+    // ADR-0019. En overførsel ville gå uden om det.
+    const plan = aPlanWithShareSavingsAccount({
+      transfers: [
+        aTransfer({ from: 'free-assets', to: 'aktiesparekonto', amountInRealKroner: 10_000 }),
+      ],
+    })
 
-    expect(() => simulate(withTransfer('free-assets', 'aktiesparekonto'))).toThrow(
-      /indbetaling/i,
-    )
-    expect(() => simulate(withTransfer('aktiesparekonto', 'free-assets'))).toThrow(
-      /frie midler/i,
-    )
+    expect(() => simulate(plan)).toThrow(/indbetaling/i)
+  })
+
+  it('henter fra aktiesparekontoen uden en udbetalingsalder at vente på', () => {
+    // Kontoen er hverken frie midler eller en pensionsordning: den har intet
+    // `OpenedOn` og ingen `PayoutAge`, og ejeren hæver af den, når hun vil.
+    // Det er dét, der lukker musefælden fra etape 2, jf. ADR-0022.
+    const plan = aPlanWithShareSavingsAccount({
+      shareSavingsAccount: 100_000,
+      transfers: [
+        aTransfer({ from: 'aktiesparekonto', to: 'free-assets', amountInRealKroner: 30_000 }),
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(holding(year, 'aktiesparekonto').closingBalance).toBe(70_000)
+    expect(bufferBalance(year)).toBe(30_000)
   })
 
   it('afviser en person med to aktiesparekonti', () => {
@@ -3429,5 +3520,284 @@ describe('udbetalingsplanens lovregler', () => {
     expect(validatePlan(legal)).toBeUndefined()
     expect(validatePlan(late)).toMatch(/2070|tredive|30 år/i)
     expect(() => simulate(late)).toThrow(/2070|tredive|30 år/i)
+  })
+})
+
+/** Fixturens buffer plus en aldersopsparing, oprettet før maj 2007 og derfor
+    under det faste regime: pensionsudbetalingsalderen er 60 år, uafhængigt af
+    folkepensionsalderens tabel. Fixturens person er født i juni 1973 og når
+    den i 2033 — det år, døren går op. */
+function aPlanWithOldAgeSavings(
+  options: Parameters<typeof aPlan>[0] & { oldAgeSavings?: number } = {},
+): Plan {
+  const { oldAgeSavings = 0, ...rest } = options
+  return aPlan({
+    balance: 0,
+    ...rest,
+    holdings: [
+      {
+        id: 'aldersopsparing',
+        name: 'Aldersopsparing',
+        variant: 'OldAgeSavings',
+        openedOn: { year: 2000, month: 1 },
+        balance: oldAgeSavings,
+        grossReturn: options.grossReturn ?? 0,
+        annualCostRate: options.annualCostRate ?? 0,
+      },
+    ],
+  })
+}
+
+/** Det år, `aPlanWithOldAgeSavings`' ordning tidligst må udbetales. */
+const oldAgeSavingsPayoutYear = 2033
+
+describe('overførsel ud af en skattefri ordning', () => {
+  it('henter fra en aldersopsparing og lander i de frie midler', () => {
+    const plan = aPlanWithOldAgeSavings({
+      oldAgeSavings: 500_000,
+      transfers: [
+        aTransfer({
+          from: 'aldersopsparing',
+          to: 'free-assets',
+          amountInRealKroner: 100_000,
+          period: { anchor: 'CalendarYear', from: oldAgeSavingsPayoutYear },
+        }),
+      ],
+    })
+
+    const year = simulateChecked(plan).find((y) => y.year === oldAgeSavingsPayoutYear)!
+
+    expect(holding(year, 'aldersopsparing').closingBalance).toBe(400_000)
+    expect(bufferBalance(year)).toBe(100_000)
+  })
+
+  it('afkorter beløbet til afgiverens primosaldo og lukker den på nul', () => {
+    // Et fast kronebeløb kunne ellers drive ordningen negativ, og en
+    // beholdning, der ikke er bufferen, må ikke gå under nul.
+    const plan = aPlanWithOldAgeSavings({
+      oldAgeSavings: 100_000,
+      transfers: [
+        aTransfer({
+          from: 'aldersopsparing',
+          to: 'free-assets',
+          amountInRealKroner: 150_000,
+          period: { anchor: 'CalendarYear', from: oldAgeSavingsPayoutYear },
+        }),
+      ],
+    })
+
+    const year = simulateChecked(plan).find((y) => y.year === oldAgeSavingsPayoutYear)!
+
+    expect(holding(year, 'aldersopsparing').closingBalance).toBe(0)
+    expect(bufferBalance(year)).toBe(100_000)
+  })
+
+  it('giver den første overførsel i planens rækkefølge hele saldoen og den næste resten', () => {
+    // Samme greb som to indbetalinger, der deler ét råderum under et
+    // `OnBalance`-loft: målte de begge mod primosaldoen hver for sig, ville
+    // de tilsammen tømme ordningen to gange.
+    const inYear = { anchor: 'CalendarYear' as const, from: oldAgeSavingsPayoutYear }
+    const plan = aPlanWithOldAgeSavings({
+      oldAgeSavings: 100_000,
+      transfers: [
+        aTransfer({
+          id: 'foerste',
+          from: 'aldersopsparing',
+          to: 'free-assets',
+          amountInRealKroner: 80_000,
+          period: inYear,
+        }),
+        aTransfer({
+          id: 'anden',
+          from: 'aldersopsparing',
+          to: 'free-assets',
+          amountInRealKroner: 80_000,
+          period: inYear,
+        }),
+      ],
+    })
+
+    const year = simulateChecked(plan).find((y) => y.year === oldAgeSavingsPayoutYear)!
+
+    expect(holding(year, 'aldersopsparing').closingBalance).toBe(0)
+    expect(bufferBalance(year)).toBe(100_000)
+  })
+
+  it('bærer det ønskede og det flyttede beløb på en overførselslinje', () => {
+    const plan = aPlanWithOldAgeSavings({
+      oldAgeSavings: 100_000,
+      transfers: [
+        aTransfer({
+          from: 'aldersopsparing',
+          to: 'free-assets',
+          amountInRealKroner: 150_000,
+          period: { anchor: 'CalendarYear', from: oldAgeSavingsPayoutYear },
+        }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+    const truncated = years.find((y) => y.year === oldAgeSavingsPayoutYear)!
+
+    expect(truncated.transfers).toEqual([
+      { transfer: 'transfer', requested: 150_000, moved: 100_000 },
+    ])
+    // Året før falder overførslen ikke, og linjen findes derfor ikke.
+    expect(years.find((y) => y.year === oldAgeSavingsPayoutYear - 1)!.transfers).toEqual([])
+  })
+
+  it('opløser en aldersforankret periode mod afgiverbeholdningens ejer', () => {
+    // Enderne har hver sin ejer, og de to er født med ti års mellemrum.
+    // Måltes alderen mod modtageren, ville tømningen begynde et helt andet
+    // sted — afgiveren er den entydige, jf. ADR-0022.
+    const plan = aPlanWithTwoOwners()
+
+    const years = simulateChecked(plan)
+    const movedIn = years
+      .filter((year) => year.transfers.length > 0)
+      .map((year) => year.year)
+
+    // Afgiveren er født i 1963 og fylder 70 i 2033; modtagerens ejer er født
+    // i 1973 og ville have givet 2043.
+    expect(movedIn[0]).toBe(2033)
+  })
+
+  it('flytter en erhvervsophørsforankret overførsel, når WorkEndAge ændres', () => {
+    const at = (workEndAge: number) =>
+      aPlanWithOldAgeSavings({
+        workEndAge,
+        oldAgeSavings: 500_000,
+        transfers: [
+          aTransfer({
+            from: 'aldersopsparing',
+            to: 'free-assets',
+            amountInRealKroner: 50_000,
+            period: { anchor: 'PersonAge', from: 'WorkEndAge' },
+          }),
+        ],
+      })
+
+    const firstMove = (plan: Plan) =>
+      simulateChecked(plan).find((year) => year.transfers.length > 0)!.year
+
+    // Fixturens person er født i juni 1973.
+    expect(firstMove(at(62))).toBe(2035)
+    expect(firstMove(at(65))).toBe(2038)
+  })
+
+  it('afviser en overførsel, der begynder før afgiverens pensionsudbetalingsalder', () => {
+    // En hævning fra en aldersopsparing før den alder koster 20 % i afgift
+    // og er ikke noget, planen skal kunne beskrive, jf. ADR-0020.
+    const from = (year: number) =>
+      aPlanWithOldAgeSavings({
+        oldAgeSavings: 500_000,
+        transfers: [
+          aTransfer({
+            from: 'aldersopsparing',
+            to: 'free-assets',
+            amountInRealKroner: 50_000,
+            period: { anchor: 'CalendarYear', from: year },
+          }),
+        ],
+      })
+
+    expect(validatePlan(from(oldAgeSavingsPayoutYear - 1))).toMatch(
+      /pensionsudbetalingsalder/i,
+    )
+    expect(validatePlan(from(oldAgeSavingsPayoutYear))).toBeUndefined()
+  })
+
+  it('afviser en overførsel uden startår — den ville begynde ved planens start', () => {
+    const plan = aPlanWithOldAgeSavings({
+      oldAgeSavings: 500_000,
+      transfers: [
+        aTransfer({ from: 'aldersopsparing', to: 'free-assets', amountInRealKroner: 50_000 }),
+      ],
+    })
+
+    expect(validatePlan(plan)).toMatch(/pensionsudbetalingsalder/i)
+  })
+
+  it('lader døren stå åben for aktiesparekontoen og de frie midler', () => {
+    // Ingen af dem er en pensionsordning: de har intet oprettelsestidspunkt
+    // og dermed ingen udbetalingsalder at vente på.
+    const konto = aPlanWithShareSavingsAccount({
+      shareSavingsAccount: 100_000,
+      transfers: [
+        aTransfer({ from: 'aktiesparekonto', to: 'free-assets', amountInRealKroner: 10_000 }),
+      ],
+    })
+
+    expect(validatePlan(konto)).toBeUndefined()
+  })
+
+  it('beskatter ikke udbetalingen og lader den stå uden for enhver indkomst', () => {
+    // `PayoutTaxation` er `TaxFree`: der udløses ingen skat, og beløbet
+    // indgår hverken i årets indtægter eller i nogen persons opgørelse.
+    // Sammenlignet med en ratepensions rate, som er personlig indkomst, er
+    // det hele forskellen.
+    const plan = aPlanWithOldAgeSavings({
+      oldAgeSavings: 500_000,
+      transfers: [
+        aTransfer({
+          from: 'aldersopsparing',
+          to: 'free-assets',
+          amountInRealKroner: 200_000,
+          period: { anchor: 'CalendarYear', from: oldAgeSavingsPayoutYear },
+        }),
+      ],
+    })
+
+    const year = simulateChecked(plan).find((y) => y.year === oldAgeSavingsPayoutYear)!
+
+    expect(year.income).toBe(0)
+    expect(year.expenses).toBe(0)
+    expect(year.tax).toBe(0)
+    expect(totalTax(year.persons[0]!.tax)).toBe(0)
+    expect(year.closingWealth).toBe(500_000)
+  })
+
+  it('kalder året uholdbart, når den eneste likviditet er en ratepension', () => {
+    // Ratepensionen kan kun nås af en udbetalingsplan, der binder ti år
+    // frem. Det er en anden plan og ikke en manglende overførsel, og
+    // pengene tæller derfor ikke som likviditet andetsteds, jf. ADR-0022.
+    const plan = aPlanWithPensionScheme('InstalmentPension', {
+      balance: 0,
+      entries: [anExpense({ amountInRealKroner: 40_000 })],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(bufferBalance(year)).toBeLessThan(0)
+    expect(year.bufferState).toBe('Unsustainable')
+  })
+
+  it('kalder året ufuldstændigt, når likviditeten står på en aktiesparekonto', () => {
+    // Kontoen har ingen dør at vente på: en overførsel kan hente fra den i
+    // ethvert år, og der mangler derfor kun én.
+    const plan = aPlanWithShareSavingsAccount({
+      shareSavingsAccount: 500_000,
+      entries: [anExpense({ amountInRealKroner: 40_000 })],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(bufferBalance(year)).toBeLessThan(0)
+    expect(year.bufferState).toBe('Incomplete')
+  })
+
+  it('tæller en aldersopsparing med først fra dens pensionsudbetalingsalder', () => {
+    // Den samme plan skifter svar undervejs: pengene er der hele tiden, men
+    // ingen overførsel kan nå dem, før døren går op i 2033.
+    const plan = aPlanWithOldAgeSavings({
+      oldAgeSavings: 5_000_000,
+      entries: [anExpense({ amountInRealKroner: 40_000 })],
+    })
+
+    const years = simulateChecked(plan)
+    const stateIn = (year: number) => years.find((y) => y.year === year)!.bufferState
+
+    expect(stateIn(oldAgeSavingsPayoutYear - 1)).toBe('Unsustainable')
+    expect(stateIn(oldAgeSavingsPayoutYear)).toBe('Incomplete')
   })
 })

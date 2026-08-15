@@ -11,13 +11,11 @@ import {
 } from './holdingYears'
 import type { HoldingYears } from './holdingYears'
 import type {
-  AgeBound,
   Contribution,
   Entry,
   Holding,
   HoldingVariant,
   Nominal,
-  Period,
   HoldingId,
   PayoutPrinciple,
   PayoutSchedule,
@@ -30,8 +28,8 @@ import type {
   Timing,
   Transfer,
 } from './plan'
-import { yearAtAge } from './age'
-import { payoutStartYear } from './payoutAge'
+import { periodBounds } from './age'
+import { payoutStartYear, transferAllowedFrom } from './payoutAge'
 import { cap, cappedVariant, hasDeductibility, payoutScheduleOf } from './holdingVariant'
 import { rateYearFor } from './rates/rates'
 import type { RateYear } from './rates/rateYear'
@@ -53,9 +51,11 @@ import type {
     rent faktisk falder i det pågældende år. */
 type ActiveEntry = { entry: Entry; amount: Nominal }
 
-/** En overførsel sammen med dens beløb i årets løbende priser, for de
-    overførsler der rent faktisk falder i det pågældende år. */
-type ActiveTransfer = { transfer: Transfer; amount: Nominal }
+/** En overførsel sammen med dens to beløb i årets løbende priser, for de
+    overførsler der rent faktisk falder i det pågældende år: hvad planen bad
+    om, og hvad afgiverens saldo rakte til. De to er ens i næsten alle år, og
+    forskellen er den, `TransferYear` gør synlig. */
+type ActiveTransfer = { transfer: Transfer; requested: Nominal; amount: Nominal }
 
 /** En indbetaling sammen med dens to beløb i årets løbende priser, dens
     forfald og den beholdning, pengene forlader — for de indbetalinger der
@@ -122,13 +122,18 @@ function simulateYear(
   rateBasis: RateBasis,
 ): YearResult {
   const entries = entriesInYear(plan, year)
-  const transfers = transfersInYear(plan, year)
   const requested = contributionsInYear(plan, year, entries, rates)
 
   // Primosaldiene står fast hele året igennem: de er forrige års ultimo og
-  // ændrer sig ikke af noget, der sker herefter. Både `OnBalance`-loftets
-  // råderum og årets rater måles mod netop dem, og de læses derfor ét sted.
+  // ændrer sig ikke af noget, der sker herefter. `OnBalance`-loftets
+  // råderum, overførslernes afkortning og årets rater måles alle mod netop
+  // dem, og de læses derfor ét sted.
   const opening = openingBalances(years)
+
+  // Overførslerne afkortes, før noget vejes ind, af samme grund som
+  // lofterne: kun det, der faktisk flyttede sig, må forrente sig i den ende,
+  // det landede i.
+  const transfers = transfersInYear(plan, year, opening)
 
   // Lofterne opgøres, før noget vejes ind. En loftform, der afkorter selve
   // indbetalingen, skal være afgjort først — ellers forrenter penge sig et
@@ -277,6 +282,11 @@ function simulateYear(
       fromSource,
       intoHolding,
     })),
+    transfers: transfers.map(({ transfer, requested, amount }) => ({
+      transfer: transfer.id,
+      requested,
+      moved: amount,
+    })),
     persons: plan.household.persons.map((person, index) => ({
       person: person.id,
       shareIncome: shareIncomeByPerson.get(person.id)!,
@@ -286,7 +296,7 @@ function simulateYear(
       caps: contributionsByPersonId.get(person.id)!.caps,
     })),
     shareIncomeTax: household.shareIncomeTax,
-    bufferState: bufferState(plan, holdings),
+    bufferState: bufferState(plan, holdings, year),
     capBreach: capBreach([...contributionsByPersonId.values()]),
   }
 }
@@ -296,15 +306,38 @@ function sumOver(holdings: HoldingYear[], of: (holding: HoldingYear) => Nominal)
 }
 
 /** Hvorfor bufferen er negativ ved årets slutning, jf. ADR-0008: `Incomplete`
-    når resten af husstandens beholdninger tilsammen dækker underskuddet —
-    der mangler kun en overførsel — og `Unsustainable` når de ikke gør.
-    Fraværende, når bufferen ikke er negativ. */
-function bufferState(plan: Plan, holdings: HoldingYear[]): BufferState | undefined {
+    når husstanden har likviditet andetsteds og blot mangler en overførsel, og
+    `Unsustainable` når den ikke har. Fraværende, når bufferen ikke er negativ.
+
+    "Likviditet andetsteds" er de beholdninger, en overførsel kan nå i netop
+    det år, og ikke summen af alle øvrige, jf. ADR-0022. Summen af alle øvrige
+    talte likviditet med, som ingen overførsel kunne hente: en ratepension kan
+    kun nås af en udbetalingsplan, der binder ti år frem, og en aldersopsparing
+    først fra sin `PayoutAge`. Spørgsmålet stilles derfor gennem
+    `transferAllowedFrom`, det samme opslag, `validatePlan` afviser en umulig
+    overførsel med — de to må ikke kunne svare hver sit.
+
+    Året er årets, og svaret kan derfor skifte undervejs: den samme plan er
+    `Unsustainable`, mens aldersopsparingens dør er lukket, og `Incomplete`
+    bagefter. */
+function bufferState(
+  plan: Plan,
+  holdings: HoldingYear[],
+  year: SimulationYear,
+): BufferState | undefined {
   const buffer = holdings.find((holding) => holding.holding === plan.buffer)!
   if (buffer.closingBalance >= 0) return undefined
 
+  const reachable = new Set(
+    plan.household.persons.flatMap((person) =>
+      person.holdings
+        .filter((holding) => holding.id !== plan.buffer)
+        .filter((holding) => transferAllowedFrom(holding, person, year))
+        .map((holding) => holding.id),
+    ),
+  )
   const elsewhere = holdings
-    .filter((holding) => holding.holding !== plan.buffer)
+    .filter((holding) => reachable.has(holding.holding))
     .reduce((sum, holding) => sum + holding.closingBalance, 0)
 
   return elsewhere >= -buffer.closingBalance ? 'Incomplete' : 'Unsustainable'
@@ -966,15 +999,36 @@ function ownerOfHolding(plan: Plan, holding: HoldingId): Person {
   )!
 }
 
-/** En overførsel har ingen ejer at binde en alder til, så dens periode er
-    altid rene kalenderår — ingen `periodBounds`-udledning nødvendig. */
-function transfersInYear(plan: Plan, year: SimulationYear): ActiveTransfer[] {
-  return plan.transfers
-    .filter((transfer) => transferAppliesInYear(transfer, year))
-    .map((transfer) => ({
-      transfer,
-      amount: transfer.amountInRealKroner * transferProjection(plan, year),
-    }))
+/** Årets overførsler, hver afkortet til det, afgiveren havde at give af.
+
+    Afkortningen måles mod primosaldoen, ganske som `OnBalance`-loftets
+    råderum: et fast kronebeløb kunne ellers drive en ordning negativ, og en
+    beholdning, der ikke er bufferen, må ikke gå under nul, jf. ADR-0022.
+    Falder to overførsler ud af den samme beholdning i samme år, får den
+    første i planens rækkefølge hele saldoen og den næste resten — samme
+    greb, og af samme grund, som to indbetalinger, der deler ét råderum.
+
+    Bufferen er undtaget. Den er det ene sted, årets restpost må samle sig,
+    og dens negative saldo er hele modellens måde at sige, at planen ikke
+    holder, jf. ADR-0002 og ADR-0008. Afkortede en overførsel den, ville
+    signalet forsvinde i stedet for at vise sig. */
+function transfersInYear(
+  plan: Plan,
+  year: SimulationYear,
+  opening: ReadonlyMap<HoldingId, Nominal>,
+): ActiveTransfer[] {
+  const remaining = new Map(opening)
+  return plan.transfers.flatMap((transfer) => {
+    if (!transferAppliesInYear(transfer, year, ownerOfHolding(plan, transfer.from))) return []
+
+    const requested = transfer.amountInRealKroner * transferProjection(plan, year)
+    if (transfer.from === plan.buffer) return [{ transfer, requested, amount: requested }]
+
+    const room = Math.max(0, remaining.get(transfer.from)!)
+    const amount = Math.min(requested, room)
+    remaining.set(transfer.from, room - amount)
+    return [{ transfer, requested, amount }]
+  })
 }
 
 /** Overførsler har ingen egen reguleringssats — de følger planens generelle
@@ -983,8 +1037,15 @@ function transferProjection(plan: Plan, year: SimulationYear): number {
   return (1 + plan.inflationAssumption) ** (year - plan.startYear)
 }
 
-function transferAppliesInYear(transfer: Transfer, year: SimulationYear): boolean {
-  const { from, to } = transfer.period
+/** Om overførslen falder i året. Aldersforankringen måles på
+    afgiverbeholdningens ejer — en beholdning har præcis én, og det er dén
+    alder, en aldersopsparings tømning skal flytte sig med, jf. ADR-0022. */
+function transferAppliesInYear(
+  transfer: Transfer,
+  year: SimulationYear,
+  owner: Person,
+): boolean {
+  const { from, to } = periodBounds(transfer.period, owner)
   return withinPeriod(from, to, year) && matchesRecurrence(transfer.recurrence, year, from, to)
 }
 
@@ -1012,32 +1073,6 @@ function matchesRecurrence(
     case 'EveryNYears':
       return from !== undefined && (year - from) % recurrence.n === 0
   }
-}
-
-/** Periodens endepunkter oversat til kalenderår. Ved `PersonAge` følger et
-    endepunkt sat til `'WorkEndAge'` `owner.workEndAge`, så perioden flytter
-    sig, når erhvervsophørsalderen ændres, uden at posten selv redigeres.
-
-    Intern: fladen læser de årstal, posten faktisk falder i, af årsrækken —
-    som desuden er klippet mod horisonten, hvilket denne ikke er, jf.
-    ADR-0012. */
-function periodBounds(
-  period: Period,
-  owner: Person,
-): { from?: SimulationYear; to?: SimulationYear } {
-  if (period.anchor === 'CalendarYear') {
-    return { from: period.from, to: period.to }
-  }
-  return {
-    from: resolveAgeBound(period.from, owner),
-    to: resolveAgeBound(period.to, owner),
-  }
-}
-
-function resolveAgeBound(bound: AgeBound | undefined, owner: Person): SimulationYear | undefined {
-  if (bound === undefined) return undefined
-  const age = bound === 'WorkEndAge' ? owner.workEndAge : bound
-  return yearAtAge(owner, age)
 }
 
 function allHoldings(plan: Plan): Holding[] {

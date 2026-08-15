@@ -23,7 +23,7 @@ import type {
   Timing,
 } from '../engine/plan'
 import { latestRateYear } from '../engine/rates/rates'
-import { payoutAge, payoutRegime } from '../engine/payoutAge'
+import { payoutAge, payoutRegime, payoutYear } from '../engine/payoutAge'
 import { payoutDurationBounds } from '../engine/validatePlan'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
 import type { YearResult } from '../engine/yearResult'
@@ -72,6 +72,7 @@ import {
   removePayoutSchedule,
   removePerson,
   removeTransfer,
+  transferEndOptions,
   withContribution,
   withDirection,
   withEntry,
@@ -1263,53 +1264,72 @@ function withAmountForm(
 
 function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {
   const transfer = findTransfer(plan, id)
-  if (!transfer) return null
+  const fromOwner = findHoldingOwner(plan, transfer?.from ?? '')
+  if (!transfer || !fromOwner) return null
 
   const holdings = plan.household.persons.flatMap((person) => person.holdings)
   const holdingName = (holdingId: string) =>
     holdings.find((holding) => holding.id === holdingId)?.name ?? holdingId
 
-  // En overførsel flytter penge mellem husstandens frie midler: ind i en
-  // ordning er det en indbetaling, og ud af en er det en udbetaling, jf.
-  // ADR-0016. Listerne tilbyder kun det, der kan vælges, frem for at lade
-  // motoren afvise planen bagefter — navneopslaget ovenfor står stadig på
-  // alle beholdninger, så en importeret plans ulovlige ende vises med sit
-  // navn og ikke med sit id.
-  const ends = holdings.filter(isFreeAssets)
+  // De to ender har hver sin regel og dermed hver sin liste. Afgiveren skal
+  // være en variant, hvis udbetaling er skattefri — også aldersopsparingen og
+  // aktiesparekontoen, som netop tømmes sådan, jf. ADR-0022. Destinationen er
+  // altid frie midler: ind i en ordning er det en indbetaling, jf. ADR-0016.
+  //
+  // Listerne tilbyder kun det, der kan vælges, frem for at lade motoren
+  // afvise planen bagefter — navneopslaget ovenfor står stadig på alle
+  // beholdninger, så en importeret plans ulovlige ende vises med sit navn og
+  // ikke med sit id.
+  const sources = transferEndOptions(plan, 'from')
+  const destinations = transferEndOptions(plan, 'to')
+  // Opslaget dækker afgiverlisten, og destinationerne er en delmængde af
+  // den: et navn, en af de to lister kan sende hertil, står altid i kortet.
+  // En beholdning, ingen af listerne tilbyder, hører ikke i det — den kunne
+  // stjæle et navn fra en, der gør.
   const holdingByName: Record<string, string> = Object.fromEntries(
-    ends.map((holding) => [holding.name, holding.id]),
+    sources.map((holding) => [holding.name, holding.id]),
   )
+
+  // Fladen låner ordet "udbetaling", når pengene forlader en ordning. Det er
+  // det, den er i virkeligheden — man beder selskabet udbetale sin
+  // aldersopsparing — men figuren hedder stadig en overførsel i glossaret og
+  // i koden, jf. ADR-0022. En etiket og ikke et begreb, og derfor står de
+  // bøjede former som tekst her og ikke som en regel, der bøjer dem.
+  const from = holdings.find((holding) => holding.id === transfer.from)
+  const label =
+    from && !isFreeAssets(from)
+      ? { slags: 'Udbetaling', bestemt: 'Udbetalingen', fjern: 'Fjern udbetaling' }
+      : { slags: 'Overførsel', bestemt: 'Overførslen', fjern: 'Fjern overførsel' }
 
   return (
     <>
       <Head
         title={`${holdingName(transfer.from)} → ${holdingName(transfer.to)}`}
-        subtitle="Overførsel"
+        subtitle={label.slags}
         onClose={onClose}
         onDelete={() => {
           onChange(removeTransfer(plan, id))
           onClose()
         }}
-        deleteLabel="Fjern overførsel"
+        deleteLabel={label.fjern}
       />
-      <Section title="Overførslen">
-        {/* Begge ender står i begge lister. Vælges den beholdning, der
-            allerede er den anden ende, bytter de to plads — se
-            `withTransferEnd`. Udelod listen den anden ende, ville retningen
-            være låst, og med præcis to beholdninger ville der ikke være et
-            valg tilbage overhovedet. */}
+      <Section title={label.bestemt}>
+        {/* Står den beholdning, der allerede er den anden ende, i listen, og
+            kan de to bytte plads lovligt, gør de det — se `withTransferEnd`.
+            Udelod listen den anden ende, ville retningen være låst mellem to
+            frie midler, og der ville ikke være et valg tilbage overhovedet. */}
         <SelectField
           label="Fra"
           help="Transfer.from"
           value={holdingName(transfer.from)}
-          options={ends.map((holding) => holding.name)}
+          options={sources.map((holding) => holding.name)}
           onChange={(name) => onChange(withTransferEnd(plan, id, 'from', holdingByName[name]!))}
         />
         <SelectField
           label="Til"
           help="Transfer.to"
           value={holdingName(transfer.to)}
-          options={ends.map((holding) => holding.name)}
+          options={destinations.map((holding) => holding.name)}
           onChange={(name) => onChange(withTransferEnd(plan, id, 'to', holdingByName[name]!))}
         />
         <NumberField
@@ -1322,86 +1342,21 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
           }
         />
       </Section>
-      <Section title="Perioden">
-        <SelectField
-          label="Gentagelse"
-          help="Recurrence.kind"
-          value={danish(recurrences, transfer.recurrence.kind)}
-          options={Object.keys(recurrences)}
-          onChange={(choice) => {
-            const kind = recurrences[choice]!
-            onChange(
-              withTransfer(plan, id, (t) =>
-                kind === 'Once'
-                  ? { ...t, recurrence: defaultRecurrence(kind), timing: timingForOnce(t.timing) }
-                  : { ...t, recurrence: defaultRecurrence(kind) },
-              ),
-            )
-          }}
-        />
-        {transfer.recurrence.kind === 'EveryNYears' && (
-          <NumberField
-            label="Hvert"
-            help="Recurrence.n"
-            unit="år"
-            value={transfer.recurrence.n}
-            onChange={(n) =>
-              onChange(
-                withTransfer(plan, id, (t) =>
-                  t.recurrence.kind === 'EveryNYears'
-                    ? { ...t, recurrence: { kind: 'EveryNYears', n } }
-                    : t,
-                ),
-              )
-            }
-          />
-        )}
-        {transfer.recurrence.kind === 'Once' ? (
-          <NumberField
-            label="År"
-            help="Period.once"
-            unit="år"
-            value={transfer.period.from ?? transfer.period.to ?? plan.startYear}
-            onChange={(from) =>
-              onChange(withTransfer(plan, id, (t) => ({ ...t, period: { from } })))
-            }
-          />
-        ) : (
-          <>
-            <OptionalNumberField
-              label="Fra (år)"
-              help="Period.from"
-              unit="år"
-              value={transfer.period.from}
-              onChange={(from) =>
-                onChange(withTransfer(plan, id, (t) => ({ ...t, period: { ...t.period, from } })))
-              }
-            />
-            <OptionalNumberField
-              label="Til (år)"
-              help="Period.to"
-              unit="år"
-              value={transfer.period.to}
-              onChange={(to) =>
-                onChange(withTransfer(plan, id, (t) => ({ ...t, period: { ...t.period, to } })))
-              }
-            />
-          </>
-        )}
-        <SelectField
-          label="Forfald"
-          help="Timing"
-          value={danishTiming(transfer.timing)}
-          options={timingOptions(transfer.recurrence)}
-          onChange={(choice) =>
-            onChange(withTransfer(plan, id, (t) => ({ ...t, timing: timings[choice]! })))
-          }
-        />
+      <PeriodSection
+        value={transfer}
+        owner={fromOwner}
+        startYear={plan.startYear}
+        onChange={(next) => onChange(withTransfer(plan, id, (t) => ({ ...t, ...next })))}
+      >
         <Hint>
-          Overførslen er altid kalenderårsforankret — den har ingen ejer at
-          binde en alder til.
+          En aldersforankret overførsel måles på {fromOwner.name}, som ejer
+          den beholdning, pengene tages fra — så en tømning flytter sig med
+          erhvervsophøret.
+          {from && isPensionScheme(from) && (
+            <> Ordningen må tidligst udbetales i {payoutYear(from, fromOwner)}.</>
+          )}
         </Hint>
-      </Section>
+      </PeriodSection>
     </>
   )
 }

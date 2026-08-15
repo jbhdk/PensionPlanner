@@ -130,6 +130,7 @@ export function YearExplanation({
       <HoldingsBlock plan={plan} year={year} display={display} />
       <EntriesBlock plan={plan} year={year} display={display} />
       <ContributionsBlock plan={plan} year={year} display={display} />
+      <TransfersBlock plan={plan} year={year} display={display} />
     </div>
   )
 }
@@ -285,6 +286,69 @@ function ContributionsBlock({
         </tbody>
       </table>
       <CapsBlock plan={plan} year={year} display={display} />
+    </div>
+  )
+}
+
+/** Årets overførsler: hvad planen bad om, og hvad der faktisk flyttede sig.
+
+    De to tal står ved siden af hinanden, fordi de kan være forskellige.
+    Afgiverens saldo ved årets begyndelse er alt, der er at give af, og et
+    fast kronebeløb, der overstiger den, afkortes — en tavs afkortning er den
+    slags fejl, der aldrig viser sig, jf. ADR-0022. I de fleste år er de to
+    ens, og linjen siger da blot, hvad der blev flyttet.
+
+    Rækken hedder de to ender ved navn, som indbetalingens gør. Blokken
+    udebliver, når året ingen overførsler har. */
+function TransfersBlock({
+  plan,
+  year,
+  display,
+}: {
+  plan: Plan
+  year: YearResult
+  display: (amount: number) => number
+}) {
+  if (year.transfers.length === 0) return null
+
+  const holdings = plan.household.persons.flatMap((person) => person.holdings)
+  const name = (transferId: string) => {
+    const transfer = plan.transfers.find((t) => t.id === transferId)
+    if (!transfer) return transferId
+    const from = holdings.find((holding) => holding.id === transfer.from)
+    const to = holdings.find((holding) => holding.id === transfer.to)
+    return `${from?.name ?? transfer.from} → ${to?.name ?? transfer.to}`
+  }
+
+  return (
+    <div className="blok bred">
+      <h3>Overførslerne</h3>
+      <table className="overfoerselstabel">
+        <thead>
+          <tr>
+            <th title={fieldHelp['TransferYear.transfer']}>Overførsel</th>
+            <th title={fieldHelp['TransferYear.requested']}>Bedt om</th>
+            <th title={fieldHelp['TransferYear.moved']}>Flyttet</th>
+          </tr>
+        </thead>
+        <tbody>
+          {year.transfers.map((transfer) => (
+            <tr key={transfer.transfer}>
+              <td>{name(transfer.transfer)}</td>
+              <td>{kroner(display(transfer.requested))}</td>
+              <td>{kroner(display(transfer.moved))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {/* Ingen farve her, ganske som i lofttabellen: rød er bufferens alene.
+          Sætningen står altid, så de to kolonner kan læses uden at gætte,
+          hvorfor de nogle år er forskellige. */}
+      <p className="hint">
+        En overførsel kan aldrig flytte mere, end afgiveren havde ved årets
+        begyndelse. Beder planen om mere, afkortes den, og beholdningen lukker på
+        nul frem for at gå i minus.
+      </p>
     </div>
   )
 }

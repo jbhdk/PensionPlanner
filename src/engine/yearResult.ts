@@ -5,6 +5,7 @@ import type {
   Nominal,
   PersonId,
   SimulationYear,
+  TransferId,
 } from './plan'
 import type { CappedVariant } from './holdingVariant'
 import type { ShareIncomeLayer } from './tax/assessHousehold'
@@ -12,8 +13,15 @@ import type { LayerAmount, MarginalTaxRates, TaxAssessment } from './tax/assessT
 
 /** Hvorfor bufferen er negativ i ét simuleringsår, jf. ADR-0008:
     `Incomplete`, når husstanden har likviditet andetsteds og blot mangler en
-    overførsel, eller `Unsustainable`, når husstandens samlede frie midler
-    også er negative. Fraværende, når bufferen ikke er negativ. */
+    overførsel, eller `Unsustainable`, når den ikke har. Fraværende, når
+    bufferen ikke er negativ.
+
+    Likviditet andetsteds er præcis de beholdninger, en overførsel kan nå i
+    netop det år: de øvrige frie midler, aktiesparekontoen, og en
+    aldersopsparing, hvis året har passeret dens `PayoutAge`. En ratepension
+    tæller ikke med — den kan kun nås af en udbetalingsplan, der binder ti år
+    frem, og det er en anden plan og ikke en manglende overførsel, jf.
+    ADR-0022. */
 export type BufferState = 'Incomplete' | 'Unsustainable'
 
 /** Hvorfor et loft er brudt i ét simuleringsår, jf. ADR-0018:
@@ -65,6 +73,24 @@ export type ContributionYear = {
   contribution: ContributionId
   fromSource: Nominal
   intoHolding: Nominal
+}
+
+/** Én overførsels to beløb i ét simuleringsår, i årets egne løbende priser
+    — kun for de overførsler der faktisk falder i året. Det ene er, hvad
+    planen bad om; det andet, hvad der faktisk blev flyttet, når afgiverens
+    primosaldo ikke rakte.
+
+    De to er ens i næsten alle år, og linjen findes for de år, hvor de ikke
+    er: en tavs afkortning er den slags fejl, der aldrig viser sig. Samme
+    greb som `CapYear` under et `OnBalance`-loft, hvor det afviste beløb
+    ellers ville have været usynligt, jf. ADR-0019 og ADR-0022.
+
+    Forfaldet står ikke her; det er en egenskab ved overførslen selv og læses
+    fra `Plan.transfers`, ligesom `EntryYear` læser sit fra `Plan.entries`. */
+export type TransferYear = {
+  transfer: TransferId
+  requested: Nominal
+  moved: Nominal
 }
 
 /** Én persons indbetaling til én slags loftbelagt ordning i ét
@@ -202,6 +228,10 @@ export type YearResult = {
   shareIncomeTax: Partial<Record<ShareIncomeLayer, LayerAmount>>
   entries: EntryYear[]
   contributions: ContributionYear[]
+  /** Årets overførsler, én linje pr. overførsel der falder i året. Tom, når
+      ingen gør. Linjen bærer både det ønskede og det flyttede, så en
+      afkortning kan ses frem for at forsvinde. */
+  transfers: TransferYear[]
   /** Fraværende, når bufferen ikke er negativ. */
   bufferState?: BufferState
   /** Fraværende, når intet loft er brudt. Konklusionen står her og ikke pr.

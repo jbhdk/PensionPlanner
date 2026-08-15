@@ -388,3 +388,36 @@ describe('v8 → v9: satsreguleringen hedder det, den løfter', () => {
     expect('statePensionProjectionAssumption' in migrated).toBe(false)
   })
 })
+
+describe('v9 → v10: overførslens periode bliver en fuld periode', () => {
+  it('forankrer en gemt overførsel til kalenderår og lader endepunkterne stå', () => {
+    // Indtil nu bar overførslen kun to årstal: den kunne ikke
+    // aldersforankres, fordi begge ender var frie midler. Nu måles alderen
+    // på afgiverbeholdningens ejer, og perioden har derfor samme form som
+    // en posts. En gemt periode betød kalenderår og bliver ved med at gøre
+    // det — der er intet at gætte, jf. ADR-0022.
+    const v9: unknown = {
+      transfers: [
+        { id: 'transfer-1', from: 'a', to: 'b', period: { from: 2030, to: 2035 } },
+        { id: 'transfer-2', from: 'a', to: 'b', period: {} },
+      ],
+    }
+
+    const v10 = runMigrations(v9, 9, 10, migrations) as {
+      transfers: Array<{ id: string; period: unknown }>
+    }
+
+    expect(v10.transfers[0]!.period).toEqual({
+      anchor: 'CalendarYear',
+      from: 2030,
+      to: 2035,
+    })
+    expect(v10.transfers[1]!.period).toEqual({ anchor: 'CalendarYear' })
+  })
+
+  it('lader en plan uden overførsler stå med en tom liste', () => {
+    const v10 = runMigrations({ name: 'Plan' }, 9, 10, migrations)
+
+    expect(v10).toEqual({ name: 'Plan', transfers: [] })
+  })
+})

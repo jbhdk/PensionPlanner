@@ -2,9 +2,12 @@ import {
   bearsPayoutSchedule,
   isEmployerAdministered,
   isFreeAssets,
+  isPensionScheme,
   isUniquePerPerson,
+  payoutTaxation,
 } from './holdingVariant'
-import { payoutStartYear, payoutYear } from './payoutAge'
+import { payoutStartYear, payoutYear, transferAllowedFrom } from './payoutAge'
+import { periodBounds } from './age'
 import type { AgeBound, Holding, HoldingId, PensionSchemeHolding, Person, Plan } from './plan'
 
 /** Planen skal beskrive noget, der kan eksistere, før motoren kan regne på
@@ -202,11 +205,7 @@ function entrySourcedDestination(plan: Plan): string | undefined {
 function contributionEnds(plan: Plan): string | undefined {
   const byId = holdingsById(plan)
   const entries = new Map(plan.entries.map((entry) => [entry.id, entry]))
-  const ownerOf = new Map(
-    plan.household.persons.flatMap((person) =>
-      person.holdings.map((holding) => [holding.id, person.id]),
-    ),
-  )
+  const ownerOf = ownersByHolding(plan)
 
   for (const contribution of plan.contributions) {
     const to = byId.get(contribution.to)
@@ -259,10 +258,10 @@ function contributionEnds(plan: Plan): string | undefined {
           `som ikke er frie midler. En flytning mellem to ordninger er ikke en indbetaling.`
         )
       }
-      owner = ownerOf.get(contribution.source)
+      owner = ownerOf.get(contribution.source)?.id
     }
 
-    if (owner !== ownerOf.get(contribution.to)) {
+    if (owner !== ownerOf.get(contribution.to)?.id) {
       return (
         `Indbetalingen ${contribution.id} går fra ${contribution.source} til ` +
         `beholdningen ${contribution.to}, som ikke tilhører samme person.`
@@ -290,11 +289,25 @@ function bufferPointer(plan: Plan): string | undefined {
   return undefined
 }
 
-/** Overførslens to ender skal begge findes, og de skal begge være frie
-    midler: en flytning ind i en ordning er en indbetaling og ikke en
-    overførsel, uanset hvor pengene kom fra, jf. ADR-0016. */
+/** Overførslens to ender skal begge findes.
+
+    Destinationen er altid frie midler: en flytning ind i en ordning er en
+    indbetaling og ikke en overførsel, uanset hvor pengene kom fra, jf.
+    ADR-0016.
+
+    Afgiveren skal være en beholdning, en overførsel må hente fra i det år,
+    den begynder: en variant, hvis `PayoutTaxation` er `TaxFree`, og — er den
+    en pensionsordning — først fra dens `PayoutAge`. En hævning fra en
+    aldersopsparing før den alder koster 20 % i afgift og er ikke noget,
+    planen skal kunne beskrive, jf. ADR-0020 og ADR-0022.
+
+    Reglen er `transferAllowedFrom`s og stilles ét sted; her udledes alene,
+    hvilken af de to betingelser der svigtede, så beskeden kan sige hvorfor.
+    Begynder overførslen uden startår, begynder den ved planens start — det
+    er dét år, døren måles mod. */
 function transferEnds(plan: Plan): string | undefined {
   const byId = holdingsById(plan)
+  const ownerOf = ownersByHolding(plan)
   for (const transfer of plan.transfers) {
     const from = byId.get(transfer.from)
     const to = byId.get(transfer.to)
@@ -310,10 +323,23 @@ function transferEnds(plan: Plan): string | undefined {
         `frie midler. En flytning ind i en ordning er en indbetaling.`
       )
     }
-    if (!isFreeAssets(from)) {
+    const owner = ownerOf.get(transfer.from)!
+    const start = periodBounds(transfer.period, owner).from ?? plan.startYear
+    if (!transferAllowedFrom(from, owner, start)) {
+      // Reglen har afgjort, at en af de to betingelser svigtede; her udledes
+      // alene hvilken. Er varianten skattefri på vejen ud, og har den en dør,
+      // er det døren — kun en pensionsordning har en. Ellers er det
+      // varianten selv.
+      if (isPensionScheme(from) && payoutTaxation(from) === 'TaxFree') {
+        return (
+          `Overførslen ${transfer.id} henter fra beholdningen ${transfer.from} fra ` +
+          `${start}, men dens pensionsudbetalingsalder nås først i ` +
+          `${payoutYear(from, owner)}.`
+        )
+      }
       return (
-        `Overførslen ${transfer.id} kommer fra beholdningen ${transfer.from}, som ikke er ` +
-        `frie midler.`
+        `Overførslen ${transfer.id} kommer fra beholdningen ${transfer.from}, hvis ` +
+        `udbetaling er personlig indkomst. Den tømmes af en udbetalingsplan.`
       )
     }
   }
@@ -328,6 +354,17 @@ function entryOwners(plan: Plan): string | undefined {
     }
   }
   return undefined
+}
+
+/** Hver beholdnings ejer slået op på beholdningens id. En beholdning har
+    præcis én, og det er dén, en aldersforankret periode og en `PayoutAge`
+    måles mod. */
+function ownersByHolding(plan: Plan): Map<HoldingId, Person> {
+  return new Map(
+    plan.household.persons.flatMap((person) =>
+      person.holdings.map((holding) => [holding.id, person] as const),
+    ),
+  )
 }
 
 function holdings(plan: Plan): Holding[] {

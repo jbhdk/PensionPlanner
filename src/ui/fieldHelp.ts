@@ -209,13 +209,24 @@ export const fieldHelp = {
   // ---------- Overførslen ----------
 
   'Transfer.from':
-    'Den beholdning, pengene tages fra. En overførsel flytter kun mellem husstandens frie midler — skal pengene ind i en pensionsordning, er det en indbetaling i stedet.',
+    'Den beholdning, pengene tages fra. Det kan være enhver opsparing, der ikke koster skat at hæve af — også en aldersopsparing eller en aktiesparekonto, som netop tømmes på denne måde. En ratepension kan derimod ikke: dens udbetaling er bundet af en plan.',
 
   'Transfer.to':
-    'Den beholdning, pengene lander i. Flytningen er hverken en indtægt eller en udgift og beskattes ikke; den omplacerer penge, husstanden allerede har.',
+    'Den beholdning, pengene lander i. Det er altid frie midler — skal de ind i en pensionsordning, er det en indbetaling i stedet, med et loft og en skattevirkning.',
 
   'Transfer.amountInRealKroner':
-    'Hvor meget der flyttes, målt i dagens kroner. Beløbet følger planens inflation gennem forløbet.',
+    'Hvor meget der flyttes, målt i dagens kroner. Beløbet følger planens inflation gennem forløbet, og der flyttes aldrig mere, end afgiveren havde ved årets begyndelse.',
+
+  // ---------- Forklar-årets overførselskolonner ----------
+
+  'TransferYear.transfer':
+    'Hvilken flytning linjen gælder, skrevet som de to beholdninger, pengene gik mellem. En plan kan have flere, og de opgøres hver for sig.',
+
+  'TransferYear.requested':
+    'Det beløb, planen bad om i året. Det er tallet fra flytningen selv, løftet med inflationen frem til året.',
+
+  'TransferYear.moved':
+    'Det beløb, der faktisk skiftede plads. Det er lavere end det ønskede, når afgiveren ikke havde nok ved årets begyndelse — resten blev ikke flyttet og står stadig, hvor den stod.',
 
   // ---------- Årstabellens kolonner ----------
 

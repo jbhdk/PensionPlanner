@@ -33,6 +33,28 @@ function aPlanWithThreeHoldings(): Plan {
   })
 }
 
+/** En aldersopsparing under det faste regime — oprettet før maj 2007 og
+    dermed med pensionsudbetalingsalderen 60 år. Fixturens person er født i
+    juni 1973 og når den i 2033. */
+function anOldAgeSavings(id: string, name: string, balance = 500_000): Holding {
+  return {
+    id,
+    name,
+    variant: 'OldAgeSavings',
+    openedOn: { year: 2000, month: 1 },
+    balance,
+    grossReturn: 0,
+    annualCostRate: 0,
+  }
+}
+
+/** Valgmulighederne i en af skuffens lister, i den rækkefølge de står. */
+function optionsOf(label: string): string[] {
+  return Array.from((screen.getByLabelText(label) as HTMLSelectElement).options).map(
+    (option) => option.value,
+  )
+}
+
 function aFreeHolding(id: string, name: string): Holding {
   return { id, name, variant: 'SavingsAccount', balance: 0, grossReturn: 0, annualCostRate: 0 }
 }
@@ -2115,10 +2137,10 @@ describe('fladen', () => {
     expect(ender()).toEqual(['Frie midler', 'Tredje beholdning'])
   })
 
-  it('viser kun beholdninger med frie midler i en overførsels to lister', async () => {
-    // En overførsel flytter penge mellem husstandens frie midler. Stod
-    // ordningen i listen, kunne ét klik skrive en plan, `validatePlan`
-    // afviser — og hele resultatspalten forsvandt, jf. ADR-0016.
+  it('holder en ratepension ude af begge en overførsels lister', async () => {
+    // Ratepensionens udbetaling er personlig indkomst og skal gennem en
+    // udbetalingsplan. Stod den i listen, kunne ét klik skrive en plan,
+    // `validatePlan` afviser, jf. ADR-0022.
     const user = userEvent.setup()
     render(
       <App
@@ -2133,13 +2155,148 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
 
-    const valg = (label: string) =>
-      Array.from((screen.getByLabelText(label) as HTMLSelectElement).options).map(
-        (option) => option.value,
-      )
+    expect(optionsOf('Fra')).toEqual(['Frie midler', 'Anden beholdning'])
+    expect(optionsOf('Til')).toEqual(['Frie midler', 'Anden beholdning'])
+  })
 
-    expect(valg('Fra')).toEqual(['Frie midler', 'Anden beholdning'])
-    expect(valg('Til')).toEqual(['Frie midler', 'Anden beholdning'])
+  it('tilbyder de skattefri ordninger i afgiverlisten, men ikke i modtagerlisten', async () => {
+    // Aldersopsparingen og aktiesparekontoen tømmes af en overførsel, jf.
+    // ADR-0022 — men vejen ind i dem er en indbetaling, og de står derfor
+    // kun i den ene liste.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...aPlan({
+            holdings: [
+              anOldAgeSavings('aldersopsparing', 'Aldersopsparing'),
+              aShareSavingsAccount(),
+            ],
+          }),
+          transfers: [
+            aTransfer({
+              from: 'aldersopsparing',
+              to: 'free-assets',
+              amountInRealKroner: 50_000,
+              period: { anchor: 'CalendarYear', from: 2040 },
+            }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Aldersopsparing.*Frie midler/ }))
+
+    expect(optionsOf('Fra')).toEqual([
+      'Frie midler',
+      'Aldersopsparing',
+      'Aktiesparekonto',
+    ])
+    expect(optionsOf('Til')).toEqual(['Frie midler'])
+  })
+
+  it('bytter ikke enderne om, når modtageren ikke kan bære afgiverens plads', async () => {
+    // Byttet er stadig svaret mellem to frie midler. Men en aldersopsparing
+    // kan ikke være destination — vejen ind i den er en indbetaling — og
+    // enderne skal derfor blive, hvor de er.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...aPlan({
+            holdings: [
+              anOldAgeSavings('aldersopsparing', 'Aldersopsparing'),
+              aFreeHolding('anden-beholdning', 'Anden beholdning'),
+            ],
+          }),
+          transfers: [
+            aTransfer({
+              from: 'aldersopsparing',
+              to: 'free-assets',
+              amountInRealKroner: 50_000,
+              period: { anchor: 'CalendarYear', from: 2040 },
+            }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Aldersopsparing.*Frie midler/ }))
+    await user.selectOptions(screen.getByLabelText('Fra'), 'Frie midler')
+
+    expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Frie midler')
+    expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Anden beholdning')
+    expect(screen.queryByText(/kan ikke simuleres/i)).toBeNull()
+  })
+
+  it('tilbyder "+ Overførsel", når husstandens eneste anden beholdning er en aldersopsparing', async () => {
+    // Musefælden fra etape 2 den anden vej rundt: kunne fladen ikke skrive
+    // tømningen, ville pengene stå bundet, uanset hvad motoren tillod. Den
+    // tilføjede begynder ved døren, så planen er regnelig i samme klik.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          holdings: [anOldAgeSavings('aldersopsparing', 'Aldersopsparing')],
+        })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: '+ Overførsel' }))
+
+    await user.click(screen.getByRole('button', { name: /Aldersopsparing.*Frie midler/ }))
+    expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Aldersopsparing')
+    expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Frie midler')
+    // Ordningen er oprettet før maj 2007, så døren går op, når personen
+    // fylder 60 i 2033.
+    expect((screen.getByLabelText('Fra (år)') as HTMLInputElement).value).toBe('2033')
+    expect(screen.queryByText(/kan ikke simuleres/i)).toBeNull()
+  })
+
+  it('kalder en overførsel ud af en ordning en udbetaling', async () => {
+    // Det er det, den er i virkeligheden — man beder selskabet udbetale sin
+    // aldersopsparing. En etiket og ikke et begreb: figuren hedder stadig en
+    // overførsel i glossaret og i koden, jf. ADR-0022.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...aPlan({ holdings: [anOldAgeSavings('aldersopsparing', 'Aldersopsparing')] }),
+          transfers: [
+            aTransfer({
+              from: 'aldersopsparing',
+              to: 'free-assets',
+              amountInRealKroner: 50_000,
+              period: { anchor: 'CalendarYear', from: 2040 },
+            }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Aldersopsparing.*Frie midler/ }))
+
+    expect(screen.getByText('Udbetaling')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Fjern udbetaling/ })).toBeTruthy()
+  })
+
+  it('kalder en overførsel mellem to frie midler en overførsel', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...aPlanWithSecondHolding(),
+          transfers: [
+            aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 50_000 }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+
+    expect(screen.getByText('Overførsel')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Fjern overførsel/ })).toBeTruthy()
   })
 
   it('bytter en overførsels ender om, også når listerne kun rummer frie midler', async () => {
@@ -2761,6 +2918,44 @@ describe('fladen', () => {
     // Begge beløb, så det kan ses, hvor AM-bidraget blev af. Differencen står
     // ikke i sin egen kolonne — den er allerede personens AM-lag ovenfor.
     expect(cells).toEqual(['Løn → Ratepension', '48.000', '44.160'])
+  })
+
+  it('viser overførslens to beløb i forklar-året, så en afkortning kan ses', async () => {
+    // En tavs afkortning er den slags fejl, der aldrig viser sig: uden
+    // linjen ville planen bede om 300.000 og flytte 200.000, uden at noget
+    // på skærmen sagde det, jf. ADR-0022.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...aPlan({
+            startYear: 2033,
+            holdings: [anOldAgeSavings('aldersopsparing', 'Aldersopsparing', 200_000)],
+          }),
+          transfers: [
+            aTransfer({
+              from: 'aldersopsparing',
+              to: 'free-assets',
+              amountInRealKroner: 300_000,
+              period: { anchor: 'CalendarYear', from: 2033 },
+            }),
+          ],
+        }}
+      />,
+    )
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    await user.click(rows[1]!) // 2033
+
+    const table = document.querySelector('table.overfoerselstabel') as HTMLElement
+    const cells = within(
+      within(table).getByText(/Aldersopsparing.*Frie midler/).closest('tr') as HTMLElement,
+    )
+      .getAllByRole('cell')
+      .map((cell) => cell.textContent)
+
+    expect(cells).toEqual(['Aldersopsparing → Frie midler', '300.000', '200.000'])
   })
 
   it('opdaterer forklar-året med det samme, når noget rettes i skuffen, mens forklaringen er åben', async () => {

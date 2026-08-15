@@ -1,5 +1,13 @@
 import { yearAtAge } from './age'
-import type { AgeBound, OpenedOn, PensionSchemeHolding, Person, SimulationYear } from './plan'
+import { isPensionScheme, payoutTaxation } from './holdingVariant'
+import type {
+  AgeBound,
+  Holding,
+  OpenedOn,
+  PensionSchemeHolding,
+  Person,
+  SimulationYear,
+} from './plan'
 import { statePensionAge } from './statePensionAge'
 
 /** De tre regelsæt, en ordnings pensionsudbetalingsalder kan falde under,
@@ -74,4 +82,28 @@ export function payoutYear(holding: PensionSchemeHolding, owner: Person): Simula
     forskelligt. */
 export function payoutStartYear(start: AgeBound, owner: Person): SimulationYear {
   return yearAtAge(owner, start === 'WorkEndAge' ? owner.workEndAge : start)
+}
+
+/** Om en `Transfer` må hente fra beholdningen i året — de to betingelser, der
+    tilsammen er "de beholdninger, en overførsel kan nå".
+
+    Den første er variantens: kun en `PayoutTaxation` på `TaxFree` kan tømmes
+    af en overførsel, fordi overførslen ingen skattevirkning har, og en
+    udbetaling, der er personlig indkomst, skal gennem en `PayoutSchedule`.
+    Den anden er årets: en pensionsordnings dør er låst indtil dens
+    `PayoutAge`. Aktiesparekontoen og de frie varianter har ingen dør, og
+    reglen rører dem ikke. Begge dele står i ADR-0022.
+
+    Ét spørgsmål med ét svar, fordi to steder spørger om det samme:
+    `validatePlan` afviser en plan, der beder om det umulige, og
+    `BufferState` afgør `Incomplete` mod `Unsustainable` på præcis de
+    beholdninger, en manglende overførsel kunne have nået. Regnet hvert sit
+    sted kunne de to komme til at læse den samme brøkalder forskelligt. */
+export function transferAllowedFrom(
+  holding: Holding,
+  owner: Person,
+  year: SimulationYear,
+): boolean {
+  if (payoutTaxation(holding) !== 'TaxFree') return false
+  return !isPensionScheme(holding) || year >= payoutYear(holding, owner)
 }

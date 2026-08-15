@@ -5,7 +5,10 @@ import {
   isPensionScheme,
   isPensionSchemeVariant,
   payoutScheduleOf,
+  payoutTaxation,
 } from '../engine/holdingVariant'
+import { periodBounds } from '../engine/age'
+import { payoutYear } from '../engine/payoutAge'
 import { minimumPayoutYears } from '../engine/validatePlan'
 import type {
   AgeBound,
@@ -398,16 +401,38 @@ export function withTransfer(
   }
 }
 
+/** De beholdninger, en overførsels ene ende kan pege på.
+
+    De to ender har hver sin regel, jf. ADR-0016 og ADR-0022: afgiveren skal
+    være en variant, hvis `PayoutTaxation` er `TaxFree` — også
+    aldersopsparingen og aktiesparekontoen, som netop tømmes af en overførsel
+    — og destinationen skal være frie midler, for ind i en ordning er det en
+    indbetaling.
+
+    Ét sted, fordi tre spørger: skuffens to lister, byttegrebet herunder, og
+    svaret på om en overførsel overhovedet kan tilføjes. Regnet hvert sit sted
+    kunne fladen komme til at tilbyde et valg, den selv ville afvise. */
+export function transferEndOptions(plan: Plan, end: 'from' | 'to'): Holding[] {
+  const holdings = plan.household.persons.flatMap((person) => person.holdings)
+  return end === 'to'
+    ? holdings.filter(isFreeAssets)
+    : holdings.filter((holding) => payoutTaxation(holding) === 'TaxFree')
+}
+
 /** Sætter den ene ende af en overførsel. Vælges den beholdning, der allerede
     er den anden ende, bytter de to plads frem for at lade overførslen pege på
     sig selv.
 
-    Byttet er det eneste, valget kan betyde. En overførsel har to ender og
-    ingen anden retning end dem, så "fra den beholdning, der i forvejen er
-    til" er brugerens måde at sige den anden vej på. Udelod listen i stedet
-    den anden ende, ville retningen være låst fra oprettelsen — og med præcis
-    to beholdninger ville hver liste have ét valg, nemlig det, der allerede
-    stod. */
+    Byttet var i sin tid det eneste, valget kunne betyde: begge ender var
+    frie midler, og "fra den beholdning, der i forvejen er til" var brugerens
+    måde at sige den anden vej på. Nu har enderne hver sin regel, og en
+    aldersopsparing kan ikke tage destinationens plads — dér flytter den anden
+    ende sig i stedet til den første, den lovligt kan stå på. Er der ingen,
+    står overførslen, som den stod: der findes intet lovligt at skrive.
+
+    Begynder overførslen før den nye afgivers `PayoutAge`, løftes starten til
+    det år, døren går op — samme greb som en ny udbetalingsplan, der lægges
+    på ordningens tidligste lovlige alder frem for på en, motoren afviser. */
 export function withTransferEnd(
   plan: Plan,
   id: string,
@@ -416,50 +441,77 @@ export function withTransferEnd(
 ): Plan {
   return withTransfer(plan, id, (transfer) => {
     const other = end === 'from' ? 'to' : 'from'
-    if (transfer[other] === holding) {
-      return { ...transfer, from: transfer.to, to: transfer.from }
+    const moved = { ...transfer, [end]: holding }
+    if (transfer[other] !== holding) return openDoorFor(plan, moved)
+
+    const displaced = transfer[end]
+    if (transferEndOptions(plan, other).some((option) => option.id === displaced)) {
+      return openDoorFor(plan, { ...transfer, from: transfer.to, to: transfer.from })
     }
-    return { ...transfer, [end]: holding }
+
+    const replacement = transferEndOptions(plan, other).find((option) => option.id !== holding)
+    return replacement ? openDoorFor(plan, { ...moved, [other]: replacement.id }) : transfer
   })
+}
+
+/** Løfter overførslens start til afgiverens `PayoutAge`, hvis den ligger før.
+    En overførsel, der begynder for tidligt, afvises af `validatePlan`, og et
+    endeknap-valg skal ikke kunne gøre hele planen uregnelig — det er samme
+    grund, som lader en ny udbetalingsplan begynde på ordningens tidligste
+    lovlige alder. Ligger starten allerede efter døren, røres den ikke. */
+function openDoorFor(plan: Plan, transfer: Transfer): Transfer {
+  const from = plan.household.persons
+    .flatMap((person) => person.holdings)
+    .find((holding) => holding.id === transfer.from)
+  const owner = findHoldingOwner(plan, transfer.from)
+  if (!from || !owner || !isPensionScheme(from)) return transfer
+
+  const door = payoutYear(from, owner)
+  const start = periodBounds(transfer.period, owner).from
+  if (start !== undefined && start >= door) return transfer
+  return { ...transfer, period: { anchor: 'CalendarYear', from: door } }
 }
 
 /** Den tyndeste overførsel, der kan tilføjes: fra og til det første lovlige
     par, hele horisonten, hvert år. Brugeren retter enderne i skuffen
     bagefter. Findes intet par, er der ingenting at tilføje, og knappen der
-    kalder her, er selv skjult. */
+    kalder her, er selv skjult.
+
+    Starten løftes til afgiverens `PayoutAge`, hvis den har en. En tilføjelse,
+    der gjorde hele planen uregnelig i samme klik, ville lade resultatspalten
+    forsvinde, før brugeren nåede at skrive et beløb. */
 export function addTransfer(plan: Plan): Plan {
   const pair = firstTransferPair(plan)
   if (!pair) return plan
 
-  return {
-    ...plan,
-    transfers: [
-      ...plan.transfers,
-      {
-        id: freshTransferId(plan),
-        from: pair.from,
-        to: pair.to,
-        amountInRealKroner: 0,
-        timing: 'Even',
-        period: {},
-        recurrence: { kind: 'Annual' },
-      },
-    ],
+  const fresh: Transfer = {
+    id: freshTransferId(plan),
+    from: pair.from,
+    to: pair.to,
+    amountInRealKroner: 0,
+    timing: 'Even',
+    period: { anchor: 'CalendarYear' },
+    recurrence: { kind: 'Annual' },
   }
+
+  return { ...plan, transfers: [...plan.transfers, openDoorFor(plan, fresh)] }
 }
 
 /** De to første beholdninger, en overførsel kan gå mellem — og dermed også
     svaret på, om en overførsel overhovedet kan tilføjes.
 
-    Begge ender er frie midler: penge ind i en ordning er en indbetaling, og
-    penge ud af en er en udbetaling, jf. ADR-0016. Enderne behøver derimod
-    ikke samme ejer — en overførsel flytter penge inden for husstandens frie
-    midler, og `validatePlan` stiller ikke det krav, indbetalingen har. */
+    Enderne har hver sin regel, og parret læses derfor af `transferEndOptions`
+    frem for af en liste her: afgiveren kan være enhver variant, hvis
+    udbetaling er skattefri, destinationen kun frie midler. Enderne behøver
+    ikke samme ejer — `validatePlan` stiller ikke det krav, indbetalingen
+    har. */
 export function firstTransferPair(plan: Plan): { from: string; to: string } | undefined {
-  const free = plan.household.persons.flatMap((person) => person.holdings).filter(isFreeAssets)
-  const [from, to] = free
-  if (!from || !to) return undefined
-  return { from: from.id, to: to.id }
+  const destinations = transferEndOptions(plan, 'to')
+  for (const from of transferEndOptions(plan, 'from')) {
+    const to = destinations.find((holding) => holding.id !== from.id)
+    if (to) return { from: from.id, to: to.id }
+  }
+  return undefined
 }
 
 function freshTransferId(plan: Plan): string {

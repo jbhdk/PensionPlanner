@@ -8,7 +8,6 @@ import type {
   Period,
   Plan,
   Recurrence,
-  SimulationYear,
   Timing,
   Transfer,
 } from '../plan'
@@ -173,22 +172,25 @@ export function aSalary(options: {
   }
 }
 
-/** En overførsel mellem to beholdninger. Perioden er altid kalenderårsforankret. */
+/** En overførsel fra en beholdning til husstandens frie midler. Perioden
+    løber hele horisonten, med mindre testen angiver noget andet, og kan
+    aldersforankres som en posts — alderen måles på afgiverens ejer. */
 export function aTransfer(options: {
+  id?: string
   from: string
   to: string
   amountInRealKroner: number
   timing?: Timing
-  period?: { from?: SimulationYear; to?: SimulationYear }
+  period?: Period
   recurrence?: Recurrence
 }): Transfer {
   return {
-    id: 'transfer',
+    id: options.id ?? 'transfer',
     from: options.from,
     to: options.to,
     amountInRealKroner: options.amountInRealKroner,
     timing: options.timing ?? 'Even',
-    period: options.period ?? {},
+    period: options.period ?? wholeHorizon,
     recurrence: options.recurrence ?? annually,
   }
 }
