@@ -2,6 +2,7 @@ import type { Plan } from '../engine/plan'
 import type { YearResult } from '../engine/yearResult'
 import { bufferStateClasses, bufferStateLabels } from './bufferState'
 import { capBreachClasses, capBreachLabels } from './capBreach'
+import { fieldHelp } from './fieldHelp'
 import { kroner } from './format'
 import type { AmountUnit } from './real'
 import { toDisplayKroner } from './real'
@@ -25,26 +26,47 @@ export function YearTable({
     <div className="tabelramme">
       <table className="aar">
         <thead>
+          {/* Hver overskrift bærer sin forklaring, jf. `fieldHelp.ts`.
+              Personkolonnerne deler én: de stiller det samme spørgsmål om
+              hver sin person. */}
           <tr>
-            <th scope="col">År</th>
+            <th scope="col" title={fieldHelp['YearTable.year']}>
+              År
+            </th>
             {persons.map((person) => (
-              <th scope="col" key={person.id}>
+              <th scope="col" key={person.id} title={fieldHelp['YearTable.personAge']}>
                 {person.name}
               </th>
             ))}
-            <th scope="col">Indtægter</th>
+            <th scope="col" title={fieldHelp['YearResult.income']}>
+              Indtægter
+            </th>
             {/* Det, der landede i ordningerne — altså hvad året lagde til
                 side. Bruttobeløbet ved kilden og AM-delen imellem dem står i
                 forklar-året; her er der plads til ét tal. Indbetalingen er en
                 bevægelse og indgår derfor ikke i nettoresultatet, som står
                 længere til højre. */}
-            <th scope="col">Indbetalinger</th>
-            <th scope="col">Afkast</th>
-            <th scope="col">Skat</th>
-            <th scope="col">Udgifter</th>
-            <th scope="col">Nettoresultat</th>
-            <th scope="col">Buffer</th>
-            <th scope="col">Formue</th>
+            <th scope="col" title={fieldHelp['YearTable.contributions']}>
+              Indbetalinger
+            </th>
+            <th scope="col" title={fieldHelp['YearResult.return']}>
+              Afkast
+            </th>
+            <th scope="col" title={fieldHelp['YearResult.tax']}>
+              Skat
+            </th>
+            <th scope="col" title={fieldHelp['YearResult.expenses']}>
+              Udgifter
+            </th>
+            <th scope="col" title={fieldHelp['YearTable.netResult']}>
+              Nettoresultat
+            </th>
+            <th scope="col" title={fieldHelp['YearTable.buffer']}>
+              Buffer
+            </th>
+            <th scope="col" title={fieldHelp['YearResult.closingWealth']}>
+              Formue
+            </th>
           </tr>
         </thead>
         <tbody>

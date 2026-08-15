@@ -470,6 +470,22 @@ body {
   line-height: 1.35;
 }
 
+/* Hver etiket og hver kolonneoverskrift bærer sin forklaring, jf.
+   `fieldHelp.ts`. Markøren er det eneste, der røber det — dækningen er total,
+   og et mærke på skærmen, der sidder på alt, ville ingenting sige. Markøren
+   koster til gengæld ingen plads og dukker op netop dér, hvor man alligevel
+   er på vej til at pege. */
+.felt label,
+.felt .etiket,
+table.aar th,
+.lagtabel th,
+.beholdningstabel th,
+.postertabel th,
+.indbetalingstabel th,
+.lofttabel th {
+  cursor: help;
+}
+
 .felt .vaerdi {
   flex: 0 0 auto;
   display: flex;

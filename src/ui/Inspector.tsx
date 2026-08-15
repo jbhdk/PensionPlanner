@@ -160,16 +160,19 @@ function PlanFields({ plan, onChange, onClose }: FieldsProps) {
       <Section title="Grundlag">
         <TextField
           label="Navn"
+          help="Plan.name"
           value={plan.name}
           onChange={(name) => onChange({ ...plan, name })}
         />
         <NumberField
           label="Startår"
+          help="Plan.startYear"
           value={plan.startYear}
           onChange={(startYear) => onChange({ ...plan, startYear })}
         />
         <NumberField
           label="Inflation"
+          help="Plan.inflationAssumption"
           unit="% p.a."
           value={asPercent(plan.inflationAssumption)}
           onChange={(percent) =>
@@ -178,6 +181,7 @@ function PlanFields({ plan, onChange, onClose }: FieldsProps) {
         />
         <NumberField
           label="§ 20-fremskrivning"
+          help="Plan.section20ProjectionAssumption"
           unit="% p.a."
           value={asPercent(plan.section20ProjectionAssumption)}
           onChange={(percent) =>
@@ -186,17 +190,13 @@ function PlanFields({ plan, onChange, onClose }: FieldsProps) {
         />
         <NumberField
           label="Satsregulering"
+          help="Plan.benefitProjectionAssumption"
           unit="% p.a."
           value={asPercent(plan.benefitProjectionAssumption)}
           onChange={(percent) =>
             onChange({ ...plan, benefitProjectionAssumption: percent / 100 })
           }
         />
-        <Hint>
-          De to fremskrivningssatser løfter beløbsgrænser og ydelser for
-          simuleringsår efter det sidst kendte satsår — hver efter sit eget
-          indeks, uafhængigt af inflationsantagelsen.
-        </Hint>
       </Section>
     </>
   )
@@ -226,6 +226,7 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
       <Section title="Personen">
         <TextField
           label="Navn"
+          help="Person.name"
           value={person.name}
           onChange={(name) =>
             onChange(withPerson(plan, id, (p) => ({ ...p, name })))
@@ -233,6 +234,7 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
         />
         <NumberField
           label="Fødselsår"
+          help="Person.birthYear"
           value={person.birthYear}
           onChange={(birthYear) =>
             onChange(withPerson(plan, id, (p) => ({ ...p, birthYear })))
@@ -240,6 +242,7 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
         />
         <NumberField
           label="Fødselsmåned"
+          help="Person.birthMonth"
           unit="1–12"
           value={person.birthMonth}
           onChange={(birthMonth) =>
@@ -248,17 +251,18 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
         />
         <NumberField
           label="Horisont"
+          help="Person.horizon"
           unit="år"
           value={person.horizon}
           onChange={(horizon) =>
             onChange(withPerson(plan, id, (p) => ({ ...p, horizon })))
           }
         />
-        <Hint>Simuleringen løber til og med det år, personen fylder så mange år.</Hint>
       </Section>
       <Section title="Skat">
         <SelectField
           label="Kommune"
+          help="Person.municipality"
           value={person.municipality}
           options={Object.keys(latestRateYear().municipalTax.rates).sort((a, b) =>
             a.localeCompare(b, 'da'),
@@ -269,15 +273,12 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
         />
         <CheckboxField
           label="Medlem af folkekirken"
+          help="Person.churchMember"
           checked={person.churchMember}
           onChange={(churchMember) =>
             onChange(withPerson(plan, id, (p) => ({ ...p, churchMember })))
           }
         />
-        <Hint>
-          Kommune- og kirkeskatteprocenten hører til satsåret og slås op efter
-          bopælskommunen — ikke tastet ind her.
-        </Hint>
       </Section>
       <Section title="Folkepension">
         <StatePensionAgeFields plan={plan} id={id} />
@@ -300,6 +301,7 @@ function StatePensionAgeFields({ plan, id }: { plan: Plan; id: string }) {
     <>
       <LockedField
         label="Folkepensionsalder"
+        help="Person.statePensionAge"
         value={`${formatNumber(derived.age)} år`}
         unit="udledt"
       />
@@ -339,6 +341,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
       <Section title="Beholdningen">
         <TextField
           label="Navn"
+          help="Holding.name"
           value={holding.name}
           onChange={(name) =>
             onChange(withHolding(plan, id, (h) => ({ ...h, name })))
@@ -346,6 +349,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
         />
         <SelectField
           label="Type"
+          help="Holding.variant"
           value={danish(variants, holding.variant)}
           options={variantOptions(plan, owner, holding)}
           onChange={(choice) =>
@@ -354,6 +358,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
         />
         <SelectField
           label="Ejer"
+          help="Holding.owner"
           value={owner.name}
           options={persons.map((person) => person.name)}
           onChange={(name) =>
@@ -362,6 +367,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
         />
         <NumberField
           label="Saldo (dagens kroner)"
+          help="Holding.balance"
           unit="kr."
           value={holding.balance}
           onChange={(balance) =>
@@ -370,6 +376,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
         />
         <RadioField
           label="Buffer"
+          help="Plan.buffer"
           checked={plan.buffer === id}
           disabled={!isFreeAssets(holding)}
           onSelect={() => onChange({ ...plan, buffer: id })}
@@ -383,6 +390,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
       <Section title="Afkast">
         <NumberField
           label="Bruttoafkast"
+          help="Holding.grossReturn"
           unit="% p.a."
           value={asPercent(holding.grossReturn)}
           onChange={(percent) =>
@@ -393,6 +401,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
         />
         <NumberField
           label="ÅOP"
+          help="Holding.annualCostRate"
           unit="% p.a."
           value={asPercent(holding.annualCostRate)}
           onChange={(percent) =>
@@ -403,6 +412,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
         />
         <LockedField
           label="Nettoafkast"
+          help="Holding.netReturn"
           value={procent(holding.grossReturn - holding.annualCostRate)}
           unit="udledt"
         />
@@ -473,6 +483,7 @@ function EntryFields({
       <Section title="Posten">
         <TextField
           label="Navn"
+          help="Entry.name"
           value={entry.name}
           onChange={(name) =>
             onChange(withEntry(plan, id, (e) => ({ ...e, name })))
@@ -488,6 +499,7 @@ function EntryFields({
               ? 'Beløb, brutto (dagens kroner)'
               : 'Beløb (dagens kroner)'
           }
+          help="Entry.amountInRealKroner"
           unit="kr."
           value={entry.amountInRealKroner}
           onChange={(amountInRealKroner) =>
@@ -496,6 +508,7 @@ function EntryFields({
         />
         <SelectField
           label="Retning"
+          help="Entry.direction"
           value={danish(directions, entry.direction)}
           options={Object.keys(directions)}
           onChange={(choice) =>
@@ -506,6 +519,7 @@ function EntryFields({
         />
         <SelectField
           label="Ejer"
+          help="Entry.owner"
           value={owner.name}
           options={persons.map((person) => person.name)}
           onChange={(name) =>
@@ -515,6 +529,7 @@ function EntryFields({
         {entry.direction === 'Income' && (
           <SelectField
             label="Skattebehandling"
+            help="Entry.taxTreatment"
             value={danish(treatments, entry.taxTreatment)}
             options={Object.keys(treatments)}
             onChange={(choice) =>
@@ -545,6 +560,7 @@ function EntryFields({
         {entry.direction === 'Income' && (
           <NumberField
             label="Reguleringssats"
+            help="Entry.regulationRate"
             unit="% p.a."
             value={asPercent(entry.regulationRate)}
             onChange={(percent) =>
@@ -601,6 +617,7 @@ function PeriodSection({
     <Section title="Perioden">
       <SelectField
         label="Gentagelse"
+        help="Recurrence.kind"
         value={danish(recurrences, recurrence.kind)}
         options={Object.keys(recurrences)}
         onChange={(choice) => {
@@ -615,6 +632,7 @@ function PeriodSection({
       {recurrence.kind === 'EveryNYears' && (
         <NumberField
           label="Hvert"
+          help="Recurrence.n"
           unit="år"
           value={recurrence.n}
           onChange={(n) => change({ recurrence: { kind: 'EveryNYears', n } })}
@@ -622,6 +640,7 @@ function PeriodSection({
       )}
       <SelectField
         label="Forankring"
+        help="Period.anchor"
         value={danish(anchors, period.anchor)}
         options={Object.keys(anchors)}
         onChange={(choice) => change({ period: defaultPeriod(anchors[choice]!) })}
@@ -630,6 +649,7 @@ function PeriodSection({
         period.anchor === 'CalendarYear' ? (
           <NumberField
             label="År"
+            help="Period.once"
             unit="år"
             value={period.from ?? period.to ?? startYear}
             onChange={(from) => change({ period: { anchor: 'CalendarYear', from } })}
@@ -637,6 +657,7 @@ function PeriodSection({
         ) : (
           <AgeBoundField
             label="Alder"
+            help="Period.once"
             workEndAge={owner.workEndAge}
             value={period.from ?? period.to}
             onChange={(from) => change({ period: { anchor: 'PersonAge', from } })}
@@ -646,12 +667,14 @@ function PeriodSection({
         <>
           <OptionalNumberField
             label="Fra (år)"
+            help="Period.from"
             unit="år"
             value={period.from}
             onChange={(from) => change({ period: { ...period, from } })}
           />
           <OptionalNumberField
             label="Til (år)"
+            help="Period.to"
             unit="år"
             value={period.to}
             onChange={(to) => change({ period: { ...period, to } })}
@@ -661,12 +684,14 @@ function PeriodSection({
         <>
           <AgeBoundField
             label="Fra (alder)"
+            help="Period.from"
             workEndAge={owner.workEndAge}
             value={period.from}
             onChange={(from) => change({ period: { ...period, from } })}
           />
           <AgeBoundField
             label="Til (alder)"
+            help="Period.to"
             workEndAge={owner.workEndAge}
             value={period.to}
             onChange={(to) => change({ period: { ...period, to } })}
@@ -675,6 +700,7 @@ function PeriodSection({
       )}
       <SelectField
         label="Forfald"
+        help="Timing"
         value={danishTiming(timing)}
         options={timingOptions(recurrence)}
         onChange={(choice) => change({ timing: timings[choice]! })}
@@ -790,6 +816,7 @@ function ContributionFields({
       <Section title="Indbetalingen">
         <SelectField
           label="Kilde"
+          help="Contribution.source"
           value={
             contribution.kind === 'EntrySourced' && sourceEntry
               ? entryLabel(sourceEntry)
@@ -818,6 +845,7 @@ function ContributionFields({
         />
         <SelectField
           label="Destination"
+          help="Contribution.to"
           value={holdingName(contribution.to)}
           options={destinations.map((holding) => holding.name)}
           onChange={(name) => {
@@ -848,6 +876,7 @@ function ContributionFields({
                 et klik, og der er kun to. */}
             <ToggleField
               label="Angives som"
+              help="Contribution.amountForm"
               value={danish(
                 contributionAmounts,
                 'percentageOfEntry' in contribution ? 'percentageOfEntry' : 'amountInRealKroner',
@@ -862,6 +891,7 @@ function ContributionFields({
             {'percentageOfEntry' in contribution ? (
               <NumberField
                 label="Procent"
+                help="Contribution.percentageOfEntry"
                 unit="%"
                 value={asPercent(contribution.percentageOfEntry)}
                 onChange={(percent) =>
@@ -875,6 +905,7 @@ function ContributionFields({
             ) : (
               <NumberField
                 label="Fast beløb (dagens kroner)"
+                help="Contribution.amountInRealKroner"
                 unit="kr."
                 value={contribution.amountInRealKroner}
                 onChange={(amountInRealKroner) =>
@@ -899,6 +930,7 @@ function ContributionFields({
           <>
             <NumberField
               label="Fast beløb (dagens kroner)"
+              help="Contribution.amountInRealKroner"
               unit="kr."
               value={contribution.amountInRealKroner}
               onChange={(amountInRealKroner) =>
@@ -1057,18 +1089,21 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
             valg tilbage overhovedet. */}
         <SelectField
           label="Fra"
+          help="Transfer.from"
           value={holdingName(transfer.from)}
           options={ends.map((holding) => holding.name)}
           onChange={(name) => onChange(withTransferEnd(plan, id, 'from', holdingByName[name]!))}
         />
         <SelectField
           label="Til"
+          help="Transfer.to"
           value={holdingName(transfer.to)}
           options={ends.map((holding) => holding.name)}
           onChange={(name) => onChange(withTransferEnd(plan, id, 'to', holdingByName[name]!))}
         />
         <NumberField
           label="Beløb (dagens kroner)"
+          help="Transfer.amountInRealKroner"
           unit="kr."
           value={transfer.amountInRealKroner}
           onChange={(amountInRealKroner) =>
@@ -1079,6 +1114,7 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
       <Section title="Perioden">
         <SelectField
           label="Gentagelse"
+          help="Recurrence.kind"
           value={danish(recurrences, transfer.recurrence.kind)}
           options={Object.keys(recurrences)}
           onChange={(choice) => {
@@ -1095,6 +1131,7 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
         {transfer.recurrence.kind === 'EveryNYears' && (
           <NumberField
             label="Hvert"
+            help="Recurrence.n"
             unit="år"
             value={transfer.recurrence.n}
             onChange={(n) =>
@@ -1111,6 +1148,7 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
         {transfer.recurrence.kind === 'Once' ? (
           <NumberField
             label="År"
+            help="Period.once"
             unit="år"
             value={transfer.period.from ?? transfer.period.to ?? plan.startYear}
             onChange={(from) =>
@@ -1121,6 +1159,7 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
           <>
             <OptionalNumberField
               label="Fra (år)"
+              help="Period.from"
               unit="år"
               value={transfer.period.from}
               onChange={(from) =>
@@ -1129,6 +1168,7 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
             />
             <OptionalNumberField
               label="Til (år)"
+              help="Period.to"
               unit="år"
               value={transfer.period.to}
               onChange={(to) =>
@@ -1139,6 +1179,7 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
         )}
         <SelectField
           label="Forfald"
+          help="Timing"
           value={danishTiming(transfer.timing)}
           options={timingOptions(transfer.recurrence)}
           onChange={(choice) =>

@@ -12,11 +12,20 @@ Parret **dansk term · `EnglishIdentifier`** i CONTEXT.md er bindende begge veje
 
 CONTEXT.md er et glossar og intet andet. Ingen implementeringsdetaljer, ingen spec, ingen noter.
 
+## Feltforklaringer
+
+Hver etiket i skuffen og hver kolonneoverskrift i en tabel har en forklaring, brugeren henter frem ved at pege på den. **Der er ingen undtagelser** — dækningen er lovet total, og derfor står der ingen markering på skærmen af, at et ord kan forklares. Tilføjer du et felt eller en kolonne, skriver du også dens forklaring; for felterne fejler oversættelsen ellers, og for kolonnerne fejler `fieldHelp.test.tsx`.
+
+Teksterne er ikke glossarets. CONTEXT.md skriver til den, der bygger, og må gerne nævne et feltnavn; forklaringerne skriver til den, der planlægger sin pension, og må ikke. **De seks stilregler står i `src/ui/fieldHelp.ts`s dokumentationskommentar** — læs dem, før du skriver en ny, og skriv en syvende dér frem for at finde på den i forbifarten. Begrundelsen for hele delingen står i [ADR-0021](./docs/adr/0021-hjaelpeteksten-skriver-til-brugeren-glossaret-til-den-der-bygger.md).
+
+En forklaring er statisk og gælder feltet. Skal fladen sige noget om den plan, der ligger på skærmen lige nu — et spærret valg, et skøn, en post uden år — er det en `Hint` ved siden af feltet og ikke en forklaring på det.
+
 ## Hvor tingene hører hjemme
 
 | Slags | Sted |
 |---|---|
 | Begreber | `CONTEXT.md` |
+| Feltforklaringer | `src/ui/fieldHelp.ts` |
 | Beslutninger | `docs/adr/` |
 | Struktur og rækkefølge | `docs/diagrams/` |
 | Brugerfladen til det færdige system | `docs/mockup/` |

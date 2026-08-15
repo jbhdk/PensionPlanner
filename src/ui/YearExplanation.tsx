@@ -10,6 +10,7 @@ import type {
   RateBasis,
   YearResult,
 } from '../engine/yearResult'
+import { fieldHelp } from './fieldHelp'
 import { kroner, procent } from './format'
 import { danish, danishTiming, variants } from './danish'
 import { inRealKroner } from './real'
@@ -154,11 +155,14 @@ function ShareIncomeTaxBlock({
       <h3>Husstandens aktieindkomstskat</h3>
       <table className="lagtabel">
         <thead>
+          {/* Husstandens aktieindkomstskat og personens egen skat er den
+              samme fire kolonner over den samme slags linje, og de deler
+              derfor forklaring — jf. nøglereglen i `fieldHelp.ts`. */}
           <tr>
-            <th>Lag</th>
-            <th>Grundlag</th>
-            <th>Sats</th>
-            <th>Beløb</th>
+            <th title={fieldHelp['LayerAmount.layer']}>Lag</th>
+            <th title={fieldHelp['LayerAmount.base']}>Grundlag</th>
+            <th title={fieldHelp['LayerAmount.rate']}>Sats</th>
+            <th title={fieldHelp['LayerAmount.amount']}>Beløb</th>
           </tr>
         </thead>
         <tbody>
@@ -201,10 +205,10 @@ function EntriesBlock({
       <table className="postertabel">
         <thead>
           <tr>
-            <th>Post</th>
-            <th>Beløb</th>
-            <th>Forfald</th>
-            <th>Afkastvægt</th>
+            <th title={fieldHelp['EntryYear.entry']}>Post</th>
+            <th title={fieldHelp['EntryYear.amount']}>Beløb</th>
+            <th title={fieldHelp.Timing}>Forfald</th>
+            <th title={fieldHelp['EntryYear.returnWeight']}>Afkastvægt</th>
           </tr>
         </thead>
         <tbody>
@@ -264,9 +268,9 @@ function ContributionsBlock({
       <table className="indbetalingstabel">
         <thead>
           <tr>
-            <th>Indbetaling</th>
-            <th>Forlod kilden</th>
-            <th>Landede</th>
+            <th title={fieldHelp['ContributionYear.contribution']}>Indbetaling</th>
+            <th title={fieldHelp['ContributionYear.fromSource']}>Forlod kilden</th>
+            <th title={fieldHelp['ContributionYear.intoHolding']}>Landede</th>
           </tr>
         </thead>
         <tbody>
@@ -324,12 +328,14 @@ function CapsBlock({
       <table className="lofttabel">
         <thead>
           <tr>
-            <th>Ordning</th>
-            <th>Indbetalt</th>
-            <th>Loft</th>
-            <th>Med fradragsret</th>
+            <th title={fieldHelp['CapYear.variant']}>Ordning</th>
+            <th title={fieldHelp['CapYear.paid']}>Indbetalt</th>
+            <th title={fieldHelp['CapYear.cap']}>Loft</th>
+            <th title={fieldHelp['CapYear.withDeductibility']}>Med fradragsret</th>
             {/* Noten er prosa og venstrestillet — hovedet følger sin kolonne. */}
-            <th className="note">Note</th>
+            <th className="note" title={fieldHelp['CapYear.note']}>
+              Note
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -416,12 +422,14 @@ function HoldingsBlock({
       <table className="beholdningstabel">
         <thead>
           <tr>
-            <th>Beholdning</th>
-            <th>Primosaldo</th>
-            <th>Vægtet strøm</th>
-            <th>Nettoafkastsats</th>
-            <th>Afkast</th>
-            <th>Beholdningsskat</th>
+            <th title={fieldHelp['HoldingYear.holding']}>Beholdning</th>
+            <th title={fieldHelp['HoldingYear.openingBalance']}>Primosaldo</th>
+            <th title={fieldHelp['HoldingYear.weightedFlow']}>Vægtet strøm</th>
+            {/* Samme sats som skuffens *Nettoafkast* og derfor samme
+                forklaring — ét tal, ét opslag. */}
+            <th title={fieldHelp['Holding.netReturn']}>Nettoafkastsats</th>
+            <th title={fieldHelp['HoldingYear.return']}>Afkast</th>
+            <th title={fieldHelp['HoldingYear.tax']}>Beholdningsskat</th>
           </tr>
         </thead>
         <tbody>
@@ -529,11 +537,14 @@ function PersonTaxBlock({
       </div>
       <table className="lagtabel">
         <thead>
+          {/* Husstandens aktieindkomstskat og personens egen skat er den
+              samme fire kolonner over den samme slags linje, og de deler
+              derfor forklaring — jf. nøglereglen i `fieldHelp.ts`. */}
           <tr>
-            <th>Lag</th>
-            <th>Grundlag</th>
-            <th>Sats</th>
-            <th>Beløb</th>
+            <th title={fieldHelp['LayerAmount.layer']}>Lag</th>
+            <th title={fieldHelp['LayerAmount.base']}>Grundlag</th>
+            <th title={fieldHelp['LayerAmount.rate']}>Sats</th>
+            <th title={fieldHelp['LayerAmount.amount']}>Beløb</th>
           </tr>
         </thead>
         <tbody>

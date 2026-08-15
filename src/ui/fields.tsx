@@ -1,11 +1,17 @@
 import type { ChangeEvent, ReactNode } from 'react'
 import { useId, useState } from 'react'
 import type { AgeBound } from '../engine/plan'
+import { fieldHelp, type FieldHelpKey } from './fieldHelp'
 import { formatNumber, parseNumber } from './planEdits'
 
 /** Skuffens byggeklodser: hvordan ét felt tegnes, ikke hvilke felter hvert
     objekt har. Det sidste står i `Inspector.tsx`, som er filens eneste bruger
-    — delingen går efter abstraktionsniveau og ikke efter genbrug. */
+    — delingen går efter abstraktionsniveau og ikke efter genbrug.
+
+    Hver komponent kræver en `help` — nøglen til feltets forklaring i
+    `fieldHelp.ts`. Den er krævet og ikke valgfri, fordi dækningen er lovet
+    total: et nyt felt uden forklaring skal fejle i oversætteren og ikke i
+    et review. Teksten hænger på etiketten, som er det, man peger på. */
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -29,10 +35,12 @@ export function Hint({ children }: { children: ReactNode }) {
     `span.etiket`, hvor et `<label htmlFor>` ville pege på ingenting. */
 function Field({
   label,
+  help,
   unit,
   children,
 }: {
   label: string
+  help: FieldHelpKey
   /** Udeladt giver en tom enhedskolonne — bredden holdes alligevel, så alle
       felters kontroller flugter ned gennem sektionen. */
   unit?: string
@@ -41,7 +49,9 @@ function Field({
   const id = useId()
   return (
     <div className="felt">
-      <label htmlFor={id}>{label}</label>
+      <label htmlFor={id} title={fieldHelp[help]}>
+        {label}
+      </label>
       <span className="vaerdi">
         {children(id)}
         <span className="enhed">{unit ?? ''}</span>
@@ -52,15 +62,17 @@ function Field({
 
 export function TextField({
   label,
+  help,
   value,
   onChange,
 }: {
   label: string
+  help: FieldHelpKey
   value: string
   onChange: (value: string) => void
 }) {
   return (
-    <Field label={label}>
+    <Field label={label} help={help}>
       {(id) => (
         <input
           id={id}
@@ -130,11 +142,13 @@ function parseOptional(text: string): number | undefined {
 
 export function NumberField({
   label,
+  help,
   unit,
   value,
   onChange,
 }: {
   label: string
+  help: FieldHelpKey
   unit?: string
   value: number
   onChange: (value: number) => void
@@ -142,7 +156,7 @@ export function NumberField({
   const tal = useNumberText(value, formatNumber, parseNumber, onChange)
 
   return (
-    <Field label={label} unit={unit}>
+    <Field label={label} help={help} unit={unit}>
       {(id) => <input id={id} type="text" inputMode="decimal" className="tal" {...tal} />}
     </Field>
   )
@@ -151,11 +165,13 @@ export function NumberField({
 /** Et talfelt der kan stå tomt — se `formatOptional`. */
 export function OptionalNumberField({
   label,
+  help,
   unit,
   value,
   onChange,
 }: {
   label: string
+  help: FieldHelpKey
   unit?: string
   value: number | undefined
   onChange: (value: number | undefined) => void
@@ -163,7 +179,7 @@ export function OptionalNumberField({
   const tal = useNumberText(value, formatOptional, parseOptional, onChange)
 
   return (
-    <Field label={label} unit={unit}>
+    <Field label={label} help={help} unit={unit}>
       {(id) => <input id={id} type="text" inputMode="decimal" className="tal" {...tal} />}
     </Field>
   )
@@ -176,11 +192,13 @@ export function OptionalNumberField({
     et tal, men den skal vises som ét. */
 export function AgeBoundField({
   label,
+  help,
   value,
   workEndAge,
   onChange,
 }: {
   label: string
+  help: FieldHelpKey
   value: AgeBound | undefined
   /** Ejerens erhvervsophørsalder — det tal feltet viser, når endepunktet
       følger den. Feltet er skrivebeskyttet imens frem for tomt: alderen er
@@ -202,7 +220,7 @@ export function AgeBoundField({
   // og skubbede inputtet ud af flugt med resten af sektionen.
   return (
     <>
-      <Field label={label} unit="år">
+      <Field label={label} help={help} unit="år">
         {(id) => (
           <input
             id={id}
@@ -221,7 +239,10 @@ export function AgeBoundField({
       </Field>
       <div className="felt felt--tilvalg">
         <span className="vaerdi">
-          <label>
+          {/* Tilvalget er sit eget spørgsmål og har derfor sin egen
+              forklaring — feltet ovenfor svarer på *hvornår*, tilvalget på
+              *hvad det følger*. Nøglen er fast: der er kun ét tilvalg. */}
+          <label title={fieldHelp['Period.followsWorkEnd']}>
             <input
               type="checkbox"
               checked={followsWorkEnd}
@@ -237,11 +258,13 @@ export function AgeBoundField({
 
 export function RadioField({
   label,
+  help,
   checked,
   onSelect,
   disabled = false,
 }: {
   label: string
+  help: FieldHelpKey
   checked: boolean
   onSelect: () => void
   /** Valget står, men kan ikke træffes — reglen bag skal stå i et `Hint` ved
@@ -249,7 +272,7 @@ export function RadioField({
   disabled?: boolean
 }) {
   return (
-    <Field label={label}>
+    <Field label={label} help={help}>
       {(id) => (
         <input
           id={id}
@@ -273,18 +296,22 @@ export function RadioField({
     knapper og ikke én kontrol at pege på, ligesom i `LockedField`. */
 export function ToggleField({
   label,
+  help,
   value,
   options,
   onChange,
 }: {
   label: string
+  help: FieldHelpKey
   value: string
   options: string[]
   onChange: (value: string) => void
 }) {
   return (
     <div className="felt">
-      <span className="etiket">{label}</span>
+      <span className="etiket" title={fieldHelp[help]}>
+        {label}
+      </span>
       <span className="vaerdi">
         <span className="kontakt">
           {options.map((option) => (
@@ -306,15 +333,17 @@ export function ToggleField({
 
 export function CheckboxField({
   label,
+  help,
   checked,
   onChange,
 }: {
   label: string
+  help: FieldHelpKey
   checked: boolean
   onChange: (checked: boolean) => void
 }) {
   return (
-    <Field label={label}>
+    <Field label={label} help={help}>
       {(id) => (
         <input
           id={id}
@@ -336,17 +365,19 @@ export type Options = string[] | { label: string; options: string[] }[]
 
 export function SelectField({
   label,
+  help,
   value,
   options,
   onChange,
 }: {
   label: string
+  help: FieldHelpKey
   value: string
   options: Options
   onChange: (value: string) => void
 }) {
   return (
-    <Field label={label}>
+    <Field label={label} help={help}>
       {(id) => (
         <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
           {options.map((option) =>
@@ -374,16 +405,20 @@ export function SelectField({
     en senere skive ("låst"), eller fordi det er udledt af andre felter. */
 export function LockedField({
   label,
+  help,
   value,
   unit = 'låst',
 }: {
   label: string
+  help: FieldHelpKey
   value: string
   unit?: string
 }) {
   return (
     <div className="felt">
-      <span className="etiket">{label}</span>
+      <span className="etiket" title={fieldHelp[help]}>
+        {label}
+      </span>
       <span className="vaerdi">
         <span className="laast">{value}</span>
         <span className="enhed">{unit}</span>
