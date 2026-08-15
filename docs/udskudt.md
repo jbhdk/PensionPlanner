@@ -42,6 +42,16 @@ Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog 
 
 **Hvad der skal bygges, når det tages op:** Et fradragsregnskab pr. indbetaling med restsaldo og valgt fordeling, opfyldningsfradraget som satstal i `RateYear`, og et felt på livrenten der skiller den privattegnede fra den arbejdsgiveradministrerede. Så længe kun den arbejdsgiveradministrerede findes, findes den skelnen ikke, og det er den billige del af fravalget.
 
+## Pensionsbeskatningslovens § 1 a, stk. 2
+
+**Status:** Udskudt, undersøgt og belagt i [pensionsudbetalingsalderen](./satser/pensionsudbetalingsalder.md). De tre udbetalingsregimer er bygget, jf. [#38](https://github.com/jbhdk/PensionPlanner/issues/38); det er alene stk. 2's fødselsdatotabel, der ikke er.
+
+**Hvorfor det betyder noget:** [PBL § 1 a](https://danskelove.dk/pensionsbeskatningsloven/1a), stk. 1, definerer pensionsudbetalingsalderen som tidspunktet tre år før folkepensionsalderen — det, `FromJanuary2018` regner. Ved siden af den bærer stk. 2 en overgangstabel indekseret efter **fødselsdato** og ikke efter oprettelsestidspunkt: født til og med 31. december 1958 giver 60 år, 1. januar – 30. juni 1959 giver 60½, 1. juli – 31. december 1959 giver 61, og 1. januar – 30. juni 1960 giver 61½. De to slags overgangsregel måler altså hver sin ting, og en ordning kan være omfattet af begge.
+
+**Prisen ved at lade den ligge:** Tabellen rammer alene personer født før 1961, som alle er fyldt 65 i 2026 — husstanden har ingen af dem. Og den går kun én vej: for de årgange, den dækker, er dens alder lavere end den, de tre regimer giver, så en plan kan ikke komme til at se mere fri ud, end den er. Skulle husstanden rumme en person født før 1961, ville hendes ordninger derimod se ud til at åbne for sent, og hendes broperiode ville se længere ud, end den er.
+
+**Hvad der skal bygges, når det tages op:** Tabellen hører i [pensionsudbetalingsalderen](./satser/pensionsudbetalingsalder.md) ved siden af de tre regimer — den er lovfastsat og ikke § 20-reguleret — og udledningen bliver et trin i `payoutAge` efter regimeopslaget. Det kræver hverken et nyt felt eller et led i migrationskæden: fødselsdatoen står allerede på personen. Det, der derimod skal afgøres først, er samspillet: om stk. 2 afløser regimets alder for de fire årgangsintervaller, eller om den lægger sig som en nedre grænse under den. Det spørgsmål er ikke besvaret, og det skal det være, før koden rører sig.
+
 ## Afledte aldre i `AgeBound`
 
 **Status:** Fravalgt. `AgeBound` er en fast alder eller `'WorkEndAge'`, og den får hverken `'StatePensionAge'` eller `'PayoutAge'` ved siden af.
