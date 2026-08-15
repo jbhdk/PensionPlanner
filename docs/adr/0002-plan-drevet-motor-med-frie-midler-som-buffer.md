@@ -14,3 +14,4 @@ Kontoabstraktionen designes med en udbetalingsstrategi pr. beholdning, så en be
 
 - [Diagram: Pengestrømmen](../diagrams/04-pengestroem.md) — frie midler som restpost, og hvad der kan gøre saldoen negativ.
 - [Diagram: Domænemodellen](../diagrams/01-domaenemodel.md) — udbetalingsplanen hænger på beholdningen, ikke på personen.
+- [ADR-0024](./0024-gennemloebet-forrenter-sig-ikke-og-afkastet-krediteres-foer-aarets-drift.md) — påstanden om den ligefremme fremadrettede udregning var truet af aftrapningen og holder igen, fordi gennemløbet ikke forrenter sig.

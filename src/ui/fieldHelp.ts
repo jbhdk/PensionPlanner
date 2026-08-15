@@ -355,7 +355,7 @@ export const fieldHelp = {
     'Hvad ordningen tømte sig med i året — for en ratepension årets rate, som regnes af saldoen ved årets begyndelse. Pengene er ikke væk: de er flyttet over på bufferen, og kun skatten af dem forsvinder. En tankestreg betyder, at ordningen ikke har en plan for at blive tømt.',
 
   'HoldingYear.weightedFlow':
-    'De penge, der kom til eller forsvandt undervejs i året, talt med efter hvor længe de nåede at være der. Sammen med saldoen ved årets begyndelse er det grundlaget, afkastet regnes af.',
+    'De penge, der kom til eller forsvandt undervejs i året, talt med efter hvor længe de nåede at være der. Sammen med saldoen ved årets begyndelse er det grundlaget, afkastet regnes af. På bufferen tæller kun det, der faldt i en bestemt måned: de månedlige beløb passerer den blot og efterlader først noget ved årets slutning.',
 
   'HoldingYear.return':
     'Hvad netop denne beholdning gav i året, før dens egen skat. Grundlaget ganget med satsen til venstre giver dette tal, så linjen kan efterregnes for sig.',

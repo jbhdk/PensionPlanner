@@ -100,7 +100,7 @@ En persons beskattede opsparing uden bindinger, i to varianter efter beskatning:
 _Avoid_: Kontanter, bankkonto, opsparing, likvider
 
 **Buffer** · `Buffer`:
-Den ene beholdning i planen, som årets samlede over- eller underskud lander på.
+Den ene beholdning i planen, som årets samlede over- eller underskud lander på. Den er husstandens transaktionskonto, og det er dét, der adskiller den fra enhver anden beholdning: årets jævne drift passerer den blot — indtægter, rater og ydelser kommer ind, udgifter og skat går ud — og det eneste, den efterlader, er over- eller underskuddet. Kun primosaldoen og de bevægelser, der har en dato, forrenter sig derfor på den. En jævn strøm mister kun sin vægt i bufferens ende; ordningen, den kom fra, mister den ikke.
 _Avoid_: Bufferkonto, restpost, kassekredit
 
 **Holdbar plan** · `Sustainable`:
@@ -240,7 +240,7 @@ En dateret flytning af penge fra én af husstandens beholdninger til dens frie m
 _Avoid_: Flytning, indskud, indbetaling, omplacering
 
 **Forfald** · `Timing`:
-Hvornår inden for et simuleringsår en pengestrøm falder: jævnt fordelt over årets måneder (`'Even'`), eller i én bestemt måned (1–12). Oversættes til en vægt på årets afkast, aldrig til et tidsskridt: `Even` giver ½, måned N giver `(12 − N + 1) / 12`.
+Hvornår inden for et simuleringsår en pengestrøm falder: jævnt fordelt over årets måneder (`'Even'`), eller i én bestemt måned (1–12). Oversættes til en vægt på årets afkast, aldrig til et tidsskridt: `Even` giver ½, måned N giver `(12 − N + 1) / 12`. Den ene undtagelse er bufferens ende, hvor `Even` giver nul, jf. `Buffer` — en strøm uden forfald er ikke en begivenhed, den er et niveau, og en transaktionskonto beholder ikke et niveau.
 _Avoid_: Måned, dato, betalingstidspunkt
 
 **Gentagelse** · `Recurrence`:

@@ -9,3 +9,7 @@ Alternativet — at simulere måned for måned — blev fravalgt. Gevinsten er f
 Jævnt fordelte strømme får vægt ½, hvilket er det matematisk rigtige for månedlige indbetalinger og udbetalinger — ikke en tilnærmelse. Måneden er kun pengene værd for klumpede beløb: et boligsalg, et nyt tag, en `Transfer`. En overførsel på 800.000 kr. i februar frem for i november er cirka 23.000 kr. i afkastforskel ved 7 %.
 
 Rækkefølgen i motoren ændrer sig som følge: alle årets strømme skal være kendt, før afkastet kan beregnes. Det opløser til gengæld to tidligere åbne spørgsmål — raten regnes altid af primosaldoen, fordi det er en lovregel, og PAL-skatten regnes altid af årets faktiske afkast. Se [diagram 02](../diagrams/02-simuleringsaaret.md).
+
+## Se også
+
+- [ADR-0024](./0024-gennemloebet-forrenter-sig-ikke-og-afkastet-krediteres-foer-aarets-drift.md) — indsnævrer denne på to punkter. Vægten er en egenskab ved strømmens **ende** og ikke ved strømmen selv: på bufferen, som er husstandens transaktionskonto, vejer en jævn strøm nul, mens afgiverens ende beholder sin. Og det er de **daterede** bevægelser og ikke alle årets strømme, der skal være kendt, før afkastet kan beregnes. Selve påstanden — at måneden er en vægt og ikke et tidsskridt, og at en dateret klump er pengene værd — står uændret.
