@@ -257,9 +257,12 @@ det interessante er, om årets resultat — løn plus ordninger plus ydelser min
 udgifter — nogensinde bliver negativt, og et fortegnsskift i én størrelse er præcis det, en
 stabling af mange kategorier skjuler. Den størrelse hedder nu `Surplus` og tegnes i sit
 eget panel under stablingen med sin egen skala, så fortegnsskiftet ikke kan forsvinde i
-båndene. Stablingen ovenover har syv faste bånd, som alle er begreber fra CONTEXT.md —
-indtægtsposter, ydelser, udbetalinger og overførsler ind, mod skat, udgiftsposter og
-indbetalinger — og ikke ét bånd pr. post, hvis antal ville følge planen frem for designet.
+båndene. Stablingen ovenover har otte faste bånd, som alle er begreber fra CONTEXT.md —
+indtægtsposter, ydelser, udbetalinger og overførsler ind, mod skat, udgiftsposter,
+indbetalinger og overførsler ud — og ikke ét bånd pr. post, hvis antal ville følge planen
+frem for designet. De otte er `Surplus`-opslagets egne bestanddele, og et bånd tæller det,
+der faktisk bevægede sig på bufferen: indbetalingens AM-del forlod den som skat og ligger
+derfor i skattebåndet, ikke i indbetalingernes.
 Se [ADR-0026](../adr/0026-aarets-overskud-taeller-afkastet-ude-men-skatten-af-det-med.md).
 Skærmen herunder står som den blev tegnet og er ikke rettet efter beslutningen.
 

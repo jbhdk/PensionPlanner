@@ -49,3 +49,17 @@ const DEFICIT = CATEGORICAL_PALETTE[6]!
 export function surplusColor(amount: number): string {
   return amount < 0 ? DEFICIT : SURPLUS
 }
+
+/** Båndenes farver i overskudsgrafens øverste panel, ét pr. plads i den
+    faste rækkefølge. Otte bånd og otte farver: paletten rækker præcis, og
+    der indføres ingen niende. Rækkefølgen er båndenes egen og ligger fast
+    hele horisonten igennem, så et bånd kan følges med øjnene fra første til
+    sidste år.
+
+    Fordi de otte bånd bruger hele paletten, deler to af dem nødvendigvis
+    tone med `surplusColor`s to. Det er ikke en tvetydighed inde i ét panel:
+    båndene har legenden og deres egen skala, søjlen nedenunder har hverken
+    eller — den er ikke en kategori, men totalen. */
+export function surplusBandColor(bandIndex: number): string {
+  return CATEGORICAL_PALETTE[bandIndex % CATEGORICAL_PALETTE.length]!
+}

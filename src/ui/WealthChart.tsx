@@ -298,7 +298,7 @@ export function WealthChart({
           <YearAxisMarks years={years} x={x} left={left} right={right} height={height} />
         </svg>
       </div>
-      <ul className="formuegraf-legend">
+      <ul className="graf-legend formuegraf-legend">
         {holdings.map((holding, si) => {
           const target: Target = { kind: 'holding', id: holding.id }
           return (

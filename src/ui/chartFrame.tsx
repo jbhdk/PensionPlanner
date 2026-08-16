@@ -92,22 +92,38 @@ export function kroneAxis(bottom: number, top: number): KroneAxis {
   return { ticks, labels, name, left }
 }
 
+/** Akser, hvis venstremargen er afstemt til den bredeste. To paneler over
+    hinanden skal dele x-akse, og det gør de kun, hvis plotfladen begynder
+    samme sted — ellers står det samme år to steder på skærmen, alt efter
+    hvilket panel man læser. Trinnet og enheden er stadig hver akses egen:
+    panelerne har hver sin skala, og det er dét, der holder et fortegnsskift
+    fra at forsvinde i en stabling. */
+export function alignedAxes(axes: KroneAxis[]): KroneAxis[] {
+  const left = Math.max(...axes.map((axis) => axis.left))
+  return axes.map((axis) => ({ ...axis, left }))
+}
+
 /** Kroneaksens mærker: enheden som overskrift over mærkatsøjlen, og en
-    gitterlinje pr. trin med nul trukket frem som basislinje. */
+    gitterlinje pr. trin med nul trukket frem som basislinje.
+
+    `top` er panelets overkant og dermed den linje, enheden står over. Den
+    er `MARGIN.top` i en graf med ét panel og panelets egen i en med to. */
 export function KroneAxisMarks({
   axis,
   y,
   right,
+  top = MARGIN.top,
 }: {
   axis: KroneAxis
   y: ScaleLinear<number, number>
   right: number
+  top?: number
 }) {
   return (
     <g className="graf-akse-y">
       {/* Enheden står over mærkatsøjlen og er højrestillet som den, så den
           læses som søjlens overskrift. */}
-      <text className="aksenavn" x={axis.left - 6} y={MARGIN.top - 8} textAnchor="end">
+      <text className="aksenavn" x={axis.left - 6} y={top - 8} textAnchor="end">
         {axis.name}
       </text>
       {axis.ticks.map((value, i) => (

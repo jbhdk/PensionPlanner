@@ -640,8 +640,9 @@ table.aar th,
 /* ---------- graferne ---------- */
 
 /* Rammen er fælles for formuegrafen og overskudsgrafen: samme kort, samme
-   plotcontainer, samme akser. Kun det, der hører til den ene graf alene —
-   legenden og bufferens spænd — bærer dens eget navn. */
+   plotcontainer, samme akser og samme legend. Kun det, der hører til den ene
+   graf alene — legendens klikbare knap og bufferens spænd — bærer dens eget
+   navn. */
 .graf {
   flex: 1 1 auto;
   min-height: 0;
@@ -671,7 +672,11 @@ table.aar th,
   height: 100%;
 }
 
-.formuegraf-legend {
+/* Legenden er fælles for de to grafer: formuegrafens bånd er beholdninger,
+   overskudsgrafens er årets bevægelser på bufferen, men prøven, ordet og
+   rytmen er den samme. Kun formuegrafens klikbare knap og dens skravering
+   hører den ene til. */
+.graf-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
@@ -680,6 +685,19 @@ table.aar th,
   list-style: none;
   font-size: 12px;
   color: var(--label);
+}
+
+.graf-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.graf-legend .svatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
 }
 
 .formuegraf-legend button {
@@ -699,13 +717,6 @@ table.aar th,
 .formuegraf-legend button.valgt {
   color: var(--ink);
   font-weight: 600;
-}
-
-.formuegraf-legend .svatch {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  flex: none;
 }
 
 /* Bundne beholdninger bærer samme skravering i legenden som i grafens bånd,
