@@ -228,9 +228,10 @@ de steder er mærket — stiplet ramme og et **skitse**-mærke, ligesom `<<skits
 diagrammerne. Et skitsemærket ord er ikke afgjort og skal gennem glossaret, før det
 bliver til kode.
 
-Mærket sidder på: **Bolig og lån** (hele etape 4), **cashflow-grafen** og **milepælene**
-i formuegrafen. Det sad også på **sammenligningen af planer**, som nu er droppet — ordet
-skal derfor aldrig gennem glossaret.
+Mærket sidder på: **Bolig og lån** (hele etape 4) og **milepælene** i formuegrafen. Det
+sad også på **sammenligningen af planer**, som nu er droppet — ordet skal derfor aldrig
+gennem glossaret. Og det sad på **cashflow-grafen**, som er nået igennem: den hedder nu
+`Surplus` · årets overskud i CONTEXT.md, og ordet "cashflow" står på `Entry`s _Avoid_-liste.
 
 ## De fem skærme
 
@@ -238,7 +239,7 @@ skal derfor aldrig gennem glossaret.
 |---|---|---|
 | `#hoved` | Om planspalten bærer alle etaper, og om årstabellen tåler tolv kolonner | Afløst af `navigator.html#b3-fane` |
 | `#forklar:2043` | Det tætteste skærmbillede i hele appen. Bygges allerede i etape 1 ([#13](https://github.com/jbhdk/PensionPlanner/issues/13)) | Bærer |
-| `#cashflow` | Divergerende stablet søjlegraf | Formen forkastet |
+| `#cashflow` | Divergerende stablet søjlegraf | Formen genindført, jf. [ADR-0026](../adr/0026-aarets-overskud-taeller-afkastet-ude-men-skatten-af-det-med.md) |
 | `#sammenlign` | Flere planer oven i hinanden, og hvad planspalten så viser | Droppet |
 | `#fejl` | Ugyldig plan mod uholdbar plan, og markeringen af de år, hvor bufferen er tom | Bærer |
 
@@ -251,11 +252,16 @@ beholdning, posterne med forfald og vægt. Det, der mangler, er B3's udtryk — 
 spaltehoved, samme kort, samme talformat som navigatoren. Formen skal ikke opfindes igen,
 kun styles.
 
-**`#cashflow`s form er forkastet.** Den divergerende stablede søjlegraf viser ikke det,
-man skal bruge. Det interessante er, om årets resultat — løn plus ordninger plus ydelser
-minus skat minus udgifter — nogensinde bliver negativt, og et fortegnsskift i én størrelse
-er præcis det, en stabling af 55 kategorier skjuler. Hvad der kommer i stedet, er ikke
-tegnet. Cashflow hører til etape 5.
+**`#cashflow`s form er genindført med indvendingen indbygget.** Den blev forkastet, fordi
+det interessante er, om årets resultat — løn plus ordninger plus ydelser minus skat minus
+udgifter — nogensinde bliver negativt, og et fortegnsskift i én størrelse er præcis det, en
+stabling af mange kategorier skjuler. Den størrelse hedder nu `Surplus` og tegnes i sit
+eget panel under stablingen med sin egen skala, så fortegnsskiftet ikke kan forsvinde i
+båndene. Stablingen ovenover har syv faste bånd, som alle er begreber fra CONTEXT.md —
+indtægtsposter, ydelser, udbetalinger og overførsler ind, mod skat, udgiftsposter og
+indbetalinger — og ikke ét bånd pr. post, hvis antal ville følge planen frem for designet.
+Se [ADR-0026](../adr/0026-aarets-overskud-taeller-afkastet-ude-men-skatten-af-det-med.md).
+Skærmen herunder står som den blev tegnet og er ikke rettet efter beslutningen.
 
 **`#sammenlign` er droppet, ikke udskudt.** Den koster en tilstand i resultatspalten og et
 ubesvaret spørgsmål om, hvad planspalten så viser, og den svarer ikke på mere, end to
@@ -363,9 +369,13 @@ kravspecifikationen:
    y-margenen retter sig efter det længste mærkat, så intet ciffer klippes af kanten.
    Hvilke kroner det er, siger omskifteren over grafen, og det gentages ikke på aksen.
 
-To krav er faldet bort. Den **divergerende stablede søjlegraf** stod som krav 2 med
-henvisning til `#cashflow`, og den form er forkastet; **flere serier af samme slags oven i
-hinanden** stod som krav 3 til plansammenligningen, som er droppet.
+Ét krav er faldet bort: **flere serier af samme slags oven i hinanden** stod som krav 3 til
+plansammenligningen, som er droppet. Den **divergerende stablede søjlegraf** stod som krav 2
+med henvisning til `#cashflow` og faldt bort med den form — men er tilbage som krav, nu med
+to paneler over en delt x-akse og hver sin y-skala, jf.
+[ADR-0026](../adr/0026-aarets-overskud-taeller-afkastet-ude-men-skatten-af-det-med.md).
+Kravet ændrer ikke ADR-0011: `d3-shape` stabler divergerende uden videre, og et panel mere
+er et `<svg>` mere.
 
 Recharts står nævnt i #17 med et "eller tilsvarende". Punkt 1, 2 og 4 er dem, der skal
 afprøves med kode, før det bliver til en beslutning — og den beslutning hører i en ADR.

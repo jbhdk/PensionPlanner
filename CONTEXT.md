@@ -100,7 +100,7 @@ En persons beskattede opsparing uden bindinger, i to varianter efter beskatning:
 _Avoid_: Kontanter, bankkonto, opsparing, likvider
 
 **Buffer** · `Buffer`:
-Den ene beholdning i planen, som årets samlede over- eller underskud lander på. Den er husstandens transaktionskonto, og det er dét, der adskiller den fra enhver anden beholdning: årets jævne drift passerer den blot — indtægter, rater og ydelser kommer ind, udgifter og skat går ud — og det eneste, den efterlader, er over- eller underskuddet. Kun primosaldoen og de bevægelser, der har en dato, forrenter sig derfor på den. En jævn strøm mister kun sin vægt i bufferens ende; ordningen, den kom fra, mister den ikke.
+Den ene beholdning i planen, som `Surplus` lander på. Den er husstandens transaktionskonto, og det er dét, der adskiller den fra enhver anden beholdning: årets jævne drift passerer den blot — indtægter, rater og ydelser kommer ind, udgifter og skat går ud — og det eneste, den efterlader, er årets overskud. Kun primosaldoen og de bevægelser, der har en dato, forrenter sig derfor på den. En jævn strøm mister kun sin vægt i bufferens ende; ordningen, den kom fra, mister den ikke.
 _Avoid_: Bufferkonto, restpost, kassekredit
 
 **Holdbar plan** · `Sustainable`:
@@ -264,6 +264,10 @@ _Avoid_: Række, resultat, output, snapshot
 **Beholdningsår** · `HoldingYear`:
 Én beholdnings tal for ét simuleringsår: primo- og ultimosaldo, årets afkast, den vægtede strøm afkastet blev regnet af, og årets udbetaling, når en udbetalingsplan tømmer den. En omsat livrentes ydelse står ikke her — den har ingen saldo at forlade og er en `Benefit`, ikke en `payout`. Beholdningens navn og satser står i planen og gentages ikke her.
 _Avoid_: Beholdningsresultat, saldolinje, kontoudtog
+
+**Årets overskud** · `Surplus`:
+Summen af alt, der bevæger sig på bufferen i ét simuleringsår, undtagen dens eget afkast: løn og øvrige indtægtsposter, folkepension, ATP og livrenteydelser, rater og overførsler ind — minus skat, udgiftsposter, indbetalinger og overførsler ud. Er tallet negativt, er det årets underskud; det er ét begreb og to ord, og fortegnet er det, der skiller dem. Svarer på, om året bar sig selv, hvor `Sustainable` svarer på, om husstanden havde noget at tage af — et underskud er derfor ikke i sig selv en fejl, men det beløb, der skal flyttes, før året går op. Afkastet står udenfor, fordi det ikke er penge, husstanden kan bruge, før der hæves, mens skatten af det forlader bufferen som enhver anden regning: et år kan vise underskud, mens formuen vokser, og det er efter hensigten. Udledt af fire tal på bufferens `HoldingYear` — ultimo minus primo, minus afkastet, plus beholdningsskatten — og aldrig et selvstændigt gemt felt, ligesom `NetReturn`.
+_Avoid_: Nettoresultat, årets resultat, cashflow, kontantstrøm, likviditet, difference
 
 **Postår** · `EntryYear`:
 Én posts beløb i ét simuleringsår, i årets egne løbende priser — kun for de poster der faktisk falder i året. Forfaldet står ikke her; det er en egenskab ved posten selv.
