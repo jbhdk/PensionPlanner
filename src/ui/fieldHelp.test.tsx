@@ -233,8 +233,13 @@ describe('feltforklaringerne', () => {
     }
   })
 
-  it('giver folkepensionens kolonneoverskrifter i forklar-året en forklaring', async () => {
-    // Folkepensionsblokken kan ikke stå i den rige plans første år: fixturens
+  it('giver hver linje i forklar-årets regnestriber en forklaring', async () => {
+    // Løftet om total dækning gælder også striberne, ikke kun tabellernes
+    // kolonner. Brugeren kan ikke se forskel på de to — der står ingen
+    // markering på nogen af dem — og en stribe, der intet siger, når man
+    // peger på den, er præcis det, garantien ikke kan bære.
+    //
+    // Aftrapningsblokken kan ikke stå i den rige plans første år: fixturens
     // person er født i 1973 og når folkepensionsalderen i 2043. Planen
     // begynder derfor dér, så blokken står i den første række.
     const user = userEvent.setup()
@@ -242,13 +247,45 @@ describe('feltforklaringerne', () => {
     await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
     await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!)
 
-    const blok = screen.getByRole('heading', { name: 'Folkepensionen', level: 3 })
-      .parentElement as HTMLElement
-    const headers = within(blok).getAllByRole('columnheader')
-    expect(headers.length).toBe(3)
-    for (const header of headers) {
-      expect(header.title, `Folkepensionen › ${header.textContent}`).not.toBe('')
+    // Balancestriben, personens vej fra bruttoløn til personlig indkomst, og
+    // hele aftrapningen af pensionstillægget. Tallet står her, så løkken ikke
+    // kan komme til at prøve ingenting.
+    const stripes = [...document.querySelectorAll<HTMLElement>('.stribepost')]
+    expect(stripes.length).toBeGreaterThan(20)
+    for (const stripe of stripes) {
+      expect(stripe.title, `Forklar-året › ${stripe.textContent}`).not.toBe('')
     }
+  })
+
+  it('viser aftrapningen af pensionstillægget som en fratrækning, der går op', async () => {
+    // Blokken findes for at kunne efterregnes: bestanddelene lægges sammen
+    // til grundlaget, fradragsbeløbet trækkes fra, og aftrapningen tages af
+    // det fulde tillæg. Hinten siger, hvad der ikke tæller med.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlan({ startYear: 2043, holdings: [aFreeHolding()] })} />)
+    await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!)
+
+    const blok = screen.getByRole('heading', {
+      name: 'Folkepension og aftrapning af pensionstillæg',
+      level: 3,
+    }).parentElement as HTMLElement
+
+    for (const label of [
+      'Pensionstillæg, fuldt',
+      'Aftrapningsgrundlag — udbetalinger og ATP',
+      'Positiv kapitalindkomst',
+      'Aktieindkomst',
+      'Aftrapningsgrundlag i alt',
+      'Fradragsbeløb',
+      'Pensionstillæg efter aftrapning',
+      'Folkepension i alt',
+    ]) {
+      expect(within(blok).getByText(label), `${label} mangler`).toBeTruthy()
+    }
+
+    expect(blok.textContent).toContain('aldersopsparing')
+    expect(blok.textContent).toContain('aktiesparekonto')
   })
 
   describe('stilen', () => {

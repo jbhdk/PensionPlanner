@@ -282,6 +282,39 @@ export const fieldHelp = {
 
   // ---------- Forklar-årets kolonner ----------
 
+  'TaxAssessment.earnedIncome':
+    'Alt det, der er tjent i år og beskattes som almindelig indkomst, før noget er trukket fra. Det er beløbet, arbejdsmarkedsbidraget og de to fradrag for at være i arbejde måles af.',
+
+  'TaxAssessment.labourMarketContribution':
+    'De otte procent, der trækkes af lønnen, før alt andet. De rammer kun arbejde: hverken folkepension, ATP eller udbetalinger fra en ordning bærer dem, for de er betalt på vejen ind.',
+
+  'TaxAssessment.contributionWithDeductibility':
+    'Den del af årets indbetaling, der blev holdt uden for indkomsten. Den virker stærkere end et almindeligt fradrag, fordi den også nedsætter grundlaget for de høje satser i toppen.',
+
+  'TaxAssessment.pensionIncome':
+    'Årets udbetalinger fra ordninger, folkepension og ATP under ét. De lægges til efter arbejdsmarkedsbidraget og giver ingen af de fradrag, arbejde giver.',
+
+  'TaxAssessment.personalIncome':
+    'Indkomsten, de fleste satser regnes af, når løn og udbetalinger er lagt sammen og indbetalingen trukket fra. Det er den, progressionsgrænserne måles på.',
+
+  'PersonYear.shareIncome':
+    'Årets gevinst eller tab på aktier uden for pensionsordningerne. Den beskattes efter sine egne to satser og lægges ikke til den øvrige indkomst.',
+
+  'PersonYear.capitalIncome':
+    'Årets renter og tilsvarende afkast, positivt eller negativt. Er beløbet negativt, nedsætter det den indkomst, kommuneskatten regnes af, men det giver ingen penge tilbage.',
+
+  'MarginalTaxRates.earnedIncome':
+    'Hvad den næste tjente krone koster i alt. Den bærer arbejdsmarkedsbidrag og kan flytte et af arbejdsfradragene, og satsen er derfor sjældent den samme som for en pensionskrone.',
+
+  'MarginalTaxRates.pensionIncome':
+    'Hvad den næste krone ud af en ordning koster husstanden. Ligger indtægten i det spænd, hvor tillægget skæres ned, koster kronen både sin egen skat og det tillæg, den tager væk — og også ægtefællens.',
+
+  'YearResult.openingWealth':
+    'Hvad husstanden ejede ved årets begyndelse, alle beholdninger lagt sammen. Det er det samme tal, forrige år sluttede med.',
+
+  'YearResult.conversion':
+    'De penge, der forlod formuen, da den livsvarige ordning blev byttet til en fast årlig indtægt. De er hverken brugt eller betalt i skat — de findes bare ikke længere som en opsparing.',
+
   'LayerAmount.layer':
     'Det enkelte trin i skatten — AM-bidrag, bundskat, kommuneskat og så videre. De opgøres hver for sig, og skatten er summen af dem, så hvert trin kan efterprøves alene.',
 
@@ -327,14 +360,38 @@ export const fieldHelp = {
   'CapYear.note':
     'De tal, de faste kolonner ikke har plads til. For aktiesparekontoen står her, hvad der stod på den ved årets begyndelse, hvor meget der var plads til, og hvad der faktisk kom ind.',
 
-  'StatePensionYear.owner':
-    'Hvem i husstanden der modtager folkepensionen. Det afgør, hvis skat den indgår i, og om beløbene er en enlig persons eller en samlevendes — en enlig får et markant større tillæg.',
-
   'StatePensionYear.basicAmount':
     'Den del af folkepensionen, alle får. Den er den samme uanset hvor stor en indkomst der er ved siden af, og den kan hverken skæres ned af arbejde eller af udbetalinger fra en ordning.',
 
   'StatePensionYear.pensionSupplement':
-    'Den del af folkepensionen, der afhænger af, om man bor alene: en enlig får omtrent det dobbelte af en samlevende. Den står som sit eget beløb ved siden af grundbeløbet, fordi de to er sat efter hver sin regel.',
+    'Det, der er tilbage, når indtægten har skåret i den indtægtsafhængige del af folkepensionen. Det er dette beløb — ikke det fulde — der udbetales og beskattes, og det er nul for den, hvis indtægt er stor nok.',
+
+  'StatePensionYear.total':
+    'Årets samlede beløb fra det offentlige: den faste del plus det, der blev tilbage af den indtægtsafhængige. Det er, hvad der faktisk kommer ind på kontoen i løbet af året.',
+
+  'Taper.fullSupplement':
+    'Den del af folkepensionen, der afhænger af indtægten, i sin fulde størrelse — altså før indtægten har skåret i den. Hvor stor den er, afhænger alene af, om man bor alene: en enlig får omtrent det dobbelte af en samlevende.',
+
+  'Taper.allowance':
+    'Hvor stor en indtægt der er fri, før tillægget begynder at blive skåret ned. Under den grænse udbetales tillægget ubeskåret, uanset hvordan indtægten er sammensat.',
+
+  'Taper.reduction':
+    'Hvor meget indtægten kostede i tillæg i år. Det er procenten ganget med den del af grundlaget, der ligger over det fri beløb — og aldrig mere, end der var tillæg at tage af.',
+
+  'TaperBase.pensionIncome':
+    'Det, husstandens egne ordninger har lagt ud i år, sammen med den livsvarige ydelse fra Arbejdsmarkedets Tillægspension. Det er den tungeste del af grundlaget — og den eneste, der kan flyttes til et andet år ved at ændre, hvornår ordningerne tømmes.',
+
+  'TaperBase.capitalIncome':
+    'Renter og lignende afkast af opsparing, når året samlet gav overskud. Et år med underskud tæller som nul: det lemper ikke, men det gør heller ingen skade.',
+
+  'TaperBase.shareIncome':
+    'Årets gevinst på aktier uden for en pensionsordning og uden for aktiesparekontoen. Den tæller fuldt med, selv om den beskattes efter sine egne satser og ikke som almindelig indkomst.',
+
+  'TaperBase.spouse':
+    'Den del af ægtefællens indtægt, der tæller med her. En fast andel holdes udenfor, så længe ægtefællen ikke selv får folkepension — og fra det år det sker, tæller hele beløbet med.',
+
+  'TaperBase.total':
+    'Den samlede indtægt, tillægget måles imod. Løn tæller ikke med, hverken egen eller ægtefællens, og det gør penge fra en aldersopsparing eller en aktiesparekonto heller ikke.',
 
   'LifeAnnuityBenefit.holding':
     'Hvilken af husstandens livrenter det årlige beløb kom af. Ordningen selv står med saldo nul fra det år, den blev omsat — pengene er byttet til en indtægt og findes ikke længere som en opsparing.',

@@ -296,28 +296,14 @@ export function totalTax(assessment: TaxAssessment): Nominal {
     ingen af delene.
 
     Aktie- og kapitalindkomst har ingen sats her: de beskattes fladt og har
-    ikke en marginal at vise. */
+    ikke en marginal at vise.
+
+    Satserne måles i `assessHousehold` og ikke her: en krone pensionsindkomst
+    aftrapper et pensionstillæg, og tillægget er husstandens beregning, jf.
+    ADR-0025. */
 export type MarginalTaxRates = {
   earnedIncome: number
   pensionIncome: number
-}
-
-/** De to satser, hver regnet ved at gentage skatteopgørelsen med én krone
-    mere af sin egen indkomstart og tage differencen fra den oprindelige —
-    aldrig ved at udlede dem analytisk af satserne, så de ikke kan komme til
-    at sige noget andet end selve opgørelsen ville. */
-export function marginalTaxRates(
-  input: TaxAssessmentInput,
-  rates: RateYear,
-): MarginalTaxRates {
-  const at = totalTax(assessTax(input, rates))
-  const withOneMore = (of: Partial<TaxAssessmentInput>) =>
-    totalTax(assessTax({ ...input, ...of }, rates)) - at
-
-  return {
-    earnedIncome: withOneMore({ earnedIncome: input.earnedIncome + 1 }),
-    pensionIncome: withOneMore({ pensionIncome: (input.pensionIncome ?? 0) + 1 }),
-  }
 }
 
 /** Summen af en række beløb, der står hver for sig — brugt til fradragene,

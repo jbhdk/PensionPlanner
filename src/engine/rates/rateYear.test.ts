@@ -68,6 +68,22 @@ describe('satsår 2026', () => {
     }
   })
 
+  it('parrer bortseelsen med aftrapningsprocenten på den samme række', () => {
+    // Kilde: docs/satser/2026.md — PL § 49, stk. 1, nr. 4. De 54 % gælder
+    // kun, mens ægtefællen ikke selv modtager social pension, og i det år
+    // hun bliver pensionist, halveres aftrapningen samtidig fra 32 til 16 %.
+    // De to skift hører sammen, og de står derfor på samme række: en
+    // opslagsvej, der kunne hente den ene uden den anden, ville kunne parre
+    // 32 % med 0 % bortseelse, og det tal er groft forkert.
+    const byStatus = Object.fromEntries(
+      rateYear2026.statePension.taper.map((taper) => [taper.civilStatus, taper]),
+    )
+
+    expect(byStatus.Single!.spouseDisregard).toBe(0)
+    expect(byStatus.WithNonPensioner!.spouseDisregard).toBe(0.54)
+    expect(byStatus.WithPensioner!.spouseDisregard).toBe(0)
+  })
+
   it('lader loftets trin ligge præcis progressionslagenes egne satser fra hinanden', () => {
     // Trappens anden selvkontrol, jf. docs/satser/2026.md: 44,57 + 7,50 =
     // 52,07 og 52,07 + 5,00 = 57,07. Relationen er grunden til, at højst ét

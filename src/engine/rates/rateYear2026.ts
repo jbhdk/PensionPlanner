@@ -190,6 +190,7 @@ export const rateYear2026: RateYear = {
     taper: [
       {
         civilStatus: 'Single',
+        spouseDisregard: 0,
         pensionSupplement: 104_748,
         allowance: 99_200,
         rate: 0.309,
@@ -197,6 +198,7 @@ export const rateYear2026: RateYear = {
       },
       {
         civilStatus: 'WithNonPensioner',
+        spouseDisregard: 0.54,
         pensionSupplement: 53_604,
         allowance: 198_800,
         rate: 0.32,
@@ -204,6 +206,7 @@ export const rateYear2026: RateYear = {
       },
       {
         civilStatus: 'WithPensioner',
+        spouseDisregard: 0,
         pensionSupplement: 53_604,
         allowance: 198_800,
         rate: 0.16,

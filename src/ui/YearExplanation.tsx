@@ -2,6 +2,7 @@ import { payoutScheduleOf } from '../engine/holdingVariant'
 import type { Holding, Person, Plan } from '../engine/plan'
 import { weightAt } from '../engine/simulate'
 import type { ShareIncomeLayer } from '../engine/tax/assessHousehold'
+import { totalTaperBase } from '../engine/tax/assessHousehold'
 import type { LayerAmount, TaxLayer } from '../engine/tax/assessTax'
 import { totalTax } from '../engine/tax/assessTax'
 import type {
@@ -112,15 +113,31 @@ export function YearExplanation({
           nul i alle andre år ville lade striben påstå, at der var noget at
           se hvert år. */}
       <div className="balancestribe">
-        <StripePost label="Formue primo" amount={display(year.openingWealth)} />
-        <StripePost label="Indtægter" amount={display(year.income)} />
-        <StripePost label="Afkast" amount={display(year.return)} />
-        <StripePost label="Skat" amount={display(-year.tax)} />
-        <StripePost label="Udgifter" amount={display(-year.expenses)} />
+        <StripePost
+          help="YearResult.openingWealth"
+          label="Formue primo"
+          amount={display(year.openingWealth)}
+        />
+        <StripePost help="YearResult.income" label="Indtægter" amount={display(year.income)} />
+        <StripePost help="YearResult.return" label="Afkast" amount={display(year.return)} />
+        <StripePost help="YearResult.tax" label="Skat" amount={display(-year.tax)} />
+        <StripePost
+          help="YearResult.expenses"
+          label="Udgifter"
+          amount={display(-year.expenses)}
+        />
         {year.conversion !== 0 && (
-          <StripePost label="Omsat livrentedepot" amount={display(-year.conversion)} />
+          <StripePost
+            help="YearResult.conversion"
+            label="Omsat livrentedepot"
+            amount={display(-year.conversion)}
+          />
         )}
-        <StripePost label="Formue ultimo" amount={display(year.closingWealth)} />
+        <StripePost
+          help="YearResult.closingWealth"
+          label="Formue ultimo"
+          amount={display(year.closingWealth)}
+        />
       </div>
       {year.conversion !== 0 && (
         <p className="hint stribenote">
@@ -551,18 +568,20 @@ function HoldingsBlock({
   )
 }
 
-/** Folkepensionens to kronebeløb for de af husstandens personer, der har nået
-    folkepensionsalderen.
+/** Folkepensionen og aftrapningen af pensionstillægget, for de af husstandens
+    personer der har nået folkepensionsalderen.
 
     Blokken findes af samme grund som ydelsernes: beløbene står ingen andre
     steder. Brugeren har hverken tastet dem eller året, de begynder i — de
     første læses af satsåret, det sidste udledes af fødselsdatoen — og uden
     blokken kunne indtægten i striben ikke føres tilbage til noget.
 
-    De to beløb står hver for sig og aldrig som én sum: det ene er fladt, det
-    andet skæres af anden indkomst, og lagt sammen kunne hverken det ene eller
-    det andet efterregnes. Blokken udebliver, når ingen i husstanden er
-    folkepensionist endnu. */
+    Den er en regnestribe og ikke en tabel, ganske som mock-uppens, fordi det
+    er en fratrækning der skal vises: hver bestanddel af aftrapningsgrundlaget
+    for sig, grundlaget som deres sum, fradragsbeløbet trukket fra og
+    aftrapningen taget af det fulde tillæg. Lagt sammen til færre linjer kunne
+    hverken grundlaget eller tillægget efterregnes, og det er netop det tal i
+    hele fremskrivningen, der er sværest at tro på. */
 function StatePensionBlock({
   plan,
   year,
@@ -572,43 +591,103 @@ function StatePensionBlock({
   year: YearResult
   display: (amount: number) => number
 }) {
-  const rows = year.persons.flatMap((personYear) =>
-    personYear.statePension === undefined
-      ? []
-      : [
-          {
-            ...personYear.statePension,
-            owner: plan.household.persons.find((person) => person.id === personYear.person),
-          },
-        ],
-  )
+  const rows = year.persons.flatMap((personYear) => {
+    const line = personYear.statePension
+    if (line === undefined) return []
+    const owner = plan.household.persons.find((person) => person.id === personYear.person)
+    const spouse = plan.household.persons.find((person) => person.id !== personYear.person)
+    return [{ line, owner, spouse }]
+  })
   if (rows.length === 0) return null
 
   return (
     <div className="blok">
-      <h3>Folkepensionen</h3>
-      <table className="ydelsestabel">
-        <thead>
-          <tr>
-            <th title={fieldHelp['StatePensionYear.owner']}>Modtager</th>
-            <th title={fieldHelp['StatePensionYear.basicAmount']}>Grundbeløb</th>
-            <th title={fieldHelp['StatePensionYear.pensionSupplement']}>Pensionstillæg</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.owner?.id ?? ''}>
-              <td>{row.owner?.name ?? ''}</td>
-              <td>{kroner(display(row.basicAmount))}</td>
-              <td>{kroner(display(row.pensionSupplement))}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <h3>Folkepension og aftrapning af pensionstillæg</h3>
+      {rows.map(({ line, owner, spouse }) => {
+        const { taper } = line
+        // Aftrapningen er ikke et felt på linjen: den er de to tillæg trukket
+        // fra hinanden, og begge står allerede her — ganske som loftlinjens
+        // råderum, jf. `CapYear`.
+        const reduction = taper.fullSupplement - line.pensionSupplement
+
+        return (
+          <div className="regnestribe" key={owner?.id ?? ''}>
+            <StripePost
+              help="StatePensionYear.basicAmount"
+              label={`${owner?.name ?? ''}: grundbeløb`}
+              amount={display(line.basicAmount)}
+            />
+            <StripePost
+              help="Taper.fullSupplement"
+              label="Pensionstillæg, fuldt"
+              amount={display(taper.fullSupplement)}
+            />
+            <StripePost
+              help="TaperBase.pensionIncome"
+              label="Aftrapningsgrundlag — udbetalinger og ATP"
+              amount={display(taper.base.pensionIncome)}
+              step="step"
+            />
+            <StripePost
+              help="TaperBase.capitalIncome"
+              label="Positiv kapitalindkomst"
+              amount={display(taper.base.capitalIncome)}
+              step="step"
+            />
+            <StripePost
+              help="TaperBase.shareIncome"
+              label="Aktieindkomst"
+              amount={display(taper.base.shareIncome)}
+              step="step"
+            />
+            {/* Linjen udebliver i en husstand med én person: en post om en
+                ægtefælles indkomst ville påstå en ægtefælle, der ikke er. */}
+            {spouse !== undefined && (
+              <StripePost
+                help="TaperBase.spouse"
+                label={`${spouse.name}s indkomst efter ${procent(taper.spouseDisregard)} bortseelse`}
+                amount={display(taper.base.spouse)}
+                step="step"
+              />
+            )}
+            <StripePost
+              help="TaperBase.total"
+              label="Aftrapningsgrundlag i alt"
+              amount={display(totalTaperBase(taper.base))}
+              step="subtotal"
+            />
+            <StripePost
+              help="Taper.allowance"
+              label="Fradragsbeløb"
+              amount={display(-taper.allowance)}
+              step="step"
+            />
+            <StripePost
+              help="Taper.reduction"
+              label={`Aftrapning, ${procent(taper.rate)} af det overskydende`}
+              amount={display(-reduction)}
+            />
+            <StripePost
+              help="StatePensionYear.pensionSupplement"
+              label="Pensionstillæg efter aftrapning"
+              amount={display(line.pensionSupplement)}
+            />
+            <StripePost
+              help="StatePensionYear.total"
+              label="Folkepension i alt"
+              amount={display(line.basicAmount + line.pensionSupplement)}
+              step="total"
+            />
+          </div>
+        )
+      })}
       <p className="hint">
         Folkepensionen står ikke i planen. Beløbene kommer fra årets officielle
         satser, og året, de begynder i, følger af fødselsdatoen — den er hverken
-        tastet eller til at skrue på.
+        tastet eller til at skrue på. Arbejdsindkomst, udbetaling fra en
+        aldersopsparing og afkast på en aktiesparekonto indgår ikke i
+        grundlaget
+        {rows[0]?.spouse ? `, og ${rows[0].spouse.name}s arbejdsindkomst indgår slet ikke` : ''}.
       </p>
     </div>
   )
@@ -674,9 +753,29 @@ function BenefitsBlock({
   )
 }
 
-function StripePost({ label, amount }: { label: string; amount: number }) {
+/** En linje i en regnestribe: etiket til venstre, beløb til højre.
+
+    `help` er påkrævet af samme grund som feltkomponenternes nøgle er det.
+    Dækningen er lovet total og bærer ingen markering på skærmen, og en
+    stribe, brugeren peger forgæves på, er præcis det, løftet ikke kan bære —
+    jf. `fieldHelp.ts`. Typen holder løftet: en ny stribe uden forklaring
+    oversætter ikke.
+
+    `step` rykker linjen ind som et led i en mellemregning, `subtotal` og
+    `total` streger den op som henholdsvis en mellemsum og en slutsum. */
+function StripePost({
+  help,
+  label,
+  amount,
+  step,
+}: {
+  help: keyof typeof fieldHelp
+  label: string
+  amount: number
+  step?: 'step' | 'subtotal' | 'total'
+}) {
   return (
-    <div className="stribepost">
+    <div className={step ? `stribepost ${step}` : 'stribepost'} title={fieldHelp[help]}>
       <span className="m">{label}</span>
       <span className="v">{kroner(amount)}</span>
     </div>
@@ -734,15 +833,18 @@ function PersonTaxBlock({
           ikke gjorde. Linjen udebliver, når året ingen indbetaling har med
           `Deductibility`: en linje på nul ville påstå det modsatte. */}
       <StripePost
+        help="TaxAssessment.earnedIncome"
         label="Løn og skattepligtige poster"
         amount={display(labourMarketContribution.base)}
       />
       <StripePost
+        help="TaxAssessment.labourMarketContribution"
         label={`AM-bidrag, ${procent(labourMarketContribution.rate)}`}
         amount={display(-labourMarketContribution.amount)}
       />
       {year.tax.contributionWithDeductibility > 0 && (
         <StripePost
+          help="TaxAssessment.contributionWithDeductibility"
           label="Indbetaling med fradragsret"
           amount={display(-year.tax.contributionWithDeductibility)}
         />
@@ -752,19 +854,36 @@ function PersonTaxBlock({
           år uden pensionsindkomst, som linjen om fradragsret gør: en linje
           på nul ville påstå en udbetaling, der ikke var. */}
       {year.tax.pensionIncome > 0 && (
-        <StripePost label="Pensionsindkomst" amount={display(year.tax.pensionIncome)} />
+        <StripePost
+          help="TaxAssessment.pensionIncome"
+          label="Pensionsindkomst"
+          amount={display(year.tax.pensionIncome)}
+        />
       )}
-      <StripePost label="Personlig indkomst" amount={display(year.tax.personalIncome)} />
-      <StripePost label="Aktieindkomst" amount={display(year.shareIncome)} />
-      <StripePost label="Kapitalindkomst" amount={display(year.capitalIncome)} />
+      <StripePost
+        help="TaxAssessment.personalIncome"
+        label="Personlig indkomst"
+        amount={display(year.tax.personalIncome)}
+        step="subtotal"
+      />
+      <StripePost
+        help="PersonYear.shareIncome"
+        label="Aktieindkomst"
+        amount={display(year.shareIncome)}
+      />
+      <StripePost
+        help="PersonYear.capitalIncome"
+        label="Kapitalindkomst"
+        amount={display(year.capitalIncome)}
+      />
       {/* Begge satser står altid, også i et rent arbejdsår. Spørgsmålet om,
           hvad den næste krone pensionsindkomst koster, er netop det, der
           stilles, mens der stadig er noget at lægge til side. */}
-      <div className="stribepost">
+      <div className="stribepost" title={fieldHelp['MarginalTaxRates.earnedIncome']}>
         <span className="m">Marginalskat, arbejdsindkomst</span>
         <span className="v">{procent(year.marginal.earnedIncome)}</span>
       </div>
-      <div className="stribepost">
+      <div className="stribepost" title={fieldHelp['MarginalTaxRates.pensionIncome']}>
         <span className="m">Marginalskat, pensionsindkomst</span>
         <span className="v">{procent(year.marginal.pensionIncome)}</span>
       </div>

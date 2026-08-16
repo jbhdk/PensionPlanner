@@ -123,14 +123,23 @@ export type CivilStatus = 'Single' | 'WithNonPensioner' | 'WithPensioner'
 
 /** Aftrapningen af pensionstillægget for én civilstand.
 
-    De fire tal er ikke uafhængige: `cutOff` følger af de tre andre, og den
-    relation er satsårets egen selvkontrol. */
+    `cutOff` er ikke uafhængig af de øvrige: den følger af ydelsen,
+    fradragsbeløbet og procenten, og den relation er satsårets egen
+    selvkontrol. */
 export type Taper = {
   civilStatus: CivilStatus
   pensionSupplement: Nominal
   /** Fradragsbeløbet — indtægten aftrapper først over dette. */
   allowance: Nominal
   rate: number
+  /** Den andel af ægtefællens øvrige indtægt, der ses bort fra, jf. PL § 49,
+      stk. 1, nr. 4. En ren procent uden maksimumbeløb.
+
+      Den står på rækken ved siden af `rate` og ikke for sig, fordi de to
+      skifter samtidig: i det år ægtefællen selv bliver pensionist, bliver
+      32 % med 54 % bortseelse til 16 % med ingen. Parret med hinandens sats
+      er tallet groft forkert, og et opslag pr. række gør den fejl umulig. */
+  spouseDisregard: number
   /** Bortfaldsgrænsen: indtægten hvor tillægget er væk. */
   cutOff: Nominal
 }

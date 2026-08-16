@@ -2786,11 +2786,71 @@ describe('fladen', () => {
     await showYearTable(user)
     await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!) // 2043
 
-    const folkepension = screen.getByRole('heading', { name: 'Folkepensionen', level: 3 })
-      .parentElement as HTMLElement
-    expect(within(folkepension).getByText('Jesper')).toBeTruthy()
+    const folkepension = screen.getByRole('heading', {
+      name: 'Folkepension og aftrapning af pensionstillæg',
+      level: 3,
+    }).parentElement as HTMLElement
+    expect(within(folkepension).getByText('Jesper: grundbeløb')).toBeTruthy()
     expect(within(folkepension).getByText('90.528')).toBeTruthy()
-    expect(within(folkepension).getByText('104.748')).toBeTruthy()
+    // Planen har ingen indkomst, så aftrapningen tager intet: det fulde og
+    // det aftrappede tillæg er det samme beløb, og det står to gange.
+    expect(within(folkepension).getAllByText('104.748').length).toBe(2)
+  })
+
+  it('viser ægtefællens andel af aftrapningsgrundlaget og hvad der ikke tæller med', async () => {
+    // Aftrapningen er den ene beregning i værktøjet, der ikke kan deles i to
+    // uafhængige personberegninger. Blokken skal derfor kunne vise, hvor
+    // meget af den andens indkomst der kostede tillæg — og sige hvilke
+    // indkomster der slet ikke tæller, for det er dem, en plan kan flytte
+    // penge over i.
+    const base = aPlan({ startYear: 2043 })
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...base,
+          household: {
+            persons: [
+              ...base.household.persons,
+              {
+                id: 'anne',
+                name: 'Anne',
+                birthYear: 1974,
+                birthMonth: 6,
+                workEndAge: 60,
+                horizon: 74,
+                municipality: 'Hvidovre',
+                churchMember: true,
+                holdings: [
+                  {
+                    id: 'annes-frie-midler',
+                    name: 'Annes frie midler',
+                    variant: 'SavingsAccount',
+                    balance: 0,
+                    grossReturn: 0,
+                    annualCostRate: 0,
+                  },
+                ],
+              },
+            ],
+          },
+        }}
+      />,
+    )
+    await showYearTable(user)
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!) // 2043
+
+    const blok = screen.getByRole('heading', {
+      name: 'Folkepension og aftrapning af pensionstillæg',
+      level: 3,
+    }).parentElement as HTMLElement
+
+    // Anne er ikke folkepensionist i 2043, så der ses bort fra 54 % af
+    // hendes indkomst — og satsen står på linjen i fladens sædvanlige form
+    // med to decimaler, så de 46 % kan føres tilbage til hendes eget beløb i
+    // hånden.
+    expect(within(blok).getByText('Annes indkomst efter 54,00 % bortseelse')).toBeTruthy()
+    expect(blok.textContent).toContain('Annes arbejdsindkomst indgår slet ikke')
   })
 
   it('lader folkepensionsblokken være væk i årene før folkepensionsalderen', async () => {
@@ -2799,7 +2859,12 @@ describe('fladen', () => {
     await showYearTable(user)
     await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!) // 2026
 
-    expect(screen.queryByRole('heading', { name: 'Folkepensionen', level: 3 })).toBeNull()
+    expect(
+      screen.queryByRole('heading', {
+        name: 'Folkepension og aftrapning af pensionstillæg',
+        level: 3,
+      }),
+    ).toBeNull()
   })
 
   it('viser skattelagene pr. person som en lodret opstilling af grundlag, sats og beløb', async () => {

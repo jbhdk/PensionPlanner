@@ -40,11 +40,12 @@ import {
 } from './holdingVariant'
 import { conversionFactor, isLifeAnnuity } from './lifeAnnuity'
 import { rateYearFor } from './rates/rates'
-import type { RateYear } from './rates/rateYear'
+import type { CivilStatus, RateYear } from './rates/rateYear'
 import { statePensionsInYear } from './statePension'
 import type { ActiveStatePension } from './statePension'
 import { statePensionYear } from './statePensionAge'
 import { assessHousehold, totalHouseholdTax } from './tax/assessHousehold'
+import type { HouseholdTaxAssessment, StatePensionYear } from './tax/assessHousehold'
 import type { TaxAssessmentInput } from './tax/assessTax'
 import { validatePlan } from './validatePlan'
 import { totalYearTax } from './yearTax'
@@ -55,7 +56,6 @@ import type {
   HoldingYear,
   LifeAnnuityBenefit,
   RateBasis,
-  StatePensionYear,
   YearResult,
 } from './yearResult'
 
@@ -305,18 +305,18 @@ function simulateYear(
   // balanceinvarianten er til for.
   const converted = convert(annuities, swept.years)
 
-  // Folkepensionen står intet sted i planen: begge kronebeløb læses af
-  // satsåret, og året, de begynder i, udledes af fødselsdatoen, jf. ADR-0023.
+  // Folkepensionen står intet sted i planen: hvem der får den, udledes af
+  // fødselsdatoen, jf. ADR-0023, og hvad den er, af satsåret. Her afgøres
+  // kun det første — kronebeløbene og aftrapningen af tillægget hører til
+  // husstandssømmet nedenfor.
   //
   // Den opgøres her og ikke længere oppe, fordi den er årets drift og ikke
   // en dateret bevægelse. Den udbetales månedsvis og lander på bufferen,
   // hvor en jævn strøm vejer nul, jf. ADR-0024 — og bogen er lukket, så den
   // kan ikke vejes noget sted alligevel.
-  const statePensions = statePensionsInYear(plan.household, year, rates)
+  const statePensions = statePensionsInYear(plan.household, year)
 
   const expenses = sumOf(entries, 'Expense')
-  const income =
-    sumOf(entries, 'Income') + sumOfBenefits(annuities) + sumOfStatePensions(statePensions)
 
   // Bufferen kan være et aktiedepot eller en opsparingskonto, og dens afkast
   // er da personens egen aktie- eller kapitalindkomst: læste opgørelsen her
@@ -341,13 +341,20 @@ function simulateYear(
           withDeductibility: contributionsByPersonId.get(person.id)!.withDeductibility,
           payouts: payoutOf(swept.payouts, person),
           benefits: sumOfBenefits(annuitiesOf(annuities, person)),
-          statePension: statePensionIncomeOf(statePensions, person),
         }),
         shareIncome: shareIncomeByPerson.get(person.id)!,
+        ...civilStatusOf(statePensions, person),
       })),
     },
     rates,
   )
+
+  // Folkepensionen kommer udefra, ganske som den omsatte livrentes ydelse,
+  // og indgår derfor i årets indtægter — hvor en rate blot flytter penge
+  // mellem husstandens egne lommer, jf. diagram 02. Beløbene er sømmets, og
+  // summen kan derfor først lægges her: tillægget er aftrappet undervejs.
+  const income =
+    sumOf(entries, 'Income') + sumOfBenefits(annuities) + sumOfStatePensions(household)
 
   // Årets restpost lander på bufferen. Den er det ene sted, over- og
   // underskuddet må samle sig, og den må gerne gå negativt — det er modellens
@@ -396,7 +403,7 @@ function simulateYear(
       tax: household.persons[index]!.tax,
       marginal: household.persons[index]!.marginal,
       lifeAnnuityBenefits: benefitsOf(annuities, person),
-      ...statePensionOf(statePensions, person),
+      ...statePensionOf(household.persons[index]!),
       caps: contributionsByPersonId.get(person.id)!.caps,
     })),
     shareIncomeTax: household.shareIncomeTax,
@@ -824,6 +831,12 @@ function shortenToHeadroom(
     kender personlig indkomst uden AM-bidrag, og en rate og et ATP-beløb er
     det samme dér, jf. `PensionIncome` i CONTEXT.md.
 
+    Folkepensionen er derimod **ikke** med. Den lægges til inde i sømmet,
+    efter aftrapningen: den indgår ikke i sit eget aftrapningsgrundlag, jf.
+    PL § 29, stk. 4, nr. 1, og var den lagt til her, kunne grundlaget ikke
+    skilles fra den igen. Det er netop den regel, der gør husstandskoblingen
+    til ét gennemløb frem for en fikspunktsiteration.
+
     Årets indbetaling med `Deductibility` går med som ét tal og udelades, når
     den er nul — så står året uden indbetaling, og fradraget følger
     indbetalingen frem for personen. Årstællingen frem til
@@ -845,7 +858,6 @@ function taxInput(
     withDeductibility: Nominal
     payouts: Nominal
     benefits: Nominal
-    statePension: Nominal
   },
 ): TaxAssessmentInput {
   const ownIncome = (taxTreatment: TaxTreatment) =>
@@ -859,10 +871,7 @@ function taxInput(
       .reduce((sum, { amount }) => sum + amount, 0)
 
   const pensionIncome =
-    ownIncome('PensionIncome') +
-    ofPerson.payouts +
-    ofPerson.benefits +
-    ofPerson.statePension
+    ownIncome('PensionIncome') + ofPerson.payouts + ofPerson.benefits
   const municipalTax = rates.municipalTax.rates[person.municipality]!
 
   return {
@@ -1130,47 +1139,41 @@ function benefitsOf(annuities: ActiveAnnuity[], person: Person): LifeAnnuityBene
   }))
 }
 
-/** Personens folkepension blandt årets, formet så den kan spredes ind i et
-    `PersonYear`: et tomt objekt i årene før folkepensionsalderen, hvor feltet
-    skal være fraværende, og ét felt bagefter.
+/** Personens civilstand blandt årets folkepensionister, formet så den kan
+    spredes ind i husstandssømmets input: et tomt objekt i årene før
+    folkepensionsalderen, hvor feltet skal være fraværende, og ét felt
+    bagefter.
 
     Spredningen frem for en valgfri værdi, så det fraværende felt ikke kan
-    blive til et felt med værdien `undefined` — de to ser ens ud i TypeScript,
-    men ikke i den JSON, en plan eksporteres og importeres som. */
-function statePensionOf(
+    blive til et felt med værdien `undefined` — de to ser ens ud i
+    TypeScript, men ikke i den JSON, en plan eksporteres og importeres som. */
+function civilStatusOf(
   statePensions: ActiveStatePension[],
   person: Person,
-): { statePension?: StatePensionYear } {
+): { statePension?: { civilStatus: CivilStatus } } {
   const line = statePensions.find((statePension) => statePension.owner === person.id)
   if (line === undefined) return {}
-  return {
-    statePension: {
-      basicAmount: line.basicAmount,
-      pensionSupplement: line.pensionSupplement,
-    },
-  }
+  return { statePension: { civilStatus: line.civilStatus } }
 }
 
-/** Personens egen folkepension som ét tal. Den er `PensionIncome` hos den,
-    der modtager den, ganske som en rate og en livrenteydelse er det hos
-    beholdningens ejer — pengene lander på bufferen uanset hvem det er, men
-    skatten gør ikke. Nul i årene før personens folkepensionsalder. */
-function statePensionIncomeOf(
-  statePensions: ActiveStatePension[],
-  person: Person,
-): Nominal {
-  return sumOfStatePensions(
-    statePensions.filter((statePension) => statePension.owner === person.id),
-  )
+/** Personens folkepension, som den står i `PersonYear`. Den kommer fra
+    husstandssømmet og ikke fra `statePensionsInYear`: først dér er tillægget
+    aftrappet, og aftrapningen er husstandens beregning, jf. ADR-0014. */
+function statePensionOf(person: {
+  statePension?: StatePensionYear
+}): { statePension?: StatePensionYear } {
+  return person.statePension === undefined ? {} : { statePension: person.statePension }
 }
 
-/** Summen af årets folkepension i husstanden. Begge kronebeløb er penge
-    udefra og lægges sammen her — de står hver for sig i `PersonYear`, hvor
-    udregningen skal kunne ses, og som ét tal her, hvor det er husstandens
-    pengestrøm, der opgøres. */
-function sumOfStatePensions(statePensions: ActiveStatePension[]): Nominal {
-  return statePensions.reduce(
-    (sum, statePension) => sum + statePension.basicAmount + statePension.pensionSupplement,
+/** Summen af årets folkepension i husstanden, med tillægget aftrappet.
+    Begge kronebeløb er penge udefra og lægges sammen her — de står hver for
+    sig i `PersonYear`, hvor udregningen skal kunne ses, og som ét tal her,
+    hvor det er husstandens pengestrøm, der opgøres. */
+function sumOfStatePensions(household: HouseholdTaxAssessment): Nominal {
+  return household.persons.reduce(
+    (sum, { statePension }) =>
+      sum +
+      (statePension ? statePension.basicAmount + statePension.pensionSupplement : 0),
     0,
   )
 }

@@ -8,6 +8,7 @@ import type {
   Plan,
 } from './plan'
 import { simulate } from './simulate'
+import { totalTaperBase } from './tax/assessHousehold'
 import { totalTax } from './tax/assessTax'
 import { validatePlan } from './validatePlan'
 import {
@@ -4103,6 +4104,13 @@ describe('folkepensionen', () => {
 
   const statePensionIn = (year: YearResult) => year.persons[0]!.statePension
 
+  /** Folkepensionens to kronebeløb alene. Linjen bærer også hele
+      aftrapningsregnestykket, og prøverne herunder handler om beløbene. */
+  const amountsIn = (year: YearResult) => {
+    const line = statePensionIn(year)!
+    return { basicAmount: line.basicAmount, pensionSupplement: line.pensionSupplement }
+  }
+
   /** Fixturens person plus en ægtefælle, der er folkepensionist i forvejen.
       Husstanden er dermed to, og ingen af dem er enlig. */
   function aPlanWithSpouse(): Plan {
@@ -4137,11 +4145,12 @@ describe('folkepensionen', () => {
 
   it('lader grundbeløbet og pensionstillægget begynde i folkepensionsåret', () => {
     // Satsårets to kronebeløb for en enlig, jf. docs/satser/2026.md.
-    // Aftrapningen er ikke bygget, og tillægget udbetales derfor fuldt.
+    // Planen har ingen indkomst, og aftrapningen har derfor intet at tage af:
+    // tillægget udbetales fuldt.
     const years = simulateChecked(aPlan({ horizon: 70 }))
 
     expect(statePensionIn(years.find((y) => y.year === statePensionYear - 1)!)).toBeUndefined()
-    expect(statePensionIn(years.find((y) => y.year === statePensionYear)!)).toEqual({
+    expect(amountsIn(years.find((y) => y.year === statePensionYear)!)).toEqual({
       basicAmount: 90_528,
       pensionSupplement: 104_748,
     })
@@ -4221,12 +4230,13 @@ describe('folkepensionen', () => {
   it('lader grundbeløbet være fladt uanset arbejdsindkomst', () => {
     // Aftrapningen af grundbeløbet efter egen arbejdsindkomst blev afskaffet
     // med virkning fra 2023. En folkepensionist, der arbejder videre, får
-    // stadig hele grundbeløbet — og i denne skive også hele tillægget.
+    // stadig hele grundbeløbet — og hele tillægget, for arbejdsindkomst står
+    // uden for aftrapningsgrundlaget.
     const years = simulateChecked(
       aPlan({ horizon: 70, entries: [aSalary({ amountInRealKroner: 1_200_000 })] }),
     )
 
-    expect(statePensionIn(years.find((y) => y.year === statePensionYear)!)).toEqual({
+    expect(amountsIn(years.find((y) => y.year === statePensionYear)!)).toEqual({
       basicAmount: 90_528,
       pensionSupplement: 104_748,
     })
@@ -4239,7 +4249,7 @@ describe('folkepensionen', () => {
     // ingen af dem enlig.
     const years = simulateChecked(aPlanWithSpouse())
 
-    expect(statePensionIn(years.find((y) => y.year === statePensionYear)!)).toEqual({
+    expect(amountsIn(years.find((y) => y.year === statePensionYear)!)).toEqual({
       basicAmount: 90_528,
       pensionSupplement: 53_604,
     })
@@ -4259,6 +4269,197 @@ describe('folkepensionen', () => {
     expect(year.rateBasis).toEqual({ knownYear: 2026, projected: true })
     expect(statePensionIn(year)!.basicAmount).toBeCloseTo(90_528 * factor, 6)
     expect(statePensionIn(year)!.pensionSupplement).toBeCloseTo(104_748 * factor, 6)
+  })
+})
+
+describe('aftrapningen af pensionstillægget', () => {
+  /** Fixturens person er født i juni 1973 og er folkepensionist fra 2043.
+      Satsårets tal for en enlig, jf. docs/satser/2026.md: 104.748 kr. i
+      fuldt tillæg, 99.200 kr. i fradragsbeløb og 30,9 % aftrapning. */
+  const statePensionYear = 2043
+
+  const taperIn = (years: YearResult[], year = statePensionYear) =>
+    years.find((y) => y.year === year)!.persons[0]!.statePension!
+
+  it('tæller rater, livrenteydelser og ATP med i aftrapningsgrundlaget', () => {
+    // De tre indtægter, aftrapningen rammer, hver ad sin vej gennem motoren:
+    // raten som en udbetaling fra en beholdning, ydelsen som en `Benefit`
+    // uden saldo, og ATP som en indtægtspost med `PensionIncome`. Skatten
+    // kender dem ikke fra hinanden, og aftrapningen gør heller ikke.
+    //
+    //   rate, 1.000.000 over ti år      100.000
+    //   livrenteydelse, 2.000.000×0,055 110.000
+    //   ATP                              60.000
+    //                                   ───────
+    //   grundlag                        270.000
+    //   270.000 − 99.200 = 170.800 over fradragsbeløbet
+    //   30,9 % af 170.800 =  52.777,20
+    //   104.748 − 52.777,20 = 51.970,80
+    const years = simulateChecked(
+      aPlan({
+        horizon: 70,
+        balance: 0,
+        entries: [aPensionIncome({ amountInRealKroner: 60_000 })],
+        holdings: [
+          {
+            id: 'ratepension',
+            name: 'Ratepension',
+            variant: 'InstalmentPension',
+            openedOn: { year: 2018, month: 1 },
+            balance: 1_000_000,
+            grossReturn: 0,
+            annualCostRate: 0,
+            payout: { start: 67, duration: 10, principle: 'SerialPrinciple' },
+          },
+          {
+            id: 'livrente',
+            name: 'Livrente',
+            variant: 'LifeAnnuity',
+            openedOn: { year: 2018, month: 1 },
+            balance: 2_000_000,
+            grossReturn: 0,
+            annualCostRate: 0,
+            quotedReserve: 1_000_000,
+            quotedAnnualBenefit: 55_000,
+            bonusRate: 0,
+            payout: { start: 67 },
+          },
+        ],
+      }),
+    )
+
+    const { taper, pensionSupplement } = taperIn(years)
+
+    // Grundlaget står som sine bestanddele, så forklar-året kan vise præcis
+    // hvilken indkomst der kostede tillæg.
+    expect(taper.base).toEqual({
+      pensionIncome: expect.closeTo(270_000, 6),
+      capitalIncome: 0,
+      shareIncome: 0,
+      spouse: 0,
+    })
+    expect(taper.fullSupplement).toBeCloseTo(104_748, 6)
+    expect(taper.allowance).toBeCloseTo(99_200, 6)
+    expect(taper.rate).toBeCloseTo(0.309, 10)
+    expect(pensionSupplement).toBeCloseTo(51_970.8, 6)
+  })
+
+  it('holder arbejdsindkomst, aldersopsparing og aktiesparekonto ude af grundlaget', () => {
+    // De tre, der ikke tæller med. En folkepensionist med en million i løn,
+    // en aldersopsparing hun tømmer, og en aktiesparekonto der forrenter sig,
+    // beholder hele sit tillæg — grundlaget er nul.
+    //
+    // Aldersopsparingen tømmes af en overførsel og ikke af en
+    // udbetalingsplan, jf. ADR-0022, og aktiesparekontoens afkast bæres af
+    // beholdningen selv og er ingen persons aktieindkomst.
+    const years = simulateChecked(
+      aPlan({
+        horizon: 70,
+        balance: 0,
+        entries: [aSalary({ amountInRealKroner: 1_000_000 })],
+        transfers: [
+          // Aldersopsparingen er oprettet før maj 2007 og må først tømmes
+          // fra 60 år, altså 2033.
+          aTransfer({
+            from: 'aldersopsparing',
+            to: 'free-assets',
+            amountInRealKroner: 80_000,
+            period: { anchor: 'CalendarYear', from: 2033 },
+          }),
+        ],
+        holdings: [
+          {
+            id: 'aldersopsparing',
+            name: 'Aldersopsparing',
+            variant: 'OldAgeSavings',
+            openedOn: { year: 2000, month: 1 },
+            balance: 2_000_000,
+            grossReturn: 0,
+            annualCostRate: 0,
+          },
+          {
+            id: 'aktiesparekonto',
+            name: 'Aktiesparekonto',
+            variant: 'ShareSavingsAccount',
+            balance: 174_200,
+            grossReturn: 0.07,
+            annualCostRate: 0,
+          },
+        ],
+      }),
+    )
+
+    const { taper, pensionSupplement } = taperIn(years)
+
+    expect(totalTaperBase(taper.base)).toBe(0)
+    expect(pensionSupplement).toBeCloseTo(104_748, 6)
+  })
+
+  it('skifter både aftrapningsprocenten og bortseelsen i det år, ægtefællen selv bliver pensionist', () => {
+    // De to hører sammen og må ikke anvendes hver for sig, jf. PL § 49,
+    // stk. 1, nr. 4. Jesper er folkepensionist fra 2043, Anne fra 2044.
+    //
+    //   2043, Anne endnu ikke pensionist — 32 % og 54 % bortseelse
+    //     grundlag  150.000 + 46 % af 300.000 = 288.000
+    //     32 % af (288.000 − 198.800)         =  28.544
+    //     53.604 − 28.544                     =  25.060
+    //
+    //   2044, Anne er nu pensionist — 16 % og ingen bortseelse
+    //     grundlag  150.000 + 300.000         = 450.000
+    //     16 % af (450.000 − 198.800)         =  40.192
+    //     53.604 − 40.192                     =  13.412
+    //
+    // Anvendtes de 54 % med de 16 %, ville tillægget være 29.412 kr. — over
+    // det dobbelte af det rigtige.
+    const base = aPlan({
+      horizon: 75,
+      balance: 0,
+      entries: [aPensionIncome({ amountInRealKroner: 150_000 })],
+    })
+    const years = simulateChecked({
+      ...base,
+      entries: [
+        ...base.entries,
+        {
+          ...aPensionIncome({ amountInRealKroner: 300_000, owner: 'anne' }),
+          id: 'annes-atp',
+        },
+      ],
+      household: {
+        persons: [
+          ...base.household.persons,
+          {
+            id: 'anne',
+            name: 'Anne',
+            birthYear: 1974,
+            birthMonth: 6,
+            workEndAge: 60,
+            horizon: 74,
+            municipality: 'Hvidovre',
+            churchMember: true,
+            holdings: [
+              aHolding({
+                id: 'annes-frie-midler',
+                name: 'Annes frie midler',
+                variant: 'SavingsAccount',
+                balance: 0,
+              }),
+            ],
+          },
+        ],
+      },
+    })
+
+    const withNonPensioner = taperIn(years, 2043)
+    const withPensioner = taperIn(years, 2044)
+
+    expect(withNonPensioner.taper.rate).toBeCloseTo(0.32, 10)
+    expect(withNonPensioner.taper.base.spouse).toBeCloseTo(138_000, 6)
+    expect(withNonPensioner.pensionSupplement).toBeCloseTo(25_060, 6)
+
+    expect(withPensioner.taper.rate).toBeCloseTo(0.16, 10)
+    expect(withPensioner.taper.base.spouse).toBeCloseTo(300_000, 6)
+    expect(withPensioner.pensionSupplement).toBeCloseTo(13_412, 6)
   })
 })
 

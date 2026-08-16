@@ -1047,6 +1047,34 @@ table.aar td .fremskrevet {
   font-variant-numeric: tabular-nums;
 }
 
+/* Regnestriben: en fratrækning vist som linjer, der lægges sammen og trækkes
+   fra, jf. mock-uppens `regn`. Indrykningen siger, at linjen er et led i
+   summen ovenover eller nedenunder, og stregerne, hvor der gøres op. */
+.regnestribe {
+  margin-top: 10px;
+}
+
+.regnestribe + .regnestribe {
+  margin-top: 16px;
+}
+
+.stribepost.step .m {
+  padding-left: 14px;
+}
+
+.stribepost.subtotal,
+.stribepost.total {
+  border-top: 1px solid var(--linje);
+}
+
+.stribepost.total {
+  font-weight: 600;
+}
+
+.stribepost.total .m {
+  color: inherit;
+}
+
 .lagtabel,
 .beholdningstabel,
 .postertabel,
