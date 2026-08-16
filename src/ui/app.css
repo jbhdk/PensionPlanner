@@ -742,6 +742,13 @@ table.aar th,
   font-family: var(--f-broed);
 }
 
+/* Årets klikfelt i overskudsgrafen dækker hele søjlens højde og er usynligt:
+   det er ikke en flade i grafen, men det areal, klikket må ramme. */
+.overskudsgraf .aarsfelt {
+  fill: transparent;
+  cursor: pointer;
+}
+
 /* Aksernes gitterlinjer er tilbagetrukne — data er det, der skal ses, jf.
    dataviz-skillets "recessive grid/axes". Basislinjen ved 0 er trukket
    svagt frem, så bunden af stablingen er til at følge. */

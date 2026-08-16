@@ -2677,6 +2677,33 @@ describe('fladen', () => {
     expect(screen.queryByRole('img', { name: 'Formuegraf' })).toBeNull()
   })
 
+  it('har Overskuddet som tredje visning mellem Formuen og Årstabellen', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+
+    const omskifter = document.querySelector('.omskifter')!
+    expect(
+      Array.from(omskifter.querySelectorAll('button')).map((knap) => knap.textContent),
+    ).toEqual(['Formuen', 'Overskuddet', 'Årstabellen'])
+
+    await user.click(screen.getByRole('button', { name: 'Overskuddet' }))
+
+    expect(screen.getByRole('button', { name: 'Overskuddet', pressed: true })).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'Overskudsgraf' })).toBeTruthy()
+    expect(screen.queryByRole('img', { name: 'Formuegraf' })).toBeNull()
+    expect(screen.queryByRole('table')).toBeNull()
+  })
+
+  it('åbner forklar-året ved klik på en søjle i overskudsgrafen', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+    await user.click(screen.getByRole('button', { name: 'Overskuddet' }))
+
+    await user.click(document.querySelector('svg rect[data-year="2027"]')!)
+
+    expect(screen.getByRole('heading', { name: '2027' })).toBeTruthy()
+  })
+
   it('åbner forklar-året ved klik på en årsrække, og fører tilbage til tabellen', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)

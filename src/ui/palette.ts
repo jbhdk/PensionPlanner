@@ -6,7 +6,7 @@ import type { Household } from '../engine/plan'
     `scripts/validate_palette.js` (CVD-adskillelse ≥ 8 ΔE, kontrast ≥ 3:1 på
     `--flade`). En niende beholdning genbruger paletten frem for at få en
     ny, uvalideret farve. */
-const CATEGORICAL_PALETTE = [
+export const CATEGORICAL_PALETTE = [
   '#3987e5', // blå
   '#d95926', // orange
   '#199e70', // aqua
@@ -32,4 +32,20 @@ export function orderedHoldings(household: Household) {
 
 export function holdingColor(holdingIndex: number): string {
   return CATEGORICAL_PALETTE[holdingIndex % CATEGORICAL_PALETTE.length]!
+}
+
+// Overskudsgrafens to toner, taget fra den samme validerede palette frem for
+// fundet på. Aqua og violet står langt fra hinanden i både kulør og lyshed,
+// så fortegnsskiftet ses på en skærmfuld søjler uden at aksen læses.
+//
+// Underskuddet er violet og ikke rød: rød er forbeholdt den negative buffer
+// alene, jf. `app.css`, og et underskud er ingen fejltilstand — det er
+// beløbet, der mangler at blive flyttet, jf. ADR-0026.
+const SURPLUS = CATEGORICAL_PALETTE[2]!
+const DEFICIT = CATEGORICAL_PALETTE[6]!
+
+/** Årets overskud er ét begreb og to ord, og fortegnet er det, der skiller
+    dem — derfor én funktion af beløbet og ikke to farver at vælge imellem. */
+export function surplusColor(amount: number): string {
+  return amount < 0 ? DEFICIT : SURPLUS
 }

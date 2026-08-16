@@ -8,6 +8,7 @@ import { savePlan, storedPlanText } from '../persistence/planStorage'
 import { Inspector } from './Inspector'
 import { Navigator } from './Navigator'
 import type { AmountUnit } from './real'
+import { SurplusChart } from './SurplusChart'
 import { WealthChart } from './WealthChart'
 import { YearExplanation } from './YearExplanation'
 import { YearTable } from './YearTable'
@@ -28,10 +29,12 @@ function download(contents: string, filename: string): void {
 
 /** Resultatspaltens visninger. Formuen er standardfanen, jf. issue #12 —
     man justerer i navigatoren og konstaterer visuelt på grafen, om planen
-    holder; tabellen er laget man går ned i bagefter. Forklar-året er ikke en
-    tredje fane, men en visning der overtager resultatspalten helt, jf.
-    issue #13 — den har sin egen vej tilbage til Årstabellen. */
-type ResultView = 'Wealth' | 'YearTable' | 'YearExplanation'
+    holder; tabellen er laget man går ned i bagefter. Overskuddet står
+    imellem dem: samme år, men strømmene frem for niveauet, jf. ADR-0026.
+    Forklar-året er ikke en fjerde fane, men en visning der overtager
+    resultatspalten helt, jf. issue #13 — den har sin egen vej tilbage til
+    Årstabellen. */
+type ResultView = 'Wealth' | 'Surplus' | 'YearTable' | 'YearExplanation'
 
 /** Fladen: topbjælken, navigatoren til venstre, resultatspalten til højre og
     inspektørskuffen, der glider ind over resultatet, når en linje vælges.
@@ -215,6 +218,12 @@ export function App({
                     Formuen
                   </button>
                   <button
+                    aria-pressed={resultView === 'Surplus'}
+                    onClick={() => setResultView('Surplus')}
+                  >
+                    Overskuddet
+                  </button>
+                  <button
                     aria-pressed={resultView === 'YearTable'}
                     onClick={() => setResultView('YearTable')}
                   >
@@ -242,6 +251,13 @@ export function App({
                   unit={unit}
                   selected={selected}
                   onSelect={setSelected}
+                />
+              ) : resultView === 'Surplus' ? (
+                <SurplusChart
+                  years={years}
+                  plan={plan}
+                  unit={unit}
+                  onSelectYear={explainYear}
                 />
               ) : (
                 <YearTable years={years} plan={plan} unit={unit} onSelectYear={explainYear} />
