@@ -283,12 +283,13 @@ export function aPensionIncome(options: {
 /** Et lønkildet bidrag. Det bærer hverken periode, forankring, gentagelse
     eller forfald — dem arver det fra sin lønpost, jf. ADR-0016. */
 export function aContribution(
-  options: { source: string; to: string } & (
+  options: { id?: string; source: string; to: string } & (
     | { percentageOfEntry: number }
     | { amountInRealKroner: number }
   ),
 ): Contribution {
-  return { id: 'contribution', kind: 'EntrySourced', ...options }
+  const { id = 'contribution', ...rest } = options
+  return { id, kind: 'EntrySourced', ...rest }
 }
 
 /** Et beholdningskildet bidrag. Det har ingen post at arve fra og bærer
@@ -296,6 +297,7 @@ export function aContribution(
     gør. Beløbet er altid et fast kronebeløb: en procent skal have en post at
     måle af, og den har det her ikke. */
 export function aHoldingContribution(options: {
+  id?: string
   source: string
   to: string
   amountInRealKroner: number
@@ -304,7 +306,7 @@ export function aHoldingContribution(options: {
   recurrence?: Recurrence
 }): Contribution {
   return {
-    id: 'contribution',
+    id: options.id ?? 'contribution',
     kind: 'HoldingSourced',
     source: options.source,
     to: options.to,
@@ -313,4 +315,134 @@ export function aHoldingContribution(options: {
     period: options.period ?? wholeHorizon,
     recurrence: options.recurrence ?? annually,
   }
+}
+
+/** En plan, hvor hver slags bevægelse på bufferen faktisk forekommer:
+    indtægts- og udgiftsposter, folkepension og en omsat livrentes ydelse,
+    rater, overførsler både ind og ud, og indbetalinger fra både lønnen og
+    bufferen selv. Dertil de to slags bevægelser, der netop **ikke** rører
+    bufferen — en indbetaling fra en anden beholdning, og en overførsel, hvor
+    ingen af enderne er bufferen.
+
+    Den findes, fordi en opdeling af årets overskud kun kan prøves på en
+    plan, hvor hver del faktisk er der: en del, der er nul hele vejen, kan
+    ikke gå fejl af sin kilde. Aktiesparekontoen og de tre ordninger bærer
+    desuden beholdningsskat, hvor bufferen og aktiedepotet ikke gør — deres
+    afkast beskattes hos personen og husstanden. */
+export function aPlanWithEveryBufferFlow(): Plan {
+  return aPlan({
+    horizon: 84,
+    balance: 1_500_000,
+    grossReturn: 0.03,
+    annualCostRate: 0.002,
+    holdings: [
+      aHolding({
+        id: 'aktiedepot',
+        name: 'Aktiedepot',
+        variant: 'ShareDepot',
+        balance: 1_000_000,
+        grossReturn: 0.05,
+        annualCostRate: 0.004,
+      }),
+      aHolding({
+        id: 'aktiesparekonto',
+        name: 'Aktiesparekonto',
+        variant: 'ShareSavingsAccount',
+        balance: 100_000,
+        grossReturn: 0.05,
+        annualCostRate: 0.004,
+      }),
+      {
+        id: 'ratepension',
+        name: 'Ratepension',
+        variant: 'InstalmentPension',
+        openedOn: { year: 2018, month: 1 },
+        balance: 1_500_000,
+        grossReturn: 0.04,
+        annualCostRate: 0.005,
+        payout: { start: 67, duration: 15, principle: 'AnnuityPrinciple' },
+      },
+      {
+        id: 'livrente',
+        name: 'Livrente',
+        variant: 'LifeAnnuity',
+        openedOn: { year: 2018, month: 1 },
+        balance: 800_000,
+        grossReturn: 0.04,
+        annualCostRate: 0.005,
+        quotedReserve: 1_000_000,
+        quotedAnnualBenefit: 50_000,
+        bonusRate: 0.01,
+        payout: { start: 68 },
+      },
+      aHolding({
+        id: 'aldersopsparing',
+        name: 'Aldersopsparing',
+        variant: 'OldAgeSavings',
+        balance: 300_000,
+        grossReturn: 0.03,
+        annualCostRate: 0.004,
+      }),
+    ],
+    entries: [
+      aSalary({
+        amountInRealKroner: 800_000,
+        period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+      }),
+      // ATP er en post og ingen ydelse, jf. ADR-0023.
+      aPensionIncome({ amountInRealKroner: 30_000, period: { anchor: 'PersonAge', from: 70 } }),
+      anExpense({ amountInRealKroner: 400_000 }),
+    ],
+    contributions: [
+      // Lønkildet: kilden er bufferen, for lønnen landede der først.
+      aContribution({
+        id: 'loenbidrag',
+        source: 'salary',
+        to: 'ratepension',
+        percentageOfEntry: 0.1,
+      }),
+      // Beholdningskildet fra bufferen selv — tæller med.
+      aHoldingContribution({
+        id: 'bufferbidrag',
+        source: 'free-assets',
+        to: 'aldersopsparing',
+        amountInRealKroner: 10_000,
+        period: { anchor: 'CalendarYear', to: 2031 },
+      }),
+      // Beholdningskildet fra en anden beholdning — pengene forlader aldrig
+      // aktiedepotet, og bufferen mærker det ikke.
+      aHoldingContribution({
+        id: 'depotbidrag',
+        source: 'aktiedepot',
+        to: 'aktiesparekonto',
+        amountInRealKroner: 20_000,
+        period: { anchor: 'CalendarYear', to: 2031 },
+      }),
+    ],
+    transfers: [
+      // Overskuddet sættes til side i arbejdsårene og hentes hjem bagefter.
+      aTransfer({
+        id: 'opsparing',
+        from: 'free-assets',
+        to: 'aktiedepot',
+        amountInRealKroner: 200_000,
+        period: { anchor: 'CalendarYear', to: 2031 },
+      }),
+      aTransfer({
+        id: 'hjemtagning',
+        from: 'aktiedepot',
+        to: 'free-assets',
+        amountInRealKroner: 150_000,
+        period: { anchor: 'CalendarYear', from: 2032 },
+      }),
+      // Ingen af enderne er bufferen.
+      aTransfer({
+        id: 'omplacering',
+        from: 'aldersopsparing',
+        to: 'aktiedepot',
+        amountInRealKroner: 25_000,
+        period: { anchor: 'PersonAge', from: 72 },
+      }),
+    ],
+  })
 }
