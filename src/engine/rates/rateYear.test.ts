@@ -131,10 +131,16 @@ describe('satsår 2026', () => {
       expect(block.source, `blokken ${name} har ingen kilde`).toMatch(/^https:\/\//)
     }
 
-    // Folkepensionens ydelser er krydstjekket mellem sekundære kilder, men
-    // ikke fundet i en officiel tabel. Mærket følger med ind i dataene, så et
-    // ubekræftet tal ikke kan nå ind i en facitcase ubemærket.
-    expect(rateYear2026.statePension.unconfirmed).toContain('basicAmount')
+    // Folkepensionens ydelser, fradragsbeløb, aftrapningsprocenter og
+    // bortseelse stod ⚠︎, indtil de blev fundet i Beskæftigelsesministeriets
+    // egen vejledning om regulering pr. 1. januar 2026 — tabel 12 og 15, med
+    // paragrafhenvisning på hver linje. Mærket er fjernet samme dag, jf.
+    // docs/satser/2026.md.
+    expect(rateYear2026.statePension.unconfirmed).toEqual([])
+
+    // Bortfaldsgrænserne står ikke i vejledningen: de er de eneste tal i
+    // blokken, der er udledt frem for hentet, og selvkontrollen herover er
+    // dermed den kilde, de har.
 
     // § 20-tabellen er Skatteministeriets egen, de fire lag på personlig
     // indkomst står på skat.dk selv, og fradragsprocenterne står dels på

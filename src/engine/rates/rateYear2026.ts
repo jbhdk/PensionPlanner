@@ -184,8 +184,12 @@ export const rateYear2026: RateYear = {
 
   statePension: {
     source:
-      'https://www.borger.dk/pension-og-efterloen/Folkepension-oversigt/foer-du-gaar-paa-folkepension/Folkepension-grundbeloeb-pensionstillaeg',
-    unconfirmed: ['basicAmount', 'taper'],
+      'https://www.retsinformation.dk/eli/retsinfo/2026/9336 — VEJ nr 9336 af ' +
+      '24/03/2026, tabel 12 (ydelserne) og tabel 15 (fradragsbeløb, ' +
+      'aftrapningsprocenter og bortseelsen). Bortfaldsgrænserne står ikke i ' +
+      'tabellen: de udledes af de tre andre, jf. selvkontrollen i ' +
+      'docs/satser/2026.md',
+    unconfirmed: [],
     basicAmount: 90_528,
     taper: [
       {
