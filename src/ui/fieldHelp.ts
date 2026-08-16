@@ -46,8 +46,8 @@
     `Period` og deler forklaring. For en tabelkolonne er "én ting" kolonnen,
     for en kolonne kan lægge sammen, trække fra eller skifte felt under
     overskriften, og læseren ser stadig kun én ting — se `CapYear.paid`, som
-    viser to forskellige tal alt efter loftets form, og `YearTable.surplus`,
-    som lægger fire tal fra samme beholdningsår sammen.
+    viser to forskellige tal alt efter loftets form, og `Surplus`, som
+    lægger fire tal fra samme beholdningsår sammen.
 
     Dækningen er total: hver etiket i skuffen og hver kolonneoverskrift i
     tabellerne har et opslag, uden undtagelse. Netop derfor er der ingen
@@ -271,8 +271,41 @@ export const fieldHelp = {
   'YearResult.expenses':
     'Alt, hvad husstanden brugte i året, lagt sammen fra planens udgiftsposter.',
 
-  'YearTable.surplus':
+  Surplus:
     'Hvad der blev til overs af det, året lagde ind på bufferbeholdningen og tog fra den. Afkastet tæller ikke med — det bliver stående, hvor det er tjent — mens skatten af det gør, for den skal betales. Et minus er det beløb, der mangler at blive flyttet fra en anden beholdning, og ikke et tegn på, at pengene ikke findes.',
+
+  'SurplusBand.IncomeEntries':
+    'Det, husstanden fik ind udefra i året — løn, ATP og hvad planen ellers navngiver på den side. Kun det, der landede på bufferbeholdningen, tæller med; penge hentet op fra en ordning er noget husstanden havde i forvejen og står for sig.',
+
+  'SurplusBand.Benefits':
+    'De faste beløb, der kommer ind uden en saldo bag sig: folkepensionens grundbeløb og pensionstillæg, og hvad en omsat livrente betaler hvert år. De er hverken tastet som en post eller hævet fra en beholdning, men de lander på bufferbeholdningen som alt andet.',
+
+  'SurplusBand.Payouts':
+    'Det, ordningerne tilsammen tømte sig med i året. Pengene flytter sig blot over på bufferbeholdningen — husstanden havde dem i forvejen — og kun skatten af dem forsvinder. De er dér, året henter sine penge, når lønnen er hørt op.',
+
+  'SurplusBand.TransfersIn':
+    'Penge, planen hentede hjem fra en anden beholdning og over på bufferbeholdningen. Formuen er den samme bagefter, men beløbet står nu dér, hvor årets regninger betales fra, og det er netop dét, et år med for lidt mangler.',
+
+  'SurplusBand.Tax':
+    'Alt, året kostede i personlige afgifter til det offentlige — ikke det, ordningerne selv trækker af deres eget afkast. Beløbet er større, end de synlige indtægter kan forklare, fordi afkast uden for ordningerne også beskattes, mens afkastet selv ikke tæller med her.',
+
+  'TaxAssessment.total':
+    'Hvad personen selv betaler i indkomstskat i året, alle lag lagt sammen. Aktieindkomstens del står ikke med her: den regnes af husstandens samlede gevinst på aktier og kan ikke deles mellem to.',
+
+  'HouseholdTaxAssessment.shareIncomeTax':
+    'Hvad husstanden betaler af gevinst og udbytte på aktier og aktiebaserede fonde i året. Den regnes under ét for begge i husstanden, fordi den lave sats gælder op til en fælles grænse, der kan flyttes mellem ægtefæller.',
+
+  ReturnTax:
+    'Den del af årets regning, der kommer af, hvad formuen har tjent uden for ordningerne. Den er med i beløbet ovenfor, mens gevinsten selv ikke er: den bliver stående, hvor den er tjent, og bliver først til penge, der kan bruges, den dag der hæves.',
+
+  'SurplusBand.ExpenseEntries':
+    'Alt, husstanden brugte i året, lagt sammen fra de linjer i planen, der koster penge. De vokser med den antagne prisstigning hele forløbet igennem og er dét, årets indtægter først og fremmest måles mod.',
+
+  'SurplusBand.Contributions':
+    'Det, der i året gik fra bufferbeholdningen og ind i en ordning. Pengene er ikke væk, blot bundet et andet sted, men de forlader den beholdning, årets regninger betales fra. Beløbet er det, der landede i ordningen; arbejdsmarkedsbidraget af det ligger i årets skat.',
+
+  'SurplusBand.TransfersOut':
+    'Penge, planen satte til side på en anden beholdning i året. Formuen er den samme bagefter, men beløbet står ikke længere dér, hvor årets regninger betales fra.',
 
   'YearTable.buffer':
     'Hvad der stod tilbage på bufferbeholdningen ved årets udgang. Går den i minus, mangler planen penge netop dér — enten fordi de står bundet et andet sted, eller fordi de slet ikke er der.',

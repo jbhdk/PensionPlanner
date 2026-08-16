@@ -164,9 +164,91 @@ function yearCell(rowIndex: number, column: string): string | null {
   return within(rows[rowIndex]!).getAllByRole('cell')[headers.indexOf(column)]!.textContent
 }
 
+/** Åbner forklar-året for et bestemt simuleringsår. Året slås op på sin
+    egen celle frem for på et rækkenummer — en plan, der får et år mere,
+    ville ellers flytte hver eneste test. */
+async function explainYear(user: ReturnType<typeof userEvent.setup>, year: number) {
+  await user.click(within(screen.getByRole('table')).getAllByRole('row')[yearRow(year)]!)
+}
+
+/** Rækkenummeret for et simuleringsår i årstabellen. Årstallet bærer en
+    stjerne i de fremskrevne år, og cellen sammenlignes derfor på sin
+    begyndelse. */
+function yearRow(year: number): number {
+  const index = within(screen.getByRole('table'))
+    .getAllByRole('row')
+    .findIndex((candidate) =>
+      candidate.querySelector('td')?.textContent?.startsWith(String(year)),
+    )
+  if (index < 0) throw new Error(`Årstabellen har ingen række for ${year}.`)
+  return index
+}
+
 /** Årstabellen ligger bag sin egen fane, med Formuen som standardfane. */
 async function showYearTable(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
+}
+
+/** Overskudsblokken i forklar-året — skærmens rygrad, som båndene og deres
+    linjer hænger i. */
+function surplusBlock(): HTMLElement {
+  return screen
+    .getByRole('heading', { name: 'Årets overskud', level: 3 })
+    .closest('.blok') as HTMLElement
+}
+
+/** Åbner et bånds fold og giver den frem. Båndet er skærmens rygrad, og
+    linjerne under det er de poster, rater, ydelser, overførsler og
+    indbetalinger, året faktisk indeholdt. */
+async function openBand(
+  user: ReturnType<typeof userEvent.setup>,
+  label: string,
+): Promise<HTMLElement> {
+  const summary = [...surplusBlock().querySelectorAll<HTMLElement>('summary')].find(
+    (candidate) => candidate.querySelector('.m')?.textContent === label,
+  )
+  if (!summary) throw new Error(`Overskudsblokken har intet foldbart bånd for ${label}.`)
+  await user.click(summary)
+  const details = summary.closest('details') as HTMLDetailsElement
+  expect(details.open, `${label} åbnede ikke`).toBe(true)
+  return details
+}
+
+/** Etiketterne i overskudsblokkens stribe, i den rækkefølge de står, uden
+    slutsummen. */
+function surplusBandLabels(): (string | null)[] {
+  return bandPosts().map((post) => post.querySelector('.m')?.textContent ?? null)
+}
+
+/** Båndenes beløb som tal, så striben kan lægges sammen og holdes op mod
+    slutsummen — præcis den regning, brugeren selv ville lave. */
+function surplusBandTotal(): number {
+  return bandPosts().reduce(
+    (total, post) => total + parseKroner(post.querySelector('.v')?.textContent ?? ''),
+    0,
+  )
+}
+
+function bandPosts(): HTMLElement[] {
+  // Kun båndenes egne linjer: et bånd står enten som en stribelinje for sig
+  // eller som hovedet på sin fold, og linjerne inde i folden er ikke bånd.
+  return [
+    ...surplusBlock().querySelectorAll<HTMLElement>(
+      ':scope > .stribepost:not(.total), :scope > .baand > summary > .stribepost',
+    ),
+  ]
+}
+
+/** Et beløb som det står på skærmen, læst tilbage til et tal. */
+function parseKroner(text: string): number {
+  return Number(text.replace(/\./g, '').replace('−', '-'))
+}
+
+/** Et beløb i en af forklar-årets regnestriber, slået op på sin etiket. */
+function stripeAmount(container: HTMLElement, label: string): string | null | undefined {
+  return Array.from(container.querySelectorAll('.stribepost'))
+    .find((post) => post.querySelector('.m')?.textContent === label)
+    ?.querySelector('.v')?.textContent
 }
 
 /** Lofttabellens rækker i forklar-året, celle for celle. */
@@ -202,6 +284,63 @@ function lagSats(label: string): string {
 function navigatorButton(name: string | RegExp) {
   const navigatorspalte = document.querySelector('.navigatorspalte') as HTMLElement
   return within(navigatorspalte).getByRole('button', { name })
+}
+
+/** En plan, hvis allerførste år rører alle otte bånd: løn og en fast
+    udgift, en ratepension der udbetaler, en livrente der omsættes med det
+    samme, et lønkildet bidrag, og en overførsel i hver retning med bufferen
+    i den ene ende. De bevarede udbetalingsaldre er 53 — den alder, ejeren
+    fylder i 2026 — så året kan læses uden at rulle fjorten år frem.
+
+    Fixturens `aPlanWithEveryBufferFlow` rører også dem alle, men aldrig i
+    samme år: dens overførsler skifter retning ved erhvervsophøret. */
+function aPlanWithEveryBand(): Plan {
+  return aPlan({
+    startYear: 2026,
+    birthYear: 1973,
+    horizon: 55,
+    balance: 1_000_000,
+    holdings: [
+      {
+        id: 'ratepension',
+        name: 'Ratepension',
+        variant: 'InstalmentPension',
+        openedOn: { year: 2018, month: 1 },
+        payoutAgeOverride: 53,
+        balance: 1_000_000,
+        grossReturn: 0,
+        annualCostRate: 0,
+        payout: { start: 53, duration: 10, principle: 'SerialPrinciple' },
+      },
+      {
+        id: 'livrente',
+        name: 'Livrente',
+        variant: 'LifeAnnuity',
+        openedOn: { year: 2018, month: 1 },
+        payoutAgeOverride: 53,
+        balance: 1_000_000,
+        grossReturn: 0,
+        annualCostRate: 0,
+        quotedReserve: 1_000_000,
+        quotedAnnualBenefit: 51_200,
+        bonusRate: 0.01,
+        payout: { start: 53 },
+      },
+      { ...aFreeHolding('opsparing', 'Opsparing'), balance: 500_000 },
+      aFreeHolding('aktiedepot', 'Aktiedepot'),
+    ],
+    entries: [
+      aSalary({ amountInRealKroner: 800_000 }),
+      anExpense({ amountInRealKroner: 400_000 }),
+    ],
+    contributions: [
+      aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.1 }),
+    ],
+    transfers: [
+      aTransfer({ id: 'hjemtagning', from: 'opsparing', to: 'free-assets', amountInRealKroner: 50_000 }),
+      aTransfer({ id: 'opsparing', from: 'free-assets', to: 'aktiedepot', amountInRealKroner: 30_000 }),
+    ],
+  })
 }
 
 /** Tre simuleringsår, så tabellen kan tælles med det blotte øje. */
@@ -2764,17 +2903,294 @@ describe('fladen', () => {
     await user.click(rows[1]!) // 2026 — startåret, hvor dagens kroner og løbende priser er ét
 
     const stribe = document.querySelector('.balancestribe') as HTMLElement
-    const post = (label: string) =>
-      Array.from(stribe.querySelectorAll('.stribepost')).find(
-        (el) => el.querySelector('.m')?.textContent === label,
-      )!.querySelector('.v')!.textContent
+    expect(stripeAmount(stribe, 'Formue primo')).toBe('1.000.000')
+    expect(stripeAmount(stribe, 'Indtægter')).toBe('0')
+    expect(stripeAmount(stribe, 'Afkast')).toBe('0')
+    expect(stripeAmount(stribe, 'Skat')).toBe('0')
+    expect(stripeAmount(stribe, 'Udgifter')).toBe('-40.000')
+    expect(stripeAmount(stribe, 'Formue ultimo')).toBe('960.000')
+  })
 
-    expect(post('Formue primo')).toBe('1.000.000')
-    expect(post('Indtægter')).toBe('0')
-    expect(post('Afkast')).toBe('0')
-    expect(post('Skat')).toBe('0')
-    expect(post('Udgifter')).toBe('-40.000')
-    expect(post('Formue ultimo')).toBe('960.000')
+  it('viser årets overskud som ét tal i forklar-året, det samme som årstabellens', async () => {
+    // Klikket i grafen eller i tabellen fører hertil, og skærmen skal bære
+    // vægten af det klik: står der −40.000 i tabellens Overskud-kolonne, er
+    // det dét tal, året skal kunne forklare. To udledninger af samme
+    // størrelse, der kunne blive uenige, ville være værre end ingen.
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+    await showYearTable(user)
+    expect(yearCell(1, 'Overskud')).toBe('-40.000')
+
+    await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!)
+
+    const blok = surplusBlock()
+    expect(stripeAmount(blok, 'Årets overskud')).toBe('-40.000')
+  })
+
+  it('deler overskuddet op i de otte bånd, grafen stabler, og lader dem summere til tallet', async () => {
+    // Båndene er de samme otte som i grafen — faste, navngivne og i samme
+    // rækkefølge — så et bånd kan følges fra graf til forklaring uden at
+    // skifte navn undervejs. De fire opad står før de fire nedad, og lagt
+    // sammen som de står, er de årets overskud.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithEveryBand()} />)
+    await showYearTable(user)
+    const overskud = yearCell(yearRow(2026), 'Overskud')
+
+    await explainYear(user, 2026)
+
+    expect(surplusBandLabels()).toEqual([
+      'Indtægtsposter',
+      'Ydelser',
+      'Udbetalinger',
+      'Overførsler ind',
+      'Skat',
+      'Udgiftsposter',
+      'Indbetalinger',
+      'Overførsler ud',
+    ])
+    expect(stripeAmount(surplusBlock(), 'Årets overskud')).toBe(overskud)
+    expect(surplusBandTotal()).toBeCloseTo(parseKroner(overskud ?? ''), 0)
+  })
+
+  it('lader et bånd uden noget i falde helt væk frem for at vise et nul', async () => {
+    // Planen har hverken indtægt, ordning, overførsel eller skat — kun den
+    // faste udgift. Otte linjer, hvoraf de syv står på nul, ville påstå syv
+    // slags bevægelser, året ikke havde, og skjule den ene det havde. Samme
+    // greb som omsætningsposten i balancestriben.
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+    await showYearTable(user)
+
+    await explainYear(user, 2026)
+
+    expect(surplusBandLabels()).toEqual(['Udgiftsposter'])
+    expect(stripeAmount(surplusBlock(), 'Årets overskud')).toBe('-40.000')
+  })
+
+  it('folder posterne ud under hvert sit bånd frem for i en blok for sig', async () => {
+    // Posterne stod før i deres egen tabel nederst på skærmen, hvor de intet
+    // sagde om, hvad de gjorde ved året. De hører under det bånd, de er en
+    // del af — og de to retninger hører ikke under det samme.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithEveryBand()} />)
+    await showYearTable(user)
+    await explainYear(user, 2026)
+
+    const indtaegter = await openBand(user, 'Indtægtsposter')
+    expect(within(indtaegter).getByText('Løn')).toBeTruthy()
+    expect(within(indtaegter).queryByText('Faste udgifter')).toBeNull()
+
+    const udgifter = await openBand(user, 'Udgiftsposter')
+    const linje = within(udgifter).getByText('Faste udgifter').closest('tr') as HTMLElement
+    expect(within(linje).getAllByRole('cell').map((cell) => cell.textContent)).toEqual([
+      'Faste udgifter',
+      '-400.000',
+      'Jævnt fordelt',
+      '0,00 %',
+    ])
+
+    expect(screen.queryByRole('heading', { name: 'Posterne', level: 3 })).toBeNull()
+  })
+
+  it('folder ydelserne ud under deres bånd, folkepensionen sammen med livrentens', async () => {
+    // De to har intet med hinanden at gøre i planen — den ene læses af
+    // satsåret, den anden af en omsætning — men de gør det samme ved året:
+    // de lander på bufferbeholdningen uden en saldo bag sig. Båndet er
+    // netop den lighed, og folden skal derfor føre dem begge.
+    //
+    // Personen er født i juni 1973 og fylder 70 i 2043, hvor både
+    // folkepensionen og livrentens udbetaling begynder.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          startYear: 2043,
+          balance: 500_000,
+          holdings: [
+            {
+              id: 'livrente',
+              name: 'Livrente',
+              variant: 'LifeAnnuity',
+              openedOn: { year: 2018, month: 1 },
+              balance: 1_000_000,
+              grossReturn: 0,
+              annualCostRate: 0,
+              quotedReserve: 1_000_000,
+              quotedAnnualBenefit: 51_200,
+              bonusRate: 0,
+              payout: { start: 70 },
+            },
+          ],
+        })}
+      />,
+    )
+    await showYearTable(user)
+    await explainYear(user, 2043)
+
+    const ydelser = await openBand(user, 'Ydelser')
+    const names = within(ydelser)
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => within(row).getAllByRole('cell')[0]!.textContent)
+    expect(names).toEqual(['Folkepension', 'Livrente'])
+    expect(within(ydelser).getByText('51.200')).toBeTruthy()
+
+    expect(screen.queryByRole('heading', { name: 'Ydelserne', level: 3 })).toBeNull()
+  })
+
+  it('folder årets udbetalinger ud under deres bånd, én linje pr. ordning', async () => {
+    // Båndets tal er summen af det, ordningerne tømte sig med. Står der ét
+    // tal og to ordninger bag det, kan året ikke efterregnes — og det er
+    // netop de år, hvor pengene kommer herfra, værktøjet findes for.
+    //
+    // Ratepensionen på en million tømmes over ti år efter serieprincippet
+    // og giver en tiendedel det første år. Beholdninger uden en
+    // udbetalingsplan har ingen linje.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithEveryBand()} />)
+    await showYearTable(user)
+    await explainYear(user, 2026)
+
+    const udbetalinger = await openBand(user, 'Udbetalinger')
+    expect(
+      within(udbetalinger)
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) =>
+          within(row)
+            .getAllByRole('cell')
+            .map((cell) => cell.textContent),
+        ),
+    ).toEqual([['Ratepension', '100.000']])
+  })
+
+  it('folder indbetalingerne ud under deres bånd og lader loftet stå for sig', async () => {
+    //
+    // Bidraget er ti procent af en løn på 800.000. De 80.000 forlader
+    // lønnen, og 8 % arbejdsmarkedsbidrag senere lander 73.600 i ordningen.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithEveryBand()} />)
+    await showYearTable(user)
+    await explainYear(user, 2026)
+
+    const indbetalinger = await openBand(user, 'Indbetalinger')
+    const linje = within(indbetalinger)
+      .getByText('Løn → Ratepension')
+      .closest('tr') as HTMLElement
+    expect(within(linje).getAllByRole('cell').map((cell) => cell.textContent)).toEqual([
+      'Løn → Ratepension',
+      '80.000',
+      '73.600',
+    ])
+    expect(screen.queryByRole('heading', { name: 'Indbetalingerne', level: 3 })).toBeNull()
+
+    // Loftet følger ikke med ind i folden. Det findes, når året bad om
+    // noget, og et indskud kan afkortes helt væk — så er båndet nul, folden
+    // væk, og afkortningen usynlig. Blokken står derfor for sig.
+    expect(within(indbetalinger).queryByRole('heading', { name: 'Lofterne' })).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Lofterne', level: 3 })).toBeTruthy()
+  })
+
+  it('deler overførslerne efter hvilken ende bufferbeholdningen står i', async () => {
+    // En overførsel ind og en overførsel ud gør det modsatte ved året, og de
+    // stod før i samme tabel, hvor kun pilen i navnet skilte dem. Under hvert
+    // sit bånd siger retningen sig selv.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithEveryBand()} />)
+    await showYearTable(user)
+    await explainYear(user, 2026)
+
+    const ind = await openBand(user, 'Overførsler ind')
+    expect(within(ind).getByText('Opsparing → Frie midler')).toBeTruthy()
+    expect(within(ind).queryByText('Frie midler → Aktiedepot')).toBeNull()
+
+    const ud = await openBand(user, 'Overførsler ud')
+    const linje = within(ud).getByText('Frie midler → Aktiedepot').closest('tr') as HTMLElement
+    expect(within(linje).getAllByRole('cell').map((cell) => cell.textContent)).toEqual([
+      'Frie midler → Aktiedepot',
+      '30.000',
+      '30.000',
+    ])
+
+    expect(screen.queryByRole('heading', { name: 'Overførslerne', level: 3 })).toBeNull()
+  })
+
+  it('lader en overførsel uden om bufferen stå i sin egen blok frem for at forsvinde', async () => {
+    // Den flytter penge mellem to andre beholdninger og rører hverken det
+    // ene bånd eller det andet — årets overskud er det samme med og uden
+    // den. Uden en blok for sig ville den falde helt ud af skærmen, og en
+    // afkortning af den ville være tavs, jf. ADR-0022.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          balance: 100_000,
+          holdings: [
+            { ...aFreeHolding('opsparing', 'Opsparing'), balance: 500_000 },
+            aFreeHolding('aktiedepot', 'Aktiedepot'),
+          ],
+          transfers: [
+            aTransfer({ from: 'opsparing', to: 'aktiedepot', amountInRealKroner: 100_000 }),
+          ],
+        })}
+      />,
+    )
+    await showYearTable(user)
+    await explainYear(user, 2026)
+
+    expect(surplusBandLabels()).not.toContain('Overførsler ind')
+    expect(surplusBandLabels()).not.toContain('Overførsler ud')
+
+    const blok = screen
+      .getByRole('heading', { name: 'Overførsler uden om bufferen', level: 3 })
+      .closest('.blok') as HTMLElement
+    expect(within(blok).getByText('Opsparing → Aktiedepot')).toBeTruthy()
+  })
+
+  it('folder skatten ud, så skatten af afkastet kan læses uden at trække fra selv', async () => {
+    // Den ene ting, brugeren garanteret undrer sig over: skattebåndet er
+    // større, end de synlige indtægter kan forklare. Forskellen er skatten
+    // af afkastet — en regning bufferbeholdningen betaler, mens afkastet
+    // selv ikke tælles med i overskuddet, jf. ADR-0026.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          startYear: 2026,
+          balance: 100_000,
+          grossReturn: 0,
+          entries: [aSalary({ amountInRealKroner: 800_000 })],
+          holdings: [
+            {
+              id: 'depot',
+              name: 'Aktiedepot',
+              variant: 'ShareDepot',
+              balance: 6_000_000,
+              grossReturn: 0.05,
+              annualCostRate: 0,
+            },
+          ],
+        })}
+      />,
+    )
+    await showYearTable(user)
+    await explainYear(user, 2026)
+
+    const skat = await openBand(user, 'Skat')
+    const baand = parseKroner(stripeAmount(surplusBlock(), 'Skat') ?? '')
+    const person = parseKroner(stripeAmount(skat, 'Jesper') ?? '')
+    const aktieindkomst = parseKroner(stripeAmount(skat, 'Aktieindkomstskat') ?? '')
+    const afkast = parseKroner(stripeAmount(skat, 'Heraf skat af afkast') ?? '')
+
+    // Personens egen skat og husstandens aktieindkomstskat er tilsammen
+    // båndet: beholdningsskatten passerer aldrig bufferbeholdningen.
+    expect(person + aktieindkomst).toBeCloseTo(baand, 0)
+
+    // Aktieindkomsten er afkast og intet andet, så hele dens skat er
+    // afkastets — og lønnen står for resten.
+    expect(afkast).toBeLessThanOrEqual(aktieindkomst)
+    expect(afkast).toBeGreaterThan(baand)
   })
 
   it('forklarer omsætningsåret, så formuefaldet ikke ligner et tab', async () => {
@@ -2787,21 +3203,15 @@ describe('fladen', () => {
     await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!) // 2026
 
     const stribe = document.querySelector('.balancestribe') as HTMLElement
-    const post = (label: string) =>
-      Array.from(stribe.querySelectorAll('.stribepost')).find(
-        (el) => el.querySelector('.m')?.textContent === label,
-      )!.querySelector('.v')!.textContent
-
-    expect(post('Omsat livrentedepot')).toBe('-1.000.000')
-    expect(post('Indtægter')).toBe('51.200')
+    expect(stripeAmount(stribe, 'Omsat livrentedepot')).toBe('-1.000.000')
+    expect(stripeAmount(stribe, 'Indtægter')).toBe('51.200')
     expect(screen.getByText(/forlader formuen/)).toBeTruthy()
 
     // Ydelsen kommer udefra og står derfor ikke blandt planens poster. Uden
     // sin egen linje kunne indtægten i striben ikke føres tilbage til noget.
-    const ydelser = screen.getByRole('heading', { name: 'Ydelserne', level: 3 })
-      .parentElement as HTMLElement
+    const ydelser = await openBand(user, 'Ydelser')
     expect(within(ydelser).getByText('Livrente')).toBeTruthy()
-    expect(within(ydelser).getByText('51.200')).toBeTruthy()
+    expect(within(ydelser).getAllByText('51.200').length).toBeGreaterThan(0)
   })
 
   it('lader striben stå uden omsætningsposten i de år, hvor intet omsættes', async () => {
@@ -2814,9 +3224,8 @@ describe('fladen', () => {
     expect(stribe.textContent).not.toContain('Omsat livrentedepot')
 
     // Ydelsen bliver ved, reguleret med bonussatsen på 1 %.
-    const ydelser = screen.getByRole('heading', { name: 'Ydelserne', level: 3 })
-      .parentElement as HTMLElement
-    expect(within(ydelser).getByText('51.712')).toBeTruthy()
+    const ydelser = await openBand(user, 'Ydelser')
+    expect(within(ydelser).getAllByText('51.712').length).toBeGreaterThan(0)
   })
 
   it('viser folkepensionens to beløb i forklar-året', async () => {
@@ -2980,21 +3389,18 @@ describe('fladen', () => {
     const blok = screen
       .getByRole('heading', { name: 'Jesper', level: 3 })
       .closest('.blok') as HTMLElement
-    const post = (label: string) =>
-      within(blok).getByText(label).closest('.stribepost')!.querySelector('.v')!.textContent
-
     // Pensionsindkomsten lægges til efter AM-bidraget, ikke før: bidraget
     // måles af lønnen alene. 600.000 − 48.000 + 200.000 = 752.000.
-    expect(post('Løn og skattepligtige poster')).toBe('600.000')
-    expect(post('AM-bidrag, 8,00 %')).toBe('-48.000')
-    expect(post('Pensionsindkomst')).toBe('200.000')
-    expect(post('Personlig indkomst')).toBe('752.000')
+    expect(stripeAmount(blok, 'Løn og skattepligtige poster')).toBe('600.000')
+    expect(stripeAmount(blok, 'AM-bidrag, 8,00 %')).toBe('-48.000')
+    expect(stripeAmount(blok, 'Pensionsindkomst')).toBe('200.000')
+    expect(stripeAmount(blok, 'Personlig indkomst')).toBe('752.000')
 
     // 752.000 ligger over mellemskattegrænsen, og Hvidovres 25,40 % lader
     // trappens første trin binde ved 44,57 %. Pensionskronen koster det plus
     // kirkeskatten; lønkronen koster 8 % AM-bidrag og 92 % af det samme.
-    expect(post('Marginalskat, pensionsindkomst')).toBe('45,29 %')
-    expect(post('Marginalskat, arbejdsindkomst')).toBe('49,67 %')
+    expect(stripeAmount(blok, 'Marginalskat, pensionsindkomst')).toBe('45,29 %')
+    expect(stripeAmount(blok, 'Marginalskat, arbejdsindkomst')).toBe('49,67 %')
   })
 
   it('viser hvordan den personlige indkomst kommer fra bruttolønnen og indbetalingen', async () => {
@@ -3027,17 +3433,14 @@ describe('fladen', () => {
     await user.click(rows[1]!) // 2026
 
     const blok = screen.getByRole('heading', { name: 'Jesper', level: 3 }).closest('.blok') as HTMLElement
-    const post = (label: string) =>
-      within(blok).getByText(label).closest('.stribepost')!.querySelector('.v')!.textContent
-
     // 700.000 − 56.000 − 64.400 = 579.600. Det er de 64.400, der landede, og
     // ikke de 70.000, der forlod lønnen: AM-bidraget måles af bruttolønnen.
     // Bidraget er holdt under ratepensionens loft, så linjen her viser
     // fradragsretten alene — loftlinjen har sin egen test.
-    expect(post('Løn og skattepligtige poster')).toBe('700.000')
-    expect(post('AM-bidrag, 8,00 %')).toBe('-56.000')
-    expect(post('Indbetaling med fradragsret')).toBe('-64.400')
-    expect(post('Personlig indkomst')).toBe('579.600')
+    expect(stripeAmount(blok, 'Løn og skattepligtige poster')).toBe('700.000')
+    expect(stripeAmount(blok, 'AM-bidrag, 8,00 %')).toBe('-56.000')
+    expect(stripeAmount(blok, 'Indbetaling med fradragsret')).toBe('-64.400')
+    expect(stripeAmount(blok, 'Personlig indkomst')).toBe('579.600')
   })
 
   it('udelader linjen om fradragsret i et år uden en indbetaling, der har den', async () => {
@@ -3176,22 +3579,30 @@ describe('fladen', () => {
     render(<App initialPlan={plan} />)
     await showYearTable(user)
 
-    const rows = within(screen.getByRole('table')).getAllByRole('row')
-    await user.click(rows[1]!) // 2026
+    await explainYear(user, 2026)
 
-    const posterTable = document.querySelector('table.postertabel') as HTMLElement
-    const cells = (name: string) =>
-      within(within(posterTable).getByText(name).closest('tr') as HTMLElement)
+    const cells = (fold: HTMLElement, name: string) =>
+      within(within(fold).getByText(name).closest('tr') as HTMLElement)
         .getAllByRole('cell')
         .map((cell) => cell.textContent)
 
     // Lønnen er jævnt fordelt og lander på bufferen, hvor en jævn strøm
     // vejer nul — kolonnen skal vise det tal, motoren faktisk regnede med.
-    expect(cells('Løn')).toEqual(['Løn', '600.000', 'Jævnt fordelt', '0,00 %'])
+    expect(cells(await openBand(user, 'Indtægtsposter'), 'Løn')).toEqual([
+      'Løn',
+      '600.000',
+      'Jævnt fordelt',
+      '0,00 %',
+    ])
     // Juni-forfald: (12 − 6 + 1) / 12 = 58,33 %. En dateret post beholder sin
     // vægt, også på bufferen. Udgiften vises negativ, som i navigatoren og
     // balancestriben.
-    expect(cells('Faste udgifter')).toEqual(['Faste udgifter', '-40.000', 'Juni', '58,33 %'])
+    expect(cells(await openBand(user, 'Udgiftsposter'), 'Faste udgifter')).toEqual([
+      'Faste udgifter',
+      '-40.000',
+      'Juni',
+      '58,33 %',
+    ])
   })
 
   it('viser indbetalingens to beløb i forklar-året', async () => {

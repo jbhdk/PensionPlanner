@@ -1096,9 +1096,56 @@ table.aar td .fremskrevet {
   color: inherit;
 }
 
+/* Båndet i overskudsblokken: en stribelinje, der kan foldes ud til de
+   linjer, den er lagt sammen af. Markøren og pilen er det eneste, der siger,
+   at der er noget at folde — teksten selv er en stribelinje som de øvrige. */
+.baand > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.baand > summary::-webkit-details-marker {
+  display: none;
+}
+
+.baand > summary .m::before {
+  content: '›';
+  display: inline-block;
+  width: 12px;
+  color: var(--muted);
+  transition: transform 0.12s;
+}
+
+.baand[open] > summary .m::before {
+  transform: rotate(90deg);
+}
+
+.baand > summary:hover {
+  background: var(--linje-svag);
+}
+
+/* Indholdet under et åbent bånd rykkes ind, så det hører til linjen ovenover
+   og ikke til blokken. */
+.baand > table,
+.baand > .regnestribe {
+  margin: 4px 0 12px 20px;
+  width: calc(100% - 20px);
+}
+
+.baand > .hint {
+  margin: -6px 0 12px 20px;
+}
+
+/* Hinten i skattebåndets stribe er allerede rykket ind med striben selv. */
+.baand > .regnestribe > .hint {
+  margin: 6px 0 0;
+  padding: 0 8px;
+}
+
 .lagtabel,
 .beholdningstabel,
 .postertabel,
+.udbetalingstabel,
 .indbetalingstabel,
 .overfoerselstabel,
 .ydelsestabel,

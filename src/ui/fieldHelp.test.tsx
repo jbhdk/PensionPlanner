@@ -22,7 +22,7 @@ import { fieldHelp } from './fieldHelp'
     Stilreglerne prøves også, men kun de mekaniske af dem. Om anden sætning
     svarer på "hvad betyder det for mig", må et menneske afgøre. */
 
-/** En plan, der er rig nok til at tegne alle syv tabeller i forklar-året:
+/** En plan, der er rig nok til at tegne alle forklar-årets tabeller:
     aktieindkomst til husstandens skattetabel, en ordning med et loft, et
     lønkildet bidrag, poster i begge retninger, og en livrente, der omsættes
     i planens allerførste år — den bevarede udbetalingsalder er 53, den
@@ -121,6 +121,15 @@ function aFreeHolding(): Holding {
   }
 }
 
+/** Folder hvert bånd i overskudsblokken ud. Tabellerne under båndene er
+    kolonneoverskrifter som alle andre, og løftet om total dækning gælder
+    dem — men de skal foldes ud, før de er noget at prøve. */
+async function openEverySurplusBand(user: ReturnType<typeof userEvent.setup>) {
+  for (const summary of [...document.querySelectorAll<HTMLElement>('.baand summary')]) {
+    await user.click(summary)
+  }
+}
+
 /** Alle etiketter i skuffen, som den står lige nu — både `<label>` og de
     `span.etiket`, som en låst værdi og en segmenteret kontakt bruger, hvor
     der ikke er én kontrol at pege på. */
@@ -208,16 +217,17 @@ describe('feltforklaringerne', () => {
     await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
     await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!)
 
+    // Tabellerne under båndene ligger i en fold og skal foldes ud, før de
+    // overhovedet er noget at prøve.
+    await openEverySurplusBand(user)
+
     // Alle tabellerne skal stå, ellers prøver testen mindre, end den ser ud
     // til: uden aktieindkomst, uden et loft eller uden en overførsel
     // udelades blokken helt.
     for (const overskrift of [
       'Husstandens aktieindkomstskat',
-      'Posterne',
-      'Indbetalingerne',
+      'Årets overskud',
       'Lofterne',
-      'Overførslerne',
-      'Ydelserne',
       'Beholdningerne',
     ]) {
       expect(

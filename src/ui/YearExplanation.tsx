@@ -1,5 +1,5 @@
 import { payoutScheduleOf } from '../engine/holdingVariant'
-import type { Holding, Person, Plan } from '../engine/plan'
+import type { Direction, Holding, Person, Plan, Transfer } from '../engine/plan'
 import { weightAt } from '../engine/simulate'
 import type { ShareIncomeLayer } from '../engine/tax/assessHousehold'
 import { totalTaperBase } from '../engine/tax/assessHousehold'
@@ -16,6 +16,10 @@ import { fieldHelp } from './fieldHelp'
 import { kroner, procent } from './format'
 import { danish, danishTiming, variants } from './danish'
 import { inRealKroner } from './real'
+import { returnTax } from './returnTax'
+import { surplus } from './surplus'
+import type { SurplusBand, SurplusBandName } from './surplusBands'
+import { surplusBands } from './surplusBands'
 
 /** Rækkefølgen skattelagene vises i: samme rækkefølge som mockuppens
     `tegnForklarAaret` — AM-bidrag og bundskat først, progressionslagene
@@ -148,6 +152,8 @@ export function YearExplanation({
         </p>
       )}
 
+      <SurplusBlock plan={plan} year={year} display={display} />
+
       <div className="blokke">
         {plan.household.persons.map((person) => {
           const personYear = year.persons.find((p) => p.person === person.id)
@@ -161,13 +167,146 @@ export function YearExplanation({
       <ShareIncomeTaxBlock year={year} display={display} />
 
       <StatePensionBlock plan={plan} year={year} display={display} />
-      <BenefitsBlock plan={plan} year={year} display={display} />
       <HoldingsBlock plan={plan} year={year} display={display} />
-      <EntriesBlock plan={plan} year={year} display={display} />
-      <ContributionsBlock plan={plan} year={year} display={display} />
-      <TransfersBlock plan={plan} year={year} display={display} />
+      <CapsBlock plan={plan} year={year} display={display} />
+      <OtherTransfersBlock plan={plan} year={year} display={display} />
     </div>
   )
+}
+
+/** Hvert bånd sin forklaring. Etiketterne er `surplusBandOrder`s og dermed
+    grafens egne — ét navn pr. bånd hele vejen igennem — mens teksten hører
+    til her, hvor forklaringerne bor. */
+const SURPLUS_BAND_HELP: Record<SurplusBandName, keyof typeof fieldHelp> = {
+  IncomeEntries: 'SurplusBand.IncomeEntries',
+  Benefits: 'SurplusBand.Benefits',
+  Payouts: 'SurplusBand.Payouts',
+  TransfersIn: 'SurplusBand.TransfersIn',
+  Tax: 'SurplusBand.Tax',
+  ExpenseEntries: 'SurplusBand.ExpenseEntries',
+  Contributions: 'SurplusBand.Contributions',
+  TransfersOut: 'SurplusBand.TransfersOut',
+}
+
+/** Årets overskud og det, det består af — forklar-årets rygrad.
+
+    Blokken står øverst, fordi den er det, klikket i grafen og i tabellen
+    fører hertil for: står der −248.000 i 2050, er det dét tal, året skal
+    kunne forklare. Tallet er `surplus` og ikke en anden udledning, så
+    skærmen og tabellen aldrig kan blive uenige. */
+function SurplusBlock({
+  plan,
+  year,
+  display,
+}: {
+  plan: Plan
+  year: YearResult
+  display: (amount: number) => number
+}) {
+  return (
+    <div className="blok bred">
+      <h3>Årets overskud</h3>
+      {/* Et bånd på nul står ikke. Otte linjer, hvoraf de fleste er nul,
+          ville påstå bevægelser, året ikke havde, og lade den ene det havde
+          drukne — samme grund som omsætningsposten i balancestriben. Grafen
+          gør det modsatte og beholder alle otte hele horisonten igennem: dér
+          er den faste plads det, der lader et bånd følges med øjnene fra år
+          til år. */}
+      {surplusBands(year, plan)
+        .filter((band) => band.amount !== 0)
+        .map((band) => (
+          <SurplusBandRow key={band.name} band={band} display={display}>
+            {bandDetail(band.name, plan, year, display)}
+          </SurplusBandRow>
+        ))}
+      <StripePost
+        help="Surplus"
+        label="Årets overskud"
+        amount={display(surplus(year, plan.buffer))}
+        step="total"
+      />
+    </div>
+  )
+}
+
+/** Ét bånd i striben, med sine egne linjer foldet ind under sig. Foldet er
+    en `details`, så året kan læses som otte tal først og pakkes ud dér, hvor
+    læseren undrer sig — og så en fold kan åbnes uden at der skal holdes
+    styr på tilstand nogen steder.
+
+    Et bånd uden linjer at folde ud står som en almindelig stribelinje.
+    Skatten er sådan et: dens bestanddele hører til personernes egne blokke
+    og ikke i en tabel her. */
+function SurplusBandRow({
+  band,
+  display,
+  children,
+}: {
+  band: SurplusBand
+  display: (amount: number) => number
+  children: React.ReactNode
+}) {
+  const stripe = (
+    <StripePost
+      help={SURPLUS_BAND_HELP[band.name]}
+      label={band.label}
+      amount={display(band.direction === 'Expense' ? -band.amount : band.amount)}
+    />
+  )
+
+  if (children === null) return stripe
+
+  return (
+    <details className="baand">
+      <summary>{stripe}</summary>
+      {children}
+    </details>
+  )
+}
+
+/** Linjerne under ét bånd: de poster, rater, ydelser, overførsler og
+    indbetalinger, året faktisk indeholdt. Opslaget står ét sted, så et bånd
+    og dets linjer ikke kan komme fra hver sin ende af filen. */
+function bandDetail(
+  name: SurplusBandName,
+  plan: Plan,
+  year: YearResult,
+  display: (amount: number) => number,
+): React.ReactNode {
+  switch (name) {
+    case 'IncomeEntries':
+      return <EntriesTable plan={plan} year={year} display={display} direction="Income" />
+    case 'ExpenseEntries':
+      return <EntriesTable plan={plan} year={year} display={display} direction="Expense" />
+    case 'Benefits':
+      return <BenefitsTable plan={plan} year={year} display={display} />
+    case 'Tax':
+      return <TaxDetail plan={plan} year={year} display={display} />
+    case 'Payouts':
+      return <PayoutsTable plan={plan} year={year} display={display} />
+    case 'Contributions':
+      return <ContributionsTable plan={plan} year={year} display={display} />
+    case 'TransfersIn':
+      return (
+        <TransfersTable
+          plan={plan}
+          year={year}
+          display={display}
+          counts={({ to }) => to === plan.buffer}
+        />
+      )
+    case 'TransfersOut':
+      return (
+        <TransfersTable
+          plan={plan}
+          year={year}
+          display={display}
+          counts={({ from }) => from === plan.buffer}
+        />
+      )
+    default:
+      return null
+  }
 }
 
 /** Aktieindkomstens skat står for sig og ikke i en persons blok: den regnes
@@ -227,18 +366,18 @@ function satsaarLabel(basis: RateBasis): string {
     til beholdningens primosaldo kan efterregnes i hånden. Forfaldet læses
     fra `Plan.entries` i stedet for at gentages her — det er en egenskab ved
     posten selv, ligesom en beholdnings navn. */
-function EntriesBlock({
+function EntriesTable({
   plan,
   year,
   display,
+  direction,
 }: {
   plan: Plan
   year: YearResult
   display: (amount: number) => number
+  direction: Direction
 }) {
   return (
-    <div className="blok bred">
-      <h3>Posterne</h3>
       <table className="postertabel">
         <thead>
           <tr>
@@ -251,7 +390,7 @@ function EntriesBlock({
         <tbody>
           {year.entries.map((entryYear) => {
             const entry = plan.entries.find((e) => e.id === entryYear.entry)
-            if (!entry) return null
+            if (!entry || entry.direction !== direction) return null
             const signed = entry.direction === 'Expense' ? -entryYear.amount : entryYear.amount
             return (
               <tr key={entryYear.entry}>
@@ -266,7 +405,6 @@ function EntriesBlock({
           })}
         </tbody>
       </table>
-    </div>
   )
 }
 
@@ -275,8 +413,12 @@ function EntriesBlock({
     en tredje kolonne — den er allerede personens eget AM-lag ovenfor, og to
     steder kunne komme til at sige hver sit.
 
-    Blokken udebliver, når året ingen indbetalinger har. */
-function ContributionsBlock({
+    Loftlinjen følger ikke med herind, selv om den handler om det samme.
+    Den findes, når året **bad om** noget, og et indskud kan afkortes helt —
+    så er båndet nul, folden væk, og afkortningen usynlig. Det er præcis den
+    tavse fejl, ADR-0019 og ADR-0022 er skrevet imod, og loftet står derfor i
+    sin egen blok. */
+function ContributionsTable({
   plan,
   year,
   display,
@@ -285,8 +427,6 @@ function ContributionsBlock({
   year: YearResult
   display: (amount: number) => number
 }) {
-  if (year.contributions.length === 0) return null
-
   const holdings = plan.household.persons.flatMap((person) => person.holdings)
   const name = (contributionId: string) => {
     const contribution = plan.contributions.find((c) => c.id === contributionId)
@@ -302,8 +442,7 @@ function ContributionsBlock({
   }
 
   return (
-    <div className="blok bred">
-      <h3>Indbetalingerne</h3>
+    <>
       <table className="indbetalingstabel">
         <thead>
           <tr>
@@ -322,7 +461,37 @@ function ContributionsBlock({
           ))}
         </tbody>
       </table>
-      <CapsBlock plan={plan} year={year} display={display} />
+    </>
+  )
+}
+
+/** De overførsler, der ikke rører bufferbeholdningen i nogen ende.
+
+    De flytter penge mellem to andre beholdninger, og årets overskud er det
+    samme med og uden dem — de har derfor intet bånd at ligge under. Uden en
+    blok for sig ville de falde helt ud af skærmen, og en afkortning af dem
+    ville være tavs, jf. ADR-0022.
+
+    Blokken udebliver, når året ingen af dem har, hvad de fleste år ikke. */
+function OtherTransfersBlock({
+  plan,
+  year,
+  display,
+}: {
+  plan: Plan
+  year: YearResult
+  display: (amount: number) => number
+}) {
+  const counts = ({ from, to }: Transfer) => from !== plan.buffer && to !== plan.buffer
+  const any = year.transfers.some((transfer) =>
+    counts(plan.transfers.find((t) => t.id === transfer.transfer)!),
+  )
+  if (!any) return null
+
+  return (
+    <div className="blok bred">
+      <h3>Overførsler uden om bufferen</h3>
+      <TransfersTable plan={plan} year={year} display={display} counts={counts} />
     </div>
   )
 }
@@ -335,19 +504,21 @@ function ContributionsBlock({
     slags fejl, der aldrig viser sig, jf. ADR-0022. I de fleste år er de to
     ens, og linjen siger da blot, hvad der blev flyttet.
 
-    Rækken hedder de to ender ved navn, som indbetalingens gør. Blokken
-    udebliver, når året ingen overførsler har. */
-function TransfersBlock({
+    Rækken hedder de to ender ved navn, som indbetalingens gør. Hvilke
+    overførsler tabellen fører, afgøres af `counts`: bufferbeholdningen står
+    i den ene ende af en overførsel ind og i den anden af en overførsel ud,
+    og de to gør det modsatte ved året. */
+function TransfersTable({
   plan,
   year,
   display,
+  counts,
 }: {
   plan: Plan
   year: YearResult
   display: (amount: number) => number
+  counts: (transfer: Transfer) => boolean
 }) {
-  if (year.transfers.length === 0) return null
-
   const holdings = plan.household.persons.flatMap((person) => person.holdings)
   const name = (transferId: string) => {
     const transfer = plan.transfers.find((t) => t.id === transferId)
@@ -358,8 +529,7 @@ function TransfersBlock({
   }
 
   return (
-    <div className="blok bred">
-      <h3>Overførslerne</h3>
+    <>
       <table className="overfoerselstabel">
         <thead>
           <tr>
@@ -369,13 +539,17 @@ function TransfersBlock({
           </tr>
         </thead>
         <tbody>
-          {year.transfers.map((transfer) => (
+          {year.transfers
+            .filter((transfer) =>
+              counts(plan.transfers.find((t) => t.id === transfer.transfer)!),
+            )
+            .map((transfer) => (
             <tr key={transfer.transfer}>
               <td>{name(transfer.transfer)}</td>
               <td>{kroner(display(transfer.requested))}</td>
               <td>{kroner(display(transfer.moved))}</td>
             </tr>
-          ))}
+            ))}
         </tbody>
       </table>
       {/* Ingen farve her, ganske som i lofttabellen: rød er bufferens alene.
@@ -386,7 +560,7 @@ function TransfersBlock({
         begyndelse. Beder planen om mere, afkortes den, og beholdningen lukker på
         nul frem for at gå i minus.
       </p>
-    </div>
+    </>
   )
 }
 
@@ -408,7 +582,12 @@ function TransfersBlock({
     Loftet er personens og måles over årets samlede indbetaling til den slags
     ordning — rækken hedder derfor varianten og ejeren, ikke den enkelte
     beholdning, jf. ADR-0018. Blokken udebliver, når året ingen indbetaling
-    havde til en loftbelagt ordning. */
+    havde til en loftbelagt ordning.
+
+    Den står for sig og ikke under indbetalingsbåndet. Linjen findes, når
+    året bad om noget, og ikke når noget landede: blev hele indskuddet
+    afkortet, er båndet nul og folden væk, og afkortningen ville forsvinde
+    med den. */
 function CapsBlock({
   plan,
   year,
@@ -425,7 +604,7 @@ function CapsBlock({
   if (lines.length === 0) return null
 
   return (
-    <>
+    <div className="blok bred">
       <h3>Lofterne</h3>
       <table className="lofttabel">
         <thead>
@@ -467,7 +646,7 @@ function CapsBlock({
         uindskudte blev liggende i kilden, og året er ikke markeret, for der er ikke sket
         noget brud.
       </p>
-    </>
+    </div>
   )
 }
 
@@ -571,8 +750,8 @@ function HoldingsBlock({
 /** Folkepensionen og aftrapningen af pensionstillægget, for de af husstandens
     personer der har nået folkepensionsalderen.
 
-    Blokken findes af samme grund som ydelsernes: beløbene står ingen andre
-    steder. Brugeren har hverken tastet dem eller året, de begynder i — de
+    Blokken findes af samme grund som ydelseslinjerne: beløbene står ingen
+    andre steder. Brugeren har hverken tastet dem eller året, de begynder i — de
     første læses af satsåret, det sidste udledes af fødselsdatoen — og uden
     blokken kunne indtægten i striben ikke føres tilbage til noget.
 
@@ -693,19 +872,77 @@ function StatePensionBlock({
   )
 }
 
-/** De ydelser uden saldo, husstanden modtog i året — i denne skive de omsatte
-    livrenters.
+/** Skattebåndet foldet ud: hver persons egen skat, husstandens
+    aktieindkomstskat, og hvor meget af det hele der er skat af afkast.
 
-    Blokken findes, fordi ydelsen ikke står nogen andre steder. Den er
-    indkomst udefra og indgår i årets indtægter, men den er ingen post i
-    planen og ingen udbetaling fra en beholdning: efter omsætningen har
-    livrenten ingen saldo at forlade. Uden linjen her kunne indtægten i
-    striben ikke føres tilbage til noget.
+    Den sidste linje er hele grunden til, at folden findes. Årets overskud
+    tæller afkastet ude og skatten af det med, jf. ADR-0026, og skattebåndet
+    bliver derfor større, end de synlige indtægter kan forklare. Uden linjen
+    ville forskellen være noget, brugeren selv skulle regne ud af tal spredt
+    over tre blokke — den er dét, `returnTax` er til for.
 
-    Modtageren står på linjen, fordi skatten er personens: pengene lander på
-    bufferen uanset ejer, men beskatningen gør ikke. Blokken udebliver, når
-    ingen i husstanden modtog en ydelse. */
-function BenefitsBlock({
+    Linjen er ikke et led i summen ovenover: den er en del af den, ikke et
+    beløb ved siden af. Derfor "heraf", og derfor står den under stregen. */
+function TaxDetail({
+  plan,
+  year,
+  display,
+}: {
+  plan: Plan
+  year: YearResult
+  display: (amount: number) => number
+}) {
+  const shareIncomeTax = Object.values(year.shareIncomeTax).reduce(
+    (total, layer) => total + layer.amount,
+    0,
+  )
+
+  return (
+    <div className="regnestribe">
+      {plan.household.persons.map((person) => {
+        const personYear = year.persons.find((p) => p.person === person.id)
+        if (!personYear) return null
+        return (
+          <StripePost
+            key={person.id}
+            help="TaxAssessment.total"
+            label={person.name}
+            amount={display(-totalTax(personYear.tax))}
+          />
+        )
+      })}
+      {shareIncomeTax !== 0 && (
+        <StripePost
+          help="HouseholdTaxAssessment.shareIncomeTax"
+          label="Aktieindkomstskat"
+          amount={display(-shareIncomeTax)}
+        />
+      )}
+      <StripePost
+        help="ReturnTax"
+        label="Heraf skat af afkast"
+        amount={display(-returnTax(year))}
+        step="subtotal"
+      />
+      <p className="hint">
+        Skatten er større, end årets synlige indtægter kan forklare. Forskellen
+        er skatten af det, formuen gav uden for ordningerne: afkastet bliver
+        stående på beholdningerne og tælles ikke med i overskuddet, mens
+        regningen for det forlader bufferen som enhver anden.
+      </p>
+    </div>
+  )
+}
+
+/** Årets udbetalinger, én linje pr. beholdning der tømte sig. Båndets tal er
+    deres sum, og med to ordninger bag ét tal kunne året ikke efterregnes.
+
+    Kun beholdninger med en udbetaling i året står her; en beholdning uden en
+    udbetalingsplan har ingen linje frem for en på nul. Beholdningstabellen
+    nedenfor fører den samme rate en gang til, og med vilje: dér står den ved
+    siden af den primosaldo, den er regnet af, og den relation er lovens
+    egen. */
+function PayoutsTable({
   plan,
   year,
   display,
@@ -715,17 +952,82 @@ function BenefitsBlock({
   display: (amount: number) => number
 }) {
   const holdings = plan.household.persons.flatMap((person) => person.holdings)
-  const rows = year.persons.flatMap((personYear) =>
-    personYear.lifeAnnuityBenefits.map((benefit) => ({
-      ...benefit,
-      owner: plan.household.persons.find((person) => person.id === personYear.person),
-    })),
-  )
-  if (rows.length === 0) return null
 
   return (
-    <div className="blok">
-      <h3>Ydelserne</h3>
+    <table className="udbetalingstabel">
+      <thead>
+        <tr>
+          <th title={fieldHelp['HoldingYear.holding']}>Beholdning</th>
+          <th title={fieldHelp['HoldingYear.payout']}>Udbetaling</th>
+        </tr>
+      </thead>
+      <tbody>
+        {year.holdings
+          .filter((holdingYear) => holdingYear.payout !== 0)
+          .map((holdingYear) => (
+            <tr key={holdingYear.holding}>
+              <td>
+                {holdings.find((holding) => holding.id === holdingYear.holding)?.name ??
+                  holdingYear.holding}
+              </td>
+              <td>{kroner(display(holdingYear.payout))}</td>
+            </tr>
+          ))}
+      </tbody>
+    </table>
+  )
+}
+
+/** De ydelser uden saldo, husstanden modtog i året: folkepensionen og hver
+    omsat livrentes årlige beløb.
+
+    Linjerne findes, fordi ydelsen ikke står nogen andre steder. Den er
+    indkomst udefra og indgår i årets indtægter, men den er ingen post i
+    planen og ingen udbetaling fra en beholdning: efter omsætningen har
+    livrenten ingen saldo at forlade, og folkepensionen har aldrig haft en.
+
+    De to har intet med hinanden at gøre i planen — den ene læses af
+    satsåret, den anden af en omsætning — men de gør det samme ved året, og
+    båndet er netop den lighed. Folkepensionen står med ét beløb; hvordan
+    grundbeløb og pensionstillæg blev til det, er aftrapningens egen blok.
+
+    Modtageren står på linjen, fordi skatten er personens: pengene lander på
+    bufferen uanset ejer, men beskatningen gør ikke. */
+function BenefitsTable({
+  plan,
+  year,
+  display,
+}: {
+  plan: Plan
+  year: YearResult
+  display: (amount: number) => number
+}) {
+  const holdings = plan.household.persons.flatMap((person) => person.holdings)
+  const rows = year.persons.flatMap((personYear) => {
+    const owner = plan.household.persons.find((person) => person.id === personYear.person)
+    const statePension = personYear.statePension
+    return [
+      ...(statePension
+        ? [
+            {
+              key: `${personYear.person}-statspension`,
+              name: 'Folkepension',
+              owner,
+              amount: statePension.basicAmount + statePension.pensionSupplement,
+            },
+          ]
+        : []),
+      ...personYear.lifeAnnuityBenefits.map((benefit) => ({
+        key: benefit.holding,
+        name: holdings.find((holding) => holding.id === benefit.holding)?.name ?? benefit.holding,
+        owner,
+        amount: benefit.amount,
+      })),
+    ]
+  })
+
+  return (
+    <>
       <table className="ydelsestabel">
         <thead>
           <tr>
@@ -736,8 +1038,8 @@ function BenefitsBlock({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.holding}>
-              <td>{holdings.find((holding) => holding.id === row.holding)?.name ?? row.holding}</td>
+            <tr key={row.key}>
+              <td>{row.name}</td>
               <td>{row.owner?.name ?? ''}</td>
               <td>{kroner(display(row.amount))}</td>
             </tr>
@@ -749,7 +1051,7 @@ function BenefitsBlock({
         årets indtægter, hvor en udbetaling fra en ordning blot flytter penge
         fra beholdningen over på bufferen.
       </p>
-    </div>
+    </>
   )
 }
 

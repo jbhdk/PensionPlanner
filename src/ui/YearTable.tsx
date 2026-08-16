@@ -71,7 +71,7 @@ export function YearTable({
                 bufferen, undtagen dens eget afkast. Et underskud er det
                 beløb, der mangler at blive flyttet — ikke en påstand om, at
                 formuen faldt. Den historie står i Formue-kolonnen. */}
-            <th scope="col" title={fieldHelp['YearTable.surplus']}>
+            <th scope="col" title={fieldHelp.Surplus}>
               Overskud
             </th>
             <th scope="col" title={fieldHelp['YearTable.buffer']}>
