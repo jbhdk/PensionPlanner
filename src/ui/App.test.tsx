@@ -328,7 +328,7 @@ describe('fladen', () => {
       'Afkast',
       'Skat',
       'Udgifter',
-      'Nettoresultat',
+      'Overskud',
       'Buffer',
       'Formue',
     ])
@@ -336,6 +336,25 @@ describe('fladen', () => {
     for (const row of rows.slice(1)) {
       const cells = within(row).getAllByRole('cell')
       expect(cells[udgifter]!.textContent).toBe('-40.000')
+    }
+  })
+
+  it('viser årets overskud i sin egen kolonne, deflateret som de øvrige beløb', async () => {
+    // Planen har ingen indtægt og ingen skat: året koster de 40.000, og det
+    // er dem, der mangler at blive flyttet. Beløbet står i dagens kroner år
+    // efter år, selv om motoren løfter udgiften med inflationen bag facaden.
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+    await showYearTable(user)
+
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    const overskud = within(rows[0]!)
+      .getAllByRole('columnheader')
+      .map((header) => header.textContent)
+      .indexOf('Overskud')
+
+    for (const row of rows.slice(1)) {
+      expect(within(row).getAllByRole('cell')[overskud]!.textContent).toBe('-40.000')
     }
   })
 
@@ -2603,8 +2622,8 @@ describe('fladen', () => {
 
   it('viser årets udbetalinger i deres egen kolonne i årstabellen', async () => {
     // Kolonnen er beholdningernes rater lagt sammen. Ligesom indbetalingerne
-    // er de penge, husstanden stadig har — de er blot flyttet — og de indgår
-    // derfor ikke i nettoresultatet.
+    // er de penge, husstanden stadig har — de er blot flyttet — men de lander
+    // på bufferen og løfter derfor årets overskud.
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithPayoutFromStart()} />)
     await showYearTable(user)

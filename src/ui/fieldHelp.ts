@@ -46,8 +46,8 @@
     `Period` og deler forklaring. For en tabelkolonne er "én ting" kolonnen,
     for en kolonne kan lægge sammen, trække fra eller skifte felt under
     overskriften, og læseren ser stadig kun én ting — se `CapYear.paid`, som
-    viser to forskellige tal alt efter loftets form, og `YearTable.netResult`,
-    som ikke har noget felt bag sig.
+    viser to forskellige tal alt efter loftets form, og `YearTable.surplus`,
+    som lægger fire tal fra samme beholdningsår sammen.
 
     Dækningen er total: hver etiket i skuffen og hver kolonneoverskrift i
     tabellerne har et opslag, uden undtagelse. Netop derfor er der ingen
@@ -257,10 +257,10 @@ export const fieldHelp = {
     'Alt, hvad husstanden fik ind i året fra sine indtægtsposter. Afkastet er ikke med — det bliver stående på beholdningerne og har sin egen kolonne.',
 
   'YearTable.contributions':
-    'Hvad der i alt landede i ordningerne i året. Det er penge, husstanden stadig har — de er blot flyttet — og de indgår derfor ikke i nettoresultatet længere til højre.',
+    'Hvad der i alt landede i ordningerne i året. Det er penge, husstanden stadig har — de er blot flyttet — men de forlader bufferbeholdningen og trækker derfor overskuddet ned.',
 
   'YearTable.payouts':
-    'Hvad ordningerne tilsammen tømte sig med i året. Pengene flytter sig blot over på bufferen, så husstanden har dem stadig — kun skatten af dem forsvinder, og derfor tæller de ikke med i nettoresultatet.',
+    'Hvad ordningerne tilsammen tømte sig med i året. Pengene flytter sig blot over på bufferbeholdningen, så husstanden har dem stadig, og kun skatten af dem forsvinder. De er der, årets overskud kommer fra, når lønnen er hørt op.',
 
   'YearResult.return':
     'Hvad alle beholdninger tilsammen forrentede sig med i året, før den skat beholdningerne selv betaler. Pengene bliver stående og bliver først til noget, der kan bruges, når der hæves.',
@@ -271,8 +271,8 @@ export const fieldHelp = {
   'YearResult.expenses':
     'Alt, hvad husstanden brugte i året, lagt sammen fra planens udgiftsposter.',
 
-  'YearTable.netResult':
-    'Hvad året gav eller kostede i alt — indtægter og afkast, minus skat og udgifter. Er tallet negativt, tærede året på formuen.',
+  'YearTable.surplus':
+    'Hvad der blev til overs af det, året lagde ind på bufferbeholdningen og tog fra den. Afkastet tæller ikke med — det bliver stående, hvor det er tjent — mens skatten af det gør, for den skal betales. Et minus er det beløb, der mangler at blive flyttet fra en anden beholdning, og ikke et tegn på, at pengene ikke findes.',
 
   'YearTable.buffer':
     'Hvad der stod tilbage på bufferbeholdningen ved årets udgang. Går den i minus, mangler planen penge netop dér — enten fordi de står bundet et andet sted, eller fordi de slet ikke er der.',

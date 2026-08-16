@@ -6,6 +6,7 @@ import { fieldHelp } from './fieldHelp'
 import { kroner } from './format'
 import type { AmountUnit } from './real'
 import { toDisplayKroner } from './real'
+import { surplus } from './surplus'
 
 /** Årstabellen: én række pr. simuleringsår. Alle beløb deflateres til dagens
     kroner her — motoren leverer dem i løbende priser. */
@@ -43,16 +44,17 @@ export function YearTable({
             </th>
             {/* Det, der landede i ordningerne — altså hvad året lagde til
                 side. Bruttobeløbet ved kilden og AM-delen imellem dem står i
-                forklar-året; her er der plads til ét tal. Indbetalingen er en
-                bevægelse og indgår derfor ikke i nettoresultatet, som står
+                forklar-året; her er der plads til ét tal. Indbetalingen
+                forlader bufferen og trækker derfor overskuddet ned, som står
                 længere til højre. */}
             <th scope="col" title={fieldHelp['YearTable.contributions']}>
               Indbetalinger
             </th>
             {/* Raterne ud af ordningerne, lagt sammen. De står ved siden af
                 indbetalingerne, fordi de er den samme slags: en bevægelse
-                inden for husstanden og ikke en indtægt. Kun deres skat
-                sætter aftryk, og de indgår derfor ikke i nettoresultatet. */}
+                inden for husstanden og ikke en indtægt. De lander på
+                bufferen og løfter derfor overskuddet, selv om formuen står
+                stille. */}
             <th scope="col" title={fieldHelp['YearTable.payouts']}>
               Udbetalinger
             </th>
@@ -65,8 +67,12 @@ export function YearTable({
             <th scope="col" title={fieldHelp['YearResult.expenses']}>
               Udgifter
             </th>
-            <th scope="col" title={fieldHelp['YearTable.netResult']}>
-              Nettoresultat
+            {/* Årets overskud, jf. ADR-0026: alt hvad der bevægede sig på
+                bufferen, undtagen dens eget afkast. Et underskud er det
+                beløb, der mangler at blive flyttet — ikke en påstand om, at
+                formuen faldt. Den historie står i Formue-kolonnen. */}
+            <th scope="col" title={fieldHelp['YearTable.surplus']}>
+              Overskud
             </th>
             <th scope="col" title={fieldHelp['YearTable.buffer']}>
               Buffer
@@ -79,8 +85,6 @@ export function YearTable({
         <tbody>
           {years.map((year) => {
             const display = (amount: number) => toDisplayKroner(amount, year.year, plan, unit)
-            const result =
-              year.income + year.return - year.tax - year.expenses
             const bufferBalance = year.holdings.find(
               (holding) => holding.holding === plan.buffer,
             )!.closingBalance
@@ -143,7 +147,7 @@ export function YearTable({
                 <td>{kroner(display(year.return))}</td>
                 <td>{kroner(display(-year.tax))}</td>
                 <td>{kroner(display(-year.expenses))}</td>
-                <td>{kroner(display(result))}</td>
+                <td>{kroner(display(surplus(year, plan.buffer)))}</td>
                 <td className="buffer">
                   {kroner(display(bufferBalance))}
                   {state && <span className="tilstand">{bufferStateLabels[state]}</span>}
