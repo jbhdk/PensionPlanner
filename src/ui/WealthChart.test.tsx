@@ -224,7 +224,7 @@ describe('WealthChart', () => {
     const years = simulate(plan)
     const { container } = render(<WealthChart years={years} plan={plan} unit="Real" />)
 
-    const maerkater = Array.from(container.querySelectorAll('svg .formuegraf-akse-y text'))
+    const maerkater = Array.from(container.querySelectorAll('svg .graf-akse-y text'))
     expect(maerkater.length).toBeGreaterThan(1)
     for (const maerkat of maerkater) {
       const hoejre = Number(maerkat.getAttribute('x'))
@@ -316,7 +316,7 @@ describe('WealthChart', () => {
     const years = simulate(plan)
     const { container } = render(<WealthChart years={years} plan={plan} unit="Real" />)
 
-    const plot = container.querySelector('.formuegraf-plot')!
+    const plot = container.querySelector('.graf-plot')!
     const svgFoer = container.querySelector('svg')!
     const hoejdeFoer = svgFoer.getAttribute('viewBox')!.split(' ')[3]
 
@@ -338,7 +338,7 @@ describe('WealthChart', () => {
     const years = simulate(plan)
     const { container } = render(<WealthChart years={years} plan={plan} unit="Real" />)
 
-    const plot = container.querySelector('.formuegraf-plot')!
+    const plot = container.querySelector('.graf-plot')!
     act(() => {
       fireResize(plot, { width: 480, height: 300 })
     })

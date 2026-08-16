@@ -129,7 +129,7 @@ body {
   padding-right: 356px;
 }
 
-/* Flex-søjle, så formuegrafen kan fylde resten af spalten under
+/* Flex-søjle, så en graf kan fylde resten af spalten under
    resultathovedet — årstabellen bruger ikke det ekstra rum og beholder sin
    egen indholdshøjde. */
 .resultatspalte {
@@ -637,9 +637,12 @@ table.aar th,
   font-size: 11px;
 }
 
-/* ---------- formuegrafen ---------- */
+/* ---------- graferne ---------- */
 
-.formuegraf {
+/* Rammen er fælles for formuegrafen og overskudsgrafen: samme kort, samme
+   plotcontainer, samme akser. Kun det, der hører til den ene graf alene —
+   legenden og bufferens spænd — bærer dens eget navn. */
+.graf {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -652,17 +655,17 @@ table.aar th,
 }
 
 /* Ingen fast højde: plotcontaineren fylder resten af kortet, og grafen
-   måles efter dens faktiske størrelse — se WealthChart's ResizeObserver.
+   måles efter dens faktiske størrelse — se `useMeasuredPlot`.
    min-height er gulvet, ikke måltallet: under 1000 px lægges spalterne
    under hinanden og får `height: auto` (se nedenfor), så der ikke er nogen
    resterende plads at fylde — uden gulvet ville grafen klappe sammen til
    næsten ingenting. */
-.formuegraf-plot {
+.graf-plot {
   flex: 1 1 auto;
   min-height: 300px;
 }
 
-.formuegraf-plot svg {
+.graf-plot svg {
   display: block;
   width: 100%;
   height: 100%;
@@ -742,18 +745,18 @@ table.aar th,
 /* Aksernes gitterlinjer er tilbagetrukne — data er det, der skal ses, jf.
    dataviz-skillets "recessive grid/axes". Basislinjen ved 0 er trukket
    svagt frem, så bunden af stablingen er til at følge. */
-.formuegraf-akse-y .gitterlinje {
+.graf-akse-y .gitterlinje {
   stroke: var(--linje-svag);
   stroke-width: 1;
 }
 
-.formuegraf-akse-y .basislinje {
+.graf-akse-y .basislinje {
   stroke: var(--linje);
   stroke-width: 1;
 }
 
-.formuegraf-akse-y text,
-.formuegraf-akse-x text {
+.graf-akse-y text,
+.graf-akse-x text {
   fill: var(--muted);
   font-size: 10px;
   font-family: var(--f-tal);
@@ -761,8 +764,8 @@ table.aar th,
 
 /* Aksens navn skal læses som en overskrift til mærkaterne, ikke som endnu
    et af dem — derfor fladens labelfarve og lidt sperring. */
-.formuegraf-akse-y .aksenavn,
-.formuegraf-akse-x .aksenavn {
+.graf-akse-y .aksenavn,
+.graf-akse-x .aksenavn {
   fill: var(--label);
   font-family: var(--f-broed);
   letter-spacing: 0.06em;

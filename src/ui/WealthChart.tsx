@@ -1,29 +1,15 @@
 import { scaleLinear } from 'd3-scale'
 import { area as d3Area, curveLinear } from 'd3-shape'
-import { useEffect, useRef, useState } from 'react'
 import { isFreeAssets } from '../engine/holdingVariant'
 import type { Plan } from '../engine/plan'
 import type { BufferState, YearResult } from '../engine/yearResult'
 import { bufferStateClasses, bufferStateLabels } from './bufferState'
-import { kroner, millioner } from './format'
+import { KroneAxisMarks, MARGIN, YearAxisMarks, kroneAxis, useMeasuredPlot } from './chartFrame'
 import { holdingColor, orderedHoldings } from './holdingPalette'
 import type { AmountUnit } from './real'
 import { toDisplayKroner } from './real'
 import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
-
-// Top og bund har hver sin ekstra linje til aksens navn: enheden over
-// y-mærkaterne, tidsenheden under årstallene. Uden dem er det tal på en akse,
-// og læseren må gætte, hvad de tæller.
-const MARGIN = { top: 22, right: 8, bottom: 34, left: 58 }
-
-// Aksemærkaterne står i monospace ved 10 px, hvor hvert tegn fylder 0,6 em.
-// Margenen kan derfor udmåles af mærkatets længde frem for at måles i DOM'en.
-const LABEL_CHAR_WIDTH = 6
-const LABEL_GAP = 10
-
-// Tidsenheden er simuleringsåret, og x-aksen tæller ét pr. punkt.
-const X_AXIS_NAME = 'år'
 
 // Et fravalgt bånd i legenden træder tilbage, men forsvinder ikke.
 const DESELECTED_OPACITY = 0.28
@@ -68,11 +54,9 @@ function bufferSpans(years: YearResult[]): BufferSpan[] {
 
     Ingen fast højde eller bredde: grafen måles efter den plads,
     plotcontaineren faktisk har, og tegnes om ved vinduesskift og når
-    inspektørskuffen åbner eller lukker. `viewBox` følger den målte bredde
-    i stedet for et fast tal, så SVG'en aldrig skalerer sin tegning — og
-    dermed heller ikke aksernes fontstørrelse — ned for at passe en smal
-    spalte. `initialWidth`/`initialHeight` er kun det, der vises inden
-    første måling. */
+    inspektørskuffen åbner eller lukker, jf. `useMeasuredPlot`.
+    `initialWidth`/`initialHeight` er kun det, der vises inden første
+    måling. */
 export function WealthChart({
   years,
   plan,
@@ -90,22 +74,7 @@ export function WealthChart({
   initialWidth?: number
   initialHeight?: number
 }) {
-  const plotRef = useRef<HTMLDivElement>(null)
-  const [width, setWidth] = useState(initialWidth)
-  const [height, setHeight] = useState(initialHeight)
-
-  useEffect(() => {
-    const plot = plotRef.current
-    if (!plot || typeof ResizeObserver === 'undefined') return
-
-    const observer = new ResizeObserver((entries) => {
-      const rect = entries[0]?.contentRect
-      if (rect && rect.width > 0) setWidth(rect.width)
-      if (rect && rect.height > 0) setHeight(rect.height)
-    })
-    observer.observe(plot)
-    return () => observer.disconnect()
-  }, [])
+  const { plotRef, width, height } = useMeasuredPlot(initialWidth, initialHeight)
 
   const holdings = orderedHoldings(plan.household)
   const n = years.length
@@ -126,31 +95,15 @@ export function WealthChart({
   }
   if (maxTop === 0) maxTop = 1
 
-  // Y-aksens gitterlinjer trappes i pæne trin (en halv tierpotens ad
-  // gangen), som mockuppens tegnFormuegraf().
-  const yStep = 10 ** Math.floor(Math.log10(maxTop)) / 2
-  const yTicks: number[] = []
-  for (let v = 0; v <= maxTop; v += yStep) yTicks.push(v)
-
-  // Hele kroner fylder mere, end margenen har plads til, så snart formuen
-  // løber op i millioner, og det yderste ciffer blev klippet af viewBox'ens
-  // venstre kant. Går aksen over en million, skrives den derfor i millioner,
-  // som mockuppens tegnFormuegraf() — og margenen udmåles efter det længste
-  // mærkat, så et ciffer mere aldrig kan skubbe teksten ud over kanten igen.
-  const inMillions = maxTop >= 1_000_000
-  const yLabels = yTicks.map((v) => (inMillions ? millioner(v) : kroner(v)))
-
-  // Aksens navn siger, hvad tallene tæller — og i hvilken størrelsesorden,
-  // siden mærkaterne skifter til millioner. Hvilke kroner det er, dagens
-  // eller årets egne, står i omskifteren over grafen og gentages ikke her.
-  const yAxisName = inMillions ? 'mio. kr.' : 'kr.'
-
-  const longestLabel = Math.max(0, ...[...yLabels, yAxisName].map((label) => label.length))
-  const left = Math.max(MARGIN.left, longestLabel * LABEL_CHAR_WIDTH + LABEL_GAP)
+  // Stablingen har ingen negativ side — en tom buffer gulves ved nul — så
+  // kroneaksen løber fra nul og op.
+  const axis = kroneAxis(0, maxTop)
+  const left = axis.left
+  const right = width - MARGIN.right
 
   const x = scaleLinear()
     .domain([0, Math.max(1, n - 1)])
-    .range([left, width - MARGIN.right])
+    .range([left, right])
   const y = scaleLinear()
     .domain([0, maxTop])
     .range([height - MARGIN.bottom, MARGIN.top])
@@ -174,7 +127,7 @@ export function WealthChart({
       key,
       clipId: `bufferstate-klip-${key}`,
       x0: Math.max(left, x(span.fromIndex) - halfStep),
-      x1: Math.min(width - MARGIN.right, x(span.toIndex) + halfStep),
+      x1: Math.min(right, x(span.toIndex) + halfStep),
     }
   })
 
@@ -189,21 +142,9 @@ export function WealthChart({
       selected?.kind === 'holding' && selected.id !== holding.id ? DESELECTED_OPACITY : 1,
   }))
 
-  // X-aksens årstal: hvert tiende år, plus altid første og sidste, så en
-  // kort horisont ikke står uden en eneste årsmarkering.
-  const xTickYears = new Set<number>()
-  years.forEach((yearResult) => {
-    if (yearResult.year % 10 === 0) xTickYears.add(yearResult.year)
-  })
-  if (n > 0) {
-    xTickYears.add(years[0]!.year)
-    xTickYears.add(years[n - 1]!.year)
-  }
-  const xTicks = Array.from(xTickYears).sort((a, b) => a - b)
-
   return (
-    <div className="formuegraf">
-      <div className="formuegraf-plot" ref={plotRef}>
+    <div className="graf formuegraf">
+      <div className="graf-plot" ref={plotRef}>
         <svg role="img" aria-label="Formuegraf" viewBox={`0 0 ${width} ${height}`}>
           <defs>
             {/* Skellet mellem bundne beholdninger og frie midler skal kunne
@@ -239,27 +180,7 @@ export function WealthChart({
               </clipPath>
             ))}
           </defs>
-          <g className="formuegraf-akse-y">
-            {/* Enheden står over mærkatsøjlen og er højrestillet som den, så
-                den læses som søjlens overskrift. */}
-            <text className="aksenavn" x={left - 6} y={MARGIN.top - 8} textAnchor="end">
-              {yAxisName}
-            </text>
-            {yTicks.map((v, i) => (
-              <g key={v}>
-                <line
-                  x1={left}
-                  x2={width - MARGIN.right}
-                  y1={y(v)}
-                  y2={y(v)}
-                  className={v === 0 ? 'basislinje' : 'gitterlinje'}
-                />
-                <text x={left - 6} y={y(v) + 3.5} textAnchor="end">
-                  {yLabels[i]}
-                </text>
-              </g>
-            ))}
-          </g>
+          <KroneAxisMarks axis={axis} y={y} right={right} />
           {bandPaths.map((band) => (
             <g key={band.holding.id}>
               <path
@@ -337,7 +258,7 @@ export function WealthChart({
             const plateWidth = label.length * SPAN_LABEL_CHAR_WIDTH + 8
             // Et spænd helt ude ved højre kant får sin plade skubbet ind, så
             // mærkatet ikke rager ud over viewBox'en.
-            const plateX = Math.min(span.x0 + 1, width - MARGIN.right - plateWidth)
+            const plateX = Math.min(span.x0 + 1, right - plateWidth)
             return (
               <g
                 key={span.key}
@@ -374,34 +295,7 @@ export function WealthChart({
               </g>
             )
           })}
-          <g className="formuegraf-akse-x">
-            {xTicks.map((yearTick) => {
-              const index = yearTick - years[0]!.year
-              // Tæt på højre kant ankres årstallet til højre i stedet for at
-              // centreres, så det ikke rager ud over viewBox'en.
-              const anchor = x(index) > width - MARGIN.right - 20 ? 'end' : 'middle'
-              return (
-                <text
-                  key={yearTick}
-                  x={x(index)}
-                  y={height - MARGIN.bottom + 14}
-                  textAnchor={anchor}
-                >
-                  {yearTick}
-                </text>
-              )
-            })}
-            {/* Tidsenheden står midt under årstallene, hvor den ikke kan
-                forveksles med et af dem. */}
-            <text
-              className="aksenavn"
-              x={(left + width - MARGIN.right) / 2}
-              y={height - 6}
-              textAnchor="middle"
-            >
-              {X_AXIS_NAME}
-            </text>
-          </g>
+          <YearAxisMarks years={years} x={x} left={left} right={right} height={height} />
         </svg>
       </div>
       <ul className="formuegraf-legend">
