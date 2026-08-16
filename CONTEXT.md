@@ -187,7 +187,11 @@ _Avoid_: Husstandsskat, samlet skatteopgørelse, familieopgørelse
 
 **Beholdningsskat** · `HoldingTax`:
 Skatten på en beholdnings årlige afkast, båret af beholdningen selv og trukket af dens saldo. Den passerer aldrig nogen persons indkomst, og den er dermed den tredje bærer ved siden af `TaxAssessment`, som er personens, og `HouseholdTaxAssessment`, som er husstandens. Satsen følger varianten: `PalTax` for `InstalmentPension`, `OldAgeSavings` og `LifeAnnuity`, og aktiesparekontoens egen for `ShareSavingsAccount`. De to frie varianter har ingen — deres afkast beskattes hos personen eller husstanden i stedet.
-_Avoid_: Lagerskat, afkastskat, depotskat
+_Avoid_: Lagerskat, afkastskat, depotskat, `ReturnTax` brugt om den
+
+**Skat af afkast** · `ReturnTax`:
+Den del af husstandens egen skat, der måler på afkastet af de frie beholdninger: aktieindkomstens to lag, kapitalindkomstens bidrag til bund- og topskat med sit eget loftnedslag, og kapitalindkomstens andel af kommune- og kirkeskatten. Den er ikke `HoldingTax`, som beholdningen selv bærer og trækker af sin egen saldo — `ReturnTax` forlader bufferen som enhver anden regning og indgår derfor i `Surplus`, hvor afkastet selv ikke gør. Henført og ikke kontrafaktisk: den lægger de lag sammen, der måler på afkastet, frem for at spørge, hvad året havde kostet uden det.
+_Avoid_: Afkastskat, kapitalskat, `HoldingTax` brugt om den
 
 **Facitcase** · `WorkedExample`:
 Et gennemregnet eksempel med kilde og verifikationsdato, som skatteopgørelsen prøves imod. Tallene står som data frem for som assertions spredt ud i en test, så det kan ses, hvor de kommer fra, og hvornår de sidst er efterset. Bygger casen på et satstal, der endnu ikke er officielt bekræftet, siger den det selv.
