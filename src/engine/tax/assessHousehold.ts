@@ -97,10 +97,22 @@ export type StatePensionYear = {
   }
 }
 
-/** Summen af aftrapningsgrundlagets bestanddele. Ikke et felt, jf.
-    `TaperBase`. */
+/** Summen af aftrapningsgrundlagets bestanddele — lovens *opgjorte
+    indtægt*. Ikke et felt, jf. `TaperBase`.
+
+    Nedrundingen til nærmeste hundrede er PL § 29, stk. 6: "Den opgjorte
+    indtægt afrundes nedad til nærmeste beløb, der er deleligt med 100." Den
+    rammer summen og ikke bestanddelene — de står præcist, så linjen kan
+    læses, som Udbetaling Danmark skriver den — og den ligger efter stk. 5's
+    bortseelse, som `base.spouse` allerede bærer, og før stk. 7's
+    fradragsbeløb, som trækkes af den her.
+
+    Den er også grunden til, at marginalsatserne måles på hundrede kroner mere
+    og ikke på én: en enkelt krone flytter i nioghalvfems ud af hundrede
+    tilfælde ingenting, og satsen ville blive en savtak frem for et tal, en
+    plan kan bruge. */
 export function totalTaperBase(base: TaperBase): Nominal {
-  return totalOwnIncome(base) + base.spouse
+  return Math.floor((totalOwnIncome(base) + base.spouse) / 100) * 100
 }
 
 /** Én person, som husstandssømmet ser hende. */
@@ -162,10 +174,18 @@ function assess(input: HouseholdTaxInput, rates: RateYear): HouseholdAssessment 
   }
 }
 
+/** Skridtet, marginalsatserne måles med. Hundrede kroner og ikke én, fordi
+    PL § 29, stk. 6 runder aftrapningsgrundlaget ned til nærmeste hundrede:
+    en enkelt krone lander i nioghalvfems ud af hundrede tilfælde inde i det
+    samme trin og flytter dermed intet tillæg, og satsen ville blive en savtak
+    frem for et tal, en plan kan bruge. Målt over et helt trin rammer den den
+    samme sats, uanset hvor i trinnet indkomsten står. */
+const marginalStep = 100
+
 /** Personens to marginalsatser, én pr. indkomstart, hver målt ved at regne
-    hele husstandens opgørelse om med én krone mere af sin egen art og tage
-    differencen — aldrig udledt analytisk af satserne, så de ikke kan komme
-    til at sige noget andet end selve opgørelsen ville.
+    hele husstandens opgørelse om med `marginalStep` kroner mere af sin egen
+    art og dele differencen med skridtet — aldrig udledt analytisk af satserne,
+    så de ikke kan komme til at sige noget andet end selve opgørelsen ville.
 
     Det, der måles, er husstandens **byrde** og ikke dens skat alene. En krone
     pensionsindkomst mere koster både sin egen skat og det pensionstillæg, den
@@ -188,18 +208,18 @@ function marginalTaxRates(
   rates: RateYear,
 ): MarginalTaxRates {
   const at = burden(assess(input, rates))
-  const withOneMore = (of: Partial<TaxAssessmentInput>) => {
+  const perKrone = (of: Partial<TaxAssessmentInput>) => {
     const person = input.persons[index]!
     const persons = input.persons.map((other, at) =>
       at === index ? { ...person, tax: { ...person.tax, ...of } } : other,
     )
-    return burden(assess({ ...input, persons }, rates)) - at
+    return (burden(assess({ ...input, persons }, rates)) - at) / marginalStep
   }
 
   const { tax } = input.persons[index]!
   return {
-    earnedIncome: withOneMore({ earnedIncome: tax.earnedIncome + 1 }),
-    pensionIncome: withOneMore({ pensionIncome: (tax.pensionIncome ?? 0) + 1 }),
+    earnedIncome: perKrone({ earnedIncome: tax.earnedIncome + marginalStep }),
+    pensionIncome: perKrone({ pensionIncome: (tax.pensionIncome ?? 0) + marginalStep }),
   }
 }
 

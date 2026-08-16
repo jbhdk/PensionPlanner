@@ -44,7 +44,8 @@ sequenceDiagram
     S-->>E: amounts before taper
 
     Note over E,T: Husstandskobling — kan ikke deles i to uafhængige personberegninger
-    E->>T: TaperBase = own + (1 − spouseDisregard) × spouse's, spouse's earned income excluded
+    E->>T: TaperBase = own + (1 − spouseDisregard) × spouse's, rounded down to nearest 100
+    Note over T: Earned income is outside the base — the pensioner's own and the spouse's alike
     T-->>E: tapered PensionSupplement
     Note over T: StatePension is not part of its own base — one pass, never an iteration
 

@@ -391,7 +391,7 @@ export const fieldHelp = {
     'Den del af ægtefællens indtægt, der tæller med her. En fast andel holdes udenfor, så længe ægtefællen ikke selv får folkepension — og fra det år det sker, tæller hele beløbet med.',
 
   'TaperBase.total':
-    'Den samlede indtægt, tillægget måles imod. Løn tæller ikke med, hverken egen eller ægtefællens, og det gør penge fra en aldersopsparing eller en aktiesparekonto heller ikke.',
+    'Den samlede indtægt, tillægget måles imod. Løn tæller ikke med, hverken egen eller ægtefællens, og det gør penge fra en aldersopsparing eller en aktiesparekonto heller ikke. Beløbet er rundet ned til nærmeste hundrede kroner, som loven foreskriver, og det er derfor sjældent præcis summen af linjerne ovenfor.',
 
   'LifeAnnuityBenefit.holding':
     'Hvilken af husstandens livrenter det årlige beløb kom af. Ordningen selv står med saldo nul fra det år, den blev omsat — pengene er byttet til en indtægt og findes ikke længere som en opsparing.',

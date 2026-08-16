@@ -244,6 +244,38 @@ describe('aftrapningen af pensionstillægget', () => {
     // million flytter det ikke en krone.
     expect(supplement({ capitalIncome: -500_000 })).toBeCloseTo(73_600.8, 6)
   })
+  it('runder det opgjorte grundlag ned til nærmeste hundrede', () => {
+    // PL § 29, stk. 6: "Den opgjorte indtægt afrundes nedad til nærmeste
+    // beløb, der er deleligt med 100." Nedrundingen rammer den opgjorte
+    // indtægt — altså summen — og ligger mellem stk. 5-bortseelsen og
+    // stk. 7-fradragsbeløbet, i den rækkefølge stykkerne selv står i.
+    //
+    //   150.060 i rater + 50 i kapitalindkomst = 150.110
+    //   nedrundet                              = 150.100
+    //   150.100 − 99.200                       =  50.900
+    //   30,9 % af 50.900                       =  15.728,10
+    //   104.748 − 15.728,10                    =  89.019,90
+    const assessment = assessHousehold(
+      {
+        persons: [
+          aPensioner({ civilStatus: 'Single', pensionIncome: 150_060, capitalIncome: 50 }),
+        ],
+      },
+      rateYear2026,
+    )
+
+    const { taper, pensionSupplement } = assessment.persons[0]!.statePension!
+
+    expect(totalTaperBase(taper.base)).toBeCloseTo(150_100, 6)
+    expect(pensionSupplement).toBeCloseTo(89_019.9, 6)
+
+    // Nedrundingen er summens og ikke hver enkelt indkomsts: bestanddelene
+    // står præcist, hvor summen står afrundet — som på Udbetaling Danmarks
+    // egen linje. Rundedes hver for sig, ville grundlaget være 150.000 og
+    // tillægget 89.050,80.
+    expect(taper.base.pensionIncome).toBeCloseTo(150_060, 6)
+    expect(taper.base.capitalIncome).toBeCloseTo(50, 6)
+  })
   it('lader ægtefællens øvrige indkomst tælle med 46 %, og hendes arbejdsindkomst slet ikke', () => {
     // Af en ægtefælles indtægt ses bort fra 54 %, jf. PL § 49, stk. 1, nr. 4
     // — en ren procent uden maksimumbeløb. Hendes arbejdsindkomst indgår
