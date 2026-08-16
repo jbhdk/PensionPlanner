@@ -1,15 +1,16 @@
 import {
+  balanceOf,
   closeYear,
+  creditReturn,
   fromBalances,
   fromPreviousYear,
-  closingBalanceOf,
   openingBalances,
   returnOf,
   withFlow,
   withMovement,
   withPayout,
 } from './holdingYears'
-import type { HoldingYears } from './holdingYears'
+import type { CreditedHoldingYears, HoldingYears } from './holdingYears'
 import type {
   Contribution,
   Entry,
@@ -185,8 +186,6 @@ function simulateYear(
   )
   const contributions = inPlanOrder(requested, contributionsByPersonId)
 
-  const expenses = sumOf(entries, 'Expense')
-
   // Raten regnes af primosaldoen, jf. diagram 02 og PBL § 11 A: saldoen ved
   // årets begyndelse divideret med resterende udbetalingsår, eller
   // annuiteten af den. Den skal derfor være kendt, før noget vejes ind: en
@@ -201,17 +200,10 @@ function simulateYear(
   // lommer, jf. ADR-0009.
   const annuities = lifeAnnuitiesInYear(plan, year, opening, previous)
 
-  // Folkepensionen står intet sted i planen: begge kronebeløb læses af
-  // satsåret, og året, de begynder i, udledes af fødselsdatoen, jf. ADR-0023.
-  const statePensions = statePensionsInYear(plan.household, year, rates)
-
-  const income =
-    sumOf(entries, 'Income') + sumOfBenefits(annuities) + sumOfStatePensions(statePensions)
-
-  // Afkastet regnes først, på primosaldi og årets strømme alene efter
-  // Modified Dietz, jf. ADR-0006 — det afhænger aldrig af skatten, kun
-  // omvendt: aktiedepotets og opsparingskontoens afkast beskattes hos
-  // personen som netop dette afkast.
+  // Herfra og til krediteringen vejes årets daterede bevægelser ind i
+  // afkastgrundlaget efter Modified Dietz, jf. ADR-0006. Folkepensionen,
+  // skatten og restposten er ikke iblandt dem og findes derfor endnu ikke:
+  // de opgøres nedenfor, hvor bogen er lukket for vægtning, jf. ADR-0024.
   // Kun bufferen modtager poster, og strømmen vejes i dens ende, jf.
   // ADR-0004 og `weightAt`.
   const afterEntries = withFlow(years, plan.buffer, weightedNetFlow(entries, plan.buffer))
@@ -255,21 +247,32 @@ function simulateYear(
   // vejer derimod ingen steder: den udbetales månedsvis og lander på
   // bufferen, hvor en jævn strøm giver nul, jf. ADR-0024.
   //
-  // Det er den sidste vægtning: herefter flytter året kun saldi, og
-  // afkastgrundlaget står fast. `annuitised` er derfor bogen, afkastet
-  // spørges af.
+  // Det er den sidste vægtning, og `annuitised` er derfor den bog,
+  // krediteringen lukker.
   const annuitised = annuities.reduce(
     (years, { holding, conversion }) =>
       withFlow(years, holding, -conversion * conversionWeight),
     flowed,
   )
 
+  // Alle daterede bevægelser er noteret, og afkastet krediteres her, jf.
+  // diagram 02. Bogen er dermed lukket for vægtning: årets drift ligger
+  // nedenunder og kan ikke nå afkastgrundlaget, fordi der ikke længere
+  // findes en bog, der tager imod en vægtning. Rækkefølgen er ikke en
+  // konvention men håndhævelsen af ADR-0024 — pensionstillægget findes
+  // ikke endnu og kan derfor ikke indgå i sit eget grundlag gennem
+  // bufferen.
+  //
+  // Beholdningsskatten trækkes med i samme greb: den regnes af årets
+  // faktiske, vægtede afkast og bæres af beholdningen selv.
+  const credited = creditReturn(annuitised, rates)
+
   // En overførsel flytter sit fulde beløb mellem afgiver og modtager. Den
   // rammer aldrig skatten eller pengestrømmen, jf. `Transfer`.
   const moved = transfers.reduce(
     (years, { transfer, amount }) =>
       withMovement(withMovement(years, transfer.from, -amount), transfer.to, amount),
-    annuitised,
+    credited,
   )
 
   // Indbetalingen tilføjer intet led til balanceinvarianten: den er en
@@ -295,29 +298,41 @@ function simulateYear(
   // Den sidste rate fejer resten med. Fejningen kommer efter afkastet, som
   // allerede er noteret vægtet, og har derfor selv vægt nul — ingen
   // cirkularitet, og rækkefølgen i diagram 02 holder.
-  const swept = sweepFinalInstalment(payouts, paid, plan.buffer, rates)
+  const swept = sweepFinalInstalment(payouts, paid, plan.buffer)
 
   // Depotet forlader husstandens formue her — ingen modtager, og hverken en
   // udgift eller en skat. Det er dét, `conversion`-leddet i
   // balanceinvarianten er til for.
-  const converted = convert(annuities, swept.years, rates)
+  const converted = convert(annuities, swept.years)
 
-  // Afkastet spørges af den bog, hvor alle årets strømme er vejet ind —
-  // ydelsen med. Bufferen kan være et aktiedepot eller en opsparingskonto,
-  // og dens afkast er da personens egen aktie- eller kapitalindkomst: læste
-  // opgørelsen her et andet afkast end det, beholdningsrækken viser, ville
-  // skatten være regnet af et tal, brugeren ikke kan finde nogen steder.
-  const shareIncomeByPerson = incomeByVariant(plan, annuitised, 'ShareDepot')
-  const capitalIncomeByPerson = incomeByVariant(plan, annuitised, 'SavingsAccount')
+  // Folkepensionen står intet sted i planen: begge kronebeløb læses af
+  // satsåret, og året, de begynder i, udledes af fødselsdatoen, jf. ADR-0023.
+  //
+  // Den opgøres her og ikke længere oppe, fordi den er årets drift og ikke
+  // en dateret bevægelse. Den udbetales månedsvis og lander på bufferen,
+  // hvor en jævn strøm vejer nul, jf. ADR-0024 — og bogen er lukket, så den
+  // kan ikke vejes noget sted alligevel.
+  const statePensions = statePensionsInYear(plan.household, year, rates)
+
+  const expenses = sumOf(entries, 'Expense')
+  const income =
+    sumOf(entries, 'Income') + sumOfBenefits(annuities) + sumOfStatePensions(statePensions)
+
+  // Bufferen kan være et aktiedepot eller en opsparingskonto, og dens afkast
+  // er da personens egen aktie- eller kapitalindkomst: læste opgørelsen her
+  // et andet afkast end det, beholdningsrækken viser, ville skatten være
+  // regnet af et tal, brugeren ikke kan finde nogen steder. Det er samme tal
+  // i enhver bog fra krediteringen og frem — afkastet er et tal på rækken og
+  // ikke en beregning, en bevægelse kan røre.
+  const shareIncomeByPerson = incomeByVariant(plan, credited, 'ShareDepot')
+  const capitalIncomeByPerson = incomeByVariant(plan, credited, 'SavingsAccount')
 
   // Hele husstandens skat bag ét søm, jf. ADR-0014. Motoren lægger intet
   // sammen selv: aktieindkomstens skat er husstandens og hører ikke til
   // nogen enkelt person, og totalen er modulets egen sum af sine dele.
   //
   // Raterne kommer med fejningen lagt til: den er en krone, personen
-  // beskattes af, som enhver anden rate. Afkastet spørges af `annuitised` og
-  // ikke af bogen her — det er det samme tal begge steder, fordi hverken
-  // primosaldoen eller den vægtede strøm ændrer sig af en bevægelse.
+  // beskattes af, som enhver anden rate.
   const household = assessHousehold(
     {
       persons: plan.household.persons.map((person) => ({
@@ -339,7 +354,7 @@ function simulateYear(
   // måde at sige, at planen ikke holder, jf. ADR-0002.
   //
   // Kun husstandens egen skat trækkes her. Beholdningsskatten er allerede
-  // trukket af beholdningen selv ved lukningen og passerer aldrig
+  // trukket af beholdningen selv ved krediteringen og passerer aldrig
   // pengestrømmen; trak bufferen den også, ville den være betalt to gange.
   const settled = withMovement(
     converted.years,
@@ -347,10 +362,9 @@ function simulateYear(
     income - totalHouseholdTax(household) - expenses,
   )
 
-  // Lukningen krediterer afkastet og trækker beholdningsskatten, jf. diagram
-  // 02. Først dér er alle tre bærere af årets skat kendt, og først dér kan
-  // de lægges sammen.
-  const holdings = closeYear(settled, rates)
+  // Lukningen gør rækkerne til årsresultatets beholdningsår. Først dér er
+  // alle tre bærere af årets skat kendt, og først dér kan de lægges sammen.
+  const holdings = closeYear(settled)
   const tax = totalYearTax(household, holdings)
 
   return {
@@ -437,7 +451,7 @@ function bufferState(
     for aktie- og kapitalindkomsten pr. person, jf. ADR-0010. */
 function incomeByVariant(
   plan: Plan,
-  years: HoldingYears,
+  years: CreditedHoldingYears,
   variant: HoldingVariant,
 ): Map<PersonId, Nominal> {
   return new Map(
@@ -962,22 +976,21 @@ function instalment(
     en rate, der ikke kan efterregne den skat, den står ved siden af. Samme
     greb som `PersonContributions`, jf. ADR-0018.
 
-    Resten er det, beholdningen ville lukke året med: saldoen som den står,
-    plus årets afkast, minus beholdningsskatten af det. Den kan være negativ
-    — annuitetsprincippets sidste rate overstiger saldoen — og fejningen
+    Resten er saldoen, som den står på den krediterede bog: årets afkast er
+    tilskrevet og beholdningsskatten trukket. Den kan være negativ —
+    annuitetsprincippets sidste rate overstiger saldoen — og fejningen
     trækker så fra i stedet. Begge veje lukker beholdningen på nul, og det er
     hele reglen. */
 function sweepFinalInstalment(
   payouts: ActivePayout[],
-  years: HoldingYears,
+  years: CreditedHoldingYears,
   buffer: HoldingId,
-  rates: RateYear,
-): { payouts: ActivePayout[]; years: HoldingYears } {
-  return payouts.reduce<{ payouts: ActivePayout[]; years: HoldingYears }>(
+): { payouts: ActivePayout[]; years: CreditedHoldingYears } {
+  return payouts.reduce<{ payouts: ActivePayout[]; years: CreditedHoldingYears }>(
     (swept, payout) => {
       if (!payout.final) return { ...swept, payouts: [...swept.payouts, payout] }
 
-      const remainder = closingBalanceOf(swept.years, payout.holding, rates)
+      const remainder = balanceOf(swept.years, payout.holding)
       return {
         payouts: [...swept.payouts, { ...payout, amount: payout.amount + remainder }],
         years: withMovement(
@@ -1084,15 +1097,14 @@ function benefitLastYear(previous: YearResult | undefined, holding: HoldingId): 
     primosaldoen, som er det depot, selskabet omsætter. */
 function convert(
   annuities: ActiveAnnuity[],
-  years: HoldingYears,
-  rates: RateYear,
-): { conversion: Nominal; years: HoldingYears } {
-  return annuities.reduce<{ conversion: Nominal; years: HoldingYears }>(
+  years: CreditedHoldingYears,
+): { conversion: Nominal; years: CreditedHoldingYears } {
+  return annuities.reduce<{ conversion: Nominal; years: CreditedHoldingYears }>(
     (converted, { holding, conversion }) => {
       if (conversion === 0) return converted
 
       const emptied = withMovement(converted.years, holding, -conversion)
-      const remainder = closingBalanceOf(emptied, holding, rates)
+      const remainder = balanceOf(emptied, holding)
       return {
         conversion: converted.conversion + conversion + remainder,
         years: withMovement(emptied, holding, -remainder),

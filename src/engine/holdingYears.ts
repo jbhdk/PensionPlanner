@@ -3,14 +3,14 @@ import type { Holding, HoldingId, Nominal } from './plan'
 import type { RateYear } from './rates/rateYear'
 import type { HoldingYear } from './yearResult'
 
-/** Årets beholdningsrækker under opbygning — én række pr. beholdning, ikke
-    fire parallelle opslagstabeller over de samme beholdninger.
+/** Årets beholdningsrækker, mens bogen er åben for vægtning — én række pr.
+    beholdning, ikke parallelle opslagstabeller over de samme beholdninger.
 
-    Rækken bærer de tal, `HoldingYear` lukker om: primosaldoen, den vægtede
-    strøm, saldoen som den står lige nu, årets udbetaling, og beholdningen
-    selv, hvis satser afkastet regnes af. Afkastet gemmes ikke — det er
-    udledt af primo og strøm og er derfor det samme, uanset hvornår i året
-    man spørger.
+    Bogen kan kun vejes. Den bærer primosaldoen, årets vægtede strøm og
+    beholdningen selv, hvis satser afkastet skal regnes af, og den kender
+    hverken en saldo, der kan flyttes, eller en udbetaling, der kan noteres.
+    Årets penge flytter sig først i den anden fase, `CreditedHoldingYears`,
+    og de to bøger deler ingen operationer, jf. ADR-0024.
 
     Beholdningerne er dem, bogen blev åbnet med, og ingen andre: et opslag på
     en beholdning, der ikke findes, er en peger, `validatePlan` skulle have
@@ -21,8 +21,33 @@ type Row = {
   holding: Holding
   openingBalance: Nominal
   weightedFlow: Nominal
+}
+
+/** Årets beholdningsrækker efter afkastet er krediteret — bogen lukket for
+    vægtning, jf. ADR-0024 og diagram 02.
+
+    Afkastet og beholdningsskatten står som tal på rækken frem for at blive
+    udledt, hver gang nogen spørger, og saldoen er primosaldoen med afkastet
+    lagt til og skatten trukket fra. Herfra flytter året kun penge:
+    overførslerne, indbetalingerne, raterne, den sidste rates fejning,
+    omsætningen og årets restpost.
+
+    Rækken har sluppet beholdningen selv og bærer kun dens id. Satserne er
+    brugt op — afkastet er regnet — og der er intet tilbage at regne dem af.
+    Det er også dét, der gør de to bøger uforvekslelige for oversætteren: en
+    krediteret bog kan ikke vejes, fordi den ikke længere ved, hvad den
+    skulle vejes med. Ringen, ADR-0024 bryder, bliver dermed umulig at skrive
+    frem for blot fraværende. */
+export type CreditedHoldingYears = ReadonlyMap<HoldingId, CreditedRow>
+
+type CreditedRow = {
+  holding: HoldingId
+  openingBalance: Nominal
+  weightedFlow: Nominal
   balance: Nominal
   payout: Nominal
+  return: Nominal
+  tax: Nominal
 }
 
 /** Årets rækker åbnet på beholdningernes egne saldi — planens startår. */
@@ -41,13 +66,7 @@ function open(holdings: Holding[], openingBalance: (holding: Holding) => Nominal
   return new Map(
     holdings.map((holding) => [
       holding.id,
-      {
-        holding,
-        openingBalance: openingBalance(holding),
-        weightedFlow: 0,
-        balance: openingBalance(holding),
-        payout: 0,
-      },
+      { holding, openingBalance: openingBalance(holding), weightedFlow: 0 },
     ]),
   )
 }
@@ -61,16 +80,52 @@ export function openingBalances(years: HoldingYears): ReadonlyMap<HoldingId, Nom
 }
 
 /** Lægger en vægtet strøm til beholdningens afkastgrundlag, jf. ADR-0006.
-    Strømmen flytter ikke saldoen — det gør `withMovement` — og den lægges
-    oveni de strømme, der allerede er noteret. */
+    Strømmen lægges oveni de strømme, der allerede er noteret, og den flytter
+    ingen saldo — bogen har ingen endnu. */
 export function withFlow(years: HoldingYears, holding: HoldingId, weighted: Nominal): HoldingYears {
   return replace(years, holding, (row) => ({ ...row, weightedFlow: row.weightedFlow + weighted }))
 }
 
-/** Flytter beholdningens saldo. Årets restpost på bufferen og overførslernes
-    fulde beløb er bevægelser; de rører ikke afkastgrundlaget, som allerede er
-    noteret vægtet. */
-export function withMovement(years: HoldingYears, holding: HoldingId, amount: Nominal): HoldingYears {
+/** Krediterer afkastet og trækker beholdningsskatten af det: bogen lukkes
+    for vægtning, og året kan herfra kun flytte penge.
+
+    Det er dét trin, diagram 02 lægger umiddelbart efter de daterede
+    bevægelser. Alt, hvad der kommer nedenunder — folkepensionen,
+    aftrapningen, skatten og årets restpost — kan ikke nå afkastgrundlaget,
+    fordi der ikke længere findes en bog, der vil tage imod en vægtning, jf.
+    ADR-0024.
+
+    Afkastet står brutto på rækken; det er saldoen, skatten er trukket af. */
+export function creditReturn(years: HoldingYears, rates: RateYear): CreditedHoldingYears {
+  return new Map(
+    [...years].map(([id, row]) => {
+      const credited = returnOn(row)
+      const tax = holdingTax(row.holding, credited, rates)
+      return [
+        id,
+        {
+          holding: id,
+          openingBalance: row.openingBalance,
+          weightedFlow: row.weightedFlow,
+          balance: row.openingBalance + credited - tax,
+          payout: 0,
+          return: credited,
+          tax,
+        },
+      ]
+    }),
+  )
+}
+
+/** Flytter beholdningens saldo. Overførslernes fulde beløb, indbetalingerne
+    og årets restpost på bufferen er bevægelser, og de rører intet
+    afkastgrundlag: det er regnet færdigt, og bogen bærer et tal frem for en
+    beregning, der kunne flytte sig. */
+export function withMovement(
+  years: CreditedHoldingYears,
+  holding: HoldingId,
+  amount: Nominal,
+): CreditedHoldingYears {
   return replace(years, holding, (row) => ({ ...row, balance: row.balance + amount }))
 }
 
@@ -82,9 +137,12 @@ export function withMovement(years: HoldingYears, holding: HoldingId, amount: No
 
     Lægges oveni det, der allerede er udbetalt, så det sidste udbetalingsårs
     fejning kan komme som sit eget kald og alligevel stå i ét tal, jf.
-    `HoldingYear.payout`. Afkastgrundlaget røres ikke: strømmen vejes for sig
-    med `withFlow`, ganske som en overførsels. */
-export function withPayout(years: HoldingYears, holding: HoldingId, amount: Nominal): HoldingYears {
+    `HoldingYear.payout`. */
+export function withPayout(
+  years: CreditedHoldingYears,
+  holding: HoldingId,
+  amount: Nominal,
+): CreditedHoldingYears {
   return replace(years, holding, (row) => ({
     ...row,
     balance: row.balance - amount,
@@ -92,48 +150,36 @@ export function withPayout(years: HoldingYears, holding: HoldingId, amount: Nomi
   }))
 }
 
-/** Det, beholdningen ville lukke året med, hvis intet mere skete: saldoen
-    som den står, plus årets afkast, minus beholdningsskatten af det.
+/** Beholdningens saldo, som den står lige nu — afkastet tilskrevet og
+    beholdningsskatten trukket, siden bogen er krediteret.
 
-    Det er dét, den sidste rate fejer med. Fejningen sker efter afkastet og
-    har derfor vægt nul — hverken primosaldoen eller den vægtede strøm ændrer
-    sig af den, og svaret er det samme før og efter, ganske som `returnOf`s.
-    Ingen cirkularitet, og rækkefølgen i diagram 02 holder. */
-export function closingBalanceOf(
-  years: HoldingYears,
-  holding: HoldingId,
-  rates: RateYear,
-): Nominal {
-  const found = row(years, holding)
-  return found.balance + credited(found) - holdingTax(found, rates)
+    Det er dét, den sidste rate og omsætningen fejer med. Fejningen sker
+    efter afkastet og kan derfor ikke flytte det grundlag, den selv er regnet
+    af — ingen cirkularitet, og rækkefølgen i diagram 02 holder. */
+export function balanceOf(years: CreditedHoldingYears, holding: HoldingId): Nominal {
+  return row(years, holding).balance
 }
 
-/** Beholdningens afkast i året: nettoafkastsatsen af primosaldoen plus årets
-    vægtede strømme, jf. ADR-0006. Skatten spørger om det, før restposten er
-    afregnet — og svaret er det samme før og efter, fordi hverken primo eller
-    strøm ændrer sig af en bevægelse. */
-export function returnOf(years: HoldingYears, holding: HoldingId): Nominal {
-  return credited(row(years, holding))
+/** Beholdningens afkast i året, brutto. Skatteopgørelsen spørger om det, før
+    restposten er afregnet — og svaret er det samme før og efter, fordi det
+    er et tal på rækken og ikke en beregning, en bevægelse kan røre. */
+export function returnOf(years: CreditedHoldingYears, holding: HoldingId): Nominal {
+  return row(years, holding).return
 }
 
-/** Lukker året: afkastet krediteres, beholdningsskatten trækkes af det, og
-    rækkerne bliver til årsresultatets `HoldingYear`. Rækkefølgen er diagram
-    02's — strømme, afkast, `HoldingTax`, luk — og skatten regnes derfor af
-    årets faktiske, vægtede afkast. Afkastet står brutto i rækken; det er
-    saldoen, skatten er trukket af. */
-export function closeYear(years: HoldingYears, rates: RateYear): HoldingYear[] {
-  return [...years.values()].map((row) => {
-    const tax = holdingTax(row, rates)
-    return {
-      holding: row.holding.id,
-      openingBalance: row.openingBalance,
-      closingBalance: row.balance + credited(row) - tax,
-      return: credited(row),
-      tax,
-      payout: row.payout,
-      weightedFlow: row.weightedFlow,
-    }
-  })
+/** Lukker året: rækkerne bliver til årsresultatets `HoldingYear`. Afkastet
+    og skatten står der allerede fra krediteringen, og ultimosaldoen er
+    saldoen, som årets bevægelser efterlod den. */
+export function closeYear(years: CreditedHoldingYears): HoldingYear[] {
+  return [...years.values()].map((row) => ({
+    holding: row.holding,
+    openingBalance: row.openingBalance,
+    closingBalance: row.balance,
+    return: row.return,
+    tax: row.tax,
+    payout: row.payout,
+    weightedFlow: row.weightedFlow,
+  }))
 }
 
 /** Beholdningsskatten af årets afkast: satsen slås op på varianten og hentes
@@ -144,12 +190,14 @@ export function closeYear(years: HoldingYears, rates: RateYear): HoldingYear[] {
     bliver før eller siden til penge tilbage, så at lade tabsåret give en
     negativ skat er en timingforenkling af samme slags som den, personskatten
     allerede hviler på. Læg ikke et `Math.max(0, …)` her. */
-function holdingTax(row: Row, rates: RateYear): Nominal {
-  const rate = holdingTaxRate(row.holding)
-  return rate === undefined ? 0 : credited(row) * rates.taxRates[rate]
+function holdingTax(holding: Holding, credited: Nominal, rates: RateYear): Nominal {
+  const rate = holdingTaxRate(holding)
+  return rate === undefined ? 0 : credited * rates.taxRates[rate]
 }
 
-function credited(row: Row): Nominal {
+/** Afkastet af nettoafkastsatsen ganget med primosaldoen plus årets vægtede
+    strømme, jf. ADR-0006. Regnes én gang, i krediteringen. */
+function returnOn(row: Row): Nominal {
   return netReturn(row.holding) * (row.openingBalance + row.weightedFlow)
 }
 
@@ -159,13 +207,17 @@ function netReturn(holding: Holding): number {
   return holding.grossReturn - holding.annualCostRate
 }
 
-function replace(years: HoldingYears, holding: HoldingId, change: (row: Row) => Row): HoldingYears {
+function replace<R>(
+  years: ReadonlyMap<HoldingId, R>,
+  holding: HoldingId,
+  change: (row: R) => R,
+): ReadonlyMap<HoldingId, R> {
   const next = new Map(years)
   next.set(holding, change(row(years, holding)))
   return next
 }
 
-function row(years: HoldingYears, holding: HoldingId): Row {
+function row<R>(years: ReadonlyMap<HoldingId, R>, holding: HoldingId): R {
   const found = years.get(holding)
   if (found === undefined) {
     throw new Error(
