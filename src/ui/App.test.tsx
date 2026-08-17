@@ -652,9 +652,12 @@ describe('fladen', () => {
     expect(options).toEqual([...options].sort((a, b) => a!.localeCompare(b!, 'da')))
   })
 
-  it('møder brugeren med en skattekolonne, der ikke længere er nul', async () => {
+  it('viser en skattekolonne, der ikke er nul, når husstanden har en løn', async () => {
+    // Posten står i testen og ikke i minimumsplanen: den plan, brugeren
+    // møder, har ingen indtægt, og skattekolonnen er nul indtil hun skriver
+    // en ind. Det er skatten af lønnen, der prøves her.
     const user = userEvent.setup()
-    render(<App initialPlan={defaultPlan()} />)
+    render(<App initialPlan={aPlan({ entries: [aSalary({ amountInRealKroner: 600_000 })] })} />)
     await showYearTable(user)
 
     const skat = yearCell(1, 'Skat')
@@ -3803,6 +3806,138 @@ describe('fladen', () => {
     })
   })
 
+  describe('slet alt', () => {
+    let createdBlobs: Blob[]
+
+    beforeEach(() => {
+      createdBlobs = []
+      URL.createObjectURL = vi.fn((blob: Blob) => {
+        createdBlobs.push(blob)
+        return 'blob:mock'
+      }) as typeof URL.createObjectURL
+      URL.revokeObjectURL = vi.fn()
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    /** Topbjælkens knap og bekræftelsesskærmens svar hedder det samme —
+        spørgsmålet og svaret bærer ét ord — så de skilles ad her. */
+    function iTopbjaelken() {
+      return within(document.querySelector('.topbjaelke')!)
+    }
+
+    function iBekraeftelsen() {
+      return within(document.querySelector('.besked')!)
+    }
+
+    it('spørger, før noget kasseres, og lader det gemte stå urørt indtil da', async () => {
+      // Der er ingen fortrydelse: autogemmet skriver ved hver ændring, så i
+      // det sekund planen er erstattet, er det gemte skrevet over. Derfor
+      // skal spørgsmålet stilles, før planen røres — ikke bagefter.
+      const user = userEvent.setup()
+      const plan = aThreeYearPlan()
+      render(<App initialPlan={plan} />)
+
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Slet alt' }))
+
+      expect(screen.getByText(/ingen fortrydelse/i)).toBeTruthy()
+      expect(loadPlan()).toEqual({ kind: 'Loaded', plan })
+      expect(screen.getByText('Ophør som 58', { selector: '.plannavn' })).toBeTruthy()
+    })
+
+    it('fører tilbage til resultatet, når bekræftelsen fortrydes', async () => {
+      const user = userEvent.setup()
+      const plan = aThreeYearPlan()
+      render(<App initialPlan={plan} />)
+
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Slet alt' }))
+      await user.click(screen.getByRole('button', { name: 'Fortryd' }))
+
+      expect(screen.queryByText(/ingen fortrydelse/i)).toBeNull()
+      expect(screen.getByRole('button', { name: 'Formuen' })).toBeTruthy()
+      expect(loadPlan()).toEqual({ kind: 'Loaded', plan })
+    })
+
+    it('efterlader minimumsplanen, når sletningen bekræftes', async () => {
+      // Det tyndeste, `validatePlan` accepterer: én person og én
+      // bufferbeholdning. En helt tom plan findes ikke — bufferen skal pege
+      // på frie midler, der findes, jf. ADR-0013 — og resultatspalten skal
+      // derfor tegne en graf bagefter og ikke sige, at planen ikke kan
+      // simuleres.
+      const user = userEvent.setup()
+      render(<App initialPlan={aThreeYearPlan()} />)
+
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Slet alt' }))
+      await user.click(iBekraeftelsen().getByRole('button', { name: 'Slet alt' }))
+
+      expect(loadPlan()).toEqual({ kind: 'Loaded', plan: defaultPlan() })
+      // Navigatoren står tilbage med bufferen og intet andet: posterne fra
+      // den kasserede plan er væk, og der er ikke sat nye i stedet.
+      const navigatoren = within(document.querySelector('.navigatorspalte')!)
+      expect(navigatoren.getByText('Frie midler')).toBeTruthy()
+      expect(navigatoren.queryByText('Faste udgifter')).toBeNull()
+      expect(navigatoren.queryByText('Løn')).toBeNull()
+      expect(screen.getByText('Min plan', { selector: '.plannavn' })).toBeTruthy()
+      expect(screen.queryByText(/kan ikke simuleres/i)).toBeNull()
+      expect(screen.queryByText(/ingen fortrydelse/i)).toBeNull()
+    })
+
+    it('giver planen som fil, uden at spørgsmålet er besvaret', async () => {
+      // Der findes ingen fortrydelse, og en gemt fil er derfor den eneste vej
+      // tilbage til den plan, der står nu. Udvejen gør spørgsmålet stumpt:
+      // den, der er i tvivl, kan løse tvivlen uden at koste planen.
+      const user = userEvent.setup()
+      const plan = aThreeYearPlan()
+      render(<App initialPlan={plan} />)
+
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Slet alt' }))
+      await user.click(iBekraeftelsen().getByRole('button', { name: 'Eksporter først' }))
+
+      expect(createdBlobs).toHaveLength(1)
+      expect(await createdBlobs[0]!.text()).toBe(exportPlan(plan))
+      expect(loadPlan()).toEqual({ kind: 'Loaded', plan })
+      expect(screen.getByText(/ingen fortrydelse/i)).toBeTruthy()
+    })
+
+    it('lukker skuffen og forlader forklar-året, når planen er kasseret', async () => {
+      // En markering på en post, der ikke længere findes, ville lade skuffen
+      // stå tom og åben og tage plads fra resultatet; og forklar-året ville
+      // forklare et år i en plan, der er væk — er året uden for den nye
+      // horisont, er opslaget et nedbrud.
+      const user = userEvent.setup()
+      render(<App initialPlan={aThreeYearPlan()} />)
+
+      await user.click(navigatorButton(/Faste udgifter/))
+      expect(document.querySelector('.skuffe')).toBeTruthy()
+      await showYearTable(user)
+      await explainYear(user, 2027)
+
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Slet alt' }))
+      await user.click(iBekraeftelsen().getByRole('button', { name: 'Slet alt' }))
+
+      expect(document.querySelector('.skuffe')).toBeNull()
+      expect(screen.getByRole('button', { name: 'Formuen', pressed: true })).toBeTruthy()
+    })
+
+    it('lader enheden stå: den er en aflæsningspræference og ikke plandata', async () => {
+      // Alt andet på skærmen pegede på den plan, der forsvandt. Enheden gør
+      // ikke — den siger, hvordan brugeren læser tal, ikke hvad planen
+      // indeholder, og den er ikke en del af det gemte skema.
+      const user = userEvent.setup()
+      render(<App initialPlan={aThreeYearPlan()} />)
+
+      await user.click(screen.getByRole('button', { name: 'Løbende priser' }))
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Slet alt' }))
+      await user.click(iBekraeftelsen().getByRole('button', { name: 'Slet alt' }))
+
+      expect(
+        screen.getByRole('button', { name: 'Løbende priser', pressed: true }),
+      ).toBeTruthy()
+    })
+  })
+
   describe('fejlskærmen', () => {
     let createdBlobs: Blob[]
 
@@ -3838,21 +3973,28 @@ describe('fladen', () => {
       expect(loadPlan()).toEqual({ kind: 'Loaded', plan: importeret })
     })
 
-    it('lader brugeren starte forfra, og rører først det gemte da', async () => {
+    it('lader brugeren slette alt, og rører først det gemte da', async () => {
       // Det gemte må ikke overskrives, før brugeren har taget stilling. Er
       // fejlen en nyere skemaversion, er planen ikke ødelagt — blot ulæselig
       // for denne udgave af værktøjet, jf. issue #16 — og et automatisk
       // gem ovenpå den ville tage den fra en, der bare åbnede den forkerte
       // fane.
+      //
+      // Fejlskærmen er sin egen bekræftelse: den stiller allerede
+      // spørgsmålet i prosa og har allerede en vej til at redde det gemte
+      // ud. Et bekræftelsestrin mere ville være den samme skærm to gange.
+      // Og det, der står tilbage, er minimumsplanen og ikke den plan, appen
+      // tilfældigvis blev givet — handlingen betyder det samme begge steder.
       const user = userEvent.setup()
       localStorage.setItem(STORAGE_KEY, 'ikke json{')
-      render(<App initialPlan={defaultPlan()} loadError="Det gemte er ikke gyldig JSON." />)
+      render(<App initialPlan={aThreeYearPlan()} loadError="Det gemte er ikke gyldig JSON." />)
 
       expect(localStorage.getItem(STORAGE_KEY)).toBe('ikke json{')
 
-      await user.click(screen.getByRole('button', { name: /Start forfra/ }))
+      await user.click(screen.getByRole('button', { name: 'Slet alt' }))
 
       expect(screen.queryByText(/ikke indlæses/i)).toBeNull()
+      expect(screen.queryByText(/ingen fortrydelse/i)).toBeNull()
       expect(document.querySelector('.navigatorspalte')).toBeTruthy()
       expect(loadPlan()).toEqual({ kind: 'Loaded', plan: defaultPlan() })
     })

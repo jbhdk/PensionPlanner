@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { aContribution, aPlan, aSalary, aTransfer } from '../engine/testing/planFixture'
 import type { Plan } from '../engine/plan'
 import { validatePlan } from '../engine/validatePlan'
-import { addEntry, removeEntry, removeHolding, removePerson, withVariant } from './planEdits'
+import { defaultPlan } from './defaultPlan'
+import {
+  addEntry,
+  addPerson,
+  removeEntry,
+  removeHolding,
+  removePerson,
+  withVariant,
+} from './planEdits'
 
 /** Et to-personers udgangspunkt: fixturens Jesper har bufferen
     ("free-assets"), Maria har en anden beholdning ved siden af. */
@@ -320,5 +328,21 @@ describe('withVariant', () => {
       variant: 'LifeAnnuity',
       openedOn: { year: 2004, month: 9 },
     })
+  })
+})
+
+describe('addPerson', () => {
+  it('tilføjer den samme tynde person, som minimumsplanen selv bærer', () => {
+    // De to er hver især "den tyndeste person", og de skal blive ved med at
+    // være den samme. Stod kommunen og kirkeskattefluebenet to steder med
+    // hver sin værdi, ville husstandens skat afhænge af, om personen kom med
+    // planen eller blev tilføjet bagefter.
+    const tilfoejet = addPerson(aPlan()).household.persons[1]!
+    const minimumsplanens = defaultPlan().household.persons[0]!
+
+    expect(tilfoejet.municipality).toBe(minimumsplanens.municipality)
+    expect(tilfoejet.churchMember).toBe(minimumsplanens.churchMember)
+    expect(tilfoejet.municipality).toBe('Silkeborg')
+    expect(tilfoejet.churchMember).toBe(false)
   })
 })

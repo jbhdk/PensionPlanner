@@ -77,8 +77,10 @@ export function withEntry(
 }
 
 /** Den tyndeste person, der kan tilføjes: fødselsåret gættes fyrre år før
-    startåret, resten er de samme standarder som fixturens. Brugeren retter
-    dem i skuffen bagefter. */
+    startåret, og resten er de samme standarder, minimumsplanen selv bærer —
+    Silkeborg og ingen kirkeskat. De to skal blive ved med at være ens, for
+    ellers ville husstandens skat afhænge af, om personen kom med planen
+    eller blev tilføjet bagefter. Brugeren retter dem i skuffen. */
 export function addPerson(plan: Plan): Plan {
   const id = freshPersonId(plan)
   const name = `Person ${plan.household.persons.length + 1}`
@@ -95,8 +97,8 @@ export function addPerson(plan: Plan): Plan {
           birthMonth: 1,
           workEndAge: 65,
           horizon: 90,
-          municipality: 'Hvidovre',
-          churchMember: true,
+          municipality: 'Silkeborg',
+          churchMember: false,
           holdings: [],
         },
       ],

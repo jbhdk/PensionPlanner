@@ -5,6 +5,7 @@ import { simulate } from '../engine/simulate'
 import { validatePlan } from '../engine/validatePlan'
 import { exportPlan, importPlan } from '../persistence/planFile'
 import { savePlan, storedPlanText } from '../persistence/planStorage'
+import { defaultPlan } from './defaultPlan'
 import { Inspector } from './Inspector'
 import { Navigator } from './Navigator'
 import type { AmountUnit } from './real'
@@ -63,6 +64,10 @@ export function App({
   // Fejlen er en tilstand og ikke en egenskab ved fladen: brugeren skal kunne
   // komme ud af den uden at genindlæse siden.
   const [loadError, setLoadError] = useState(initialLoadError)
+  // Bekræftelsen er en tilstand og ikke en dialog: fladen har ingen modaler,
+  // og spørgsmålet stilles i den samme figur som fejlskærmens — med
+  // navigatoren stående ved siden af, så man ser, hvad der forsvinder.
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Ingen gem-knap: planen gemmes ved hver ændring, jf. issue #15. Er
@@ -77,6 +82,29 @@ export function App({
   function explainYear(year: number) {
     setExplainedYear(year)
     setResultView('YearExplanation')
+  }
+
+  /** Kasserer planen og sætter minimumsplanen i stedet — den samme handling
+      fra topbjælken og fra fejlskærmen, så ordet betyder det samme begge
+      steder.
+
+      Alt, der pegede på den kasserede plan, følger med: en markering på et
+      objekt, der ikke længere findes, ville lade skuffen stå tom og åben, og
+      forklar-året ville slå et år op i en plan, der er væk — ligger året
+      uden for den nye horisont, er opslaget et nedbrud. Enheden bliver
+      stående: den siger, hvordan brugeren læser tal, ikke hvad planen
+      indeholder.
+
+      Autogemmet skriver ved næste tegning, så det gemte er væk i samme
+      øjeblik. Derfor stilles spørgsmålet før dette kald og ikke her. */
+  function handleDelete() {
+    setPlan(defaultPlan())
+    setSelected(null)
+    setExplainedYear(null)
+    setResultView('Wealth')
+    setImportError(null)
+    setConfirmingDelete(false)
+    setLoadError(undefined)
   }
 
   function handleExport() {
@@ -145,15 +173,15 @@ export function App({
                     Hent det gemte
                   </button>
                 )}
-                <button type="button" className="knap" onClick={() => setLoadError(undefined)}>
-                  Start forfra
+                <button type="button" className="knap" onClick={handleDelete}>
+                  Slet alt
                 </button>
               </div>
               <p className="uddybning">
                 Det gemte røres ikke, før du vælger. Importerer du en fil,
-                erstatter den det — starter du forfra, kasseres det til fordel
-                for en tom plan. Hent det først, hvis du vil rette i det og
-                importere det igen.
+                erstatter den det — sletter du alt, kasseres det til fordel for
+                en plan med én person og én tom beholdning. Hent det først,
+                hvis du vil rette i det og importere det igen.
               </p>
             </div>
           </div>
@@ -174,6 +202,17 @@ export function App({
       <header className="topbjaelke">
         <span className="maerke">Pensionsplanner</span>
         <span className="plannavn">{plan.name}</span>
+        {/* Planhåndtering og ikke en filhandling: knappen rører ingen fil,
+            den kasserer den plan, der står på skærmen. Den sidder derfor i
+            venstre gruppe, hvor etape 5 skal bygge planvælgeren, og væk fra
+            Eksporter og Importer. Den er etape 1's stedfortræder for den
+            håndtering: med kun én plan er "kassér den" alt, hvad der kan
+            lade sig gøre. Derfor står den ikke i fladekortet, som tegner det
+            færdige system — dér er der et planbibliotek, og den destruktive
+            handling fjerner én plan ud af flere. */}
+        <button type="button" className="knap" onClick={() => setConfirmingDelete(true)}>
+          Slet alt
+        </button>
         <span className="filhandlinger">
           {importError && (
             <span className="importfejl" role="alert">
@@ -199,7 +238,42 @@ export function App({
         </div>
 
         <div className="spalte resultatspalte">
-          {resultView === 'YearExplanation' && explainedYear !== null ? (
+          {/* Bekræftelsen er fejlskærmens figur og ikke en dialog: fladen har
+              ingen modaler, og den ene anden gang appen stiller et alvorligt
+              spørgsmål, ser det sådan ud. Navigatoren bliver stående ved
+              siden af, så man ser, hvad der forsvinder, mens man beslutter
+              sig. "Eksporter først" er den vigtigste af de tre udveje — der
+              findes ingen fortrydelse, og en gemt fil er den eneste vej
+              tilbage til den plan, der står nu. Uden den skulle tvivlen
+              løses med et gæt. */}
+          {confirmingDelete ? (
+            <div className="besked stop">
+              <h3>Slet alt?</h3>
+              <p>
+                Hele planen kasseres, og du begynder forfra med én person og
+                én tom beholdning. Der er ingen fortrydelse.
+              </p>
+              <div className="udveje">
+                <button type="button" className="knap" onClick={handleExport}>
+                  Eksporter først
+                </button>
+                <button type="button" className="knap" onClick={handleDelete}>
+                  Slet alt
+                </button>
+                <button
+                  type="button"
+                  className="knap"
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  Fortryd
+                </button>
+              </div>
+              <p className="uddybning">
+                Eksporter først, hvis du vil kunne komme tilbage. En gemt fil
+                er den eneste vej tilbage til den plan, der står nu.
+              </p>
+            </div>
+          ) : resultView === 'YearExplanation' && explainedYear !== null ? (
             <YearExplanation
               year={years.find((y) => y.year === explainedYear)!}
               years={years}
