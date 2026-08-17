@@ -551,6 +551,7 @@ export function addTransfer(plan: Plan): Plan {
 
   const fresh: Transfer = {
     id: freshTransferId(plan),
+    name: `Overførsel ${plan.transfers.length + 1}`,
     from: pair.from,
     to: pair.to,
     amountInRealKroner: 0,
@@ -652,14 +653,16 @@ export function addContribution(plan: Plan): Plan {
   if (!pair) return plan
 
   const id = freshContributionId(plan)
+  const name = `Indbetaling ${plan.contributions.length + 1}`
   return {
     ...plan,
     contributions: [
       ...plan.contributions,
       pair.kind === 'EntrySourced'
-        ? { id, kind: pair.kind, source: pair.source, to: pair.to, percentageOfEntry: 0 }
+        ? { id, name, kind: pair.kind, source: pair.source, to: pair.to, percentageOfEntry: 0 }
         : {
             id,
+            name,
             kind: pair.kind,
             source: pair.source,
             to: pair.to,

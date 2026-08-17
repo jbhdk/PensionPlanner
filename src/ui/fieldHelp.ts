@@ -208,6 +208,9 @@ export const fieldHelp = {
 
   // ---------- Indbetalingen ----------
 
+  'Contribution.name':
+    'Det, indbetalingen hedder i listen og i forklaringen af et år. Hedder den noget om, hvilken aftale den hører til, kan to bidrag til den samme ordning skelnes fra hinanden. Det indgår ikke i nogen beregning.',
+
   'Contribution.source':
     'Hvor pengene til indbetalingen kommer fra. Er det en lønpost, trækkes de af lønnen før skat; er det en beholdning, flyttes allerede beskattede penge. En løn kan kun betale til ordninger i lønmodtagerens eget navn, mens opsparede penge kan gå til begges.',
 
@@ -225,6 +228,9 @@ export const fieldHelp = {
 
   // ---------- Overførslen ----------
 
+  'Transfer.name':
+    'Det, flytningen hedder i listen og i forklaringen af et år. Hedder den noget om, hvad pengene skal bruges til, kan to hævninger fra den samme opsparing skelnes fra hinanden. Det indgår ikke i nogen beregning.',
+
   'Transfer.from':
     'Den beholdning, pengene tages fra. Det kan være enhver opsparing, der ikke koster skat at hæve af — også en aldersopsparing eller en aktiesparekonto, som netop tømmes på denne måde. En ratepension kan derimod ikke: dens udbetaling er bundet af en plan.',
 
@@ -237,7 +243,7 @@ export const fieldHelp = {
   // ---------- Forklar-årets overførselskolonner ----------
 
   'TransferYear.transfer':
-    'Hvilken flytning linjen gælder, skrevet som de to beholdninger, pengene gik mellem. En plan kan have flere, og de opgøres hver for sig.',
+    'Hvilken flytning linjen gælder, kaldt det samme som i listen til venstre. En plan kan have flere, og de opgøres hver for sig.',
 
   'TransferYear.requested':
     'Det beløb, planen bad om i året. Det er tallet fra flytningen selv, løftet med inflationen frem til året.',
@@ -370,7 +376,7 @@ export const fieldHelp = {
     'Hvor stor en del af året pengene nåede at være med i. Falder de i januar, tæller de næsten et helt års afkast med; falder de i december, næsten intet. Er de fordelt jævnt over året, tæller de slet ikke med: de passerer blot kontoen og efterlader først noget ved årets slutning.',
 
   'ContributionYear.contribution':
-    'Hvilken indbetaling linjen gælder, skrevet som hvor pengene kom fra, og hvor de gik hen.',
+    'Hvilken indbetaling linjen gælder, kaldt det samme som i listen til venstre. En plan kan have flere til den samme ordning, og de opgøres hver for sig.',
 
   'ContributionYear.fromSource':
     'Hvad der blev trukket ved kilden — af lønnen, før den blev udbetalt, eller af den beholdning pengene kom fra.',

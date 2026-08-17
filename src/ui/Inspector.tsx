@@ -1170,15 +1170,10 @@ function ContributionFields({
     destination && !destinations.some((holding) => holding.name === destination.name)
       ? [destination, ...destinations]
       : destinations
-  const sourceName =
-    contribution.kind === 'EntrySourced'
-      ? (sourceEntry?.name ?? contribution.source)
-      : holdingName(contribution.source)
-
   return (
     <>
       <Head
-        title={`${sourceName} → ${holdingName(contribution.to)}`}
+        title={contribution.name}
         subtitle="Indbetaling"
         onClose={onClose}
         onDelete={() => {
@@ -1188,6 +1183,12 @@ function ContributionFields({
         deleteLabel="Fjern indbetaling"
       />
       <Section title="Indbetalingen">
+        <TextField
+          label="Navn"
+          help="Contribution.name"
+          value={contribution.name}
+          onChange={(name) => onChange(withContribution(plan, id, (c) => ({ ...c, name })))}
+        />
         <SelectField
           label="Kilde"
           help="Contribution.source"
@@ -1391,17 +1392,18 @@ function withSource(
     | { kind: 'EntrySourced'; source: EntryId }
     | { kind: 'HoldingSourced'; source: HoldingId },
 ): Contribution {
-  const { id, to } = contribution
+  const { id, name, to } = contribution
   const amountInRealKroner =
     'amountInRealKroner' in contribution ? contribution.amountInRealKroner : undefined
 
   if (source.kind === 'EntrySourced') {
     return amountInRealKroner === undefined
-      ? { id, to, ...source, percentageOfEntry: 0 }
-      : { id, to, ...source, amountInRealKroner }
+      ? { id, name, to, ...source, percentageOfEntry: 0 }
+      : { id, name, to, ...source, amountInRealKroner }
   }
   return {
     id,
+    name,
     to,
     ...source,
     amountInRealKroner: amountInRealKroner ?? 0,
@@ -1421,10 +1423,10 @@ function withAmountForm(
   field: 'percentageOfEntry' | 'amountInRealKroner',
 ): Contribution {
   if (contribution.kind !== 'EntrySourced') return contribution
-  const { id, kind, source, to } = contribution
+  const { id, name, kind, source, to } = contribution
   return field === 'percentageOfEntry'
-    ? { id, kind, source, to, percentageOfEntry: 0 }
-    : { id, kind, source, to, amountInRealKroner: 0 }
+    ? { id, name, kind, source, to, percentageOfEntry: 0 }
+    : { id, name, kind, source, to, amountInRealKroner: 0 }
 }
 
 function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {
@@ -1469,7 +1471,7 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
   return (
     <>
       <Head
-        title={`${holdingName(transfer.from)} → ${holdingName(transfer.to)}`}
+        title={transfer.name}
         subtitle={label.slags}
         onClose={onClose}
         onDelete={() => {
@@ -1479,6 +1481,12 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
         deleteLabel={label.fjern}
       />
       <Section title={label.bestemt}>
+        <TextField
+          label="Navn"
+          help="Transfer.name"
+          value={transfer.name}
+          onChange={(name) => onChange(withTransfer(plan, id, (t) => ({ ...t, name })))}
+        />
         {/* Står den beholdning, der allerede er den anden ende, i listen, og
             kan de to bytte plads lovligt, gør de det — se `withTransferEnd`.
             Udelod listen den anden ende, ville retningen være låst mellem to

@@ -1260,14 +1260,18 @@ describe('overførsler', () => {
     // totalformuen blev NaN resten af årsrækken, uden et ord fra motoren.
     const plan = aPlan({
       transfers: [
-        aTransfer({ from: 'free-assets', to: 'findes-ikke', amountInRealKroner: 10_000 }),
+        aTransfer({
+          name: 'Hjemtagning',
+          from: 'free-assets',
+          to: 'findes-ikke',
+          amountInRealKroner: 10_000,
+        }),
       ],
     })
 
-    // Overførslen har intet navn af sig selv og kendes på den ende, der
-    // rammer noget — den anden er netop det, beskeden handler om.
+    // Beskeden nævner flytningen ved det navn, den har i navigatoren.
     expect(() => simulate(plan)).toThrow(
-      /Overførslen fra beholdningen Frie midler går til en beholdning, der ikke findes/i,
+      /Overførslen Hjemtagning går til en beholdning, der ikke findes/i,
     )
   })
 
@@ -3147,22 +3151,31 @@ describe('indbetalingens pegere', () => {
 
   it('afviser en indbetaling, hvis destination ikke findes', () => {
     const plan = aPlanWith(
-      aContribution({ source: 'salary', to: 'findes-ikke', percentageOfEntry: 0.08 }),
+      aContribution({
+        name: 'Firmapension',
+        source: 'salary',
+        to: 'findes-ikke',
+        percentageOfEntry: 0.08,
+      }),
     )
 
-    // Indbetalingen kendes på den ende, der rammer noget — her lønposten.
     expect(() => simulate(plan)).toThrow(
-      /Indbetalingen fra posten Løn går til en beholdning, der ikke findes/i,
+      /Indbetalingen Firmapension går til en beholdning, der ikke findes/i,
     )
   })
 
   it('afviser en indbetaling, hvis kilden ikke findes', () => {
     const plan = aPlanWith(
-      aContribution({ source: 'ingen-loen', to: 'ratepension', percentageOfEntry: 0.08 }),
+      aContribution({
+        name: 'Firmapension',
+        source: 'ingen-loen',
+        to: 'ratepension',
+        percentageOfEntry: 0.08,
+      }),
     )
 
     expect(() => simulate(plan)).toThrow(
-      /Indbetalingen til beholdningen Ratepension kommer fra en post, der ikke findes/i,
+      /Indbetalingen Firmapension kommer fra en post, der ikke findes/i,
     )
   })
 
@@ -3232,6 +3245,7 @@ describe('indbetalingens pegere', () => {
   it('afviser en beholdningskilde, der ikke findes', () => {
     const plan = aPlanWith(
       aHoldingContribution({
+        name: 'Efterlønsindskud',
         source: 'findes-ikke',
         to: 'ratepension',
         amountInRealKroner: 50_000,
@@ -3239,7 +3253,7 @@ describe('indbetalingens pegere', () => {
     )
 
     expect(() => simulate(plan)).toThrow(
-      /Indbetalingen til beholdningen Ratepension kommer fra en beholdning, der ikke findes/i,
+      /Indbetalingen Efterlønsindskud kommer fra en beholdning, der ikke findes/i,
     )
   })
 

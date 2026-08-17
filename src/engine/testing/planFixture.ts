@@ -207,6 +207,7 @@ export function aSalary(options: {
     aldersforankres som en posts — alderen måles på afgiverens ejer. */
 export function aTransfer(options: {
   id?: string
+  name?: string
   from: string
   to: string
   amountInRealKroner: number
@@ -216,6 +217,7 @@ export function aTransfer(options: {
 }): Transfer {
   return {
     id: options.id ?? 'transfer',
+    name: options.name ?? 'Overførslen',
     from: options.from,
     to: options.to,
     amountInRealKroner: options.amountInRealKroner,
@@ -283,13 +285,13 @@ export function aPensionIncome(options: {
 /** Et lønkildet bidrag. Det bærer hverken periode, forankring, gentagelse
     eller forfald — dem arver det fra sin lønpost, jf. ADR-0016. */
 export function aContribution(
-  options: { id?: string; source: string; to: string } & (
+  options: { id?: string; name?: string; source: string; to: string } & (
     | { percentageOfEntry: number }
     | { amountInRealKroner: number }
   ),
 ): Contribution {
-  const { id = 'contribution', ...rest } = options
-  return { id, kind: 'EntrySourced', ...rest }
+  const { id = 'contribution', name = 'Indbetalingen', ...rest } = options
+  return { id, name, kind: 'EntrySourced', ...rest }
 }
 
 /** Et beholdningskildet bidrag. Det har ingen post at arve fra og bærer
@@ -298,6 +300,7 @@ export function aContribution(
     måle af, og den har det her ikke. */
 export function aHoldingContribution(options: {
   id?: string
+  name?: string
   source: string
   to: string
   amountInRealKroner: number
@@ -307,6 +310,7 @@ export function aHoldingContribution(options: {
 }): Contribution {
   return {
     id: options.id ?? 'contribution',
+    name: options.name ?? 'Indbetalingen',
     kind: 'HoldingSourced',
     source: options.source,
     to: options.to,

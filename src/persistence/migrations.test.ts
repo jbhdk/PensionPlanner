@@ -471,3 +471,67 @@ describe('v10 → v11: livrenten bærer sine omsætningsfelter', () => {
     expect(v11).toEqual({ name: 'Plan', household: { persons: [] } })
   })
 })
+
+describe('v11 → v12: overførslen og indbetalingen bærer et navn', () => {
+  it('skriver de to ender som navnet, så planen hedder det, den hidtil har vist', () => {
+    // Indtil nu havde de to figurer intet navn, og fladen skrev deres ender
+    // i stedet. Det er dermed også det eneste, migrationen kan skrive uden
+    // at gætte: en nummerering ville omdøbe hver eneste flytning i en gemt
+    // plan til noget, brugeren aldrig har set.
+    const v11: unknown = {
+      household: {
+        persons: [
+          {
+            id: 'jesper',
+            holdings: [
+              { id: 'frie', name: 'Frie midler' },
+              { id: 'opsparing', name: 'Opsparing' },
+              { id: 'ratepension', name: 'Ratepension' },
+            ],
+          },
+        ],
+      },
+      entries: [{ id: 'salary', name: 'Løn' }],
+      transfers: [{ id: 'transfer-1', from: 'opsparing', to: 'frie' }],
+      contributions: [
+        { id: 'contribution-1', kind: 'EntrySourced', source: 'salary', to: 'ratepension' },
+        {
+          id: 'contribution-2',
+          kind: 'HoldingSourced',
+          source: 'frie',
+          to: 'ratepension',
+        },
+      ],
+    }
+
+    const v12 = runMigrations(v11, 11, 12, migrations) as {
+      transfers: Array<{ name: string }>
+      contributions: Array<{ name: string }>
+    }
+
+    expect(v12.transfers[0]!.name).toBe('Opsparing → Frie midler')
+    // Kilden slås op i den bog, formen peger ind i: en post i den ene
+    // udgave, en beholdning i den anden.
+    expect(v12.contributions[0]!.name).toBe('Løn → Ratepension')
+    expect(v12.contributions[1]!.name).toBe('Frie midler → Ratepension')
+  })
+
+  it('lader en ende, der ikke rammer noget, beholde sit id i navnet', () => {
+    // Sådan en plan afvises alligevel ved indgangen, jf. ADR-0013, og
+    // beskeden skal kunne pege på den figur, der er gået i stykker.
+    const v12 = runMigrations(
+      { transfers: [{ id: 'transfer-1', from: 'findes-ikke', to: 'findes-heller-ikke' }] },
+      11,
+      12,
+      migrations,
+    ) as { transfers: Array<{ name: string }> }
+
+    expect(v12.transfers[0]!.name).toBe('findes-ikke → findes-heller-ikke')
+  })
+
+  it('lader en plan uden nogen af delene stå med to tomme lister', () => {
+    const v12 = runMigrations({ name: 'Plan' }, 11, 12, migrations)
+
+    expect(v12).toEqual({ name: 'Plan', transfers: [], contributions: [] })
+  })
+})

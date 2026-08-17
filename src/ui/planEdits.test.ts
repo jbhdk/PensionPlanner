@@ -4,8 +4,10 @@ import type { Plan } from '../engine/plan'
 import { validatePlan } from '../engine/validatePlan'
 import { defaultPlan } from './defaultPlan'
 import {
+  addContribution,
   addEntry,
   addPerson,
+  addTransfer,
   removeEntry,
   removeHolding,
   removePerson,
@@ -344,5 +346,59 @@ describe('addPerson', () => {
     expect(tilfoejet.churchMember).toBe(minimumsplanens.churchMember)
     expect(tilfoejet.municipality).toBe('Silkeborg')
     expect(tilfoejet.churchMember).toBe(false)
+  })
+})
+
+describe('addTransfer og addContribution', () => {
+  /** En plan med to beholdninger med frie midler og en ordning at betale
+      til — nok til, at begge knapper har et lovligt par at bygge på. */
+  function aPlanToAddTo(): Plan {
+    const base = aTwoPersonPlan()
+    const owner = base.household.persons[0]!
+    return {
+      ...base,
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      household: {
+        persons: [
+          {
+            ...owner,
+            holdings: [
+              ...owner.holdings,
+              {
+                id: 'ratepension',
+                name: 'Ratepension',
+                variant: 'InstalmentPension',
+                openedOn: { year: 2018, month: 1 },
+                balance: 0,
+                grossReturn: 0,
+                annualCostRate: 0,
+              },
+            ],
+          },
+          ...base.household.persons.slice(1),
+        ],
+      },
+    }
+  }
+
+  it('nummererer den nye overførsel og den nye indbetaling', () => {
+    // Navnet skrives ved oprettelsen som en beholdnings og udledes ikke af
+    // enderne: en etikette, der læste sig selv af de to beholdninger, ville
+    // skifte under brugeren, hver gang en ende blev valgt om.
+    const plan = addTransfer(addTransfer(aPlanToAddTo()))
+
+    expect(plan.transfers.map((transfer) => transfer.name)).toEqual([
+      'Overførsel 1',
+      'Overførsel 2',
+    ])
+  })
+
+  it('nummererer den nye indbetaling', () => {
+    const plan = addContribution(addContribution(aPlanToAddTo()))
+
+    expect(plan.contributions.map((contribution) => contribution.name)).toEqual([
+      'Indbetaling 1',
+      'Indbetaling 2',
+    ])
   })
 })

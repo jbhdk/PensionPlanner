@@ -109,8 +109,6 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
   const holdingSum = holdings.reduce((sum, h) => sum + h.balance, 0)
   const income = plan.entries.filter((entry) => entry.direction === 'Income')
   const expenses = plan.entries.filter((entry) => entry.direction === 'Expense')
-  const holdingName = (id: string) => holdings.find((h) => h.id === id)?.name ?? id
-  const entryName = (id: string) => plan.entries.find((entry) => entry.id === id)?.name ?? id
 
   return [
     {
@@ -187,14 +185,7 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
       count: String(plan.contributions.length),
       summary: '',
       rows: plan.contributions.map((contribution) => ({
-        // Kilde → destination i begge udgaver, så de læses som ét slags
-        // objekt i listen — og kilden siger selv, hvilken udgave rækken er:
-        // et postnavn i den ene, et beholdningsnavn i den anden.
-        name: `${
-          contribution.kind === 'EntrySourced'
-            ? entryName(contribution.source)
-            : holdingName(contribution.source)
-        } → ${holdingName(contribution.to)}`,
+        name: contribution.name,
         value:
           'percentageOfEntry' in contribution
             ? procent(contribution.percentageOfEntry)
@@ -212,7 +203,7 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
       count: String(plan.transfers.length),
       summary: '',
       rows: plan.transfers.map((transfer) => ({
-        name: `${holdingName(transfer.from)} → ${holdingName(transfer.to)}`,
+        name: transfer.name,
         value: kroner(transfer.amountInRealKroner),
         target: { kind: 'transfer', id: transfer.id },
       })),

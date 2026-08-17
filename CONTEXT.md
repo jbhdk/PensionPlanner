@@ -224,7 +224,7 @@ Et tidspunkt angivet ved alder: enten en fast alder, eller en henvisning til `Wo
 _Avoid_: Aldersgrænse, tidspunkt
 
 **Indbetaling** · `Contribution`:
-En bevægelse af penge ind i en beholdning, der ikke er frie midler — altså ind i en ordning med et loft på vejen ind og regler på vejen ud. Kilden er enten en indtægtspost eller en anden beholdning. Hverken skattevirkningen eller loftet er noget, indbetalingen selv bærer: skattevirkningen følger destinationens variant, og AM-behandlingen følger kilden.
+En bevægelse af penge ind i en beholdning, der ikke er frie midler — altså ind i en ordning med et loft på vejen ind og regler på vejen ud. Kilden er enten en indtægtspost eller en anden beholdning. Hverken skattevirkningen eller loftet er noget, indbetalingen selv bærer: skattevirkningen følger destinationens variant, og AM-behandlingen følger kilden. Den bærer et navn som posten, skrevet ved oprettelsen og rettet af brugeren.
 _Avoid_: Bidrag, indskud, præmie, opsparing
 
 **Loft** · `Cap`:
@@ -240,7 +240,7 @@ Om ordningen kan oprettes og administreres af en arbejdsgiver, så en indbetalin
 _Avoid_: Firmaordning, arbejdsgiverordning, bortseelsesret
 
 **Overførsel** · `Transfer`:
-En dateret flytning af penge fra én af husstandens beholdninger til dens frie midler. Hverken en indtægt eller en udgift, og uden skattevirkning — afgiveren skal derfor være en variant, hvis `PayoutTaxation` er `TaxFree`. Det er også den, der tømmer en aldersopsparing og en aktiesparekonto: efter pensionsudbetalingsalderen er de konti, ejeren hæver af som hun vil, og en udbetalingsplan ville påstå en lovregel, der ikke findes, jf. [ADR-0022](./docs/adr/0022-den-skattefri-ordning-toemmes-af-en-overfoersel-ikke-af-en-udbetalingsplan.md). Destinationen er det, der skiller overførslen fra en indbetaling: går pengene ind i en ordning, er det en indbetaling, uanset hvor de kom fra. Perioden kan aldersforankres som en posts, og alderen måles på afgiverbeholdningens ejer — en beholdning har præcis én. Beløbet afkortes til afgiverens saldo, og forskellen står på `TransferYear`. Fladen må skrive "udbetaling" om en overførsel ud af en ordning, fordi det er det, den er i virkeligheden; det er en etiket og ikke et begreb.
+En dateret flytning af penge fra én af husstandens beholdninger til dens frie midler. Hverken en indtægt eller en udgift, og uden skattevirkning — afgiveren skal derfor være en variant, hvis `PayoutTaxation` er `TaxFree`. Det er også den, der tømmer en aldersopsparing og en aktiesparekonto: efter pensionsudbetalingsalderen er de konti, ejeren hæver af som hun vil, og en udbetalingsplan ville påstå en lovregel, der ikke findes, jf. [ADR-0022](./docs/adr/0022-den-skattefri-ordning-toemmes-af-en-overfoersel-ikke-af-en-udbetalingsplan.md). Destinationen er det, der skiller overførslen fra en indbetaling: går pengene ind i en ordning, er det en indbetaling, uanset hvor de kom fra. Perioden kan aldersforankres som en posts, og alderen måles på afgiverbeholdningens ejer — en beholdning har præcis én. Beløbet afkortes til afgiverens saldo, og forskellen står på `TransferYear`. Fladen må skrive "udbetaling" om en overførsel ud af en ordning, fordi det er det, den er i virkeligheden; det er en etiket og ikke et begreb. Den bærer et navn som posten og indbetalingen.
 _Avoid_: Flytning, indskud, indbetaling, omplacering
 
 **Forfald** · `Timing`:

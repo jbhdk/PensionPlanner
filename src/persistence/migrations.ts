@@ -286,6 +286,53 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    // v11 → v12: overførslen og indbetalingen bærer et navn, brugeren selv
+    // kan rette, som posten og beholdningen altid har gjort. Indtil nu havde
+    // de intet, og fladen skrev deres to ender i stedet.
+    //
+    // Der er intet at gætte: de to ender er præcis det, planen har vist
+    // indtil nu, og de skrives derfor som navnet. En nummerering ville have
+    // omdøbt hver eneste flytning i en gemt plan til noget, brugeren aldrig
+    // har set. Nye figurer nummereres derimod — "Overførsel 1" — for dér er
+    // der ingen ender, der er valgt endnu, jf. `addTransfer`.
+    //
+    // En ende, der ikke rammer noget, kan ikke navngives og beholder sit id.
+    // Sådan en plan afvises alligevel ved indgangen, jf. ADR-0013, og
+    // beskeden skal kunne pege på den figur, der er gået i stykker.
+    from: 11,
+    migrate: (data) => {
+      const plan = data as {
+        household?: { persons?: Array<{ holdings?: Array<Record<string, unknown>> }> }
+        entries?: Array<Record<string, unknown>>
+        transfers?: Array<Record<string, unknown>>
+        contributions?: Array<Record<string, unknown>>
+        [key: string]: unknown
+      }
+      const named = (rows: Array<Record<string, unknown>>) =>
+        new Map(rows.map((row) => [row.id, row.name]))
+      const holdings = named(
+        (plan.household?.persons ?? []).flatMap((person) => person.holdings ?? []),
+      )
+      const entries = named(plan.entries ?? [])
+      const nameOf = (book: Map<unknown, unknown>, id: unknown) => book.get(id) ?? id
+
+      return {
+        ...plan,
+        transfers: (plan.transfers ?? []).map((transfer) => ({
+          ...transfer,
+          name: `${nameOf(holdings, transfer.from)} \u2192 ${nameOf(holdings, transfer.to)}`,
+        })),
+        contributions: (plan.contributions ?? []).map((contribution) => ({
+          ...contribution,
+          name: `${nameOf(
+            contribution.kind === 'EntrySourced' ? entries : holdings,
+            contribution.source,
+          )} \u2192 ${nameOf(holdings, contribution.to)}`,
+        })),
+      }
+    },
+  },
 ]
 
 /** Kører kæden fra `fromVersion` til `toVersion`, ét led ad gangen. Rent og

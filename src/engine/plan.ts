@@ -273,6 +273,12 @@ export type Entry =
     `TransferYear`: afgiverens saldo rakte ikke nødvendigvis. */
 export type Transfer = {
   id: TransferId
+  /** Det, flytningen hedder på skærmen. Skrevet ved oprettelsen som
+      "Overførsel 1" og rettet i skuffen som en beholdnings, jf. `addTransfer`
+      — aldrig udledt af enderne. En etikette, der læste sig selv af de to
+      beholdninger, ville skifte under brugeren, hver gang en ende blev
+      valgt om. */
+  name: string
   from: HoldingId
   to: HoldingId
   amountInRealKroner: Real
@@ -289,6 +295,9 @@ type ContributionAmount = { percentageOfEntry: number } | { amountInRealKroner: 
 
 type ContributionBase = {
   id: ContributionId
+  /** Det, indbetalingen hedder på skærmen. Skrevet ved oprettelsen og rettet
+      i skuffen, af samme grund som `Transfer.name`. */
+  name: string
   /** Destinationen. Aldrig frie midler — så er det en overførsel. */
   to: HoldingId
 }

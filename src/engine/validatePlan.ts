@@ -11,7 +11,6 @@ import { payoutStartYear, payoutYear, transferAllowedFrom } from './payoutAge'
 import { periodBounds } from './age'
 import type {
   AgeBound,
-  Contribution,
   Entry,
   EntryId,
   Holding,
@@ -49,9 +48,9 @@ import type {
 
     Beskeden nævner figurerne ved de navne, planen selv giver dem, og aldrig
     ved deres id. Den skrives til den, der planlægger sin pension, og hun har
-    aldrig set `contribution-4` — hun kender sin indbetaling på de to ender,
-    navigatoren viser den ved. Id'et er motorens peger, og det hører hjemme,
-    hvor det er selve emnet: i en invariant, der er brudt inde i motoren, jf.
+    aldrig set `contribution-4` — hun kender sin indbetaling på det navn, der
+    står i navigatoren. Id'et er motorens peger, og det hører hjemme, hvor det
+    er selve emnet: i en invariant, der er brudt inde i motoren, jf.
     `holdingYears`. */
 export function validatePlan(plan: Plan): string | undefined {
   return (
@@ -220,15 +219,14 @@ function oneOfEachUniqueVariant(plan: Plan): string | undefined {
     andet sted i fladen, jf. ADR-0020. */
 function entrySourcedDestination(plan: Plan): string | undefined {
   const byId = holdingsById(plan)
-  const entries = entriesById(plan)
   for (const contribution of plan.contributions) {
     if (contribution.kind !== 'EntrySourced') continue
     const to = byId.get(contribution.to)
     if (!to || isEmployerAdministered(to)) continue
     return (
-      `${contributionBySource(contribution, entries, byId)} går til beholdningen ` +
-      `${to.name}, som ikke er arbejdsgiveradministreret — skriv den som et bidrag ` +
-      `fra personens frie midler.`
+      `Indbetalingen ${contribution.name} går til beholdningen ${to.name}, som ikke ` +
+      `er arbejdsgiveradministreret — skriv den som et bidrag fra personens frie ` +
+      `midler.`
     )
   }
   return undefined
@@ -250,7 +248,7 @@ function contributionEnds(plan: Plan): string | undefined {
   const ownerOf = ownersByHolding(plan)
 
   for (const contribution of plan.contributions) {
-    const subject = contributionBySource(contribution, entries, byId)
+    const subject = `Indbetalingen ${contribution.name}`
     const to = byId.get(contribution.to)
     if (!to) {
       return `${subject} går til en beholdning, der ikke findes.`
@@ -268,12 +266,12 @@ function contributionEnds(plan: Plan): string | undefined {
     if (contribution.kind === 'EntrySourced') {
       const source = entries.get(contribution.source)
       if (!source) {
-        return `Indbetalingen til beholdningen ${to.name} kommer fra en post, der ikke findes.`
+        return `${subject} kommer fra en post, der ikke findes.`
       }
       if (source.direction !== 'Income') {
         return (
-          `Indbetalingen til beholdningen ${to.name} kommer fra posten ${source.name}, ` +
-          `som er en udgiftspost. En lønkilde er en indtægtspost.`
+          `${subject} kommer fra posten ${source.name}, som er en udgiftspost. ` +
+          `En lønkilde er en indtægtspost.`
         )
       }
       // Ejerskellet kræver begge ejere for at kunne siges i navne. Findes
@@ -284,7 +282,7 @@ function contributionEnds(plan: Plan): string | undefined {
       const destinationOwner = ownerOf.get(contribution.to)!
       if (sourceOwner !== undefined && sourceOwner.id !== destinationOwner.id) {
         return (
-          `Indbetalingen kommer fra posten ${source.name}, som tilhører ` +
+          `${subject} kommer fra posten ${source.name}, som tilhører ` +
           `${sourceOwner.name}, og går til beholdningen ${to.name}, som tilhører ` +
           `${destinationOwner.name}. En ordning, en arbejdsgiver administrerer, står ` +
           `i lønmodtagerens eget navn.`
@@ -294,8 +292,7 @@ function contributionEnds(plan: Plan): string | undefined {
       const source = byId.get(contribution.source)
       if (!source) {
         return (
-          `Indbetalingen til beholdningen ${to.name} kommer fra en beholdning, ` +
-          `der ikke findes.`
+          `${subject} kommer fra en beholdning, der ikke findes.`
         )
       }
       // En flytning mellem to ordninger er ikke en indbetaling. Loven har
@@ -303,9 +300,8 @@ function contributionEnds(plan: Plan): string | undefined {
       // domænet — den plan skal afvises frem for at blive regnet forkert.
       if (!isFreeAssets(source)) {
         return (
-          `Indbetalingen til beholdningen ${to.name} kommer fra beholdningen ` +
-          `${source.name}, som ikke er frie midler. En flytning mellem to ordninger ` +
-          `er ikke en indbetaling.`
+          `${subject} kommer fra beholdningen ${source.name}, som ikke er frie ` +
+          `midler. En flytning mellem to ordninger er ikke en indbetaling.`
         )
       }
     }
@@ -354,15 +350,15 @@ function transferEnds(plan: Plan): string | undefined {
     const from = byId.get(transfer.from)
     const to = byId.get(transfer.to)
     if (!from) {
-      return `${transferByEnd(to, 'til')} kommer fra en beholdning, der ikke findes.`
+      return `Overførslen ${transfer.name} kommer fra en beholdning, der ikke findes.`
     }
     if (!to) {
-      return `${transferByEnd(from, 'fra')} går til en beholdning, der ikke findes.`
+      return `Overførslen ${transfer.name} går til en beholdning, der ikke findes.`
     }
     if (!isFreeAssets(to)) {
       return (
-        `Overførslen fra beholdningen ${from.name} går til beholdningen ${to.name}, ` +
-        `som ikke er frie midler. En flytning ind i en ordning er en indbetaling.`
+        `Overførslen ${transfer.name} går til beholdningen ${to.name}, som ikke er ` +
+        `frie midler. En flytning ind i en ordning er en indbetaling.`
       )
     }
     const owner = ownerOf.get(transfer.from)!
@@ -374,13 +370,14 @@ function transferEnds(plan: Plan): string | undefined {
       // varianten selv.
       if (isPensionScheme(from) && payoutTaxation(from) === 'TaxFree') {
         return (
-          `Overførslen henter fra beholdningen ${from.name} fra ${start}, men dens ` +
-          `pensionsudbetalingsalder nås først i ${payoutYear(from, owner)}.`
+          `Overførslen ${transfer.name} henter fra beholdningen ${from.name} fra ` +
+          `${start}, men dens pensionsudbetalingsalder nås først i ` +
+          `${payoutYear(from, owner)}.`
         )
       }
       return (
-        `Overførslen kommer fra beholdningen ${from.name}, hvis udbetaling er ` +
-        `personlig indkomst. Den tømmes af en udbetalingsplan.`
+        `Overførslen ${transfer.name} kommer fra beholdningen ${from.name}, hvis ` +
+        `udbetaling er personlig indkomst. Den tømmes af en udbetalingsplan.`
       )
     }
   }
@@ -395,37 +392,6 @@ function entryOwners(plan: Plan): string | undefined {
     }
   }
   return undefined
-}
-
-/** "Indbetalingen fra posten Løn" — indbetalingen har intet navn af sig selv
-    og kendes på sine to ender, præcis som navigatoren viser den. Kilden er
-    den ene af dem, og hvilken slags figur den er, siger formen: en post i den
-    lønkildede udgave, en beholdning i den beholdningskildede.
-
-    Rammer kilden ingenting, bliver det bare "Indbetalingen". To knækkede
-    pegere på samme figur er en fil, der er redigeret i hånden, og beskeden
-    siger da det, den kan, frem for at falde tilbage på et id, ingen har
-    skrevet. */
-function contributionBySource(
-  contribution: Contribution,
-  entries: Map<EntryId, Entry>,
-  byId: Map<HoldingId, Holding>,
-): string {
-  const source =
-    contribution.kind === 'EntrySourced'
-      ? entries.get(contribution.source)
-      : byId.get(contribution.source)
-  if (source === undefined) return 'Indbetalingen'
-  const noun = contribution.kind === 'EntrySourced' ? 'posten' : 'beholdningen'
-  return `Indbetalingen fra ${noun} ${source.name}`
-}
-
-/** Overførslen kendes på sine ender af samme grund som indbetalingen. Her er
-    begge ender beholdninger, og det er den hele ende, der navngiver den. */
-function transferByEnd(other: Holding | undefined, direction: 'fra' | 'til'): string {
-  return other === undefined
-    ? 'Overførslen'
-    : `Overførslen ${direction} beholdningen ${other.name}`
 }
 
 /** Navne på dansk remseform: "A og B", "A, B og C". */

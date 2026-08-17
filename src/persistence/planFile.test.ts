@@ -79,9 +79,10 @@ describe('planFile', () => {
     // indbetalinger, v7 → v8, hvor de tre ordninger fik det
     // oprettelsestidspunkt, deres udbetalingsalder udledes af, v8 → v9, hvor
     // satsreguleringen kom til at hedde det, den løfter, v9 → v10, hvor
-    // overførslens periode blev en fuld periode, og v10 → v11, hvor
-    // livrenten fik sine omsætningsfelter.
-    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(11)
+    // overførslens periode blev en fuld periode, v10 → v11, hvor livrenten
+    // fik sine omsætningsfelter, og v11 → v12, hvor overførslen og
+    // indbetalingen fik hver sit navn.
+    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(12)
   })
 
   it('bærer en plan med indbetalinger hele vejen rundt', () => {

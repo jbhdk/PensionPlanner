@@ -66,6 +66,7 @@ classDiagram
     }
 
     class Contribution {
+        +name
         +source
         +percentageOfEntry
         +amountInRealKroner
@@ -76,6 +77,7 @@ classDiagram
     }
 
     class Transfer {
+        +name
         +from
         +to
         +amount

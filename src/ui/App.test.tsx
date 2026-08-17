@@ -372,8 +372,20 @@ function aPlanWithEveryBand(): Plan {
       aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.1 }),
     ],
     transfers: [
-      aTransfer({ id: 'hjemtagning', from: 'opsparing', to: 'free-assets', amountInRealKroner: 50_000 }),
-      aTransfer({ id: 'opsparing', from: 'free-assets', to: 'aktiedepot', amountInRealKroner: 30_000 }),
+      aTransfer({
+        id: 'hjemtagning',
+        name: 'Ud af opsparingen',
+        from: 'opsparing',
+        to: 'free-assets',
+        amountInRealKroner: 50_000,
+      }),
+      aTransfer({
+        id: 'opsparing',
+        name: 'Ind i aktiedepotet',
+        from: 'free-assets',
+        to: 'aktiedepot',
+        amountInRealKroner: 30_000,
+      }),
     ],
   })
 }
@@ -922,7 +934,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(navigatorButton(/Frie midler → Aktiesparekonto/))
+    await user.click(navigatorButton(/Indbetalingen/))
     const kilde = screen.getByLabelText(/Kilde/) as HTMLSelectElement
 
     expect(Array.from(kilde.options).map((option) => option.value)).toEqual([
@@ -942,7 +954,7 @@ describe('fladen', () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithSpouse()} />)
 
-    await user.click(navigatorButton(/Løn.*Ratepension/))
+    await user.click(navigatorButton(/Indbetalingen/))
     await user.selectOptions(screen.getByLabelText(/Kilde/), 'Løn · Maria')
 
     expect((screen.getByLabelText(/Destination/) as HTMLSelectElement).value).toBe(
@@ -966,7 +978,7 @@ describe('fladen', () => {
     })
     render(<App initialPlan={withoutMariasPension(aPlanWithSpouse())} />)
 
-    await user.click(navigatorButton(/Løn.*Ratepension/))
+    await user.click(navigatorButton(/Indbetalingen/))
 
     // Hendes frie midler står der derimod: de må betale til Jespers ordning,
     // jf. ADR-0028 — det er kun lønnen, der er bundet til sin egen ejer.
@@ -995,7 +1007,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(navigatorButton(/Løn.*Ratepension/))
+    await user.click(navigatorButton(/Indbetalingen/))
 
     expect((screen.getByLabelText(/Destination/) as HTMLSelectElement).value).toBe('Ratepension')
 
@@ -1034,7 +1046,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(navigatorButton(/Frie midler → Ratepension/))
+    await user.click(navigatorButton(/Indbetalingen/))
     await user.selectOptions(screen.getByLabelText(/Destination/), 'Aktiesparekonto')
 
     // Kilden bliver stående: den beholdningskildede udgave har ingen ejer at
@@ -1063,7 +1075,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(navigatorButton(/Løn.*Ratepension/))
+    await user.click(navigatorButton(/Indbetalingen/))
     await user.selectOptions(screen.getByLabelText(/Destination/), 'Aktiesparekonto')
 
     expect((screen.getByLabelText(/Kilde/) as HTMLSelectElement).value).toBe('Frie midler · Jesper')
@@ -1221,7 +1233,7 @@ describe('fladen', () => {
       />,
     )
     await user.click(
-      transferRender.getByRole('button', { name: /Frie midler.*Anden beholdning/ }),
+      transferRender.getByRole('button', { name: /Overførslen/ }),
     )
     expect(firstPeriodenFelt(transferRender.container)).toBe('Gentagelse')
   })
@@ -1543,10 +1555,10 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(navigatorButton(/Frie midler → Anden beholdning/))
+    await user.click(navigatorButton(/Overførslen/))
     await user.click(screen.getByRole('button', { name: /Fjern overførsel/ }))
 
-    expect(screen.queryByRole('button', { name: /Frie midler → Anden beholdning/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Overførslen/ })).toBeNull()
   })
 
   it('flytter en beholdning til en anden ejer via ejer-vælgeren', async () => {
@@ -1671,14 +1683,19 @@ describe('fladen', () => {
     expect(screen.getByRole('button', { name: /Løn/ })).toBeTruthy()
   })
 
-  it('viser overførsler som sin egen gruppe i navigatoren, med fra- og til-navn i rækken', () => {
+  it('viser overførsler som sin egen gruppe i navigatoren, med flytningens navn i rækken', () => {
     const plan = aPlanWithSecondHolding()
     render(
       <App
         initialPlan={{
           ...plan,
           transfers: [
-            aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 50_000 }),
+            aTransfer({
+              name: 'Tømning af opsparingen',
+              from: 'free-assets',
+              to: 'anden-beholdning',
+              amountInRealKroner: 50_000,
+            }),
           ],
         }}
       />,
@@ -1686,12 +1703,13 @@ describe('fladen', () => {
 
     const gruppe = screen.getByRole('button', { name: /Overførsler/ })
     expect(within(gruppe).getByText('1')).toBeTruthy()
-    expect(
-      screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }),
-    ).toBeTruthy()
+    // Rækken viser flytningens eget navn og ikke dens to ender: en etikette,
+    // der læste sig selv af beholdningerne, ville skifte under brugeren,
+    // hver gang en ende blev valgt om.
+    expect(navigatorButton(/Tømning af opsparingen/)).toBeTruthy()
   })
 
-  it('viser indbetalinger som sin egen gruppe i navigatoren, med kilde → destination i rækken', () => {
+  it('viser indbetalinger som sin egen gruppe i navigatoren, med bidragets navn i rækken', () => {
     const plan = aPlanWithPension()
     render(
       <App
@@ -1699,7 +1717,12 @@ describe('fladen', () => {
           ...plan,
           entries: [aSalary({ amountInRealKroner: 600_000 })],
           contributions: [
-            aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+            aContribution({
+              name: 'Firmapension',
+              source: 'salary',
+              to: 'ratepension',
+              percentageOfEntry: 0.08,
+            }),
           ],
         }}
       />,
@@ -1709,8 +1732,8 @@ describe('fladen', () => {
     expect(within(gruppe).getByText('1')).toBeTruthy()
     // Ingen sum i gruppen: en procent af en lønpost har intet kronebeløb, før
     // året er regnet, og navigatoren viser kun planen.
-    expect(navigatorButton(/Løn.*Ratepension/)).toBeTruthy()
-    expect(within(navigatorButton(/Løn.*Ratepension/)).getByText('8,00 %')).toBeTruthy()
+    expect(navigatorButton(/Firmapension/)).toBeTruthy()
+    expect(within(navigatorButton(/Firmapension/)).getByText('8,00 %')).toBeTruthy()
   })
 
   it('viser i indbetalingens skuffe destination og beløb, og ikke de felter bidraget ikke har', async () => {
@@ -1728,9 +1751,9 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(navigatorButton(/Løn.*Ratepension/))
+    await user.click(navigatorButton(/Indbetalingen/))
 
-    expect(sectionLabels('Indbetalingen')).toEqual(['Kilde', 'Destination'])
+    expect(sectionLabels('Indbetalingen')).toEqual(['Navn', 'Kilde', 'Destination'])
     expect(sectionLabels('Beløb')).toEqual(['Angives som', 'Procent'])
 
     // Begge former er synlige uden at åbne noget, jf. fladekortet — en vælger
@@ -1769,9 +1792,9 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(navigatorButton(/Frie midler.*Ratepension/))
+    await user.click(navigatorButton(/Indbetalingen/))
 
-    expect(sectionLabels('Indbetalingen')).toEqual(['Kilde', 'Destination'])
+    expect(sectionLabels('Indbetalingen')).toEqual(['Navn', 'Kilde', 'Destination'])
     // Kun den ene beløbsform: en procent skal have en post at måle af, og
     // kontakten "Angives som" ville være et valg, der aldrig kan træffes.
     expect(sectionLabels('Beløb')).toEqual(['Fast beløb (dagens kroner)'])
@@ -1784,6 +1807,39 @@ describe('fladen', () => {
     ])
     // Der er ingen post at følge — arvelinjen hører til den anden udgave.
     expect(screen.queryByRole('heading', { name: /^Følger/ })).toBeNull()
+  })
+
+  it('omdøber en indbetaling fra skuffen', async () => {
+    // Navnefeltet står med bidragets navn som en beholdnings — almindelig
+    // tekst, der bliver stående, mens der rettes i den.
+    const user = userEvent.setup()
+    const plan = aPlanWithPension()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          contributions: [
+            aHoldingContribution({
+              source: 'free-assets',
+              to: 'ratepension',
+              amountInRealKroner: 50_000,
+            }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(navigatorButton(/Indbetalingen/))
+    const navn = screen.getByLabelText('Navn') as HTMLInputElement
+    expect(navn.value).toBe('Indbetalingen')
+
+    await user.clear(navn)
+    await user.type(navn, 'Efterlønsindskud')
+
+    expect(navigatorButton(/Efterlønsindskud/)).toBeTruthy()
+    expect((screen.getByLabelText('Navn') as HTMLInputElement).value).toBe(
+      'Efterlønsindskud',
+    )
   })
 
   it('skifter indbetalingens rude, når kilden skifter fra en lønpost til en beholdning', async () => {
@@ -1803,7 +1859,7 @@ describe('fladen', () => {
         }}
       />,
     )
-    await user.click(navigatorButton(/Løn.*Ratepension/))
+    await user.click(navigatorButton(/Indbetalingen/))
     expect(screen.getByRole('heading', { name: 'Følger Løn' })).toBeTruthy()
 
     // Vælgeren har begge slags kilder at tilbyde, i hver sin gruppe.
@@ -1824,9 +1880,9 @@ describe('fladen', () => {
     ])
   })
 
-  it('viser begge indbetalingsformer i navigatorens gruppe, kendelige på kilden', () => {
-    // Læseren skal kunne se, hvilken udgave en række er, uden at åbne den.
-    // Navnet er kilde → destination i begge, og kilden siger det selv.
+  it('viser begge indbetalingsformer i navigatorens gruppe, hver med sit navn', () => {
+    // De to udgaver står i den samme gruppe og læses som ét slags objekt.
+    // Hver bærer sit eget navn, præcis som en beholdning gør.
     const plan = aPlanWithPension()
     const person = plan.household.persons[0]!
     render(
@@ -1854,9 +1910,15 @@ describe('fladen', () => {
           },
           entries: [aSalary({ amountInRealKroner: 600_000 })],
           contributions: [
-            aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+            aContribution({
+              name: 'Lønbidrag',
+              source: 'salary',
+              to: 'ratepension',
+              percentageOfEntry: 0.08,
+            }),
             {
               ...aHoldingContribution({
+                name: 'Højt loft',
                 source: 'free-assets',
                 to: 'aldersopsparing',
                 amountInRealKroner: 64_200,
@@ -1870,10 +1932,8 @@ describe('fladen', () => {
 
     const gruppe = screen.getByRole('button', { name: /Indbetalinger/ })
     expect(within(gruppe).getByText('2')).toBeTruthy()
-    expect(within(navigatorButton(/Løn.*Ratepension/)).getByText('8,00 %')).toBeTruthy()
-    expect(
-      within(navigatorButton(/Frie midler.*Aldersopsparing/)).getByText('64.200'),
-    ).toBeTruthy()
+    expect(within(navigatorButton(/Lønbidrag/)).getByText('8,00 %')).toBeTruthy()
+    expect(within(navigatorButton(/Højt loft/)).getByText('64.200')).toBeTruthy()
   })
 
   it('tilføjer en indbetaling via indbetalingsgruppen, og dens inspektør kan åbnes', async () => {
@@ -1887,7 +1947,7 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: '+ Indbetaling' }))
 
-    await user.click(navigatorButton(/Løn.*Ratepension/))
+    await user.click(navigatorButton(/Indbetaling 1/))
     expect(screen.getByRole('heading', { name: 'Følger Løn' })).toBeTruthy()
   })
 
@@ -1900,7 +1960,7 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: '+ Indbetaling' }))
 
-    await user.click(navigatorButton(/Frie midler.*Ratepension/))
+    await user.click(navigatorButton(/Indbetaling 1/))
     expect(sectionLabels('Beløb')).toEqual(['Fast beløb (dagens kroner)'])
   })
 
@@ -1921,7 +1981,7 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: '+ Indbetaling' }))
 
-    expect(navigatorButton(/Frie midler.*Aktiesparekonto/)).toBeTruthy()
+    expect(navigatorButton(/Indbetaling 1/)).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
   })
 
@@ -1978,7 +2038,7 @@ describe('fladen', () => {
         }}
       />,
     )
-    await user.click(navigatorButton(/Løn.*Ratepension/))
+    await user.click(navigatorButton(/Indbetalingen/))
 
     await user.click(screen.getByRole('button', { name: 'Fast beløb' }))
 
@@ -2003,7 +2063,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
 
     expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Frie midler')
     expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Anden beholdning')
@@ -2015,7 +2075,7 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: /Luk inspektøren/ }))
     expect(
-      screen.getByRole('button', { name: /Frie midler.*Anden beholdning.*75.000/ }),
+      screen.getByRole('button', { name: /Overførslen.*75.000/ }),
     ).toBeTruthy()
   })
 
@@ -2037,7 +2097,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
 
     const fra = screen.getByLabelText('Fra') as HTMLSelectElement
     expect(Array.from(fra.options).map((option) => option.value)).toEqual([
@@ -2050,9 +2110,12 @@ describe('fladen', () => {
     expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Anden beholdning')
     expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Frie midler')
 
+    // Rækken i navigatoren bærer flytningens navn og ikke dens ender, så
+    // byttet ses i skuffens to vælgere ovenfor. Rækken skal stadig stå der
+    // med sit beløb.
     await user.click(screen.getByRole('button', { name: /Luk inspektøren/ }))
     expect(
-      screen.getByRole('button', { name: /Anden beholdning.*Frie midler.*50.000/ }),
+      screen.getByRole('button', { name: /Overførslen.*50.000/ }),
     ).toBeTruthy()
   })
 
@@ -2375,7 +2438,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(navigatorButton(/Løn.*Ratepension/))
+    await user.click(navigatorButton(/Indbetalingen/))
 
     expect(screen.queryByText('Loft')).toBeNull()
     expect(screen.queryByText('Med fradragsret')).toBeNull()
@@ -2431,7 +2494,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
     expect(screen.getByLabelText(/Fra \(år\)/)).toBeTruthy()
 
     await user.selectOptions(screen.getByLabelText(/Gentagelse/), 'Én gang')
@@ -2463,7 +2526,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
 
     const ender = () => [
       (screen.getByLabelText('Fra') as HTMLSelectElement).value,
@@ -2499,7 +2562,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
 
     expect(optionsOf('Fra')).toEqual(['Frie midler', 'Anden beholdning'])
     expect(optionsOf('Til')).toEqual(['Frie midler', 'Anden beholdning'])
@@ -2531,7 +2594,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Aldersopsparing.*Frie midler/ }))
+    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
 
     expect(optionsOf('Fra')).toEqual([
       'Frie midler',
@@ -2567,7 +2630,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Aldersopsparing.*Frie midler/ }))
+    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
     await user.selectOptions(screen.getByLabelText('Fra'), 'Frie midler')
 
     expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Frie midler')
@@ -2590,7 +2653,7 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: '+ Overførsel' }))
 
-    await user.click(screen.getByRole('button', { name: /Aldersopsparing.*Frie midler/ }))
+    await user.click(screen.getByRole('button', { name: /Overførsel 1/ }))
     expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Aldersopsparing')
     expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Frie midler')
     // Ordningen er oprettet før maj 2007, så døren går op, når personen
@@ -2620,7 +2683,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Aldersopsparing.*Frie midler/ }))
+    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
 
     expect(screen.getByText('Udbetaling')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Fjern udbetaling/ })).toBeTruthy()
@@ -2639,10 +2702,42 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
 
     expect(screen.getByText('Overførsel')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Fjern overførsel/ })).toBeTruthy()
+  })
+
+  it('omdøber en overførsel fra skuffen, og enderne rører ikke navnet', async () => {
+    // Navnet står i navigatoren og i skuffens hoved, så de to steder ikke
+    // kan komme til at sige hver sit. Skiftes en ende bagefter, bliver
+    // navnet stående: det er brugerens og ikke en etikette, fladen udleder.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...aPlanWithSecondHolding(),
+          transfers: [
+            aTransfer({ from: 'free-assets', to: 'anden-beholdning', amountInRealKroner: 50_000 }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(navigatorButton(/Overførslen/))
+    const navn = screen.getByLabelText('Navn') as HTMLInputElement
+    expect(navn.value).toBe('Overførslen')
+
+    await user.clear(navn)
+    await user.type(navn, 'Tømning af opsparingen')
+
+    // To steder: navigatorens række og skuffens hoved.
+    expect(navigatorButton(/Tømning af opsparingen/)).toBeTruthy()
+    expect(screen.getAllByText('Tømning af opsparingen')).toHaveLength(2)
+
+    await user.selectOptions(screen.getByLabelText('Fra'), 'Anden beholdning')
+
+    expect(navigatorButton(/Tømning af opsparingen/)).toBeTruthy()
   })
 
   it('bytter en overførsels ender om, også når listerne kun rummer frie midler', async () => {
@@ -2658,7 +2753,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ }))
+    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
 
     await user.selectOptions(screen.getByLabelText('Til'), 'Frie midler')
 
@@ -2673,7 +2768,9 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: '+ Overførsel' }))
 
-    expect(navigatorButton(/Frie midler.*Anden beholdning/)).toBeTruthy()
+    // Den nye flytning nummereres som en beholdning og ikke efter sine
+    // ender: de er valgt af `addTransfer` og ikke af brugeren endnu.
+    expect(navigatorButton(/Overførsel 1/)).toBeTruthy()
     expect(screen.queryByText(/kan ikke simuleres/i)).toBeNull()
   })
 
@@ -2689,7 +2786,7 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: '+ Overførsel' }))
 
-    const raekke = screen.getByRole('button', { name: /Frie midler.*Anden beholdning/ })
+    const raekke = screen.getByRole('button', { name: /Overførsel 1/ })
     expect(raekke).toBeTruthy()
 
     await user.click(raekke)
@@ -3228,10 +3325,10 @@ describe('fladen', () => {
 
     const indbetalinger = await openBand(user, 'Indbetalinger')
     const linje = within(indbetalinger)
-      .getByText('Løn → Ratepension')
+      .getByText('Indbetalingen')
       .closest('tr') as HTMLElement
     expect(within(linje).getAllByRole('cell').map((cell) => cell.textContent)).toEqual([
-      'Løn → Ratepension',
+      'Indbetalingen',
       '80.000',
       '73.600',
     ])
@@ -3254,13 +3351,13 @@ describe('fladen', () => {
     await explainYear(user, 2026)
 
     const ind = await openBand(user, 'Overførsler ind')
-    expect(within(ind).getByText('Opsparing → Frie midler')).toBeTruthy()
-    expect(within(ind).queryByText('Frie midler → Aktiedepot')).toBeNull()
+    expect(within(ind).getByText('Ud af opsparingen')).toBeTruthy()
+    expect(within(ind).queryByText('Ind i aktiedepotet')).toBeNull()
 
     const ud = await openBand(user, 'Overførsler ud')
-    const linje = within(ud).getByText('Frie midler → Aktiedepot').closest('tr') as HTMLElement
+    const linje = within(ud).getByText('Ind i aktiedepotet').closest('tr') as HTMLElement
     expect(within(linje).getAllByRole('cell').map((cell) => cell.textContent)).toEqual([
-      'Frie midler → Aktiedepot',
+      'Ind i aktiedepotet',
       '30.000',
       '30.000',
     ])
@@ -3283,7 +3380,12 @@ describe('fladen', () => {
             aFreeHolding('aktiedepot', 'Aktiedepot'),
           ],
           transfers: [
-            aTransfer({ from: 'opsparing', to: 'aktiedepot', amountInRealKroner: 100_000 }),
+            aTransfer({
+              name: 'Uden om bufferen',
+              from: 'opsparing',
+              to: 'aktiedepot',
+              amountInRealKroner: 100_000,
+            }),
           ],
         })}
       />,
@@ -3297,7 +3399,7 @@ describe('fladen', () => {
     const blok = screen
       .getByRole('heading', { name: 'Overførsler uden om bufferen', level: 3 })
       .closest('.blok') as HTMLElement
-    expect(within(blok).getByText('Opsparing → Aktiedepot')).toBeTruthy()
+    expect(within(blok).getByText('Uden om bufferen')).toBeTruthy()
   })
 
   it('folder skatten ud, så skatten af afkastet kan læses uden at trække fra selv', async () => {
@@ -3778,13 +3880,13 @@ describe('fladen', () => {
     await user.click(rows[1]!) // 2026
 
     const table = document.querySelector('table.indbetalingstabel') as HTMLElement
-    const cells = within(within(table).getByText(/Løn.*Ratepension/).closest('tr') as HTMLElement)
+    const cells = within(within(table).getByText(/Indbetalingen/).closest('tr') as HTMLElement)
       .getAllByRole('cell')
       .map((cell) => cell.textContent)
 
     // Begge beløb, så det kan ses, hvor AM-bidraget blev af. Differencen står
     // ikke i sin egen kolonne — den er allerede personens AM-lag ovenfor.
-    expect(cells).toEqual(['Løn → Ratepension', '48.000', '44.160'])
+    expect(cells).toEqual(['Indbetalingen', '48.000', '44.160'])
   })
 
   it('viser overførslens to beløb i forklar-året, så en afkortning kan ses', async () => {
@@ -3817,12 +3919,12 @@ describe('fladen', () => {
 
     const table = document.querySelector('table.overfoerselstabel') as HTMLElement
     const cells = within(
-      within(table).getByText(/Aldersopsparing.*Frie midler/).closest('tr') as HTMLElement,
+      within(table).getByText(/Overførslen/).closest('tr') as HTMLElement,
     )
       .getAllByRole('cell')
       .map((cell) => cell.textContent)
 
-    expect(cells).toEqual(['Aldersopsparing → Frie midler', '300.000', '200.000'])
+    expect(cells).toEqual(['Overførslen', '300.000', '200.000'])
   })
 
   it('opdaterer forklar-året med det samme, når noget rettes i skuffen, mens forklaringen er åben', async () => {

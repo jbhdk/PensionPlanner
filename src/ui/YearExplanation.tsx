@@ -427,19 +427,9 @@ function ContributionsTable({
   year: YearResult
   display: (amount: number) => number
 }) {
-  const holdings = plan.household.persons.flatMap((person) => person.holdings)
-  const name = (contributionId: string) => {
-    const contribution = plan.contributions.find((c) => c.id === contributionId)
-    if (!contribution) return contributionId
-    // Kilden slås op i den bog, dens udgave peger ind i: et lønkildet bidrag
-    // kommer fra en post, et beholdningskildet fra en beholdning.
-    const source =
-      contribution.kind === 'EntrySourced'
-        ? plan.entries.find((entry) => entry.id === contribution.source)
-        : holdings.find((holding) => holding.id === contribution.source)
-    const to = holdings.find((holding) => holding.id === contribution.to)
-    return `${source?.name ?? contribution.source} → ${to?.name ?? contribution.to}`
-  }
+  // Samme navn som i navigatoren og i skuffens hoved.
+  const name = (contributionId: string) =>
+    plan.contributions.find((c) => c.id === contributionId)?.name ?? contributionId
 
   return (
     <>
@@ -519,14 +509,8 @@ function TransfersTable({
   display: (amount: number) => number
   counts: (transfer: Transfer) => boolean
 }) {
-  const holdings = plan.household.persons.flatMap((person) => person.holdings)
-  const name = (transferId: string) => {
-    const transfer = plan.transfers.find((t) => t.id === transferId)
-    if (!transfer) return transferId
-    const from = holdings.find((holding) => holding.id === transfer.from)
-    const to = holdings.find((holding) => holding.id === transfer.to)
-    return `${from?.name ?? transfer.from} → ${to?.name ?? transfer.to}`
-  }
+  const name = (transferId: string) =>
+    plan.transfers.find((t) => t.id === transferId)?.name ?? transferId
 
   return (
     <>
