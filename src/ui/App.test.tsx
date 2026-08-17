@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgeBound, Holding, PayoutSchedule, Plan } from '../engine/plan'
@@ -4313,5 +4313,182 @@ describe('fladen', () => {
       ['Til progressionsgrænsen', '79.400', '27,00 %', '21.438'],
       ['Over progressionsgrænsen', '20.600', '42,00 %', '8.652'],
     ])
+  })
+})
+
+describe('rækkefølgen flyttes i navigatoren', () => {
+  /** Kassens rækker i den rækkefølge, de står. */
+  function rowNames(title: string): string[] {
+    const groups = [...document.querySelectorAll<HTMLElement>('.nav-gruppe')]
+    const group = groups.find((section) =>
+      section.querySelector('h3')?.textContent?.includes(title),
+    )!
+    return [...group.querySelectorAll('.nav-rk .navn')].map((navn) => navn.textContent ?? '')
+  }
+
+  /** Kassens indhold i den rækkefølge, det står — overskrifter og rækker
+      mellem hinanden, så skellet mellem to ejere kan ses. */
+  function boxLines(title: string): string[] {
+    const groups = [...document.querySelectorAll<HTMLElement>('.nav-gruppe')]
+    const group = groups.find((section) =>
+      section.querySelector('h3')?.textContent?.includes(title),
+    )!
+    return [...group.querySelectorAll('.nav-underoverskrift, .nav-rk .navn')].map(
+      (line) => line.textContent ?? '',
+    )
+  }
+
+  /** Trækket, som browseren udfører det: grebet gribes, rækken løftes, og
+      den slippes på en anden. Uden greb starter trækket ikke. */
+  function dragOnto(from: HTMLElement, to: HTMLElement) {
+    fireEvent.mouseDown(from.querySelector('.greb')!)
+    fireEvent.dragStart(from)
+    fireEvent.dragOver(to)
+    fireEvent.drop(to)
+  }
+
+  /** To indbetalinger til den samme ordning. Deler de et loft, tager den
+      første i listen sit fulde beløb, jf. ADR-0019 — rækkefølgen er derfor
+      et greb om en prioritet og ikke en sortering. */
+  function aPlanWithTwoContributions(): Plan {
+    return aPlan({
+      holdings: [aPensionHolding('ratepension', 'Ratepension')],
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      contributions: [
+        aContribution({
+          id: 'foerst',
+          name: 'Først',
+          source: 'salary',
+          to: 'ratepension',
+          percentageOfEntry: 0.05,
+        }),
+        aContribution({
+          id: 'dernaest',
+          name: 'Dernæst',
+          source: 'salary',
+          to: 'ratepension',
+          percentageOfEntry: 0.05,
+        }),
+      ],
+    })
+  }
+
+  it('sætter ejerens navn over hver persons beholdninger', () => {
+    // Kassen har altid vist begge personers beholdninger efter hinanden.
+    // Uden overskriften var der intet at se skellet på — og skellet er
+    // reelt: en beholdning kan ikke trækkes over til den anden person.
+    render(<App initialPlan={aPlanWithSpouse()} />)
+
+    expect(boxLines('Beholdninger')).toEqual([
+      'Jesper',
+      'Frie midler',
+      'Ratepension',
+      'Maria',
+      'Marias frie midler',
+      'Marias ratepension',
+    ])
+  })
+
+  it('trækker en indbetaling op over den anden', () => {
+    render(<App initialPlan={aPlanWithTwoContributions()} />)
+    expect(rowNames('Indbetalinger')).toEqual(['Først', 'Dernæst'])
+
+    dragOnto(navigatorButton(/Dernæst/), navigatorButton(/Først/))
+
+    expect(rowNames('Indbetalinger')).toEqual(['Dernæst', 'Først'])
+  })
+
+  it('starter ikke et træk, når rækken gribes uden om grebet', () => {
+    // Rækken er også en knap, der åbner skuffen. Kunne den bæres fra hvor
+    // som helst, ville et skævt klik flytte planen.
+    render(<App initialPlan={aPlanWithTwoContributions()} />)
+
+    const dernaest = navigatorButton(/Dernæst/)
+    fireEvent.dragStart(dernaest)
+    fireEvent.dragOver(navigatorButton(/Først/))
+    fireEvent.drop(navigatorButton(/Først/))
+
+    expect(rowNames('Indbetalinger')).toEqual(['Først', 'Dernæst'])
+  })
+
+  it('flytter rækken med Alt og en piletast', () => {
+    render(<App initialPlan={aPlanWithTwoContributions()} />)
+
+    const foerst = navigatorButton(/Først/)
+    foerst.focus()
+    fireEvent.keyDown(foerst, { key: 'ArrowDown', altKey: true })
+
+    expect(rowNames('Indbetalinger')).toEqual(['Dernæst', 'Først'])
+
+    // Enden er enden: pilen ned igen har ingen plads at flytte til.
+    fireEvent.keyDown(navigatorButton(/Først/), { key: 'ArrowDown', altKey: true })
+
+    expect(rowNames('Indbetalinger')).toEqual(['Dernæst', 'Først'])
+  })
+
+  it('lader en piletast uden Alt være rækkens egen', () => {
+    render(<App initialPlan={aPlanWithTwoContributions()} />)
+
+    fireEvent.keyDown(navigatorButton(/Først/), { key: 'ArrowDown' })
+
+    expect(rowNames('Indbetalinger')).toEqual(['Først', 'Dernæst'])
+  })
+
+  it('afviser et slip i den anden persons beholdninger', () => {
+    // Ejerskabet har skattemæssige følger og skiftes i skuffen. Et træk må
+    // ikke kunne gøre det i forbifarten.
+    render(<App initialPlan={aPlanWithSpouse()} />)
+
+    dragOnto(navigatorButton(/Marias ratepension/), navigatorButton(/Frie midler.*1.000.000/))
+
+    expect(boxLines('Beholdninger')).toEqual([
+      'Jesper',
+      'Frie midler',
+      'Ratepension',
+      'Maria',
+      'Marias frie midler',
+      'Marias ratepension',
+    ])
+  })
+
+  it('giver ikke en liste med én række et greb', () => {
+    // Husstanden med én person har ingen plads at bytte med, og et greb, der
+    // ikke kan flytte noget, er værre end intet greb. Pladsen holdes åben,
+    // så rækkerne flugter ned gennem spalten.
+    render(<App initialPlan={aPlanWithTwoContributions()} />)
+
+    // Husstandens foldeknap bærer også navnet i sit resumé, så rækken hentes
+    // i kassen og ikke på rollen.
+    const husstanden = [...document.querySelectorAll<HTMLElement>('.nav-gruppe')].find(
+      (group) => group.querySelector('h3')?.textContent?.includes('Husstanden'),
+    )!
+
+    expect(husstanden.querySelector('.nav-rk .greb')!.innerHTML).toBe('')
+    expect(navigatorButton(/Først/).querySelector('.greb svg')).toBeTruthy()
+  })
+
+  it('husker rækkefølgen i det gemte og i en eksporteret fil', async () => {
+    // Rækkefølgen er arrayets, og der er intet felt at gemme den i. Det er
+    // netop derfor den skal prøves: knækkede den, ville den knække tavst.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithTwoContributions()} />)
+
+    dragOnto(navigatorButton(/Dernæst/), navigatorButton(/Først/))
+
+    const gemt = loadPlan()
+    expect(gemt.kind).toBe('Loaded')
+    const plan = (gemt as { kind: 'Loaded'; plan: Plan }).plan
+    expect(plan.contributions.map((contribution) => contribution.id)).toEqual([
+      'dernaest',
+      'foerst',
+    ])
+
+    await user.upload(
+      screen.getByLabelText(/Importer/),
+      new File([exportPlan(plan)], 'plan.json', { type: 'application/json' }),
+    )
+
+    expect(await screen.findByRole('button', { name: /Dernæst/ })).toBeTruthy()
+    expect(rowNames('Indbetalinger')).toEqual(['Dernæst', 'Først'])
   })
 })

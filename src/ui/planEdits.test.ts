@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aContribution, aPlan, aSalary, aTransfer } from '../engine/testing/planFixture'
+import { aContribution, aPlan, aSalary, aTransfer, anExpense } from '../engine/testing/planFixture'
 import type { Plan } from '../engine/plan'
 import { validatePlan } from '../engine/validatePlan'
 import { defaultPlan } from './defaultPlan'
@@ -8,6 +8,11 @@ import {
   addEntry,
   addPerson,
   addTransfer,
+  moveContribution,
+  moveEntry,
+  moveHolding,
+  movePerson,
+  moveTransfer,
   removeEntry,
   removeHolding,
   removePerson,
@@ -399,6 +404,130 @@ describe('addTransfer og addContribution', () => {
     expect(plan.contributions.map((contribution) => contribution.name)).toEqual([
       'Indbetaling 1',
       'Indbetaling 2',
+    ])
+  })
+})
+
+describe('rækkefølgen i planen', () => {
+  /** Tre indbetalinger til den samme ordning. Rækkefølgen mellem dem er ikke
+      pynt: deler de et loft, tager den første sit fulde beløb, og den næste
+      får resten, jf. ADR-0019. */
+  function threeContributions(): Plan {
+    return aPlan({
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          openedOn: { year: 2018, month: 1 },
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+      contributions: [
+        aContribution({ id: 'a', name: 'A', source: 'salary', to: 'ratepension', percentageOfEntry: 0.05 }),
+        aContribution({ id: 'b', name: 'B', source: 'salary', to: 'ratepension', percentageOfEntry: 0.05 }),
+        aContribution({ id: 'c', name: 'C', source: 'salary', to: 'ratepension', percentageOfEntry: 0.05 }),
+      ],
+    })
+  }
+
+  const idsOf = (plan: Plan) => plan.contributions.map((contribution) => contribution.id)
+
+  it('sætter figuren på den plads, den slippes på, og skubber resten sammen', () => {
+    const plan = threeContributions()
+
+    expect(idsOf(moveContribution(plan, 'c', 0))).toEqual(['c', 'a', 'b'])
+    expect(idsOf(moveContribution(plan, 'a', 2))).toEqual(['b', 'c', 'a'])
+    expect(idsOf(moveContribution(plan, 'a', 1))).toEqual(['b', 'a', 'c'])
+  })
+
+  it('klemmer en plads uden for listen ind i dens ende', () => {
+    // Et slip forbi den sidste række er ikke en fejl, brugeren skal se — det
+    // er et slip i enden.
+    const plan = threeContributions()
+
+    expect(idsOf(moveContribution(plan, 'a', 9))).toEqual(['b', 'c', 'a'])
+    expect(idsOf(moveContribution(plan, 'c', -3))).toEqual(['c', 'a', 'b'])
+  })
+
+  it('lader planen stå, når figuren ikke findes', () => {
+    const plan = threeContributions()
+
+    expect(moveContribution(plan, 'findes-ikke', 0)).toEqual(plan)
+  })
+
+  it('flytter også overførslen, som deler råderum efter samme regel', () => {
+    const plan = aPlan({
+      holdings: [
+        { id: 'anden', name: 'Anden beholdning', variant: 'SavingsAccount', balance: 0, grossReturn: 0, annualCostRate: 0 },
+      ],
+      transfers: [
+        aTransfer({ id: 'foerst', name: 'Først', from: 'free-assets', to: 'anden', amountInRealKroner: 10_000 }),
+        aTransfer({ id: 'dernaest', name: 'Dernæst', from: 'free-assets', to: 'anden', amountInRealKroner: 20_000 }),
+      ],
+    })
+
+    expect(moveTransfer(plan, 'dernaest', 0).transfers.map((t) => t.id)).toEqual([
+      'dernaest',
+      'foerst',
+    ])
+  })
+
+  it('lader udgifterne ligge, hvor de lå, når en indtægt flyttes', () => {
+    // Indtægter og udgifter er to kig ind i den samme liste. Flytter man i
+    // det ene kig, må det andet ikke rykke sig — brugeren ser ikke engang de
+    // rækker, hun ville have flyttet.
+    const loen = aSalary({ amountInRealKroner: 600_000 })
+    const plan = aPlan({
+      entries: [
+        loen,
+        anExpense({ amountInRealKroner: 200_000 }),
+        { ...loen, id: 'bonus', name: 'Bonus' },
+      ],
+    })
+
+    const flyttet = moveEntry(plan, 'bonus', 0)
+
+    expect(flyttet.entries.map((entry) => entry.id)).toEqual(['bonus', 'living-costs', 'salary'])
+  })
+
+  it('holder beholdningen inden for sin egen ejers liste', () => {
+    // Ejerskabet har skattemæssige følger og skiftes i skuffen, ikke ved et
+    // træk. En plads uden for ejerens egne rækker lander derfor i enden af
+    // dem og ikke hos den anden person.
+    const plan = aTwoPersonPlan()
+    const [jesper, maria] = plan.household.persons
+
+    const flyttet = moveHolding(plan, 'marias-konto', 0)
+
+    expect(flyttet.household.persons[0]!.holdings).toEqual(jesper!.holdings)
+    expect(flyttet.household.persons[1]!.holdings).toEqual(maria!.holdings)
+  })
+
+  it('bytter om på ejerens egne beholdninger', () => {
+    const plan = aPlan({
+      holdings: [
+        { id: 'anden', name: 'Anden beholdning', variant: 'SavingsAccount', balance: 0, grossReturn: 0, annualCostRate: 0 },
+      ],
+    })
+
+    const flyttet = moveHolding(plan, 'anden', 0)
+
+    expect(flyttet.household.persons[0]!.holdings.map((holding) => holding.id)).toEqual([
+      'anden',
+      'free-assets',
+    ])
+  })
+
+  it('flytter personen i husstanden', () => {
+    const plan = aTwoPersonPlan()
+
+    expect(movePerson(plan, 'maria', 0).household.persons.map((person) => person.id)).toEqual([
+      'maria',
+      'jesper',
     ])
   })
 })

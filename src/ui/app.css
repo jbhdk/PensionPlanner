@@ -289,7 +289,7 @@ body {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 5px 13px 5px 10px;
+  padding: 5px 13px 5px 5px;
   font: inherit;
   color: var(--ink);
   background: none;
@@ -312,6 +312,67 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Grebet, rækken trækkes i. Pladsen holdes åben i hver eneste række, også
+   hvor der intet er at flytte — ellers ville en kasse med to ejere, hvor den
+   ene har én beholdning og den anden tre, stå med to forskellige indrykninger
+   ned gennem den samme liste.
+
+   Prikkerne er næsten usynlige, indtil rækken peges på. Grebet er ikke det,
+   man kommer for, og en liste med seks lysende håndtag ville læse som seks
+   knapper frem for som planen. */
+.nav-rk .greb {
+  flex: 0 0 6px;
+  align-self: center;
+  line-height: 0;
+  color: transparent;
+  cursor: grab;
+}
+
+.nav-rk:hover .greb {
+  color: #55606d;
+}
+
+.nav-rk .greb:hover {
+  color: var(--muted);
+}
+
+.nav-rk .greb:active {
+  cursor: grabbing;
+}
+
+/* Den tomme plads i en liste, der ikke kan omordnes, er ikke et greb. */
+.nav-rk .greb:empty {
+  cursor: inherit;
+}
+
+/* Rækken, mens den bæres, og stregen hvor den lander. Stregen sidder på den
+   kant, rækken faktisk går ind ad — over målet på vej op, under det på vej
+   ned — så slippet kan ses inden det sker. */
+.nav-rk.baaret {
+  opacity: 0.4;
+}
+
+.nav-rk.slip-over {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.nav-rk.slip-under {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* Ejerens navn over sine beholdninger. Kassen har altid vist begge personers
+   efter hinanden; uden overskriften var der intet at se skellet på, og skellet
+   er reelt — en beholdning kan ikke trækkes over til den anden person. */
+.nav-underoverskrift {
+  padding: 7px 13px 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.nav-krop > div:first-child > .nav-underoverskrift {
+  padding-top: 1px;
 }
 
 .nav-rk .tal {

@@ -742,3 +742,81 @@ export function removeContribution(plan: Plan, id: string): Plan {
     contributions: plan.contributions.filter((contribution) => contribution.id !== id),
   }
 }
+
+/** ---------- rækkefølgen ----------
+
+    Planens rækkefølge er ikke en visningsdetalje. Beder to indbetalinger til
+    samme aktiesparekonto tilsammen om mere, end loftet giver plads til, tager
+    den første i `plan.contributions` sit fulde beløb, og den næste får
+    resten, jf. ADR-0019; overførsler deler råderummet efter samme regel, jf.
+    `transfersInYear`. Det er derfor rækkefølgen kan flyttes af brugeren og
+    ikke af fladen: den er et greb om en prioritet, motoren allerede adlyder.
+
+    Alle fem flytter inden for den liste, brugeren ser. Ingen af dem kan
+    ændre, hvad en figur er eller hører til — en beholdning bliver i sin
+    ejers egen liste, og et ejerskifte har både skattemæssige følger og sit
+    eget felt i skuffen, jf. `withHoldingOwner`. */
+
+/** Flytter figuren med `id` hen på pladsen `to` og skubber resten sammen.
+    En plads uden for listen klemmes ind i den, så et slip forbi enden lander
+    i enden — og en figur, der ikke findes, lader listen stå. */
+function movedById<T extends { id: string }>(items: T[], id: string, to: number): T[] {
+  const from = items.findIndex((item) => item.id === id)
+  if (from === -1) return items
+
+  const rest = items.filter((_, index) => index !== from)
+  const at = Math.max(0, Math.min(to, rest.length))
+  return [...rest.slice(0, at), items[from]!, ...rest.slice(at)]
+}
+
+export function movePerson(plan: Plan, id: string, to: number): Plan {
+  return {
+    ...plan,
+    household: { persons: movedById(plan.household.persons, id, to) },
+  }
+}
+
+/** Pladsen tælles i ejerens egen liste. Beholdningen kan ikke flyttes ud af
+    den: `withPerson` rører kun den ene person, og en plads uden for listen
+    klemmes ind i dens ende. */
+export function moveHolding(plan: Plan, id: string, to: number): Plan {
+  const owner = findHoldingOwner(plan, id)
+  if (owner === undefined) return plan
+
+  return withPerson(plan, owner.id, (person) => ({
+    ...person,
+    holdings: movedById(person.holdings, id, to),
+  }))
+}
+
+/** Pladsen tælles blandt posterne i postens egen retning, for det er dem,
+    brugeren ser i kassen. Indtægter og udgifter deler `plan.entries`, og den
+    anden slags bliver liggende, hvor den lå: kun de pladser, retningen
+    optager i listen, bytter indhold. */
+export function moveEntry(plan: Plan, id: string, to: number): Plan {
+  const moving = findEntry(plan, id)
+  if (moving === undefined) return plan
+
+  const slots = plan.entries.flatMap((entry, index) =>
+    entry.direction === moving.direction ? [index] : [],
+  )
+  const reordered = movedById(
+    slots.map((slot) => plan.entries[slot]!),
+    id,
+    to,
+  )
+
+  const entries = [...plan.entries]
+  slots.forEach((slot, index) => {
+    entries[slot] = reordered[index]!
+  })
+  return { ...plan, entries }
+}
+
+export function moveContribution(plan: Plan, id: string, to: number): Plan {
+  return { ...plan, contributions: movedById(plan.contributions, id, to) }
+}
+
+export function moveTransfer(plan: Plan, id: string, to: number): Plan {
+  return { ...plan, transfers: movedById(plan.transfers, id, to) }
+}
