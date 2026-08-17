@@ -9,7 +9,17 @@ import {
 } from './holdingVariant'
 import { payoutStartYear, payoutYear, transferAllowedFrom } from './payoutAge'
 import { periodBounds } from './age'
-import type { AgeBound, Holding, HoldingId, PensionSchemeHolding, Person, Plan } from './plan'
+import type {
+  AgeBound,
+  Contribution,
+  Entry,
+  EntryId,
+  Holding,
+  HoldingId,
+  PensionSchemeHolding,
+  Person,
+  Plan,
+} from './plan'
 
 /** Planen skal beskrive noget, der kan eksistere, før motoren kan regne på
     den. Hvervet er to slags regler.
@@ -35,7 +45,14 @@ import type { AgeBound, Holding, HoldingId, PensionSchemeHolding, Person, Plan }
     Returnerer en forklarende dansk besked ved den første regel, planen
     bryder — ellers intet. Brugt tre steder: `simulate` kaster på den, fladen
     viser den i resultatspalten frem for at lade planen fejle tavst, og
-    persistenslaget afviser en fil, der bærer den. */
+    persistenslaget afviser en fil, der bærer den.
+
+    Beskeden nævner figurerne ved de navne, planen selv giver dem, og aldrig
+    ved deres id. Den skrives til den, der planlægger sin pension, og hun har
+    aldrig set `contribution-4` — hun kender sin indbetaling på de to ender,
+    navigatoren viser den ved. Id'et er motorens peger, og det hører hjemme,
+    hvor det er selve emnet: i en invariant, der er brudt inde i motoren, jf.
+    `holdingYears`. */
 export function validatePlan(plan: Plan): string | undefined {
   return (
     bufferPointer(plan) ??
@@ -82,7 +99,7 @@ function payoutSchedules(plan: Plan): string | undefined {
         const begins = payoutStartYear(start, person)
         if (begins < legal) {
           return (
-            `Beholdningen ${holding.id} udbetales fra ${begins}, men dens ` +
+            `Beholdningen ${holding.name} udbetales fra ${begins}, men dens ` +
             `pensionsudbetalingsalder nås først i ${legal}.`
           )
         }
@@ -99,7 +116,7 @@ function payoutSchedules(plan: Plan): string | undefined {
       const begins = payoutStartYear(schedule.start, person)
       if (schedule.duration < minimumPayoutYears) {
         return (
-          `Beholdningen ${holding.id} udbetales over ${schedule.duration} år. ` +
+          `Beholdningen ${holding.name} udbetales over ${schedule.duration} år. ` +
           `En ratepension skal udbetales over mindst ${minimumPayoutYears} år.`
         )
       }
@@ -111,7 +128,7 @@ function payoutSchedules(plan: Plan): string | undefined {
       const latest = legal + latestPayoutYearsAfterPayoutAge
       if (last > latest) {
         return (
-          `Beholdningen ${holding.id} udbetaler sin sidste rate i ${last}. ` +
+          `Beholdningen ${holding.name} udbetaler sin sidste rate i ${last}. ` +
           `Den skal falde senest i ${latest}, ${latestPayoutYearsAfterPayoutAge} år ` +
           `efter pensionsudbetalingsalderen.`
         )
@@ -173,10 +190,14 @@ function oneOfEachUniqueVariant(plan: Plan): string | undefined {
       const count = (counted.get(holding.variant) ?? 0) + 1
       counted.set(holding.variant, count)
       if (count > 1) {
+        // Varianten nævnes ikke ved navn: dens danske etiket er fladens, og
+        // motoren har ingen at låne. Beholdningerne selv siger det bedre —
+        // brugeren kan pege på dem i navigatoren.
+        const same = person.holdings.filter((other) => other.variant === holding.variant)
         return (
-          `Personen ${person.id} har ${
-            person.holdings.filter((other) => other.variant === holding.variant).length
-          } beholdninger af varianten ${holding.variant}. Der kan kun være én pr. person.`
+          `${person.name} har ${same.length} beholdninger af samme type: ` +
+          `${listed(same.map((other) => other.name))}. Der kan kun være én af den ` +
+          `type pr. person.`
         )
       }
     }
@@ -199,14 +220,15 @@ function oneOfEachUniqueVariant(plan: Plan): string | undefined {
     andet sted i fladen, jf. ADR-0020. */
 function entrySourcedDestination(plan: Plan): string | undefined {
   const byId = holdingsById(plan)
+  const entries = entriesById(plan)
   for (const contribution of plan.contributions) {
     if (contribution.kind !== 'EntrySourced') continue
     const to = byId.get(contribution.to)
     if (!to || isEmployerAdministered(to)) continue
     return (
-      `Indbetalingen ${contribution.id} kommer fra posten ${contribution.source} og går ` +
-      `til beholdningen ${contribution.to}, som ikke er arbejdsgiveradministreret — ` +
-      `skriv den som et bidrag fra personens frie midler.`
+      `${contributionBySource(contribution, entries, byId)} går til beholdningen ` +
+      `${to.name}, som ikke er arbejdsgiveradministreret — skriv den som et bidrag ` +
+      `fra personens frie midler.`
     )
   }
   return undefined
@@ -224,21 +246,19 @@ function entrySourcedDestination(plan: Plan): string | undefined {
     destinationens ejer og ikke kildens, jf. ADR-0028. */
 function contributionEnds(plan: Plan): string | undefined {
   const byId = holdingsById(plan)
-  const entries = new Map(plan.entries.map((entry) => [entry.id, entry]))
+  const entries = entriesById(plan)
   const ownerOf = ownersByHolding(plan)
 
   for (const contribution of plan.contributions) {
+    const subject = contributionBySource(contribution, entries, byId)
     const to = byId.get(contribution.to)
     if (!to) {
-      return (
-        `Indbetalingen ${contribution.id} går til beholdningen ${contribution.to}, ` +
-        `som ikke findes.`
-      )
+      return `${subject} går til en beholdning, der ikke findes.`
     }
     if (isFreeAssets(to)) {
       return (
-        `Indbetalingen ${contribution.id} går til beholdningen ${contribution.to}, ` +
-        `som er frie midler. En flytning mellem frie midler er en overførsel.`
+        `${subject} går til beholdningen ${to.name}, som ikke er en ordning. ` +
+        `En flytning mellem frie midler er en overførsel.`
       )
     }
 
@@ -248,30 +268,34 @@ function contributionEnds(plan: Plan): string | undefined {
     if (contribution.kind === 'EntrySourced') {
       const source = entries.get(contribution.source)
       if (!source) {
-        return (
-          `Indbetalingen ${contribution.id} kommer fra posten ${contribution.source}, ` +
-          `som ikke findes.`
-        )
+        return `Indbetalingen til beholdningen ${to.name} kommer fra en post, der ikke findes.`
       }
       if (source.direction !== 'Income') {
         return (
-          `Indbetalingen ${contribution.id} kommer fra posten ${contribution.source}, ` +
+          `Indbetalingen til beholdningen ${to.name} kommer fra posten ${source.name}, ` +
           `som er en udgiftspost. En lønkilde er en indtægtspost.`
         )
       }
-      if (source.owner !== ownerOf.get(contribution.to)?.id) {
+      // Ejerskellet kræver begge ejere for at kunne siges i navne. Findes
+      // postens ikke, er det dén fejl, der skal meldes, og `entryOwners`
+      // melder den længere nede i kæden — bedre end en besked her om, at
+      // posten tilhører en anden end destinationen.
+      const sourceOwner = plan.household.persons.find((person) => person.id === source.owner)
+      const destinationOwner = ownerOf.get(contribution.to)!
+      if (sourceOwner !== undefined && sourceOwner.id !== destinationOwner.id) {
         return (
-          `Indbetalingen ${contribution.id} kommer fra posten ${contribution.source} og går ` +
-          `til beholdningen ${contribution.to}, som tilhører en anden person. En ordning, ` +
-          `en arbejdsgiver administrerer, står i lønmodtagerens eget navn.`
+          `Indbetalingen kommer fra posten ${source.name}, som tilhører ` +
+          `${sourceOwner.name}, og går til beholdningen ${to.name}, som tilhører ` +
+          `${destinationOwner.name}. En ordning, en arbejdsgiver administrerer, står ` +
+          `i lønmodtagerens eget navn.`
         )
       }
     } else {
       const source = byId.get(contribution.source)
       if (!source) {
         return (
-          `Indbetalingen ${contribution.id} kommer fra beholdningen ${contribution.source}, ` +
-          `som ikke findes.`
+          `Indbetalingen til beholdningen ${to.name} kommer fra en beholdning, ` +
+          `der ikke findes.`
         )
       }
       // En flytning mellem to ordninger er ikke en indbetaling. Loven har
@@ -279,8 +303,9 @@ function contributionEnds(plan: Plan): string | undefined {
       // domænet — den plan skal afvises frem for at blive regnet forkert.
       if (!isFreeAssets(source)) {
         return (
-          `Indbetalingen ${contribution.id} kommer fra beholdningen ${contribution.source}, ` +
-          `som ikke er frie midler. En flytning mellem to ordninger er ikke en indbetaling.`
+          `Indbetalingen til beholdningen ${to.name} kommer fra beholdningen ` +
+          `${source.name}, som ikke er frie midler. En flytning mellem to ordninger ` +
+          `er ikke en indbetaling.`
         )
       }
     }
@@ -295,13 +320,13 @@ function contributionEnds(plan: Plan): string | undefined {
 function bufferPointer(plan: Plan): string | undefined {
   const matches = holdings(plan).filter((holding) => holding.id === plan.buffer)
   if (matches.length === 0) {
-    return `Planens buffer peger på beholdningen ${plan.buffer}, som ikke findes.`
+    return `Planens buffer peger på en beholdning, der ikke findes.`
   }
   if (matches.length > 1) {
     return `Flere beholdninger er udpeget som buffer.`
   }
   if (!isFreeAssets(matches[0]!)) {
-    return `Planens buffer peger på beholdningen ${plan.buffer}, som ikke er frie midler.`
+    return `Planens buffer er beholdningen ${matches[0]!.name}, som ikke er frie midler.`
   }
   return undefined
 }
@@ -329,15 +354,15 @@ function transferEnds(plan: Plan): string | undefined {
     const from = byId.get(transfer.from)
     const to = byId.get(transfer.to)
     if (!from) {
-      return `Overførslen ${transfer.id} kommer fra beholdningen ${transfer.from}, som ikke findes.`
+      return `${transferByEnd(to, 'til')} kommer fra en beholdning, der ikke findes.`
     }
     if (!to) {
-      return `Overførslen ${transfer.id} går til beholdningen ${transfer.to}, som ikke findes.`
+      return `${transferByEnd(from, 'fra')} går til en beholdning, der ikke findes.`
     }
     if (!isFreeAssets(to)) {
       return (
-        `Overførslen ${transfer.id} går til beholdningen ${transfer.to}, som ikke er ` +
-        `frie midler. En flytning ind i en ordning er en indbetaling.`
+        `Overførslen fra beholdningen ${from.name} går til beholdningen ${to.name}, ` +
+        `som ikke er frie midler. En flytning ind i en ordning er en indbetaling.`
       )
     }
     const owner = ownerOf.get(transfer.from)!
@@ -349,14 +374,13 @@ function transferEnds(plan: Plan): string | undefined {
       // varianten selv.
       if (isPensionScheme(from) && payoutTaxation(from) === 'TaxFree') {
         return (
-          `Overførslen ${transfer.id} henter fra beholdningen ${transfer.from} fra ` +
-          `${start}, men dens pensionsudbetalingsalder nås først i ` +
-          `${payoutYear(from, owner)}.`
+          `Overførslen henter fra beholdningen ${from.name} fra ${start}, men dens ` +
+          `pensionsudbetalingsalder nås først i ${payoutYear(from, owner)}.`
         )
       }
       return (
-        `Overførslen ${transfer.id} kommer fra beholdningen ${transfer.from}, hvis ` +
-        `udbetaling er personlig indkomst. Den tømmes af en udbetalingsplan.`
+        `Overførslen kommer fra beholdningen ${from.name}, hvis udbetaling er ` +
+        `personlig indkomst. Den tømmes af en udbetalingsplan.`
       )
     }
   }
@@ -367,10 +391,53 @@ function entryOwners(plan: Plan): string | undefined {
   const ids = new Set(plan.household.persons.map((person) => person.id))
   for (const entry of plan.entries) {
     if (!ids.has(entry.owner)) {
-      return `Posten ${entry.id} tilhører personen ${entry.owner}, som ikke findes.`
+      return `Posten ${entry.name} tilhører en person, der ikke findes.`
     }
   }
   return undefined
+}
+
+/** "Indbetalingen fra posten Løn" — indbetalingen har intet navn af sig selv
+    og kendes på sine to ender, præcis som navigatoren viser den. Kilden er
+    den ene af dem, og hvilken slags figur den er, siger formen: en post i den
+    lønkildede udgave, en beholdning i den beholdningskildede.
+
+    Rammer kilden ingenting, bliver det bare "Indbetalingen". To knækkede
+    pegere på samme figur er en fil, der er redigeret i hånden, og beskeden
+    siger da det, den kan, frem for at falde tilbage på et id, ingen har
+    skrevet. */
+function contributionBySource(
+  contribution: Contribution,
+  entries: Map<EntryId, Entry>,
+  byId: Map<HoldingId, Holding>,
+): string {
+  const source =
+    contribution.kind === 'EntrySourced'
+      ? entries.get(contribution.source)
+      : byId.get(contribution.source)
+  if (source === undefined) return 'Indbetalingen'
+  const noun = contribution.kind === 'EntrySourced' ? 'posten' : 'beholdningen'
+  return `Indbetalingen fra ${noun} ${source.name}`
+}
+
+/** Overførslen kendes på sine ender af samme grund som indbetalingen. Her er
+    begge ender beholdninger, og det er den hele ende, der navngiver den. */
+function transferByEnd(other: Holding | undefined, direction: 'fra' | 'til'): string {
+  return other === undefined
+    ? 'Overførslen'
+    : `Overførslen ${direction} beholdningen ${other.name}`
+}
+
+/** Navne på dansk remseform: "A og B", "A, B og C". */
+function listed(names: string[]): string {
+  if (names.length < 2) return names.join('')
+  return `${names.slice(0, -1).join(', ')} og ${names.at(-1)}`
+}
+
+/** Husstandens poster slået op på deres id — det, en besked om en lønkilde
+    har brug for for at kunne sige postens navn. */
+function entriesById(plan: Plan): Map<EntryId, Entry> {
+  return new Map(plan.entries.map((entry) => [entry.id, entry]))
 }
 
 /** Hver beholdnings ejer slået op på beholdningens id. En beholdning har

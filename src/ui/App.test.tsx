@@ -2707,7 +2707,9 @@ describe('fladen', () => {
     render(<App initialPlan={{ ...aPlan(), buffer: 'findes-ikke' }} />)
 
     expect(screen.getByText(/kan ikke simuleres/i)).toBeTruthy()
-    expect(screen.getByText(/findes-ikke/)).toBeTruthy()
+    // Beskeden siger hvad der er galt uden at vise pegeren selv: id'et er
+    // motorens, og resultatspalten skriver til den, der planlægger.
+    expect(screen.getByText(/buffer peger på en beholdning, der ikke findes/i)).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
   })
 

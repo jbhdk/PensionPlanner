@@ -471,7 +471,9 @@ describe('simulate', () => {
       entries: [aSalary({ amountInRealKroner: 400_000, owner: 'findes-ikke' })],
     })
 
-    expect(() => simulate(plan)).toThrow(/findes-ikke/)
+    // Beskeden nævner posten ved dens navn og ikke ved dens id: den skrives
+    // til den, der planlægger sin pension, og hun kender kun navnet.
+    expect(() => simulate(plan)).toThrow(/Løn tilhører en person, der ikke findes/i)
   })
 
   it('lægger lønnen til årets indtægter og trækker årets skat af den', () => {
@@ -1262,7 +1264,11 @@ describe('overførsler', () => {
       ],
     })
 
-    expect(() => simulate(plan)).toThrow(/findes-ikke/)
+    // Overførslen har intet navn af sig selv og kendes på den ende, der
+    // rammer noget — den anden er netop det, beskeden handler om.
+    expect(() => simulate(plan)).toThrow(
+      /Overførslen fra beholdningen Frie midler går til en beholdning, der ikke findes/i,
+    )
   })
 
   it('mærker året ufuldstændig, når bufferen er negativ, men husstanden har likviditet andetsteds', () => {
@@ -1688,9 +1694,10 @@ describe('aktiesparekontoen', () => {
     })
     const plan = aPlan({ holdings: [anAccount('den-ene'), anAccount('den-anden')] })
 
-    // Beskeden navngiver varianten og ikke ordningen på dansk: reglen er
-    // varianttabellens og ikke aktiesparekontoens alene, jf. ADR-0010.
-    expect(() => simulate(plan)).toThrow(/jesper.*ShareSavingsAccount/i)
+    // Beskeden nævner de to konti ved deres navne og aktiesparekontoen ved
+    // intet: reglen er varianttabellens og ikke aktiesparekontoens alene, jf.
+    // ADR-0010, og varianten har ingen dansk etiket i motoren at låne.
+    expect(() => simulate(plan)).toThrow(/jesper har 2 beholdninger af samme type/i)
   })
 
   it('afviser en lønkildet indbetaling til aktiesparekontoen', () => {
@@ -3143,7 +3150,10 @@ describe('indbetalingens pegere', () => {
       aContribution({ source: 'salary', to: 'findes-ikke', percentageOfEntry: 0.08 }),
     )
 
-    expect(() => simulate(plan)).toThrow(/findes-ikke.*ikke findes/i)
+    // Indbetalingen kendes på den ende, der rammer noget — her lønposten.
+    expect(() => simulate(plan)).toThrow(
+      /Indbetalingen fra posten Løn går til en beholdning, der ikke findes/i,
+    )
   })
 
   it('afviser en indbetaling, hvis kilden ikke findes', () => {
@@ -3151,7 +3161,9 @@ describe('indbetalingens pegere', () => {
       aContribution({ source: 'ingen-loen', to: 'ratepension', percentageOfEntry: 0.08 }),
     )
 
-    expect(() => simulate(plan)).toThrow(/ingen-loen.*ikke findes/i)
+    expect(() => simulate(plan)).toThrow(
+      /Indbetalingen til beholdningen Ratepension kommer fra en post, der ikke findes/i,
+    )
   })
 
   it('afviser en indbetaling til frie midler — så er det en overførsel', () => {
@@ -3172,7 +3184,7 @@ describe('indbetalingens pegere', () => {
       entries: [anExpense({ amountInRealKroner: 360_000 })],
     }
 
-    expect(() => simulate(plan)).toThrow(/living-costs.*udgiftspost|udgift/i)
+    expect(() => simulate(plan)).toThrow(/posten Faste udgifter, som er en udgiftspost/i)
   })
 
   it('afviser en lønkilde, hvor posten og ordningen ikke er samme persons', () => {
@@ -3212,7 +3224,9 @@ describe('indbetalingens pegere', () => {
       },
     }
 
-    expect(() => simulate(plan)).toThrow(/anden person/i)
+    // Beskeden siger begge ejere ved navn: hele fejlen er, at de to ikke er
+    // den samme, og et id ville lade brugeren gætte hvilke to.
+    expect(() => simulate(plan)).toThrow(/tilhører Jesper.*tilhører Maria/is)
   })
 
   it('afviser en beholdningskilde, der ikke findes', () => {
@@ -3224,7 +3238,9 @@ describe('indbetalingens pegere', () => {
       }),
     )
 
-    expect(() => simulate(plan)).toThrow(/findes-ikke.*ikke findes/i)
+    expect(() => simulate(plan)).toThrow(
+      /Indbetalingen til beholdningen Ratepension kommer fra en beholdning, der ikke findes/i,
+    )
   })
 
   it('afviser en beholdningskilde, der ikke er frie midler', () => {
