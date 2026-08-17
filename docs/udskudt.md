@@ -32,6 +32,16 @@ Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog 
 
 **Hvad der skal bygges, når det tages op:** Kun hvis ADR-0019 rulles tilbage — altså hvis aktiesparekontoens loft en dag skulle lade indskuddet lande mod en afgift i stedet for at afkorte det. Så bliver de 3 % p.a. en bærer ved siden af de øvrige, ligesom PBL § 25 A's 20 %, og udlodningspligten kræver desuden, at penge kan forlade en aktiesparekonto uden om en udbetalingsplan. Ingen af delene findes i modellen i dag.
 
+## Kapitalpensionens 20-årsfrist
+
+**Status:** Udskudt. Kapitalpensionen er bygget som en beholdning, en overførsel kan tømme fra dens `PayoutAge`; det er alene fristen for, hvornår den senest skal være ude, der ikke er.
+
+**Hvorfor det betyder noget:** En kapitalpension skal være udbetalt senest 20 år efter pensionsudbetalingsalderen. En plan, der lader den blive stående længere, beskriver noget, der ikke kan ske — pengeinstituttet udbetaler den, uanset hvad planen siger.
+
+**Prisen ved at lade den ligge:** Ikke nul, og fejlen er tavs. En kapitalpension, ingen overførsel tømmer, forrentes videre og betaler aldrig sin afgift, så formuen står afgiften for højt — en forskel, der vokser med afkastet. 300.000 kr. urørt i tyve år ved 4 % netto står som 657.000 kr. i formuegrafen, hvor de er 394.000 kr. værd efter afgift. Det skiller den fra aldersopsparingens afgift, som markeres og koster nul: her er der ingen markering overhovedet, og året, hvor fristen sprænges, ser ud som ethvert andet.
+
+**Hvad der skal bygges, når det tages op:** Ikke en indgangskontrol. Om kontoen faktisk er tømt til tiden afhænger af saldi og af, om en overførsel blev afkortet, og reglen hører derfor i årsresultatet som en markering på linje med `CapBreach` og `BufferState` — samme plan kan overholde fristen, indtil en overførsel ikke rækker, og bryde den året efter. Alternativet, en tvungen tømning i friståret, ville lade motoren skrive en bevægelse, planen ikke har bedt om, og det er et større brud med [ADR-0002](./adr/0002-plan-drevet-motor-med-frie-midler-som-buffer.md) end den markering, det skulle spare.
+
 ## Den privattegnede livrentes tiårsfordeling
 
 **Status:** Fravalgt til v1, undersøgt og belagt i [satsår 2026](./satser/2026.md). Den arbejdsgiveradministrerede livrente er uden årligt loft, og det er den form, husstandens livrenter har.
