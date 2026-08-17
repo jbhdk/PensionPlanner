@@ -531,7 +531,7 @@ table.aar th,
   border: 1px solid var(--felt-kant);
   border-radius: 4px;
   padding: 3px 8px;
-  width: 122px;
+  width: 138px;
 }
 
 .felt input.tal {
@@ -541,7 +541,7 @@ table.aar th,
 }
 
 .felt .laast {
-  width: 122px;
+  width: 138px;
   text-align: right;
   color: var(--muted);
   font-style: italic;
@@ -551,15 +551,21 @@ table.aar th,
 
 /* Enheden står ved hvert felt, så ingen er i tvivl om, hvad der tastes.
    Bred nok til de korte enheder ("kr.", "% p.a.", "udledt") — den lange
-   forklaring hører til i labelen i stedet, jf. `AgeBoundField`. */
+   forklaring hører til i labelen i stedet, jf. `AgeBoundField`.
+
+   Kolonnen er skåret ind til de længste af dem, og de 16px er lagt til
+   indtastningsfeltet i stedet. Værdikolonnen holder sin bredde, så det kun
+   er feltets højre kant, der flytter sig: etiketten beholder sin plads, og
+   `Pensionsudbetalingsalder` er allerede for langt et ord til at kunne
+   undvære den. */
 .felt .enhed {
   color: var(--muted);
   font-size: 11px;
-  width: 56px;
+  width: 40px;
 }
 
 /* Erhvervsophør-tilvalget hører til aldersfeltet over det, men står på sin
-   egen linje. Proppet ind i enhedskolonnen sprængte det de 56px, alle andre
+   egen linje. Proppet ind i enhedskolonnen sprængte det de 40px, alle andre
    felter deler, og skubbede inputtet ud af flugt med resten af sektionen. */
 .felt--tilvalg {
   justify-content: flex-end;
@@ -567,8 +573,8 @@ table.aar th,
   margin-top: -3px;
 }
 
-/* Samme bredde som en almindelig værdikolonne — felt 122px + 8px mellemrum +
-   enhed 56px — så afkrydsningen starter præcis under indtastningsfeltet. */
+/* Samme bredde som en almindelig værdikolonne — felt 138px + 8px mellemrum +
+   enhed 40px — så afkrydsningen starter præcis under indtastningsfeltet. */
 .felt--tilvalg .vaerdi {
   width: 186px;
 }

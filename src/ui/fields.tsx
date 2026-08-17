@@ -267,7 +267,7 @@ export function AgeBoundField({
   )
 
   // Tilvalget får sin egen linje under aldersfeltet. Proppet ind i
-  // enhedskolonnen sprængte "erhvervsophør" de 56px, alle andre felter deler,
+  // enhedskolonnen sprængte "erhvervsophør" de 40px, alle andre felter deler,
   // og skubbede inputtet ud af flugt med resten af sektionen.
   return (
     <>

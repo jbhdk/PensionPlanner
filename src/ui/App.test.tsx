@@ -1424,7 +1424,7 @@ describe('fladen', () => {
   })
 
   it('lægger erhvervsophør-tilvalget på sin egen linje, ikke i enhedskolonnen', async () => {
-    // Enhedskolonnen er 56px og deles af hvert felt i skuffen. Lå
+    // Enhedskolonnen er 40px og deles af hvert felt i skuffen. Lå
     // afkrydsningen i den, sprængte "erhvervsophør" bredden, og aldersfeltets
     // input stod forskudt fra alle andre felter i sektionen.
     const user = userEvent.setup()
