@@ -48,7 +48,7 @@ function aPlanWithSecondHolding(options: Parameters<typeof aPlan>[0] = {}): Plan
 /** Fixturens buffer plus én pensionsordning af den ønskede variant, kaldet
     "ordning". Oprettet i januar 2018 og dermed under det nyeste regime. */
 function aPlanWithPensionScheme(
-  variant: 'InstalmentPension' | 'LifeAnnuity' | 'OldAgeSavings',
+  variant: 'InstalmentPension' | 'LifeAnnuity' | 'OldAgeSavings' | 'CapitalPension',
   options: Parameters<typeof aPlan>[0] = {},
 ): Plan {
   return aPlan({
@@ -1430,6 +1430,22 @@ describe('pensionsbeholdninger', () => {
     expect(() => simulate(outOf('InstalmentPension'))).toThrow(/udbetalingsplan/i)
     expect(() => simulate(outOf('LifeAnnuity'))).toThrow(/udbetalingsplan/i)
   })
+
+  it('afviser en overførsel ud af en kapitalpension, og siger ikke det forkerte om hvorfor', () => {
+    // Ordningens `PayoutTaxation` er `Chargeable`, og der er endnu ingen vej
+    // ud af den. Afvisningen må ikke låne ratepensionens begrundelse:
+    // kapitalpensionens udbetaling er hverken personlig indkomst eller noget,
+    // en udbetalingsplan kan bære — loven binder hverken dens varighed eller
+    // dens årlige beløb, jf. ADR-0029.
+    const plan = aPlanWithPensionScheme('CapitalPension', {
+      transfers: [
+        aTransfer({ from: 'ordning', to: 'free-assets', amountInRealKroner: 10_000 }),
+      ],
+    })
+
+    expect(() => simulate(plan)).toThrow(/afgift/i)
+    expect(() => simulate(plan)).not.toThrow(/udbetalingsplan/i)
+  })
 })
 
 
@@ -1487,7 +1503,12 @@ describe('beholdningsskat', () => {
     expect(bufferBalance(year)).toBeCloseTo(0, 6)
   })
 
-  it.each(['InstalmentPension', 'LifeAnnuity', 'OldAgeSavings'] as HoldingVariant[])(
+  it.each([
+    'InstalmentPension',
+    'LifeAnnuity',
+    'OldAgeSavings',
+    'CapitalPension',
+  ] as HoldingVariant[])(
     'beskatter %s efter PAL-satsen — satsen følger varianten',
     (variant) => {
       const plan = aPlan({
@@ -1507,9 +1528,10 @@ describe('beholdningsskat', () => {
       const ordning = holding(simulateChecked(plan)[0]!, 'ordning')
 
       // ÅOP er trukket fra først som i enhver anden beholdning, jf. ADR-0003:
-      // 5 % netto af 500.000 giver 25.000, og 15,3 % af dem er 3.825. De tre
-      // ordninger deler sats, fordi varianttabellen giver dem samme række —
-      // ikke fordi tre steder i motoren tilfældigvis siger det samme.
+      // 5 % netto af 500.000 giver 25.000, og 15,3 % af dem er 3.825. De
+      // fire ordninger deler sats, fordi varianttabellen giver dem samme
+      // række — ikke fordi fire steder i motoren tilfældigvis siger det
+      // samme.
       expect(ordning.return).toBeCloseTo(25_000, 6)
       expect(ordning.tax).toBeCloseTo(3_825, 6)
       expect(ordning.closingBalance).toBeCloseTo(521_175, 6)
@@ -1707,10 +1729,11 @@ describe('aktiesparekontoen', () => {
   it('afviser en lønkildet indbetaling til aktiesparekontoen', () => {
     // Der findes ingen arbejdsgiveradministreret aktiesparekonto. Den
     // lønkildede form indeholder AM-bidrag på vejen ind, fordi kilden er
-    // AM-pligtig — rigtigt for de tre pensionsordninger og en kategorifejl
-    // her: pengene på en aktiesparekonto har for længst passeret hele ejerens
-    // skatteopgørelse. Handlingen skrives som et beholdningskildet bidrag fra
-    // bufferen, hvor den regner rigtigt, jf. ADR-0020.
+    // AM-pligtig — rigtigt for de ordninger, en arbejdsgiver kan
+    // administrere, og en kategorifejl her: pengene på en aktiesparekonto har
+    // for længst passeret hele ejerens skatteopgørelse. Handlingen skrives som
+    // et beholdningskildet bidrag fra bufferen, hvor den regner rigtigt, jf.
+    // ADR-0020.
     const plan = aPlan({
       entries: [aSalary({ amountInRealKroner: 600_000 })],
       contributions: [

@@ -23,13 +23,27 @@ const cappedVariants = ['InstalmentPension', 'OldAgeSavings', 'ShareSavingsAccou
 
 export type CappedVariant = (typeof cappedVariants)[number]
 
+/** De varianter, hvis udbetaling er `Chargeable`. Kapitalpensionen alene, jf.
+    ADR-0029 — og listen står her af samme grund som `cappedVariants`: den
+    binder to celler i tabellen, som ellers kunne komme ud af trit med
+    hinanden.
+
+    Bindingen går begge veje. En variant på listen *skal* stå `Chargeable` i
+    sin `payoutTaxation`, og en, der står `Chargeable` uden at være her, kan
+    ikke skrives. Uden den halvdel kunne en beholdning være afgiftspligtig
+    uden en sats at slå op — og det ville vise sig som en beholdning, der
+    tømmes gratis i et årsresultat, frem for som en oversætterfejl. */
+const chargeableVariants = ['CapitalPension'] as const
+
+export type ChargeableVariant = (typeof chargeableVariants)[number]
+
 /** Varianttabellen: det opslag, beholdningssiden af motoren hænger på, tegnet
     i docs/diagrams/01-domaenemodel.md. Én række pr. variant og én kolonne pr.
     regel, så en ny variant er en række at udfylde frem for en betingelse at
     finde og rette — jf. ADR-0010, hvor varianten er aksen og beskatningen
     ikke et felt ved siden af den.
 
-    Denne skive bruger otte kolonner. */
+    Denne skive bruger ni kolonner. */
 const table: {
   [V in HoldingVariant]: Row & {
     cap: V extends CappedVariant ? CapRule : undefined
@@ -50,6 +64,32 @@ const table: {
         ? true
         : false
       : false
+    /** Hvad der sker i skatten, når penge forlader en beholdning af varianten.
+        Variantens akse på vejen ud, ganske som `deductibility` er det på vejen
+        ind, jf. ADR-0010 — og den kolonne, der afgør, hvem der kan tømme hvad:
+        kun en `PersonalIncome` bærer en `PayoutSchedule`, og en `TaxFree`
+        tømmes af en `Transfer`, jf. ADR-0022. Den afgiftspligtige tømmes af
+        samme figur, jf. ADR-0029, men vejen ud af den er ikke bygget endnu.
+
+        Skellet er ikke pension mod ikke-pension. Aldersopsparingen deler
+        kolonne med de frie varianter og med aktiesparekontoen, fordi der ingen
+        skat udløses, når pengene hentes — det, der skiller den fra en
+        opsparingskonto, er den låste dør indtil dens `PayoutAge`, PAL-skatten
+        på afkastet og loftet på vejen ind.
+
+        Cellen er bundet til `chargeableVariants`, så den og `chargeRate`
+        ikke kan sige hver sit om den samme række. */
+    payoutTaxation: V extends ChargeableVariant
+      ? 'Chargeable'
+      : Exclude<PayoutTaxation, 'Chargeable'>
+    /** Nøglen til afgiftens sats i satsåret, eller `undefined` når varianten
+        ingen afgift har. Rækken navngiver satsen på nøjagtig samme måde som
+        `holdingTaxRate` gør: rækken siger hvilken sats, satsåret siger hvad
+        den er.
+
+        Typebundet til de `Chargeable` varianter, sådan som `cap` er bundet
+        til de loftbelagte. */
+    chargeRate: V extends ChargeableVariant ? keyof TaxRates : undefined
   }
 } = {
   InstalmentPension: {
@@ -64,6 +104,7 @@ const table: {
       form: 'PerYear',
       amount: (rates) => rates.thresholds.instalmentPensionCap,
     },
+    chargeRate: undefined,
   },
   LifeAnnuity: {
     freeAssets: false,
@@ -74,6 +115,7 @@ const table: {
     uniquePerPerson: false,
     employerAdministered: true,
     cap: undefined,
+    chargeRate: undefined,
   },
   OldAgeSavings: {
     freeAssets: false,
@@ -90,6 +132,18 @@ const table: {
           ? rates.thresholds.oldAgeSavingsCapNearStatePensionAge
           : rates.thresholds.oldAgeSavingsCap,
     },
+    chargeRate: undefined,
+  },
+  CapitalPension: {
+    freeAssets: false,
+    holdingTaxRate: 'palTaxRate',
+    payoutTaxation: 'Chargeable',
+    deductibility: false,
+    payoutSchedule: false,
+    uniquePerPerson: false,
+    employerAdministered: false,
+    cap: undefined,
+    chargeRate: 'capitalPensionChargeRate',
   },
   ShareSavingsAccount: {
     freeAssets: false,
@@ -103,6 +157,7 @@ const table: {
       form: 'OnBalance',
       amount: (rates) => rates.thresholds.shareSavingsAccountCap,
     },
+    chargeRate: undefined,
   },
   ShareDepot: {
     freeAssets: true,
@@ -113,6 +168,7 @@ const table: {
     uniquePerPerson: false,
     employerAdministered: false,
     cap: undefined,
+    chargeRate: undefined,
   },
   SavingsAccount: {
     freeAssets: true,
@@ -123,12 +179,13 @@ const table: {
     uniquePerPerson: false,
     employerAdministered: false,
     cap: undefined,
+    chargeRate: undefined,
   },
 }
 
 /** Variantens `payout`-felt uden `undefined`, eller `never` når varianten
     ikke bærer feltet. Indekseringen går gennem `'payout' & keyof …`, så
-    opslaget også er lovligt for de fire varianter, der ingen plan har. */
+    opslaget også er lovligt for de fem varianter, der ingen plan har. */
 type PayoutFieldOf<V extends HoldingVariant> = NonNullable<
   Extract<Holding, { variant: V }>['payout' & keyof Extract<Holding, { variant: V }>]
 >
@@ -140,27 +197,15 @@ type Row = {
       satsåret siger, hvad satserne er, og motoren siger, hvilken variant der
       betaler hvilken. Samme idiom som lagenes `rates.taxRates[layer]`. */
   holdingTaxRate: keyof TaxRates | undefined
-  /** Hvad der sker i skatten, når penge forlader en beholdning af varianten.
-      Variantens akse på vejen ud, ganske som `deductibility` er det på vejen
-      ind, jf. ADR-0010 — og den kolonne, der afgør, hvem der kan tømme hvad:
-      kun en `TaxFree` kan tømmes af en `Transfer`, og kun en
-      `PersonalIncome` bærer en `PayoutSchedule`, jf. ADR-0022.
-
-      Skellet er ikke pension mod ikke-pension. Aldersopsparingen deler
-      kolonne med de frie varianter og med aktiesparekontoen, fordi der ingen
-      skat udløses, når pengene hentes — det, der skiller den fra en
-      opsparingskonto, er den låste dør indtil dens `PayoutAge`, PAL-skatten
-      på afkastet og loftet på vejen ind. */
-  payoutTaxation: PayoutTaxation
   /** Om en indbetaling til varianten har `Deductibility`. De to frie
       varianter står med falsk frem for med et hul: en indbetaling til frie
       midler er en overførsel og afvises af `validatePlan`, så feltet aldrig
       slås op for dem. Diagram 01 skriver samme celle som "—". */
   deductibility: boolean
   /** Om personen kun kan have én beholdning af varianten. Sand alene for
-      aktiesparekontoen, jf. ASKL § 3; flere ratepensioner, aldersopsparinger
-      og livrenter er lovlige, og ADR-0018 hviler på, at to af dem deler ét
-      loft. */
+      aktiesparekontoen, jf. ASKL § 3; flere ratepensioner, aldersopsparinger,
+      livrenter og kapitalpensioner er lovlige, og ADR-0018 hviler på, at to
+      af dem deler ét loft. */
   uniquePerPerson: boolean
   /** Om varianten kan være arbejdsgiveradministreret, så en lønpost kan være
       kilde til en indbetaling til den. Falsk for aktiesparekontoen og for de
@@ -171,9 +216,11 @@ type Row = {
 
 /** Hvad der sker i skatten, når penge forlader en beholdning:
     `PersonalIncome` for ratepensionen og livrenten, `TaxFree` for
-    aldersopsparingen, aktiesparekontoen og de to frie varianter. En egenskab
-    ved varianten og aldrig ved den enkelte udbetaling. */
-export type PayoutTaxation = 'PersonalIncome' | 'TaxFree'
+    aldersopsparingen, aktiesparekontoen og de to frie varianter, og
+    `Chargeable` for kapitalpensionen. De tre er udtømmende: en udbetaling
+    lander i en indkomstopgørelse, udløser en afgift, eller koster ingenting.
+    En egenskab ved varianten og aldrig ved den enkelte udbetaling. */
+export type PayoutTaxation = 'PersonalIncome' | 'TaxFree' | 'Chargeable'
 
 /** Loftets form, og hvad det gælder i året — de to sider af `Cap`, jf.
     CONTEXT.md.
@@ -212,7 +259,7 @@ export type Cap = {
 const oldAgeSavingsHighCapFrom = 7
 
 /** De varianter, der er en `PensionScheme`. Skrevet som en udtømmende
-    tabel og ikke som en liste: en syvende variant med et oprettelsestidspunkt
+    tabel og ikke som en liste: en ottende variant med et oprettelsestidspunkt
     får unionen til at kræve en række her, hvor en liste tavst kunne mangle
     den. Rækkerne bærer ingen data — spørgsmålet er, om varianten står i
     tabellen. */
@@ -220,6 +267,7 @@ const pensionSchemeVariants: Record<PensionSchemeVariant, true> = {
   InstalmentPension: true,
   LifeAnnuity: true,
   OldAgeSavings: true,
+  CapitalPension: true,
 }
 
 /** Om beholdningen er en pensionsordning — altså om den har et

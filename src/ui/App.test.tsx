@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgeBound, Holding, PayoutSchedule, Plan } from '../engine/plan'
 import {
   aContribution,
+  aHolding,
   aHoldingContribution,
   aPlan,
   aPensionIncome,
@@ -804,7 +805,7 @@ describe('fladen', () => {
     expect(bruttoafkast().value).toBe('0')
   })
 
-  it('lader en beholdnings type vælges mellem de seks, med deres danske navne', async () => {
+  it('lader en beholdnings type vælges mellem de syv, med deres danske navne', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithSecondHolding()} />)
 
@@ -819,6 +820,7 @@ describe('fladen', () => {
       'Ratepension',
       'Livrente',
       'Aldersopsparing',
+      'Kapitalpension',
       'Aktiesparekonto',
       'Aktiedepot',
       'Opsparingskonto',
@@ -830,6 +832,29 @@ describe('fladen', () => {
     expect(type.value).toBe('Aktiesparekonto')
     await showYearTable(user)
     expect(screen.getByRole('table')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+  })
+
+  it('giver en ny kapitalpension et oprettelsestidspunkt og dermed en udbetalingsalder', async () => {
+    // Ordningen er en `PensionScheme` som de tre øvrige: uden et
+    // oprettelsestidspunkt var der intet regelsæt at udlede alderen af.
+    // Gættet er planens startår, og brugeren retter det i feltet ved siden
+    // af — 2026 falder under det nyeste regime, og fixturens person, født i
+    // juni 1973, har folkepensionsalder 70 og dermed 67.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithSecondHolding()} />)
+
+    await user.click(navigatorButton(/Anden beholdning/))
+    await user.selectOptions(screen.getByLabelText(/Type/), 'Kapitalpension')
+
+    expect((screen.getByLabelText('Oprettet (år)') as HTMLInputElement).value).toBe('2026')
+    expect(lockedField('Pensionsudbetalingsalder').querySelector('.laast')!.textContent).toBe(
+      '67 år',
+    )
+
+    // Og planen kan stadig regnes: resultatspalten viser årstabellen og ikke
+    // beskeden om, at planen ikke kan simuleres.
+    await showYearTable(user)
     expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
   })
 
@@ -3946,6 +3971,45 @@ describe('fladen', () => {
     await user.type(balance, '2000000')
 
     expect(within(holdingsTable).getByText('2.000.000')).toBeTruthy()
+  })
+
+  it('tegner kapitalpensionen i formuegrafen og lægger den i årstabellens formue', async () => {
+    // Ingen poster og ingen buffersaldo, så året er ordningens eget: 5 %
+    // netto af 500.000 er 25.000, PAL-satsen tager 15,3 % af dem, og formuen
+    // ender på 521.175. Beholdningen er hverken et bånd for sig eller en
+    // kolonne for sig — den er en beholdning som de øvrige.
+    const user = userEvent.setup()
+    const plan = aPlan({
+      balance: 0,
+      holdings: [
+        aHolding({
+          id: 'kapitalpension',
+          name: 'Kapitalpension',
+          variant: 'CapitalPension',
+          balance: 500_000,
+          grossReturn: 0.06,
+          annualCostRate: 0.01,
+        }),
+      ],
+    })
+    render(<App initialPlan={plan} />)
+
+    const graf = screen.getByRole('img', { name: 'Formuegraf' }).closest('.formuegraf')!
+    expect(
+      within(graf as HTMLElement).getByRole('button', { name: 'Kapitalpension' }),
+    ).toBeTruthy()
+    expect(graf.querySelector('path[data-holding="kapitalpension"]')).toBeTruthy()
+
+    await showYearTable(user)
+    const rows = within(screen.getByRole('table')).getAllByRole('row')
+    const headers = within(rows[0]!)
+      .getAllByRole('columnheader')
+      .map((header) => header.textContent)
+    const cells = within(rows[1]!).getAllByRole('cell')
+
+    expect(cells[headers.indexOf('Afkast')]!.textContent).toBe('25.000')
+    expect(cells[headers.indexOf('Skat')]!.textContent).toBe('-3.825')
+    expect(cells[headers.indexOf('Formue')]!.textContent).toBe('521.175')
   })
 
   it('åbner inspektøren for beholdningen, når der klikkes på grafens legend', async () => {

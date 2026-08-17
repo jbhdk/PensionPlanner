@@ -312,7 +312,7 @@ export function removePayoutSchedule(plan: Plan, id: string): Plan {
 /** Redigerer en beholdnings udbetalingsplan, og lader beholdningen stå, hvis
     den ingen har. Samme form og samme grund som `withPensionScheme`:
     `withHolding` giver hele unionen ind, og en plan skrevet dér ville være et
-    felt, fem af seks varianter ikke har. */
+    felt, seks af syv varianter ikke har. */
 export function withPayoutSchedule(
   plan: Plan,
   id: string,

@@ -208,9 +208,9 @@ function oneOfEachUniqueVariant(plan: Plan): string | undefined {
     administrere. Aktiesparekontoen er den eneste, der ikke er det, og reglen
     spørger varianttabellen frem for at nævne den ved navn, jf. ADR-0010. Den
     lønkildede form indeholder AM-bidrag på vejen ind, fordi kilden er
-    AM-pligtig — rigtigt for de tre pensionsordninger og en kategorifejl her:
-    pengene på en aktiesparekonto er fuldt beskattede midler, ejeren selv
-    flytter derind, og der lander 100 %.
+    AM-pligtig — rigtigt for de ordninger, en arbejdsgiver kan administrere,
+    og en kategorifejl her: pengene på en aktiesparekonto er fuldt beskattede
+    midler, ejeren selv flytter derind, og der lander 100 %.
 
     Reglen koster en smule udtryksevne. En skattefri indtægtspost regner
     faktisk rigtigt som lønkilde, fordi der ikke indeholdes AM-bidrag af den,
@@ -373,6 +373,16 @@ function transferEnds(plan: Plan): string | undefined {
           `Overførslen ${transfer.name} henter fra beholdningen ${from.name} fra ` +
           `${start}, men dens pensionsudbetalingsalder nås først i ` +
           `${payoutYear(from, owner)}.`
+        )
+      }
+      // De to øvrige former har hver sin grund, og den ene må ikke låne den
+      // andens: en afgiftspligtig ordning tømmes ikke af en udbetalingsplan,
+      // for loven binder hverken dens varighed eller dens årlige beløb, jf.
+      // ADR-0029. Vejen ud af den bygges i en senere skive.
+      if (payoutTaxation(from) === 'Chargeable') {
+        return (
+          `Overførslen ${transfer.name} kommer fra beholdningen ${from.name}, hvis ` +
+          `udbetaling koster en afgift. Værktøjet kan endnu ikke regne på den.`
         )
       }
       return (

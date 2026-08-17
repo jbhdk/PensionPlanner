@@ -117,7 +117,7 @@ export function aPlan(options: Options = {}): Plan {
     uden et cast, som netop ville skjule det, felternes plads i unionen er
     til for.
 
-    Oprettelsestidspunktet skrives kun for de tre pensionsordninger, og
+    Oprettelsestidspunktet skrives kun for de fire pensionsordninger, og
     livrentens tre omsætningsfelter kun for den. En fixture, der gav dem til
     de øvrige, ville skrive en plan, typen ikke tillader.
 
@@ -152,6 +152,7 @@ export function aHolding(options: {
       return { ...base, variant, openedOn, quotedReserve, quotedAnnualBenefit, bonusRate }
     case 'InstalmentPension':
     case 'OldAgeSavings':
+    case 'CapitalPension':
       return { ...base, variant, openedOn }
     default:
       return { ...base, variant }

@@ -24,6 +24,7 @@ export type HoldingVariant =
   | 'InstalmentPension'
   | 'LifeAnnuity'
   | 'OldAgeSavings'
+  | 'CapitalPension'
   | 'ShareSavingsAccount'
   | 'ShareDepot'
   | 'SavingsAccount'
@@ -45,7 +46,7 @@ type HoldingBase = {
 export type OpenedOn = { year: number; month: number }
 
 /** Det, en `PensionScheme` bærer ud over `HoldingBase`. Felterne hænger på de
-    tre varianter og aldrig på grundformen: en aktiesparekonto og frie midler
+    fire varianter og aldrig på grundformen: en aktiesparekonto og frie midler
     har ingen udbetalingsalder, og et felt, de aldrig bruger, er en løgn i det
     gemte skema, jf. ADR-0015. */
 type PensionScheme = {
@@ -77,7 +78,7 @@ export type PayoutSchedule = {
   principle: PayoutPrinciple
 }
 
-/** En diskrimineret union på `variant`. De tre pensionsordninger bærer
+/** En diskrimineret union på `variant`. De fire pensionsordninger bærer
     `PensionScheme`, de tre øvrige gør ikke, og hvert medlem bærer kun det,
     dets egen variant har: livrentens omsætningsfelter hænger på dens eget
     medlem og kan ikke skrives på nogen anden. Et dødt felt i det gemte
@@ -123,6 +124,7 @@ export type Holding =
         payout?: { start: AgeBound }
       })
   | (HoldingBase & PensionScheme & { variant: 'OldAgeSavings' })
+  | (HoldingBase & PensionScheme & { variant: 'CapitalPension' })
   | (HoldingBase & { variant: 'ShareSavingsAccount' })
   | (HoldingBase & { variant: 'ShareDepot' })
   | (HoldingBase & { variant: 'SavingsAccount' })
@@ -142,7 +144,7 @@ export type Holding =
 export type PayoutScheduleHolding = Extract<Holding, { variant: 'InstalmentPension' }>
 
 /** De medlemmer af unionen, der er en `PensionScheme`. Udledt af unionen selv
-    frem for skrevet som en liste ved siden af den: en syvende variant med et
+    frem for skrevet som en liste ved siden af den: en ottende variant med et
     oprettelsestidspunkt er med af sig selv, og en liste kunne komme ud af
     trit med det, typen bærer. */
 export type PensionSchemeHolding = Extract<Holding, { openedOn: OpenedOn }>

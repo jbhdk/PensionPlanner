@@ -455,7 +455,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
 }
 
 /** Hvornår ordningen tidligst må udbetales — det, brugeren taster, og det,
-    loven gør ved det. Afsnittet står kun på de tre pensionsvarianter: en
+    loven gør ved det. Afsnittet står kun på de fire pensionsvarianter: en
     aktiesparekonto og frie midler har ingen udbetalingsalder, og et felt om
     en, der ikke findes, ville påstå en lovregel, der heller ikke gør.
 

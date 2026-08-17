@@ -30,7 +30,7 @@ describe('planFile', () => {
     expect(result.kind).toBe('Failed')
   })
 
-  it('bærer en plan med de tre pensionsvarianter hele vejen rundt', () => {
+  it('bærer en plan med de fire pensionsvarianter hele vejen rundt', () => {
     // En udvidet union er bagudkompatibel: en gemt plan fra etape 1 kender
     // ingen af de tre og skal indlæses uændret, og en plan der gør, skal
     // kunne gemmes og hentes igen med sine egne felter i behold.
@@ -66,6 +66,15 @@ describe('planFile', () => {
           grossReturn: 0.07,
           annualCostRate: 0.006,
         },
+        {
+          id: 'kapitalpension',
+          name: 'Kapitalpension',
+          variant: 'CapitalPension',
+          openedOn: { year: 2005, month: 3 },
+          balance: 250_000,
+          grossReturn: 0.05,
+          annualCostRate: 0.005,
+        },
       ],
     })
 
@@ -73,8 +82,10 @@ describe('planFile', () => {
 
     expect(result).toEqual({ kind: 'Loaded', plan })
     // Tallet er hårdkodet med vilje: flytter det sig, skal det være, fordi
-    // noget faktisk krævede et led i kæden. At de tre varianter kom til,
-    // gjorde det ikke — det gjorde derimod v5 → v6, hvor overstyringen af
+    // noget faktisk krævede et led i kæden. At varianterne kom til, gjorde
+    // det ikke — heller ikke kapitalpensionen, som ingen gemt plan
+    // indeholder, og som derfor ikke er noget, en ældre plan skal føres frem
+    // til. Det gjorde derimod v5 → v6, hvor overstyringen af
     // folkepensionsalderen forsvandt, v6 → v7, hvor planen fik sine
     // indbetalinger, v7 → v8, hvor de tre ordninger fik det
     // oprettelsestidspunkt, deres udbetalingsalder udledes af, v8 → v9, hvor

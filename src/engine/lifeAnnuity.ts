@@ -2,7 +2,7 @@ import type { Holding } from './plan'
 
 /** Livrenten som medlem af `Holding`-unionen. Det ene sted, varianten nævnes
     ved navn: omsætningen er dens egen regel og hører derfor ikke i
-    varianttabellen, som svarer på det, alle seks varianter skal svare på —
+    varianttabellen, som svarer på det, alle syv varianter skal svare på —
     en sats, et loft, en beskatningsform. Der er hverken en sats at slå op
     eller et loft at måle her, kun to oplyste tal og en kvotient. */
 export type LifeAnnuityHolding = Extract<Holding, { variant: 'LifeAnnuity' }>
