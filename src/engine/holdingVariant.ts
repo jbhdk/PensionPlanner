@@ -43,7 +43,7 @@ export type ChargeableVariant = (typeof chargeableVariants)[number]
     finde og rette — jf. ADR-0010, hvor varianten er aksen og beskatningen
     ikke et felt ved siden af den.
 
-    Denne skive bruger ni kolonner. */
+    Denne skive bruger ti kolonner. */
 const table: {
   [V in HoldingVariant]: Row & {
     cap: V extends CappedVariant ? CapRule : undefined
@@ -100,6 +100,7 @@ const table: {
     payoutSchedule: true,
     uniquePerPerson: false,
     employerAdministered: true,
+    openToContributions: true,
     cap: {
       form: 'PerYear',
       amount: (rates) => rates.thresholds.instalmentPensionCap,
@@ -114,6 +115,7 @@ const table: {
     payoutSchedule: false,
     uniquePerPerson: false,
     employerAdministered: true,
+    openToContributions: true,
     cap: undefined,
     chargeRate: undefined,
   },
@@ -125,6 +127,7 @@ const table: {
     payoutSchedule: false,
     uniquePerPerson: false,
     employerAdministered: true,
+    openToContributions: true,
     cap: {
       form: 'PerYear',
       amount: (rates, yearsToStatePensionAge) =>
@@ -142,6 +145,7 @@ const table: {
     payoutSchedule: false,
     uniquePerPerson: false,
     employerAdministered: false,
+    openToContributions: false,
     cap: undefined,
     chargeRate: 'capitalPensionChargeRate',
   },
@@ -153,6 +157,7 @@ const table: {
     payoutSchedule: false,
     uniquePerPerson: true,
     employerAdministered: false,
+    openToContributions: true,
     cap: {
       form: 'OnBalance',
       amount: (rates) => rates.thresholds.shareSavingsAccountCap,
@@ -167,6 +172,7 @@ const table: {
     payoutSchedule: false,
     uniquePerPerson: false,
     employerAdministered: false,
+    openToContributions: false,
     cap: undefined,
     chargeRate: undefined,
   },
@@ -178,6 +184,7 @@ const table: {
     payoutSchedule: false,
     uniquePerPerson: false,
     employerAdministered: false,
+    openToContributions: false,
     cap: undefined,
     chargeRate: undefined,
   },
@@ -212,6 +219,14 @@ type Row = {
       to frie varianter — en indbetaling til frie midler er en overførsel og
       afvises i forvejen, så deres celle slås aldrig op. */
   employerAdministered: boolean
+  /** Om ordningen overhovedet kan modtage en indbetaling, jf.
+      `OpenToContributions` i CONTEXT.md. Falsk alene for kapitalpensionen,
+      som har været lukket for nytegning siden udgangen af 2012. De to frie
+      varianter står også med falsk, fordi det er sandt, men deres celle
+      slås aldrig op: en indbetaling til frie midler er i forvejen en
+      overførsel og afvises som det kategorispørgsmål, den er, jf.
+      ADR-0020. */
+  openToContributions: boolean
 }
 
 /** Hvad der sker i skatten, når penge forlader en beholdning:
@@ -335,6 +350,18 @@ export function isUniquePerPerson(variant: HoldingVariant): boolean {
     ADR-0016. */
 export function isEmployerAdministered(holding: Holding): boolean {
   return table[holding.variant].employerAdministered
+}
+
+/** Om beholdningen overhovedet kan modtage en indbetaling, jf.
+    `OpenToContributions` i CONTEXT.md. Falsk alene for kapitalpensionen, som
+    har været lukket for nytegning siden udgangen af 2012 — den kan kun
+    tømmes, aldrig fyldes.
+
+    En strukturel umulighed og ikke et årsafhængigt brud, jf. ADR-0020:
+    svaret er det samme i alle simuleringsår, og en indbetaling til den
+    afvises derfor ved indgangen. */
+export function isOpenToContributions(holding: Holding): boolean {
+  return table[holding.variant].openToContributions
 }
 
 /** Om beholdningen kan bære en udbetalingsplan, jf. `PayoutSchedule` i

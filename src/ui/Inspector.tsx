@@ -4,6 +4,7 @@ import {
   isEmployerAdministered,
   isFreeAssets,
   isFreeAssetsVariant,
+  isOpenToContributions,
   isPensionScheme,
   isUniquePerPerson,
 } from '../engine/holdingVariant'
@@ -1146,7 +1147,9 @@ function ContributionFields({
     named(holdingName(holdingId), ownerOfHolding.get(holdingId)?.name ?? '')
 
   // En indbetaling går aldrig til frie midler — så er det en overførsel, jf.
-  // ADR-0016. Vælgerne tilbyder kun det, der kan vælges, frem for at lade
+  // ADR-0016 — og aldrig til en kapitalpension, som har været lukket for
+  // indbetaling siden udgangen af 2012, jf. `OpenToContributions` i
+  // CONTEXT.md. Vælgerne tilbyder kun det, der kan vælges, frem for at lade
   // motoren afvise planen bagefter.
   //
   // Destinationslisten er de ordninger, kilden må betale til: lønmodtagerens
@@ -1160,7 +1163,7 @@ function ContributionFields({
   const freeAssetsForSource = owner.holdings.find(isFreeAssets) ?? holdings.find(isFreeAssets)
   const destinations = (
     contribution.kind === 'EntrySourced' ? owner.holdings : holdings
-  ).filter((holding) => !isFreeAssets(holding))
+  ).filter((holding) => !isFreeAssets(holding) && isOpenToContributions(holding))
   // Feltet skal vise planens egen destination, også når den ligger uden for
   // listen. Det gør en ordning hos en anden person i den lønkildede udgave,
   // og faldt feltet tilbage på listens første, ville skuffen vise noget

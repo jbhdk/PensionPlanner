@@ -852,7 +852,14 @@ describe('fladen', () => {
       '67 år',
     )
 
-    // Og planen kan stadig regnes: resultatspalten viser årstabellen og ikke
+    // Gættet er planens startår, men ordningen har været lukket for
+    // nytegning siden udgangen af 2012 — brugeren retter det til dét
+    // tidspunkt, hendes egen kapitalpension faktisk blev oprettet.
+    const aar = screen.getByLabelText('Oprettet (år)')
+    await user.clear(aar)
+    await user.type(aar, '2005')
+
+    // Og planen kan så regnes: resultatspalten viser årstabellen og ikke
     // beskeden om, at planen ikke kan simuleres.
     await showYearTable(user)
     expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
@@ -1012,6 +1019,38 @@ describe('fladen', () => {
       'Frie midler · Jesper',
       'Marias frie · Maria',
     ])
+  })
+
+  it('udelader kapitalpensionen fra indbetalingens destinationsliste', async () => {
+    // Ordningen har været lukket for indbetaling siden udgangen af 2012, og
+    // et valg her ville kun blive afvist bagefter, jf. ADR-0020.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({
+          holdings: [
+            aPensionHolding('ratepension', 'Ratepension'),
+            aHolding({
+              id: 'kapitalpension',
+              name: 'Kapitalpension',
+              variant: 'CapitalPension',
+              openedOn: { year: 2005, month: 1 },
+              balance: 0,
+              grossReturn: 0,
+              annualCostRate: 0,
+            }),
+          ],
+          entries: [aSalary({ amountInRealKroner: 600_000 })],
+          contributions: [
+            aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+          ],
+        })}
+      />,
+    )
+
+    await user.click(navigatorButton(/Indbetalingen/))
+
+    expect(optionsOf('Destination')).not.toContain('Kapitalpension')
   })
 
   it('viser planens egen destination, når den ligger hos en anden person', async () => {
@@ -3986,6 +4025,7 @@ describe('fladen', () => {
           id: 'kapitalpension',
           name: 'Kapitalpension',
           variant: 'CapitalPension',
+          openedOn: { year: 2005, month: 1 },
           balance: 500_000,
           grossReturn: 0.06,
           annualCostRate: 0.01,

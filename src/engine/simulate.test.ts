@@ -1446,6 +1446,44 @@ describe('pensionsbeholdninger', () => {
     expect(() => simulate(plan)).toThrow(/afgift/i)
     expect(() => simulate(plan)).not.toThrow(/udbetalingsplan/i)
   })
+
+  it('afviser en kapitalpension oprettet efter udgangen af 2012', () => {
+    // Ordningen har været lukket for nytegning siden udgangen af 2012 — et
+    // senere oprettelsestidspunkt er en tilstand, der ikke findes i
+    // virkeligheden, jf. ADR-0020 og OpenToContributions i CONTEXT.md.
+    const plan = aPlan({
+      balance: 0,
+      holdings: [
+        aHolding({
+          id: 'kapitalpension',
+          name: 'Kapitalpension',
+          variant: 'CapitalPension',
+          balance: 250_000,
+          openedOn: { year: 2013, month: 1 },
+        }),
+      ],
+    })
+
+    expect(() => simulate(plan)).toThrow(/Kapitalpension.*lukket for nytegning/is)
+  })
+
+  it('tillader en kapitalpension oprettet i december 2012', () => {
+    // Grænsetilfældet: skellet falder ved udgangen af 2012, ikke før.
+    const plan = aPlan({
+      balance: 0,
+      holdings: [
+        aHolding({
+          id: 'kapitalpension',
+          name: 'Kapitalpension',
+          variant: 'CapitalPension',
+          balance: 250_000,
+          openedOn: { year: 2012, month: 12 },
+        }),
+      ],
+    })
+
+    expect(() => simulate(plan)).not.toThrow()
+  })
 })
 
 
@@ -1521,6 +1559,9 @@ describe('beholdningsskat', () => {
             balance: 500_000,
             grossReturn: 0.06,
             annualCostRate: 0.01,
+            // Kapitalpensionen alene har været lukket for nytegning siden
+            // udgangen af 2012 — de øvrige tre beholder fixturens standard.
+            ...(variant === 'CapitalPension' ? { openedOn: { year: 2010, month: 1 } } : {}),
           }),
         ],
       })
@@ -3208,6 +3249,39 @@ describe('indbetalingens pegere', () => {
     )
 
     expect(() => simulate(plan)).toThrow(/overførsel/i)
+  })
+
+  it('afviser en indbetaling til en kapitalpension', () => {
+    // Ordningen har været lukket for indbetaling siden udgangen af 2012, jf.
+    // OpenToContributions i CONTEXT.md — den kan ikke fyldes, kun tømmes.
+    const base = aPlanWith(
+      aContribution({ source: 'salary', to: 'kapitalpension', percentageOfEntry: 0.08 }),
+    )
+    const person = base.household.persons[0]!
+    const plan: Plan = {
+      ...base,
+      household: {
+        persons: [
+          {
+            ...person,
+            holdings: [
+              ...person.holdings,
+              {
+                id: 'kapitalpension',
+                name: 'Kapitalpension',
+                variant: 'CapitalPension',
+                openedOn: { year: 2010, month: 1 },
+                balance: 0,
+                grossReturn: 0,
+                annualCostRate: 0,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    expect(() => simulate(plan)).toThrow(/Kapitalpension.*lukket for indbetaling/is)
   })
 
   it('afviser en lønkilde, der ikke er en indtægtspost', () => {

@@ -31,7 +31,10 @@ const regimes: { from: OpenedOn; regime: PayoutRegime; age: (statePensionAge: nu
   { from: { year: 2018, month: 1 }, regime: 'FromJanuary2018', age: (age) => age - 3 },
 ]
 
-function reached(openedOn: OpenedOn, skel: OpenedOn): boolean {
+/** Om `openedOn` ligger på eller efter et lovskel. Delt af `payoutRegime` og
+    af kapitalpensionens egen lukningsdato, jf. `validatePlan` — begge måler
+    et oprettelsestidspunkt mod en fast grænse i år og måned. */
+export function reached(openedOn: OpenedOn, skel: OpenedOn): boolean {
   return openedOn.year !== skel.year ? openedOn.year > skel.year : openedOn.month >= skel.month
 }
 
