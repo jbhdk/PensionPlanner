@@ -1302,9 +1302,10 @@ function entrySourcedInYear(
     og løftes af planens inflationsantagelse, som en overførsel gør — det er
     ikke en indtægt og har derfor ingen reguleringssats at følge.
 
-    Aldersforankringen måler fra destinationens ejer. Kilde og destination
-    tilhører samme person, jf. `validatePlan`, så der er kun én alder at måle
-    fra — og det er dén, der gør formen aldersforankringsdygtig, hvor en
+    Aldersforankringen måler fra destinationens ejer. Kilden kan tilhøre den
+    anden person, jf. ADR-0028, og valget mellem de to ender er derfor et
+    valg: destinationen er den, ordningens loft og fradragsret allerede
+    følger, og det er den, der gør formen aldersforankringsdygtig, hvor en
     overførsel ikke er det. */
 function holdingSourcedInYear(
   contribution: Contribution & { kind: 'HoldingSourced' },

@@ -1090,29 +1090,33 @@ function ContributionFields({
 
   const sourceEntry =
     contribution.kind === 'EntrySourced' ? findEntry(plan, contribution.source) : undefined
-  // Kilde og destination tilhører samme person, jf. ADR-0016, så der er kun
-  // én ejer at måle et aldersendepunkt fra — og den findes i begge udgaver.
+  // Ejeren, de to felter hænger op på, er kildens i den lønkildede udgave og
+  // destinationens i den beholdningskildede, jf. ADR-0028: en lønkildet
+  // indbetaling skal ende i lønmodtagerens egen ordning, mens en
+  // beholdningskildet må krydse ejerskellet. Det er derfor også kun den
+  // sidste, der har en alder at forankre en periode med — og den måles på
+  // destinationen, som motoren gør det.
   const owner =
     contribution.kind === 'EntrySourced'
       ? plan.household.persons.find((person) => person.id === sourceEntry?.owner)
-      : ownerOfHolding.get(contribution.source)
+      : ownerOfHolding.get(contribution.to)
   if (!owner) return null
 
   // Kilden er ét felt med to grupper. Navnet bærer personen med, så to ens
   // navne i husstanden kan skelnes fra hinanden i listen.
   const named = (name: string, person: string) => `${name} · ${person}`
   const destination = holdings.find((holding) => holding.id === contribution.to)
-  // Kilden kan pege på en anden persons post, og så flytter destinationen
-  // med: den ordning, bidraget lander i, skal tilhøre kildens ejer, jf.
-  // ADR-0016. Ligger den nuværende destination allerede hos den nye ejer,
-  // bliver den stående; ellers findes ejerens første ordning. Er der ingen,
-  // er der intet at flytte til — og kilden tilbydes ikke, frem for at lade
-  // ét klik skrive en plan, `validatePlan` afviser, jf. ADR-0020.
-  const destinationUnder = (person: Person | undefined, kind: Contribution['kind']) => {
+  // Lønposten kan pege på en anden persons løn, og så flytter destinationen
+  // med: en ordning, en arbejdsgiver administrerer, står i lønmodtagerens
+  // eget navn, jf. ADR-0028. Ligger den nuværende destination allerede hos
+  // den nye ejer, bliver den stående; ellers findes ejerens første
+  // arbejdsgiveradministrerede ordning. Er der ingen, er der intet at flytte
+  // til — og lønposten tilbydes ikke, frem for at lade ét klik skrive en
+  // plan, `validatePlan` afviser, jf. ADR-0020.
+  const employerDestinationUnder = (person: Person | undefined) => {
     if (person?.holdings.some((holding) => holding.id === contribution.to)) return contribution.to
     return person?.holdings.find(
-      (holding) =>
-        !isFreeAssets(holding) && (kind !== 'EntrySourced' || isEmployerAdministered(holding)),
+      (holding) => !isFreeAssets(holding) && isEmployerAdministered(holding),
     )?.id
   }
   const personById = (personId: string) =>
@@ -1126,13 +1130,13 @@ function ContributionFields({
       : plan.entries.filter(
           (entry) =>
             entry.direction === 'Income' &&
-            destinationUnder(personById(entry.owner), 'EntrySourced') !== undefined,
+            employerDestinationUnder(personById(entry.owner)) !== undefined,
         )
-  const holdingSources = holdings.filter(
-    (holding) =>
-      isFreeAssets(holding) &&
-      destinationUnder(ownerOfHolding.get(holding.id), 'HoldingSourced') !== undefined,
-  )
+  // Enhver af husstandens frie midler kan være kilde, også den anden
+  // persons: pengene flytter sig allerede uhindret mellem ejerne gennem en
+  // overførsel, og skattevirkningen følger destinationen, jf. ADR-0028.
+  // Destinationen bliver derfor stående, når kilden skifter.
+  const holdingSources = holdings.filter(isFreeAssets)
   const entryLabel = (entry: Entry) =>
     named(
       entry.name,
@@ -1141,27 +1145,27 @@ function ContributionFields({
   const holdingLabel = (holdingId: string) =>
     named(holdingName(holdingId), ownerOfHolding.get(holdingId)?.name ?? '')
 
-  // En indbetaling går aldrig til frie midler — så er det en overførsel — og
-  // kilde og destination skal tilhøre samme person, jf. ADR-0016. Vælgerne
-  // tilbyder kun det, der kan vælges, frem for at lade motoren afvise planen
-  // bagefter.
+  // En indbetaling går aldrig til frie midler — så er det en overførsel, jf.
+  // ADR-0016. Vælgerne tilbyder kun det, der kan vælges, frem for at lade
+  // motoren afvise planen bagefter.
+  //
+  // Destinationslisten er de ordninger, kilden må betale til: lønmodtagerens
+  // egne i den ene udgave, husstandens alle i den anden.
   //
   // Destinationen kan skifte bidragets udgave med sig: vælges en ordning,
   // ingen arbejdsgiver kan administrere, mens kilden er en lønpost, flytter
-  // kilden med over på personens frie midler. Har personen ingen at flytte
-  // den til, er der intet at skifte til, og ordningen tilbydes ikke.
-  const ownFreeAssets = owner.holdings.find(isFreeAssets)
-  const destinations = owner.holdings.filter(
-    (holding) =>
-      !isFreeAssets(holding) &&
-      (contribution.kind !== 'EntrySourced' ||
-        isEmployerAdministered(holding) ||
-        ownFreeAssets !== undefined),
-  )
+  // kilden med over på frie midler — helst lønmodtagerens egne, ellers
+  // husstandens buffer, som altid er frie midler. Der er derfor altid noget
+  // at skifte til, og enhver af ejerens ordninger kan stå som destination.
+  const freeAssetsForSource = owner.holdings.find(isFreeAssets) ?? holdings.find(isFreeAssets)
+  const destinations = (
+    contribution.kind === 'EntrySourced' ? owner.holdings : holdings
+  ).filter((holding) => !isFreeAssets(holding))
   // Feltet skal vise planens egen destination, også når den ligger uden for
-  // listen. En ordning hos en anden person står der ikke, og faldt feltet
-  // tilbage på listens første, ville skuffen vise noget andet end det,
-  // motoren melder fejl om — og fejlen kunne ikke rettes ved at vælge om.
+  // listen. Det gør en ordning hos en anden person i den lønkildede udgave,
+  // og faldt feltet tilbage på listens første, ville skuffen vise noget
+  // andet end det, motoren melder fejl om — og fejlen kunne ikke rettes ved
+  // at vælge om.
   const destinationOptions =
     destination && !destinations.some((holding) => holding.name === destination.name)
       ? [destination, ...destinations]
@@ -1204,16 +1208,15 @@ function ContributionFields({
           onChange={(choice) => {
             const entry = entrySources.find((source) => entryLabel(source) === choice)
             const holding = holdingSources.find((source) => holdingLabel(source.id) === choice)
-            const to = entry
-              ? destinationUnder(personById(entry.owner), 'EntrySourced')!
-              : destinationUnder(ownerOfHolding.get(holding!.id), 'HoldingSourced')!
             onChange(
-              withContribution(plan, id, (c) => {
-                const moved = { ...c, to }
-                return entry
-                  ? withSource(moved, { kind: 'EntrySourced', source: entry.id })
-                  : withSource(moved, { kind: 'HoldingSourced', source: holding!.id })
-              }),
+              withContribution(plan, id, (c) =>
+                entry
+                  ? withSource(
+                      { ...c, to: employerDestinationUnder(personById(entry.owner))! },
+                      { kind: 'EntrySourced', source: entry.id },
+                    )
+                  : withSource(c, { kind: 'HoldingSourced', source: holding!.id }),
+              ),
             )
           }}
         />
@@ -1228,7 +1231,7 @@ function ContributionFields({
               withContribution(plan, id, (c) => {
                 const moved = { ...c, to: to.id }
                 return c.kind === 'EntrySourced' && !isEmployerAdministered(to)
-                  ? withSource(moved, { kind: 'HoldingSourced', source: ownFreeAssets!.id })
+                  ? withSource(moved, { kind: 'HoldingSourced', source: freeAssetsForSource!.id })
                   : moved
               }),
             )

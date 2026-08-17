@@ -216,10 +216,12 @@ function entrySourcedDestination(plan: Plan): string | undefined {
     midler — så er det en overførsel, jf. ADR-0016 — og kilden skal findes i
     den bog, dens form peger ind i.
 
-    Kilde og destination skal tilhøre samme person i begge former:
-    fradragsretten nedsætter den personlige indkomst, og den hører hos den,
-    der ejer ordningen. En indbetaling til ægtefællens ordning ville placere
-    skattevirkningen hos den forkerte. */
+    Ejerskellet gælder kun den lønkildede form: en arbejdsgiveradministreret
+    ordning står i lønmodtagerens eget navn, og person 1's løn kan derfor
+    ikke lande i person 2's ratepension. Det beholdningskildede bidrag må
+    krydse det — husstandens frie midler flytter sig allerede uhindret
+    mellem ejerne gennem en `Transfer`, og skattevirkningen følger
+    destinationens ejer og ikke kildens, jf. ADR-0028. */
 function contributionEnds(plan: Plan): string | undefined {
   const byId = holdingsById(plan)
   const entries = new Map(plan.entries.map((entry) => [entry.id, entry]))
@@ -243,7 +245,6 @@ function contributionEnds(plan: Plan): string | undefined {
     // En kilde, der ikke rammer noget, ville få bidraget til tavst at udeblive
     // hvert eneste år frem for at fejle — netop den slags løgn, ADR-0013 er
     // til for.
-    let owner: string | undefined
     if (contribution.kind === 'EntrySourced') {
       const source = entries.get(contribution.source)
       if (!source) {
@@ -258,7 +259,13 @@ function contributionEnds(plan: Plan): string | undefined {
           `som er en udgiftspost. En lønkilde er en indtægtspost.`
         )
       }
-      owner = source.owner
+      if (source.owner !== ownerOf.get(contribution.to)?.id) {
+        return (
+          `Indbetalingen ${contribution.id} kommer fra posten ${contribution.source} og går ` +
+          `til beholdningen ${contribution.to}, som tilhører en anden person. En ordning, ` +
+          `en arbejdsgiver administrerer, står i lønmodtagerens eget navn.`
+        )
+      }
     } else {
       const source = byId.get(contribution.source)
       if (!source) {
@@ -276,14 +283,6 @@ function contributionEnds(plan: Plan): string | undefined {
           `som ikke er frie midler. En flytning mellem to ordninger er ikke en indbetaling.`
         )
       }
-      owner = ownerOf.get(contribution.source)?.id
-    }
-
-    if (owner !== ownerOf.get(contribution.to)?.id) {
-      return (
-        `Indbetalingen ${contribution.id} går fra ${contribution.source} til ` +
-        `beholdningen ${contribution.to}, som ikke tilhører samme person.`
-      )
     }
   }
   return undefined

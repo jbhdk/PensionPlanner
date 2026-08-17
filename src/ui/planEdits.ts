@@ -638,10 +638,10 @@ export function withDirection(entry: Entry, direction: Direction): Entry {
 }
 
 /** Den tyndeste indbetaling, der kan tilføjes: nul kroner eller nul procent,
-    fra den første lovlige kilde til den første af ejerens ordninger. Kilde og
-    destination skal tilhøre samme person, og destinationen må ikke være frie
-    midler, jf. ADR-0016 — findes intet sådant par, er der ingenting at
-    tilføje, og knappen der kalder her, er selv skjult.
+    fra den første lovlige kilde til den første ordning, den må gå til.
+    Destinationen må ikke være frie midler, jf. ADR-0016 — findes intet
+    sådant par, er der ingenting at tilføje, og knappen der kalder her, er
+    selv skjult.
 
     Er kilden en lønpost, er formen procent frem for et fast beløb: det er
     den, der følger lønnen op af sig selv, og den brugeren skal skulle vælge
@@ -684,7 +684,13 @@ export function addContribution(plan: Plan): Plan {
     En ordning, ingen arbejdsgiver kan administrere, kan ikke være enden på
     et lønkildet par: så ville ét klik skrive en plan, `validatePlan`
     afviser, jf. ADR-0020. Den springes over i første omgang og findes af den
-    beholdningskildede i anden. */
+    beholdningskildede i anden.
+
+    Det lønkildede par skal tilhøre samme person — en arbejdsgiverordning
+    står i lønmodtagerens eget navn — mens det beholdningskildede må krydse
+    ejerskellet, jf. ADR-0028. Husstandens første frie midler kan derfor
+    parres med husstandens første ordning, og i den almindelige husstand,
+    hvor begge findes hos den første person, bliver parret det samme som før. */
 export function firstContributionPair(
   plan: Plan,
 ): { kind: Contribution['kind']; source: string; to: string } | undefined {
@@ -696,11 +702,10 @@ export function firstContributionPair(
     )
     if (to) return { kind: 'EntrySourced', source: entry.id, to: to.id }
   }
-  for (const person of plan.household.persons) {
-    const source = person.holdings.find(isFreeAssets)
-    const to = person.holdings.find((holding) => !isFreeAssets(holding))
-    if (source && to) return { kind: 'HoldingSourced', source: source.id, to: to.id }
-  }
+  const holdings = plan.household.persons.flatMap((person) => person.holdings)
+  const source = holdings.find(isFreeAssets)
+  const to = holdings.find((holding) => !isFreeAssets(holding))
+  if (source && to) return { kind: 'HoldingSourced', source: source.id, to: to.id }
   return undefined
 }
 

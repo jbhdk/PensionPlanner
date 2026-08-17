@@ -3175,10 +3175,10 @@ describe('indbetalingens pegere', () => {
     expect(() => simulate(plan)).toThrow(/living-costs.*udgiftspost|udgift/i)
   })
 
-  it('afviser en indbetaling, hvor kilde og destination ikke er samme persons', () => {
-    // Jespers løn ind i Marias ordning ville placere skattevirkningen hos den
-    // forkerte: fradragsretten nedsætter den personlige indkomst, og den
-    // hører hos den, der har ordningen.
+  it('afviser en lønkilde, hvor posten og ordningen ikke er samme persons', () => {
+    // Jespers løn ind i Marias ratepension findes ikke: en ordning, en
+    // arbejdsgiver administrerer, står i lønmodtagerens eget navn, jf.
+    // ADR-0028.
     const base = aPlanWith(
       aContribution({ source: 'salary', to: 'marias-ratepension', percentageOfEntry: 0.08 }),
     )
@@ -3212,7 +3212,7 @@ describe('indbetalingens pegere', () => {
       },
     }
 
-    expect(() => simulate(plan)).toThrow(/samme person/i)
+    expect(() => simulate(plan)).toThrow(/anden person/i)
   })
 
   it('afviser en beholdningskilde, der ikke findes', () => {
@@ -3266,9 +3266,12 @@ describe('indbetalingens pegere', () => {
     expect(() => simulate(plan)).toThrow(/ratepension.*ikke er frie midler/i)
   })
 
-  it('afviser et beholdningskildet bidrag, hvor kilde og destination ikke er samme persons', () => {
-    // Samme regel som for lønkilden, og af samme grund: fradragsretten hører
-    // hos den, der ejer ordningen.
+  it('tager imod et beholdningskildet bidrag fra den anden persons frie midler', () => {
+    // Husstandens frie midler flytter sig allerede uhindret mellem ejerne
+    // gennem en overførsel, og både loftet og fradragsretten følger
+    // destinationens ejer — Jespers frie midler må derfor betale til Marias
+    // ratepension, jf. ADR-0028. Uden det kunne intet nå en ordning hos den,
+    // der ikke ejer bufferen.
     const base = aPlanWith(
       aHoldingContribution({
         source: 'free-assets',
@@ -3306,7 +3309,22 @@ describe('indbetalingens pegere', () => {
       },
     }
 
-    expect(() => simulate(plan)).toThrow(/samme person/i)
+    const year = simulateChecked(plan)[0]!
+    const landed = year.contributions.find((line) => line.contribution === 'contribution')!
+
+    // Ingen AM-behandling på vejen ind: pengene kommer fra beskattede frie
+    // midler, og der lander 100 % i Marias ordning.
+    expect(landed.fromSource).toBeCloseTo(50_000, 0)
+    expect(landed.intoHolding).toBeCloseTo(50_000, 0)
+
+    // Og loftet er Marias, ikke Jespers: fradragsretten følger destinationens
+    // ejer, uanset hvis frie midler pengene forlod.
+    const capOf = (personId: string) =>
+      year.persons
+        .find((person) => person.person === personId)!
+        .caps.find((cap) => cap.variant === 'InstalmentPension')
+    expect(capOf('maria')).toMatchObject({ form: 'PerYear', withDeductibility: 50_000 })
+    expect(capOf('jesper')).toBeUndefined()
   })
 })
 

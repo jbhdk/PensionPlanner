@@ -934,10 +934,11 @@ describe('fladen', () => {
   })
 
   it('flytter destinationen med, når kilden skifter til ægtefællens lønpost', async () => {
-    // Kilde og destination tilhører samme person, jf. ADR-0016. Skiftede
-    // kilden alene, blev bidraget stående på Jespers ordning med Marias løn
-    // som kilde — en plan `validatePlan` afviser — og destinationsfeltet
-    // viste tilmed Marias ordning, fordi planens egen faldt ud af listen.
+    // En lønkildet indbetaling skal ende i lønmodtagerens egen ordning, jf.
+    // ADR-0028. Skiftede kilden alene, blev bidraget stående på Jespers
+    // ordning med Marias løn som kilde — en plan `validatePlan` afviser — og
+    // destinationsfeltet viste tilmed Marias ordning, fordi planens egen
+    // faldt ud af listen.
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithSpouse()} />)
 
@@ -967,7 +968,13 @@ describe('fladen', () => {
 
     await user.click(navigatorButton(/Løn.*Ratepension/))
 
-    expect(optionsOf('Kilde')).toEqual(['Løn · Jesper', 'Frie midler · Jesper'])
+    // Hendes frie midler står der derimod: de må betale til Jespers ordning,
+    // jf. ADR-0028 — det er kun lønnen, der er bundet til sin egen ejer.
+    expect(optionsOf('Kilde')).toEqual([
+      'Løn · Jesper',
+      'Frie midler · Jesper',
+      'Marias frie · Maria',
+    ])
   })
 
   it('viser planens egen destination, når den ligger hos en anden person', async () => {
@@ -995,6 +1002,46 @@ describe('fladen', () => {
     // Og valget er der: ægtefællens egen ordning står i listen ved siden af.
     await user.selectOptions(screen.getByLabelText(/Destination/), 'Marias ratepension')
 
+    expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+  })
+
+  it('lader bufferen betale til ægtefællens aktiesparekonto', async () => {
+    // Alt årets overskud lander på bufferen, og den har én ejer. Kunne et
+    // beholdningskildet bidrag ikke krydse ejerskellet, kunne ingen ordning
+    // hos den anden person nås uden en mellemstation af frie midler, jf.
+    // ADR-0028.
+    const user = userEvent.setup()
+    const base = aPlanWithSpouse()
+    const maria = base.household.persons[1]!
+    render(
+      <App
+        initialPlan={{
+          ...base,
+          contributions: [
+            aHoldingContribution({
+              source: 'free-assets',
+              to: 'ratepension',
+              amountInRealKroner: 20_000,
+            }),
+          ],
+          household: {
+            persons: [
+              base.household.persons[0]!,
+              { ...maria, holdings: [...maria.holdings, aShareSavingsAccount()] },
+            ],
+          },
+        }}
+      />,
+    )
+
+    await user.click(navigatorButton(/Frie midler → Ratepension/))
+    await user.selectOptions(screen.getByLabelText(/Destination/), 'Aktiesparekonto')
+
+    // Kilden bliver stående: den beholdningskildede udgave har ingen ejer at
+    // følge med over.
+    expect((screen.getByLabelText(/Kilde/) as HTMLSelectElement).value).toBe(
+      'Frie midler · Jesper',
+    )
     expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
   })
 

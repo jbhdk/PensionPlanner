@@ -201,9 +201,8 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
             : kroner(contribution.amountInRealKroner),
         target: { kind: 'contribution', id: contribution.id },
       })),
-      // Et bidrag kræver en lønpost at komme fra og en af samme persons
-      // ordninger at gå til. Er der intet sådant par, er der ikke noget at
-      // tilføje, jf. ADR-0016.
+      // Et bidrag kræver en kilde at komme fra og en ordning at gå til. Er
+      // der intet sådant par, er der ikke noget at tilføje, jf. ADR-0016.
       addLabel: firstContributionPair(plan) ? '+ Indbetaling' : undefined,
       onAdd: () => onChange(addContribution(plan)),
     },

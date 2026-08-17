@@ -209,7 +209,7 @@ export const fieldHelp = {
   // ---------- Indbetalingen ----------
 
   'Contribution.source':
-    'Hvor pengene til indbetalingen kommer fra. Er det en lønpost, trækkes de af lønnen før skat; er det en beholdning, flyttes allerede beskattede penge.',
+    'Hvor pengene til indbetalingen kommer fra. Er det en lønpost, trækkes de af lønnen før skat; er det en beholdning, flyttes allerede beskattede penge. En løn kan kun betale til ordninger i lønmodtagerens eget navn, mens opsparede penge kan gå til begges.',
 
   'Contribution.to':
     'Hvilken ordning pengene lander i. Valget afgør resten: om indbetalingen nedsætter skatten, hvilket loft den måles mod, og hvordan pengene beskattes, mens de står der.',
