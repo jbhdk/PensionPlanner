@@ -1101,15 +1101,38 @@ function ContributionFields({
   // Kilden er ét felt med to grupper. Navnet bærer personen med, så to ens
   // navne i husstanden kan skelnes fra hinanden i listen.
   const named = (name: string, person: string) => `${name} · ${person}`
+  const destination = holdings.find((holding) => holding.id === contribution.to)
+  // Kilden kan pege på en anden persons post, og så flytter destinationen
+  // med: den ordning, bidraget lander i, skal tilhøre kildens ejer, jf.
+  // ADR-0016. Ligger den nuværende destination allerede hos den nye ejer,
+  // bliver den stående; ellers findes ejerens første ordning. Er der ingen,
+  // er der intet at flytte til — og kilden tilbydes ikke, frem for at lade
+  // ét klik skrive en plan, `validatePlan` afviser, jf. ADR-0020.
+  const destinationUnder = (person: Person | undefined, kind: Contribution['kind']) => {
+    if (person?.holdings.some((holding) => holding.id === contribution.to)) return contribution.to
+    return person?.holdings.find(
+      (holding) =>
+        !isFreeAssets(holding) && (kind !== 'EntrySourced' || isEmployerAdministered(holding)),
+    )?.id
+  }
+  const personById = (personId: string) =>
+    plan.household.persons.find((person) => person.id === personId)
   // Går indbetalingen til en ordning, ingen arbejdsgiver kan administrere,
   // tilbydes lønposterne slet ikke: den plan ville `validatePlan` afvise, og
   // så forsvandt resultatspalten efter ét klik, jf. ADR-0020.
-  const destination = holdings.find((holding) => holding.id === contribution.to)
   const entrySources =
     destination && !isEmployerAdministered(destination)
       ? []
-      : plan.entries.filter((entry) => entry.direction === 'Income')
-  const holdingSources = holdings.filter(isFreeAssets)
+      : plan.entries.filter(
+          (entry) =>
+            entry.direction === 'Income' &&
+            destinationUnder(personById(entry.owner), 'EntrySourced') !== undefined,
+        )
+  const holdingSources = holdings.filter(
+    (holding) =>
+      isFreeAssets(holding) &&
+      destinationUnder(ownerOfHolding.get(holding.id), 'HoldingSourced') !== undefined,
+  )
   const entryLabel = (entry: Entry) =>
     named(
       entry.name,
@@ -1135,6 +1158,14 @@ function ContributionFields({
         isEmployerAdministered(holding) ||
         ownFreeAssets !== undefined),
   )
+  // Feltet skal vise planens egen destination, også når den ligger uden for
+  // listen. En ordning hos en anden person står der ikke, og faldt feltet
+  // tilbage på listens første, ville skuffen vise noget andet end det,
+  // motoren melder fejl om — og fejlen kunne ikke rettes ved at vælge om.
+  const destinationOptions =
+    destination && !destinations.some((holding) => holding.name === destination.name)
+      ? [destination, ...destinations]
+      : destinations
   const sourceName =
     contribution.kind === 'EntrySourced'
       ? (sourceEntry?.name ?? contribution.source)
@@ -1173,12 +1204,16 @@ function ContributionFields({
           onChange={(choice) => {
             const entry = entrySources.find((source) => entryLabel(source) === choice)
             const holding = holdingSources.find((source) => holdingLabel(source.id) === choice)
+            const to = entry
+              ? destinationUnder(personById(entry.owner), 'EntrySourced')!
+              : destinationUnder(ownerOfHolding.get(holding!.id), 'HoldingSourced')!
             onChange(
-              withContribution(plan, id, (c) =>
-                entry
-                  ? withSource(c, { kind: 'EntrySourced', source: entry.id })
-                  : withSource(c, { kind: 'HoldingSourced', source: holding!.id }),
-              ),
+              withContribution(plan, id, (c) => {
+                const moved = { ...c, to }
+                return entry
+                  ? withSource(moved, { kind: 'EntrySourced', source: entry.id })
+                  : withSource(moved, { kind: 'HoldingSourced', source: holding!.id })
+              }),
             )
           }}
         />
@@ -1186,9 +1221,9 @@ function ContributionFields({
           label="Destination"
           help="Contribution.to"
           value={holdingName(contribution.to)}
-          options={destinations.map((holding) => holding.name)}
+          options={destinationOptions.map((holding) => holding.name)}
           onChange={(name) => {
-            const to = destinations.find((holding) => holding.name === name)!
+            const to = destinationOptions.find((holding) => holding.name === name)!
             onChange(
               withContribution(plan, id, (c) => {
                 const moved = { ...c, to: to.id }

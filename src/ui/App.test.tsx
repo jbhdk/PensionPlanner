@@ -72,6 +72,41 @@ function aPlanWithPensionBetweenFreeHoldings(): Plan {
   })
 }
 
+/** Husstanden med to personer, som hver har en løn og en ratepension — så
+    en indbetalings to ender kan flyttes fra den ene person til den anden.
+    Bidraget går fra Jespers løn til Jespers ordning. */
+function aPlanWithSpouse(): Plan {
+  const base = aPlan({
+    holdings: [aPensionHolding('ratepension', 'Ratepension')],
+    entries: [aSalary({ amountInRealKroner: 600_000 })],
+    contributions: [
+      aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
+    ],
+  })
+  const jesper = base.household.persons[0]!
+  return {
+    ...base,
+    entries: [
+      ...base.entries,
+      { ...aSalary({ amountInRealKroner: 400_000, owner: 'maria' }), id: 'marias-loen' },
+    ],
+    household: {
+      persons: [
+        jesper,
+        {
+          ...jesper,
+          id: 'maria',
+          name: 'Maria',
+          holdings: [
+            aFreeHolding('marias-frie-midler', 'Marias frie midler'),
+            aPensionHolding('marias-ratepension', 'Marias ratepension'),
+          ],
+        },
+      ],
+    },
+  }
+}
+
 function aPensionHolding(id: string, name: string): Holding {
   return {
     id,
@@ -896,6 +931,71 @@ describe('fladen', () => {
     // Og gruppen står ikke tom tilbage: en overskrift uden noget under sig
     // ville se ud som en liste, der mangler at blive fyldt.
     expect(kilde.querySelector('optgroup[label="Lønposter"]')).toBeNull()
+  })
+
+  it('flytter destinationen med, når kilden skifter til ægtefællens lønpost', async () => {
+    // Kilde og destination tilhører samme person, jf. ADR-0016. Skiftede
+    // kilden alene, blev bidraget stående på Jespers ordning med Marias løn
+    // som kilde — en plan `validatePlan` afviser — og destinationsfeltet
+    // viste tilmed Marias ordning, fordi planens egen faldt ud af listen.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithSpouse()} />)
+
+    await user.click(navigatorButton(/Løn.*Ratepension/))
+    await user.selectOptions(screen.getByLabelText(/Kilde/), 'Løn · Maria')
+
+    expect((screen.getByLabelText(/Destination/) as HTMLSelectElement).value).toBe(
+      'Marias ratepension',
+    )
+    expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+  })
+
+  it('tilbyder ikke ægtefællens lønpost som kilde, når ægtefællen ingen ordning har', async () => {
+    // Der er ingen destination at flytte med over, og valget kunne kun ende
+    // i en plan, motoren afviser. Så står posten ikke i listen, jf. ADR-0020.
+    const user = userEvent.setup()
+    const withoutMariasPension = (plan: Plan): Plan => ({
+      ...plan,
+      household: {
+        persons: [
+          plan.household.persons[0]!,
+          { ...plan.household.persons[1]!, holdings: [aFreeHolding('marias-frie', 'Marias frie')] },
+        ],
+      },
+    })
+    render(<App initialPlan={withoutMariasPension(aPlanWithSpouse())} />)
+
+    await user.click(navigatorButton(/Løn.*Ratepension/))
+
+    expect(optionsOf('Kilde')).toEqual(['Løn · Jesper', 'Frie midler · Jesper'])
+  })
+
+  it('viser planens egen destination, når den ligger hos en anden person', async () => {
+    // Modprøve på, at feltet ikke lyver. En plan, hvor de to ender er faldet
+    // fra hinanden, skal kunne rettes: vises listens første i stedet for
+    // planens egen, står skuffen og siger noget andet end fejlbeskeden, og
+    // det rigtige valg kan ikke træffes, fordi det allerede står i feltet.
+    const user = userEvent.setup()
+    const plan = aPlanWithSpouse()
+    render(
+      <App
+        initialPlan={{
+          ...plan,
+          contributions: [
+            aContribution({ source: 'marias-loen', to: 'ratepension', percentageOfEntry: 0.08 }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(navigatorButton(/Løn.*Ratepension/))
+
+    expect((screen.getByLabelText(/Destination/) as HTMLSelectElement).value).toBe('Ratepension')
+
+    // Og valget er der: ægtefællens egen ordning står i listen ved siden af.
+    await user.selectOptions(screen.getByLabelText(/Destination/), 'Marias ratepension')
+
+    expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
   })
 
   it('flytter kilden til de frie midler, når destinationen skifter til en aktiesparekonto', async () => {
