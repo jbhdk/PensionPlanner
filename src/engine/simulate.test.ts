@@ -1166,6 +1166,71 @@ describe('overførsler', () => {
     expect(anden.weightedFlow).toBeCloseTo(100_000, 6)
   })
 
+  it('lader årets egne overførsler give råderum videre i planens rækkefølge', () => {
+    // Året har ingen indre tidsrækkefølge — måneden er en afkastvægt og ikke
+    // et tidsskridt, jf. ADR-0006. En beholdning, der ubestridt modtog
+    // 200.000 kr., har derfor også noget at give af, selv om den stod tom
+    // ved årets begyndelse.
+    const plan = aPlanWithSecondHolding({
+      balance: 1_000_000,
+      transfers: [
+        aTransfer({
+          id: 'ind',
+          from: 'free-assets',
+          to: 'anden-beholdning',
+          amountInRealKroner: 200_000,
+        }),
+        aTransfer({
+          id: 'ud',
+          from: 'anden-beholdning',
+          to: 'free-assets',
+          amountInRealKroner: 150_000,
+        }),
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(
+      year.holdings.find((h) => h.holding === 'anden-beholdning')!.closingBalance,
+    ).toBe(50_000)
+    expect(bufferBalance(year)).toBe(950_000)
+  })
+
+  it('afkorter udtrækket, når det står før indskuddet i planens rækkefølge', () => {
+    // Rækkefølgen i planen er den eneste orden, der findes: falder udtrækket
+    // først, er beholdningen stadig tom, og der er intet at give af.
+    const plan = aPlanWithSecondHolding({
+      balance: 1_000_000,
+      transfers: [
+        aTransfer({
+          id: 'ud',
+          from: 'anden-beholdning',
+          to: 'free-assets',
+          amountInRealKroner: 150_000,
+        }),
+        aTransfer({
+          id: 'ind',
+          from: 'free-assets',
+          to: 'anden-beholdning',
+          amountInRealKroner: 200_000,
+        }),
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(
+      year.holdings.find((h) => h.holding === 'anden-beholdning')!.closingBalance,
+    ).toBe(200_000)
+    expect(bufferBalance(year)).toBe(800_000)
+    expect(year.transfers.find((t) => t.transfer === 'ud')).toEqual({
+      transfer: 'ud',
+      requested: 150_000,
+      moved: 0,
+    })
+  })
+
   it('afviser en plan hvor to beholdninger er udpeget som samme buffer', () => {
     const base = aPlanWithSecondHolding()
     const plan: Plan = {

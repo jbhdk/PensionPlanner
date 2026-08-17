@@ -243,7 +243,7 @@ export const fieldHelp = {
     'Det beløb, planen bad om i året. Det er tallet fra flytningen selv, løftet med inflationen frem til året.',
 
   'TransferYear.moved':
-    'Det beløb, der faktisk skiftede plads. Det er lavere end det ønskede, når afgiveren ikke havde nok ved årets begyndelse — resten blev ikke flyttet og står stadig, hvor den stod.',
+    'Det beløb, der faktisk skiftede plads. Det er lavere end det ønskede, når afgiveren ikke havde nok at give af — hverken fra årets begyndelse eller fra de flytninger, der står før denne i planen. Resten blev ikke flyttet og står stadig, hvor den stod.',
 
   // ---------- Årstabellens kolonner ----------
 

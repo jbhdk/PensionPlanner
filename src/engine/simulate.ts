@@ -1336,17 +1336,28 @@ function ownerOfHolding(plan: Plan, holding: HoldingId): Person {
 
 /** Årets overførsler, hver afkortet til det, afgiveren havde at give af.
 
-    Afkortningen måles mod primosaldoen, ganske som `OnBalance`-loftets
-    råderum: et fast kronebeløb kunne ellers drive en ordning negativ, og en
-    beholdning, der ikke er bufferen, må ikke gå under nul, jf. ADR-0022.
-    Falder to overførsler ud af den samme beholdning i samme år, får den
-    første i planens rækkefølge hele saldoen og den næste resten — samme
-    greb, og af samme grund, som to indbetalinger, der deler ét råderum.
+    Råderummet er primosaldoen ført med årets egne overførsler: en beholdning,
+    der modtog tidligere i planens rækkefølge, kan give videre samme år. Året
+    har ingen indre tidsrækkefølge at måle imod — måneden er en afkastvægt og
+    ikke et tidsskridt, jf. ADR-0006 — så en beholdning, pengene ubestridt
+    landede i, har også noget at give af. Målte afkortningen mod primosaldoen
+    alene, ville en ordning, der fyldes op og tømmes i samme år, aldrig kunne
+    give noget fra sig.
 
-    Bufferen er undtaget. Den er det ene sted, årets restpost må samle sig,
-    og dens negative saldo er hele modellens måde at sige, at planen ikke
-    holder, jf. ADR-0002 og ADR-0008. Afkortede en overførsel den, ville
-    signalet forsvinde i stedet for at vise sig. */
+    Afkortes gør den stadig: et fast kronebeløb kunne ellers drive en ordning
+    negativ, og en beholdning, der ikke er bufferen, må ikke gå under nul, jf.
+    ADR-0022. Planens rækkefølge er den eneste orden, der findes, og den
+    afgør begge veje. Falder to overførsler ud af den samme beholdning i
+    samme år, får den første hele saldoen og den næste resten — samme greb,
+    og af samme grund, som to indbetalinger, der deler ét råderum. Falder et
+    udtræk før det indskud, der skulle dække det, er der intet at give af, og
+    linjen står med et ønsket beløb, der ikke flyttede sig.
+
+    Bufferen er undtaget som afgiver. Den er det ene sted, årets restpost må
+    samle sig, og dens negative saldo er hele modellens måde at sige, at
+    planen ikke holder, jf. ADR-0002 og ADR-0008. Afkortede en overførsel
+    den, ville signalet forsvinde i stedet for at vise sig — og derfor føres
+    dens rest ufortrødent negativ, hvor en anden beholdning stopper ved nul. */
 function transfersInYear(
   plan: Plan,
   year: SimulationYear,
@@ -1357,11 +1368,12 @@ function transfersInYear(
     if (!transferAppliesInYear(transfer, year, ownerOfHolding(plan, transfer.from))) return []
 
     const requested = transfer.amountInRealKroner * transferProjection(plan, year)
-    if (transfer.from === plan.buffer) return [{ transfer, requested, amount: requested }]
+    const room = remaining.get(transfer.from)!
+    const amount =
+      transfer.from === plan.buffer ? requested : Math.min(requested, Math.max(0, room))
 
-    const room = Math.max(0, remaining.get(transfer.from)!)
-    const amount = Math.min(requested, room)
     remaining.set(transfer.from, room - amount)
+    remaining.set(transfer.to, remaining.get(transfer.to)! + amount)
     return [{ transfer, requested, amount }]
   })
 }
