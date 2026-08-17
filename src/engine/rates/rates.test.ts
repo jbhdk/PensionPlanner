@@ -66,6 +66,25 @@ describe('rateYearFor', () => {
     expect(rates.allowanceRates).toEqual(rateYear2026.allowanceRates)
   })
 
+  it('arver kapitalpensionens afgift uændret, når § 20-grænserne selv har flyttet sig', () => {
+    // Afgiften er en procent i loven og ikke en beløbsgrænse, og den er
+    // derfor ikke § 20-reguleret. Den arves uændret af ethvert simuleringsår
+    // efter det sidst kendte satsår, ganske som PAL-skattens. Testen måler
+    // den mod en grænse, der *er* flyttet sig i samme år — ellers ville den
+    // også bestå i et år, hvor slet ingen fremskrivning havde fundet sted.
+    const { rates } = rateYearFor(2060, {
+      section20ProjectionAssumption: 0.02,
+      statePensionProjectionAssumption: 0.02,
+    })
+
+    expect(rates.taxRates.capitalPensionChargeRate).toBe(
+      rateYear2026.taxRates.capitalPensionChargeRate,
+    )
+    expect(rates.thresholds.instalmentPensionCap).toBeGreaterThan(
+      rateYear2026.thresholds.instalmentPensionCap,
+    )
+  })
+
   it('lader et nyt kendt satsår automatisk overtage de simuleringsår, der før blev fremskrevet', () => {
     const rateYear2028: RateYear = {
       ...rateYear2026,

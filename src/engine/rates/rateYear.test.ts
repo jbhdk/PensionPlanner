@@ -4,16 +4,22 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { rateYear2026 } from './rateYear2026'
 
+/** Dokumentet bag satsåret. De tre aflæsninger herunder henter hver sin
+    tabel ud af det, og de deler denne ene indgang, så stien kun står ét sted. */
+function satserDoc(): string {
+  return readFileSync(
+    fileURLToPath(new URL('../../../docs/satser/2026.md', import.meta.url)),
+    'utf8',
+  )
+}
+
 /** Læser kommunetabellen af docs/satser/2026.md, så testen bruger dokumentet
     som facit i stedet for at gentage tallene som en separat liste her.
     `rateYear2026.ts`'s egen kommentar siger det ligeud: retter man et tal i
     dokumentet, retter man det begge steder — denne test er den kontrol af
     at det faktisk sker. */
 function municipalTaxFromDoc(): Record<string, { municipalTaxRate: number; churchTaxRate: number }> {
-  const doc = readFileSync(
-    fileURLToPath(new URL('../../../docs/satser/2026.md', import.meta.url)),
-    'utf8',
-  )
+  const doc = satserDoc()
   const section = doc.split('## Kommune- og kirkeskatteprocenter')[1]!.split(/\n## /)[0]!
   const rowPattern = /^\| (.+) \| ([\d,]+) % \| ([\d,]+) % \|$/gm
 
@@ -34,12 +40,21 @@ function municipalTaxFromDoc(): Record<string, { municipalTaxRate: number; churc
     af det. Renten er Finans Danmarks og hverken en § 20-grænse eller en
     skattesats — den har sin egen kilde og sin egen tabel i dokumentet. */
 function amortisationRateFromDoc(): number {
-  const doc = readFileSync(
-    fileURLToPath(new URL('../../../docs/satser/2026.md', import.meta.url)),
-    'utf8',
-  )
+  const doc = satserDoc()
   const section = doc.split('## Amortisationsrenten')[1]!.split(/\n## /)[0]!
   const match = /\| Amortisationsrente \| ([\d,]+) % \|/.exec(section)!
+  return Number(match[1]!.replace(',', '.')) / 100
+}
+
+/** Kapitalpensionens afgift læst af docs/satser/2026.md's satstabel, af samme
+    grund som de to ovenfor: dokumentet er forlægget, og satsårsfilen er en
+    afskrift af det. Satstabellen bærer en kildekolonne pr. række; den læses
+    ikke her, men den er grunden til, at rækken kan stå som facit. */
+function taxRateFromDoc(label: string): number {
+  const doc = satserDoc()
+  const section = doc.split('\n## Skattesatser')[1]!.split(/\n## /)[0]!
+  const pattern = String.raw`^\| ${label} \| ([\d,]+) % \|`
+  const match = new RegExp(pattern, 'm').exec(section)!
   return Number(match[1]!.replace(',', '.')) / 100
 }
 
@@ -160,6 +175,20 @@ describe('satsår 2026', () => {
     // § 11 A, stk. 3, og hører derfor i satsåret.
     expect(rateYear2026.amortisationRate.rate).toBeCloseTo(0.0322, 10)
     expect(rateYear2026.amortisationRate.rate).toBeCloseTo(amortisationRateFromDoc(), 10)
+  })
+
+  it('bærer kapitalpensionens afgift med samme tal som docs/satser/2026.md', () => {
+    // Afgiften er hverken en skat eller en § 20-grænse: den er en flad
+    // procent af det, der forlader en kapitalpension, og den passerer ingen
+    // indkomstopgørelse. Den har derfor ingen selvkontrol at hvile på —
+    // en flad procent har ingen relation til andre tal — og kilden er det
+    // eneste, der kan bekræfte den. Dokumentets kildekolonne peger på
+    // PBL § 25, stk. 1, og satsårsfilen er afskriften af den række.
+    expect(rateYear2026.taxRates.capitalPensionChargeRate).toBeCloseTo(0.4, 10)
+    expect(rateYear2026.taxRates.capitalPensionChargeRate).toBeCloseTo(
+      taxRateFromDoc('Kapitalpension, afgift ved udbetaling'),
+      10,
+    )
   })
 
   it('slår op for alle ca. 98 kommuner, og med samme tal som docs/satser/2026.md', () => {

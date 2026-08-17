@@ -35,6 +35,12 @@ export type TaxRates = {
   shareIncomeAboveThreshold: number
   palTaxRate: number
   shareSavingsAccountTaxRate: number
+  /** Afgiften af det, der forlader en kapitalpension, jf. PBL § 25, stk. 1.
+      Ikke § 20-reguleret — en procent i loven og ikke en beløbsgrænse — og
+      den arves derfor uændret af et fremskrevet satsår, ganske som
+      PAL-skattens. Loven kender flere afgiftsprocenter, og det er derfor
+      satsåret og ikke beskatningsformen `Chargeable`, der bærer den. */
+  capitalPensionChargeRate: number
 }
 
 /** Det skrå skatteloft, trappet fra 2026. Alle tre ekskl. AM-bidrag og

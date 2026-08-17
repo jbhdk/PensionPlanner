@@ -17,13 +17,19 @@ export const rateYear2026: RateYear = {
   },
 
   taxRates: {
-    source: 'https://www.skatteguiden.dk/skattesatser/',
+    source:
+      'https://www.skatteguiden.dk/skattesatser/ ' +
+      '(AM-bidraget, aktieindkomsten, PAL-skatten og aktiesparekontoen) og ' +
+      'https://svmn.dk/tal-og-metode/satser/' +
+      'satser-og-beloebsgraenser-i-lovgivningen/pensionsbeskatningsloven ' +
+      '(kapitalpensionens afgift)',
     unconfirmed: [],
     labourMarketContribution: 0.08,
     shareIncomeBelowThreshold: 0.27,
     shareIncomeAboveThreshold: 0.42,
     palTaxRate: 0.153,
     shareSavingsAccountTaxRate: 0.17,
+    capitalPensionChargeRate: 0.4,
   },
 
   taxCeiling: {
