@@ -90,6 +90,9 @@ export const fieldHelp = {
   'Person.horizon':
     'Den alder, fremskrivningen løber til og med for denne person. Sat for lavt stopper regnestykket, før pengene er brugt op, og planen ser mere holdbar ud, end den er.',
 
+  'Person.workEndAge':
+    'Den alder, hvor lønnen og anden arbejdsindkomst ophører. Poster og udbetalingsplaner sat til at følge den, flytter sig automatisk, når alderen ændres, så forskellige stoptidspunkter er lette at sammenligne.',
+
   'Person.municipality':
     'Den kommune, personen bor i. Kommune- og kirkeskatteprocenten hentes derfra for hvert enkelt år og tastes ikke ind — det er også her, en flytning til en billigere kommune afprøves.',
 

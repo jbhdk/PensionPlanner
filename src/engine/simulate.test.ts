@@ -4797,6 +4797,156 @@ describe('aftrapningen af pensionstillægget', () => {
   })
 })
 
+describe('en persons horisont stopper hendes egen indkomst, ikke husstandens udgifter eller hendes beholdninger, jf. ADR-0030', () => {
+  // Jesper (født 1973, juni) får en kortere horisont end sin samlever Maria
+  // (født 1975, januar), så husstanden fortsætter, længe efter hans egen er
+  // passeret — netop den situation, ADR-0030 retter på. Horisont 70 giver
+  // Jesper sidste år 1973 + 70 = 2043, som samtidig er hans egen
+  // folkepensionsalders første år (70 år, jf. `statePensionAge.ts`s trin for
+  // 1973-årgangen) — så testene kan se begge stoppe præcis dér. Marias
+  // horisont 90 giver husstanden sidste år 1975 + 90 = 2065.
+  function aPlanWithShorterLivedJesper(options: Parameters<typeof aPlan>[0] = {}): Plan {
+    const base = aPlan({ horizon: 70, ...options })
+    return {
+      ...base,
+      household: {
+        persons: [
+          ...base.household.persons,
+          {
+            id: 'maria',
+            name: 'Maria',
+            birthYear: 1975,
+            birthMonth: 1,
+            workEndAge: 65,
+            horizon: 90,
+            municipality: 'Hvidovre',
+            churchMember: true,
+            holdings: [
+              aHolding({
+                id: 'marias-frie-midler',
+                name: 'Marias frie midler',
+                variant: 'SavingsAccount',
+                balance: 0,
+              }),
+            ],
+          },
+        ],
+      },
+    }
+  }
+
+  it('lader husstanden fortsætte til den længstlevendes horisont', () => {
+    const years = simulateChecked(aPlanWithShorterLivedJesper())
+
+    expect(years.at(-1)!.year).toBe(2065)
+  })
+
+  it('stopper en indtægtspost ved ejerens egen horisont, selvom husstanden fortsætter', () => {
+    const plan = aPlanWithShorterLivedJesper({
+      entries: [aPensionIncome({ amountInRealKroner: 30_000, owner: 'jesper' })],
+    })
+    const years = simulateChecked(plan)
+    const entriesIn = (year: number) => years.find((y) => y.year === year)!.entries
+
+    expect(entriesIn(2043)).toEqual([{ entry: 'atp', amount: 30_000 }])
+    expect(entriesIn(2044)).toEqual([])
+  })
+
+  it('lader horisonten vinde over et eksplicit slutpunkt, der rækker forbi den', () => {
+    const plan = aPlanWithShorterLivedJesper({
+      entries: [
+        aPensionIncome({
+          amountInRealKroner: 30_000,
+          owner: 'jesper',
+          period: { anchor: 'CalendarYear', to: 2050 },
+        }),
+      ],
+    })
+    const years = simulateChecked(plan)
+    const entriesIn = (year: number) => years.find((y) => y.year === year)!.entries
+
+    expect(entriesIn(2043)).toEqual([{ entry: 'atp', amount: 30_000 }])
+    expect(entriesIn(2044)).toEqual([])
+  })
+
+  it('lader en udgiftspost fortsætte forbi ejerens egen horisont — den er husstandens, ikke hendes', () => {
+    const plan = aPlanWithShorterLivedJesper({
+      entries: [anExpense({ amountInRealKroner: 40_000 })],
+    })
+    const years = simulateChecked(plan)
+
+    expect(years.find((y) => y.year === 2044)!.expenses).toBe(40_000)
+  })
+
+  it('stopper folkepensionen ved egen horisont', () => {
+    const years = simulateChecked(aPlanWithShorterLivedJesper())
+    const jespersStatePension = (year: number) =>
+      years
+        .find((y) => y.year === year)!
+        .persons.find((p) => p.person === 'jesper')!.statePension
+
+    expect(jespersStatePension(2043)).toBeDefined()
+    expect(jespersStatePension(2044)).toBeUndefined()
+  })
+
+  it('stopper livrentens ydelse ved ejerens egen horisont, men rører ikke omsætningen af depotet', () => {
+    const plan = aPlanWithShorterLivedJesper({
+      holdings: [
+        {
+          id: 'livrente',
+          name: 'Livrente',
+          variant: 'LifeAnnuity',
+          openedOn: { year: 2018, month: 1 },
+          balance: 800_000,
+          grossReturn: 0.04,
+          annualCostRate: 0.005,
+          quotedReserve: 1_000_000,
+          quotedAnnualBenefit: 50_000,
+          bonusRate: 0,
+          // 3 år før folkepensionsalderen (70), jf. `FromJanuary2018`-regimet
+          // — den tidligste, ordningen (oprettet 2018) må udbetales.
+          payout: { start: 67 },
+        },
+      ],
+    })
+    const years = simulateChecked(plan)
+    const jespersBenefit = (year: number) =>
+      years
+        .find((y) => y.year === year)!
+        .persons.find((p) => p.person === 'jesper')!
+        .lifeAnnuityBenefits.find((benefit) => benefit.holding === 'livrente')!.amount
+
+    // Omsætningsåret (1973 + 67 = 2040): depotet forlader beholdningen,
+    // ydelsen er ganget omsætningsfaktoren — begge upåvirket af, hvor
+    // Jespers horisont ligger.
+    expect(holding(years.find((y) => y.year === 2040)!, 'livrente').closingBalance).toBe(0)
+    expect(jespersBenefit(2040)).toBeGreaterThan(0)
+    // Sidste år inden for hans egen horisont: ydelsen løber stadig.
+    expect(jespersBenefit(2043)).toBeGreaterThan(0)
+    // Året efter: husstanden fortsætter for Marias skyld, men Jespers
+    // livsvarige ydelse gør det ikke.
+    expect(jespersBenefit(2044)).toBe(0)
+  })
+
+  it('lader jespers egne beholdninger fortsætte uændret efter hans egen horisont', () => {
+    const plan = aPlanWithShorterLivedJesper({
+      holdings: [
+        aHolding({
+          id: 'jespers-opsparing',
+          name: 'Jespers opsparing',
+          variant: 'SavingsAccount',
+          balance: 500_000,
+          grossReturn: 0.04,
+        }),
+      ],
+    })
+    const years = simulateChecked(plan)
+    const afterHorizon = years.find((y) => y.year === 2044)!
+
+    expect(holding(afterHorizon, 'jespers-opsparing').return).toBeGreaterThan(0)
+  })
+})
+
 describe('bufferens jævne strømme', () => {
   it('lader den jævne drift passere bufferen uden at forrente sig', () => {
     // ADR-0024's første værn: bufferen er husstandens transaktionskonto, og

@@ -1,3 +1,4 @@
+import { personLastYear } from './age'
 import type { Household, Person, PersonId, SimulationYear } from './plan'
 import type { CivilStatus } from './rates/rateYear'
 import { statePensionYear } from './statePensionAge'
@@ -20,13 +21,17 @@ export type ActiveStatePension = { owner: PersonId; civilStatus: CivilStatus }
     læses af satsåret, og året, de begynder i, udledes af fødselsdatoen
     gennem `statePensionYear` — motorens eneste vej til det årstal, så
     folkepensionens start og aldersopsparingens vindue ikke kan skille sig i
-    det halve år. */
+    det halve år.
+
+    Den stopper også ved personens egen horisont, jf. ADR-0030: folkepensionen
+    er hendes egen indkomst, ikke husstandens, og hører derfor til samme
+    regel som en indtægtspost. */
 export function statePensionsInYear(
   household: Household,
   year: SimulationYear,
 ): ActiveStatePension[] {
   return household.persons
-    .filter((person) => year >= statePensionYear(person))
+    .filter((person) => year >= statePensionYear(person) && year <= personLastYear(person))
     .map((person) => ({
       owner: person.id,
       civilStatus: civilStatusOf(person, household, year),

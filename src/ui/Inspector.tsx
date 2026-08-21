@@ -280,6 +280,16 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
             onChange(withPerson(plan, id, (p) => ({ ...p, horizon })))
           }
         />
+        <NumberField
+          label="Erhvervsophør"
+          help="Person.workEndAge"
+          unit="år"
+          value={person.workEndAge}
+          bounds={{ min: 0, max: person.horizon }}
+          onChange={(workEndAge) =>
+            onChange(withPerson(plan, id, (p) => ({ ...p, workEndAge })))
+          }
+        />
       </Section>
       <Section title="Skat">
         <SelectField

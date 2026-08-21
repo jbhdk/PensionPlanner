@@ -14,6 +14,15 @@ export function yearAtAge(person: Person, age: number): SimulationYear {
   return person.birthYear + Math.floor(age + (person.birthMonth - 1) / 12)
 }
 
+/** Det sidste år, personens egen indkomst tælles med — jf. ADR-0030. Efter
+    det fortsætter husstandens udgifter og personens beholdninger uændret,
+    men hendes indtægtsposter, folkepension og livrenteydelse gør ikke:
+    horisonten er et loft på hendes egne strømme og ikke en fri grænse, en
+    post kan række forbi. */
+export function personLastYear(person: Person): SimulationYear {
+  return yearAtAge(person, person.horizon)
+}
+
 /** Periodens to endepunkter oversat til kalenderår. Ved `PersonAge` følger et
     endepunkt sat til `'WorkEndAge'` `owner.workEndAge`, så perioden flytter
     sig, når erhvervsophørsalderen ændres, uden at posten selv redigeres.

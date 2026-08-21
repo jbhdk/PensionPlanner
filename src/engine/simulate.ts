@@ -29,7 +29,7 @@ import type {
   Timing,
   Transfer,
 } from './plan'
-import { periodBounds } from './age'
+import { periodBounds, personLastYear } from './age'
 import { payoutStartYear, transferAllowedFrom } from './payoutAge'
 import {
   cap,
@@ -1076,7 +1076,12 @@ const conversionWeight = 1
     omsat i virkeligheden, og der findes intet depot at regne ydelsen af. En
     sådan ordning skrives som en indtægtspost med `PensionIncome`, præcis som
     ATP, jf. ADR-0023 — ikke som en beholdning med en saldo, motoren ikke kan
-    genskabe. */
+    genskabe.
+
+    Omsætningen selv er upåvirket af ejerens horisont — depotet er en
+    beholdningsbevægelse, ikke en indkomst, jf. ADR-0030 — men ydelsen er
+    `PensionIncome` og stopper derfor, når året ligger efter hendes eget
+    sidste år. */
 function lifeAnnuitiesInYear(
   plan: Plan,
   year: SimulationYear,
@@ -1093,16 +1098,25 @@ function lifeAnnuitiesInYear(
       const startYear = payoutStartYear(start, person)
       if (year < startYear) return []
 
+      const activeIncome = year <= personLastYear(person)
       const line = { holding: holding.id, owner: person.id }
       if (year === startYear) {
         const reserve = opening.get(holding.id)!
-        return [{ ...line, conversion: reserve, benefit: reserve * conversionFactor(holding) }]
+        return [
+          {
+            ...line,
+            conversion: reserve,
+            benefit: activeIncome ? reserve * conversionFactor(holding) : 0,
+          },
+        ]
       }
       return [
         {
           ...line,
           conversion: 0,
-          benefit: benefitLastYear(previous, holding.id) * (1 + holding.bonusRate),
+          benefit: activeIncome
+            ? benefitLastYear(previous, holding.id) * (1 + holding.bonusRate)
+            : 0,
         },
       ]
     }),
@@ -1260,8 +1274,14 @@ function entryProjection(entry: Entry, plan: Plan, year: SimulationYear): number
 }
 
 /** Om en post falder i det pågældende år: dens periode skal dække året, og
-    dens gentagelse skal ramme netop det år. */
+    dens gentagelse skal ramme netop det år.
+
+    En indtægtspost har desuden ejerens egen horisont som et loft, der vinder
+    over et eksplicit sat slutpunkt — jf. ADR-0030. En udgiftspost er
+    husstandens og ikke personens og har intet loft ud over sin egen periode,
+    selvom den måtte være aldersforankret til netop denne ejer. */
 function appliesInYear(entry: Entry, year: SimulationYear, owner: Person): boolean {
+  if (entry.direction === 'Income' && year > personLastYear(owner)) return false
   const { from, to } = periodBounds(entry.period, owner)
   return withinPeriod(from, to, year) && matchesRecurrence(entry.recurrence, year, from, to)
 }

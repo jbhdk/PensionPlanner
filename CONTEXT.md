@@ -320,7 +320,7 @@ _Avoid_: Modregningsgrundlag, indtægtsgrundlag
 ### Aldre
 
 **Erhvervsophør** · `WorkEndAge`:
-Det år en person holder op med at arbejde. En fri beslutning, ikke en lovbestemt alder, og det primære håndtag når scenarier sammenlignes.
+Den alder, en person holder op med at arbejde. En fri beslutning, ikke en lovbestemt alder, og det primære håndtag når scenarier sammenlignes.
 _Avoid_: Pensionsalder, pensionering, tilbagetrækning
 
 **Pensionsudbetalingsalder** · `PayoutAge`:

@@ -74,11 +74,11 @@ Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog 
 
 ## Efterladtescenarie (dødsfald)
 
-**Status:** Udskudt til efter v1. `Person` har et slutår fra dag ét, så mekanikken kan slås til uden at rive domænemodellen op.
+**Status:** Delvist bygget, resten udskudt til efter v1. Jf. [ADR-0030](./adr/0030-en-persons-horisont-stopper-hendes-egen-indkomst-ikke-husstandens-udgifter-eller-hendes-beholdninger.md) stopper en persons indtægtsposter, folkepension og livrenteydelse allerede ved hendes egen `horizon`. Det er en tilnærmelse og ikke en modellering af dødsfaldet selv: ingen enlig-sats, intet udgiftsfald, og beholdninger fortsætter uændret.
 
-**Hvorfor det betyder noget:** Med 12 års aldersforskel og kvinders højere levealder er det mest sandsynlige forløb, at hustruen står alene i cirka 18 år. Ved dødsfald ophører den livsvarige livrente, ATP og folkepensionen for afdøde på én gang, mens udgifterne kun falder til omkring 70 %. Den efterlevendes folkepension skifter til enlig-sats: højere tillæg, men aftrapningsgrænsen falder fra 198.800 til 99.200 kr.
+**Hvorfor det betyder noget:** Med 12 års aldersforskel og kvinders højere levealder er det mest sandsynlige forløb, at hustruen står alene i en årrække. Ved et reelt dødsfald falder udgifterne kun til omkring 70 %, og den efterlevendes folkepension skifter til enlig-sats: højere tillæg, men aftrapningsgrænsen falder fra 198.800 til 99.200 kr. Ingen af de to er bygget — det, der er bygget, er alene at afdødes egne strømme stopper.
 
-**Hvad der skal bygges, når det tages op:** Livrentens ophør og eventuel garantiperiode eller ægtefælledækning, folkepensionens enlig-satser med den lavere aftrapningsgrænse, ATP's ophør, og behandlingen af restsaldi. En billig forenkling: antag at den efterlevende overtager rateudbetalingerne og beskattes af dem som almindelig indkomst — så undgås 40 %-afgiften i det almindelige tilfælde.
+**Hvad der mangler at blive bygget, når det tages op:** Overførsel af afdødes beholdninger til den efterlevende (uskiftet bo), med den efterfølgende skattebehandling og aktiesparekontoens `UniquePerPerson`-kollision, hvis begge allerede har én. Folkepensionens enlig-satser med den lavere aftrapningsgrænse og udgifternes fald til ca. 70 %. En billig forenkling for en ratepension, der ikke er udbetalt til ende: antag at den efterlevende overtager rateudbetalingerne og beskattes af dem som almindelig indkomst — så undgås 40 %-afgiften i det almindelige tilfælde.
 
 **Tidsfølsomhed:** Ægtefælledækning på en livrente skal købes, før udbetalingen starter, og kan ikke tilføjes bagefter. Beslutningen skal derfor være regnet igennem inden den ældste fylder 60.
 
