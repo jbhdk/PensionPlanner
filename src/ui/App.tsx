@@ -35,8 +35,10 @@ function download(contents: string, filename: string): void {
     jf. issue #13 — den har sin egen vej tilbage til Årstabellen. */
 type ResultView = 'Planner' | 'YearTable' | 'YearExplanation'
 
-/** Fladen: topbjælken, navigatoren til venstre, resultatspalten til højre og
-    inspektørskuffen, der glider ind over resultatet, når en linje vælges.
+/** Fladen: topbjælken, navigatoren til venstre, resultatspalten i midten og
+    inspektørskuffen til højre — en fast tredje spalte, der viser planens
+    egne felter, når intet andet er valgt, og skifter til det valgte, når
+    man klikker en linje i navigatoren.
 
     Der er ingen beregn-knap. `simulate` er en ren funktion over en håndfuld
     beholdninger og godt tres år, så årsrækken regnes om ved hver ændring —
@@ -91,11 +93,12 @@ export function App({
       steder.
 
       Alt, der pegede på den kasserede plan, følger med: en markering på et
-      objekt, der ikke længere findes, ville lade skuffen stå tom og åben, og
-      forklar-året ville slå et år op i en plan, der er væk — ligger året
-      uden for den nye horisont, er opslaget et nedbrud. Enheden bliver
-      stående: den siger, hvordan brugeren læser tal, ikke hvad planen
-      indeholder.
+      objekt, der ikke længere findes, ville lade skuffen blive stående på et
+      objekt, der er væk, i stedet for at falde tilbage på den nye plans egne
+      felter, jf. ADR-0035 — og forklar-året ville slå et år op i en plan,
+      der er væk — ligger året uden for den nye horisont, er opslaget et
+      nedbrud. Enheden bliver stående: den siger, hvordan brugeren læser tal,
+      ikke hvad planen indeholder.
 
       Autogemmet skriver ved næste tegning, så det gemte er væk i samme
       øjeblik. Derfor stilles spørgsmålet før dette kald og ikke her. */
@@ -229,7 +232,7 @@ export function App({
         </span>
       </header>
 
-      <div className={'spalter' + (selected ? ' med-skuffe' : '')}>
+      <div className="spalter">
         <div className="spalte navigatorspalte">
           <Navigator
             plan={plan}
@@ -333,17 +336,15 @@ export function App({
           )}
         </div>
 
-        {selected && (
-          <aside className="skuffe" aria-label="Inspektør">
-            <Inspector
-              plan={plan}
-              years={years}
-              selected={selected}
-              onChange={setPlan}
-              onClose={() => setSelected(null)}
-            />
-          </aside>
-        )}
+        <aside className="spalte skuffe" aria-label="Inspektør">
+          <Inspector
+            plan={plan}
+            years={years}
+            selected={selected}
+            onChange={setPlan}
+            onClose={() => setSelected(null)}
+          />
+        </aside>
       </div>
     </div>
   )

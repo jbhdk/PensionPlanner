@@ -4050,19 +4050,21 @@ describe('fladen', () => {
     expect(bufferBaand.getAttribute('fill-opacity')).toBe('0.28')
   })
 
-  it('lukker inspektøren igen, når der klikkes på den samme legend en gang til', async () => {
+  it('lader inspektøren falde tilbage på planens felter, når der klikkes på den samme legend en gang til', async () => {
     const user = userEvent.setup()
     const plan = aPlanWithSecondHolding()
     render(<App initialPlan={plan} />)
 
     const graf = screen.getByRole('img', { name: 'Formuegraf' }).closest('.formuegraf')!
     const legendKnap = within(graf as HTMLElement).getByRole('button', { name: 'Anden beholdning' })
+    const skuffe = screen.getByRole('complementary', { name: 'Inspektør' })
 
     await user.click(legendKnap)
-    expect(screen.getByRole('complementary', { name: 'Inspektør' })).toBeTruthy()
+    expect(within(skuffe).getByText('Anden beholdning')).toBeTruthy()
 
     await user.click(legendKnap)
-    expect(screen.queryByRole('complementary', { name: 'Inspektør' })).toBeNull()
+    expect(within(skuffe).queryByText('Anden beholdning')).toBeNull()
+    expect(within(skuffe).getByText(plan.name)).toBeTruthy()
 
     // Med intet valgt skal alle bånd stå med samme styrke igen.
     const andenBaand = graf.querySelector('path[data-holding="anden-beholdning"]')!
@@ -4234,23 +4236,24 @@ describe('fladen', () => {
       expect(screen.getByText(/ingen fortrydelse/i)).toBeTruthy()
     })
 
-    it('lukker skuffen og forlader forklar-året, når planen er kasseret', async () => {
+    it('lader skuffen falde tilbage på planens felter og forlader forklar-året, når planen er kasseret', async () => {
       // En markering på en post, der ikke længere findes, ville lade skuffen
-      // stå tom og åben og tage plads fra resultatet; og forklar-året ville
-      // forklare et år i en plan, der er væk — er året uden for den nye
-      // horisont, er opslaget et nedbrud.
+      // blive stående på et objekt, der er væk, i stedet for at falde
+      // tilbage på den nye plans egne felter, jf. ADR-0035; og forklar-året
+      // ville forklare et år i en plan, der er væk — er året uden for den
+      // nye horisont, er opslaget et nedbrud.
       const user = userEvent.setup()
       render(<App initialPlan={aThreeYearPlan()} />)
 
       await user.click(navigatorButton(/Faste udgifter/))
-      expect(document.querySelector('.skuffe')).toBeTruthy()
+      expect(document.querySelector('.skuffe .titel')?.textContent).toContain('Faste udgifter')
       await showYearTable(user)
       await explainYear(user, 2027)
 
       await user.click(iTopbjaelken().getByRole('button', { name: 'Slet alt' }))
       await user.click(iBekraeftelsen().getByRole('button', { name: 'Slet alt' }))
 
-      expect(document.querySelector('.skuffe')).toBeNull()
+      expect(document.querySelector('.skuffe .titel')?.textContent).toContain('Min plan')
       expect(screen.getByRole('button', { name: 'Planlæggeren', pressed: true })).toBeTruthy()
       expect(document.querySelector('.hovedgraf-plads [aria-label="Formuegraf"]')).toBeTruthy()
     })

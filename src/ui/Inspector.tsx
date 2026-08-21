@@ -112,53 +112,55 @@ export function Inspector({
   onChange: (plan: Plan) => void
   onClose: () => void
 }) {
-  if (selected === null) return null
+  // Skuffen er en fast spalte og altid synlig, jf. ADR-0035 — intet valgt
+  // falder derfor tilbage på planens egne felter i stedet for at stå tom.
+  const target = selected ?? { kind: 'plan' as const }
 
   return (
     <>
       <div className="spaltehoved">Inspektør</div>
       <div className="inspektor">
-        {selected.kind === 'plan' && (
+        {target.kind === 'plan' && (
           <PlanFields plan={plan} onChange={onChange} onClose={onClose} />
         )}
-        {selected.kind === 'person' && (
+        {target.kind === 'person' && (
           <PersonFields
             plan={plan}
-            id={selected.id}
+            id={target.id}
             onChange={onChange}
             onClose={onClose}
           />
         )}
-        {selected.kind === 'holding' && (
+        {target.kind === 'holding' && (
           <HoldingFields
             plan={plan}
-            id={selected.id}
+            id={target.id}
             onChange={onChange}
             onClose={onClose}
           />
         )}
-        {selected.kind === 'entry' && (
+        {target.kind === 'entry' && (
           <EntryFields
             plan={plan}
             years={years}
-            id={selected.id}
+            id={target.id}
             onChange={onChange}
             onClose={onClose}
           />
         )}
-        {selected.kind === 'contribution' && (
+        {target.kind === 'contribution' && (
           <ContributionFields
             plan={plan}
             years={years}
-            id={selected.id}
+            id={target.id}
             onChange={onChange}
             onClose={onClose}
           />
         )}
-        {selected.kind === 'transfer' && (
+        {target.kind === 'transfer' && (
           <TransferFields
             plan={plan}
-            id={selected.id}
+            id={target.id}
             onChange={onChange}
             onClose={onClose}
           />

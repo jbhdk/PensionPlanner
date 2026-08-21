@@ -11,11 +11,12 @@ import { WealthChart } from './WealthChart'
 export type MainGraph = 'Wealth' | 'Fordeling' | 'Overskud'
 const GRAPHS: MainGraph[] = ['Wealth', 'Fordeling', 'Overskud']
 
-/** Graf-laget: én hovedgraf øverst, to mini-grafer side om side nedenunder,
-    jf. ADR-0033. Alle tre er synlige samtidig — modsat den tidligere
-    omskifter, der viste én ad gangen. Klikker man en mini-graf, bytter den
-    plads med hovedgrafen; den anden mini rører sig ikke. De to mini-pladser
-    har derfor ingen egen identitet, kun de tre grafer har.
+/** Graf-laget: én hovedgraf til venstre, to mini-grafer stablet i en søjle
+    til højre, jf. ADR-0034 (afløser arrangementet fra ADR-0033). Alle tre er
+    synlige samtidig — modsat den tidligere omskifter, der viste én ad
+    gangen. Klikker man en mini-graf, bytter den plads med hovedgrafen; den
+    anden mini rører sig ikke. De to mini-pladser har derfor ingen egen
+    identitet, kun de tre grafer har.
 
     `mainGraph` er løftet til den ejende komponent, ligesom `selected` er
     det for `WealthChart` — så et helt kasseret plan nulstiller den samme
