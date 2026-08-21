@@ -424,6 +424,168 @@ describe('Timeline', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
+  it('viser ét erhvervsophørs-håndtag pr. person, placeret ved personens workEndAge', () => {
+    const plan = aTwoPersonPlan()
+
+    const { container } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />,
+    )
+
+    // Jesper: født 1973, ophør 58 → 2031. Anne: født 1975, ophør 62 → 2037.
+    // Planens start er 2026, 18 px pr. år.
+    const jesper = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
+    const anne = container.querySelector('.tl-ophoer-greb[data-person="anne"]') as HTMLElement
+    expect(jesper.style.left).toBe(`${(2031 - 2026) * 18}px`)
+    expect(anne.style.left).toBe(`${(2037 - 2026) * 18}px`)
+  })
+
+  it('kalder onChange via withPerson med den nye workEndAge, når erhvervsophørs-håndtaget trækkes', () => {
+    const plan = aPlan()
+    const onChange = vi.fn()
+
+    const { container } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+    )
+
+    const handle = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
+    fireEvent.mouseDown(handle, { clientX: 0 })
+    fireEvent.mouseMove(window, { clientX: 3 * 18 })
+
+    expect(onChange).toHaveBeenCalledTimes(1)
+    const next = onChange.mock.calls[0]![0] as Plan
+    expect(next.household.persons[0]).toMatchObject({ workEndAge: 61 })
+  })
+
+  it('kalder ikke onChange for erhvervsophørs-håndtaget, før musen har flyttet sig et helt snappet år', () => {
+    const plan = aPlan()
+    const onChange = vi.fn()
+
+    const { container } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+    )
+
+    const handle = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
+    fireEvent.mouseDown(handle, { clientX: 0 })
+    // Under halvdelen af et år på 18px-skalaen — runder til nul.
+    fireEvent.mouseMove(window, { clientX: 8 })
+
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('flytter en post, hvis endepunkt er låst til erhvervsophør, når en efterfølgende genrendering viser den nye plan', () => {
+    // Jesper: workEndAge 58, birthMonth 6 → 'to'-rollen løser til 2030 (året
+    // før erhvervsophørsåret 2031, jf. ADR-0031). Lønnen løber fra planens
+    // start (åbent) til erhvervsophør (låst).
+    const plan = aPlan({
+      entries: [
+        aSalary({
+          amountInRealKroner: 600_000,
+          period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+        }),
+      ],
+    })
+    const onChange = vi.fn()
+
+    const { container, rerender } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+    )
+
+    const handle = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
+    fireEvent.mouseDown(handle, { clientX: 0 })
+    fireEvent.mouseMove(window, { clientX: 3 * 18 })
+
+    const nextPlan = onChange.mock.calls[0]![0] as Plan
+    rerender(<Timeline plan={nextPlan} selected={null} onSelect={() => {}} onChange={onChange} />)
+
+    // Ny workEndAge 61 → 'to'-rollen løser til 2033.
+    const box = screen.getByRole('button', { name: 'Løn' })
+    expect(box.style.width).toBe(`${(2033 - 2026 + 1) * 18}px`)
+  })
+
+  it('lader en anden posts kalenderårsforankrede periode stå urørt, når erhvervsophørs-håndtaget trækkes', () => {
+    const plan = aPlan({
+      entries: [
+        aSalary({
+          amountInRealKroner: 600_000,
+          period: { anchor: 'CalendarYear', from: 2030, to: 2035 },
+        }),
+      ],
+    })
+    const onChange = vi.fn()
+
+    const { container, rerender } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+    )
+
+    const handle = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
+    fireEvent.mouseDown(handle, { clientX: 0 })
+    fireEvent.mouseMove(window, { clientX: 3 * 18 })
+
+    const nextPlan = onChange.mock.calls[0]![0] as Plan
+    expect(nextPlan.entries[0]).toMatchObject({ period: { from: 2030, to: 2035 } })
+
+    rerender(<Timeline plan={nextPlan} selected={null} onSelect={() => {}} onChange={onChange} />)
+    const box = screen.getByRole('button', { name: 'Løn' })
+    expect(box.style.left).toBe(`${(2030 - 2026) * 18}px`)
+  })
+
+  it('viser én lodret erhvervsophørslinje pr. person, ved samme x-position som håndtaget', () => {
+    const plan = aTwoPersonPlan()
+
+    const { container } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />,
+    )
+
+    const lines = container.querySelectorAll('.tl-ophoer')
+    expect(lines).toHaveLength(2)
+
+    const jesperLine = container.querySelector('.tl-ophoer[data-person="jesper"]') as HTMLElement
+    const jesperHandle = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
+    expect(jesperLine.style.left).toBe(jesperHandle.style.left)
+  })
+
+  it('holder op med at kalde onChange for erhvervsophørs-håndtaget, efter museknappen er sluppet', () => {
+    const plan = aPlan()
+    const onChange = vi.fn()
+
+    const { container } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+    )
+
+    const handle = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
+    fireEvent.mouseDown(handle, { clientX: 0 })
+    fireEvent.mouseMove(window, { clientX: 18 })
+    fireEvent.mouseUp(window)
+    onChange.mockClear()
+    fireEvent.mouseMove(window, { clientX: 36 })
+
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('klemmer erhvervsophøret til [0, horizon], ligesom Inspektørens Erhvervsophør-felt', () => {
+    // Jesper: workEndAge 58, horizon 90 — et træk på 40 år ville give 98,
+    // over horisonten.
+    const plan = aPlan()
+    const onChange = vi.fn()
+
+    const { container } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+    )
+
+    const handle = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
+    fireEvent.mouseDown(handle, { clientX: 0 })
+    fireEvent.mouseMove(window, { clientX: 40 * 18 })
+
+    const next = onChange.mock.calls[onChange.mock.calls.length - 1]![0] as Plan
+    expect(next.household.persons[0]).toMatchObject({ workEndAge: 90 })
+
+    // Yderligere museflytning inden for det klemte område kalder ikke
+    // onChange igen, fordi den opløste værdi ikke ændrer sig.
+    onChange.mockClear()
+    fireEvent.mouseMove(window, { clientX: 41 * 18 })
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('markerer den valgte post, men ingen af de andre', () => {
     const plan = aPlan({
       entries: [aSalary({ amountInRealKroner: 600_000 }), anExpense({ amountInRealKroner: 300_000 })],

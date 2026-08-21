@@ -7,6 +7,7 @@ import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
 import { applyTimelineDrag } from './timelineDrag'
 import type { TimelineDragEdge } from './timelineDrag'
+import { withPerson } from './planEdits'
 
 /** Gruppernes danske titler, samme opdeling som Navigatorens, jf. ADR-0036
     og mock-uppens `GRUPPER_T`. Rent visningsnavn og ikke et glossaropslag —
@@ -25,6 +26,16 @@ const YEAR_WIDTH = 18
 
 /** Højde pr. pakket række, samme værdi som mock-uppens `RAEKKE_H`. */
 const ROW_HEIGHT = 24
+
+/** Højde pr. akserække (kalenderår og hver persons alder), matcher
+    `.tl-akse-raekke`s faste CSS-højde. */
+const AXIS_ROW_HEIGHT = 18
+
+/** Højde af en gruppes overskrift, matcher `.tl-gruppe-hoved`s faste
+    CSS-højde, samme værdi som mock-uppens `GRUPPE_HOVED_H`. Erhvervsophørs-
+    linjens fulde udstrækning regnes ud fra denne og `ROW_HEIGHT`, ligesom
+    mock-uppens `tlIndhold` regner sin `samlet`-højde. */
+const GROUP_HEADER_HEIGHT = 25
 
 /** Håndtagets bredde, samme værdi som mock-uppens `.tl-haandtag`. */
 const HANDLE_WIDTH = 6
@@ -103,11 +114,15 @@ function ageMarks(person: { birthYear: number; horizon: number }): number[] {
     et helt tag beregnes mod planen dér og ikke mod den seneste — ellers ville
     afrundingens rest fra tidligere museflytninger snige sig med ind, jf.
     ADR-0036 og mock-uppens `OVERSTYRING`. */
-type Drag = {
-  item: TimelineItem
-  edge: TimelineDragEdge
-  startX: number
-  startPlan: Plan
+type Drag =
+  | { kind: 'item'; item: TimelineItem; edge: TimelineDragEdge; startX: number; startPlan: Plan }
+  | { kind: 'person'; personId: string; startX: number; startPlan: Plan }
+
+/** Klemmer erhvervsophøret til samme grænser som Inspektørens `NumberField`
+    for `Person.workEndAge` (`bounds={{ min: 0, max: person.horizon }}`) —
+    håndtaget skal opføre sig præcis som det felt, jf. issue #61. */
+function clampWorkEndAge(age: number, horizon: number): number {
+  return Math.min(Math.max(age, 0), horizon)
 }
 
 /** Tidslinjen: bokse, akse, folding, valg og træk, jf. ADR-0036. Tegner ud fra
@@ -135,10 +150,23 @@ export function Timeline({
   useEffect(() => {
     if (!drag) return
     const onMouseMove = (event: MouseEvent) => {
-      const deltaYears = Math.round((event.clientX - drag.startX) / YEAR_WIDTH)
-      if (deltaYears === lastDelta.current) return
-      lastDelta.current = deltaYears
-      onChange(applyTimelineDrag(drag.startPlan, drag.item, drag.edge, deltaYears))
+      const rawDelta = Math.round((event.clientX - drag.startX) / YEAR_WIDTH)
+      if (drag.kind === 'item') {
+        if (rawDelta === lastDelta.current) return
+        lastDelta.current = rawDelta
+        onChange(applyTimelineDrag(drag.startPlan, drag.item, drag.edge, rawDelta))
+        return
+      }
+      const person = drag.startPlan.household.persons.find((p) => p.id === drag.personId)!
+      const workEndAge = clampWorkEndAge(person.workEndAge + rawDelta, person.horizon)
+      // Klemningen kan gøre flere `rawDelta`-værdier i træk til samme
+      // resultat — sammenlignes derfor mod den faktiske aldersforskydning og
+      // ikke mod `rawDelta` selv, så commit-kun-ved-værdiskifte holder også
+      // ved horisontens grænse.
+      const effectiveDelta = workEndAge - person.workEndAge
+      if (effectiveDelta === lastDelta.current) return
+      lastDelta.current = effectiveDelta
+      onChange(withPerson(drag.startPlan, drag.personId, (p) => ({ ...p, workEndAge })))
     }
     const onMouseUp = () => setDrag(null)
     window.addEventListener('mousemove', onMouseMove)
@@ -153,7 +181,15 @@ export function Timeline({
     return (event: ReactMouseEvent) => {
       event.stopPropagation()
       lastDelta.current = 0
-      setDrag({ item, edge, startX: event.clientX, startPlan: plan })
+      setDrag({ kind: 'item', item, edge, startX: event.clientX, startPlan: plan })
+    }
+  }
+
+  function startPersonDrag(personId: string) {
+    return (event: ReactMouseEvent) => {
+      event.stopPropagation()
+      lastDelta.current = 0
+      setDrag({ kind: 'person', personId, startX: event.clientX, startPlan: plan })
     }
   }
   // Foldning er tidslinjens egen tilstand, uafhængig af Navigatorens
@@ -161,6 +197,15 @@ export function Timeline({
   const [folded, setFolded] = useState<Partial<Record<TimelineGroupName, boolean>>>({})
 
   const contentWidth = `${(end - start + 1) * YEAR_WIDTH}px`
+  // Erhvervsophørslinjens fulde udstrækning: aksens højde (kalenderåret plus
+  // én række pr. person) og summen af de synlige gruppers højde, en foldet
+  // gruppe bidrager kun sin overskrift, jf. mock-uppens `tlIndhold`.
+  const axisHeight = AXIS_ROW_HEIGHT * (1 + plan.household.persons.length)
+  const groupsHeight = groups.reduce(
+    (sum, group) =>
+      sum + GROUP_HEADER_HEIGHT + (folded[group.name] ? 0 : group.rowCount * ROW_HEIGHT),
+    0,
+  )
 
   return (
     <div className="tidslinje-lag">
@@ -196,7 +241,28 @@ export function Timeline({
                   </span>
                 ))}
                 <span className="tl-akse-navn">{person.name.slice(0, 1)}</span>
+                <div
+                  className="tl-ophoer-greb"
+                  data-person={person.id}
+                  style={{ left: `${(person.birthYear + person.workEndAge - start) * YEAR_WIDTH}px` }}
+                  onMouseDown={startPersonDrag(person.id)}
+                >
+                  {person.name} · {person.workEndAge}
+                </div>
               </div>
+            ))}
+          </div>
+          <div
+            className="tl-ophoer-linjer"
+            style={{ top: `${axisHeight}px`, height: `${groupsHeight}px` }}
+          >
+            {plan.household.persons.map((person) => (
+              <div
+                key={person.id}
+                className="tl-ophoer"
+                data-person={person.id}
+                style={{ left: `${(person.birthYear + person.workEndAge - start) * YEAR_WIDTH}px` }}
+              />
             ))}
           </div>
           {groups.map((group) => (

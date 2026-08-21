@@ -1551,6 +1551,51 @@ table.aar td .fremskrevet {
   padding-left: 2px;
 }
 
+/* Erhvervsophørs-håndtaget: sidder på personens egen aldersrække, så det er
+   entydigt hvis greb der hører til hvem. Opfører sig som Inspektørens
+   Erhvervsophør-felt, jf. issue #61. */
+.tl-ophoer-greb {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  z-index: 5;
+  background: var(--accent);
+  opacity: 0.85;
+  color: var(--paa-accent);
+  font-size: 9.5px;
+  font-family: var(--f-tal);
+  padding: 1px 6px;
+  border-radius: 0 0 4px 4px;
+  cursor: ew-resize;
+  white-space: nowrap;
+}
+
+.tl-ophoer-greb:hover {
+  opacity: 1;
+}
+
+/* Den lodrette linje ned gennem grupperne, så de poster der følger
+   erhvervsophøret kan ses at flugte med håndtaget. Selve linjen bærer intet
+   mærkat — det sidder i den faste akse ovenfor, jf. `.tl-ophoer-greb`, så
+   det aldrig lægger sig oven i en gruppeoverskrift, uanset hvor langt ned
+   linjen når. */
+.tl-ophoer-linjer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.tl-ophoer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0.8;
+}
+
 .tl-gruppe {
   border-bottom: 1px solid var(--linje);
 }
@@ -1561,6 +1606,7 @@ table.aar td .fremskrevet {
   z-index: 3;
   width: fit-content;
   min-width: 100%;
+  height: 25px;
   display: flex;
   align-items: center;
   gap: 8px;
