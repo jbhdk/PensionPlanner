@@ -1614,6 +1614,37 @@ table.aar td .fremskrevet {
   outline-offset: 1px;
 }
 
+/* Håndtaget i hver ende — kun tegnet, når endepunktet er frit. Et låst eller
+   åbent endepunkt har intet håndtag, jf. issue #60. */
+.tl-haandtag {
+  position: absolute;
+  top: 3px;
+  height: 18px;
+  width: 6px;
+  cursor: ew-resize;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.tl-haandtag.fra {
+  border-radius: 3px 0 0 3px;
+}
+
+.tl-haandtag.til {
+  border-radius: 0 3px 3px 0;
+}
+
+.tl-haandtag:hover {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.tl-boks.krop-fri {
+  cursor: grab;
+}
+
+.tl-boks.krop-fri:active {
+  cursor: grabbing;
+}
+
 /* Engangspost eller omsætningspunkt: ét tidspunkt, tegnet som en rombe uden
    udstrækning — intet at trække i to ender af. Kun romben roteres; navnet
    ved siden af skal stadig kunne læses vandret. */
