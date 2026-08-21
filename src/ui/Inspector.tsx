@@ -110,6 +110,9 @@ export function Inspector({
   years: YearResult[]
   selected: Selection
   onChange: (plan: Plan) => void
+  /** Rydder markeringen. Ingen knap kalder den længere — skuffen er en fast
+      spalte og har intet at lukke, jf. ADR-0035 — men en slettet linje må
+      ikke lade markeringen pege på noget, der er væk. */
   onClose: () => void
 }) {
   // Skuffen er en fast spalte og altid synlig, jf. ADR-0035 — intet valgt
@@ -176,10 +179,10 @@ type FieldsProps = {
   onClose: () => void
 }
 
-function PlanFields({ plan, onChange, onClose }: FieldsProps) {
+function PlanFields({ plan, onChange }: FieldsProps) {
   return (
     <>
-      <Head title={plan.name} subtitle="Det, der gælder hele forløbet" onClose={onClose} />
+      <Head title={plan.name} subtitle="Det, der gælder hele forløbet" />
       <Section title="Grundlag">
         <TextField
           label="Navn"
@@ -234,7 +237,6 @@ function PersonFields({ plan, id, onChange, onClose }: FieldsProps & { id: strin
       <Head
         title={person.name}
         subtitle={`Født ${person.birthYear} · horisont ${person.birthYear + person.horizon}`}
-        onClose={onClose}
         onDelete={
           plan.household.persons.length > 1
             ? () => {
@@ -363,7 +365,6 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
       <Head
         title={holding.name}
         subtitle="Beholdning"
-        onClose={onClose}
         onDelete={() => {
           onChange(removeHolding(plan, id))
           onClose()
@@ -766,7 +767,6 @@ function EntryFields({
       <Head
         title={entry.name}
         subtitle={`Post · ${income ? 'indtægt' : 'udgift'}`}
-        onClose={onClose}
         onDelete={() => {
           onChange(removeEntry(plan, id))
           onClose()
@@ -1131,7 +1131,6 @@ function ContributionFields({
       <Head
         title={contribution.name}
         subtitle="Indbetaling"
-        onClose={onClose}
         onDelete={() => {
           onChange(removeContribution(plan, id))
           onClose()
@@ -1429,7 +1428,6 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
       <Head
         title={transfer.name}
         subtitle={label.slags}
-        onClose={onClose}
         onDelete={() => {
           onChange(removeTransfer(plan, id))
           onClose()
@@ -1508,14 +1506,12 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
 function Head({
   title,
   subtitle,
-  onClose,
   onDelete,
   deleteLabel,
   deleteHint,
 }: {
   title: string
   subtitle: string
-  onClose: () => void
   /** Udeladt betyder, at objektet ikke kan slettes herfra — Person udelader
       den, når husstanden kun har én tilbage. */
   onDelete?: () => void
@@ -1528,30 +1524,19 @@ function Head({
     <>
       <div className="titel">
         {title}
-        <span className="handlinger">
-          {onDelete && (
-            <>
-              <button
-                type="button"
-                className="slet"
-                aria-label={deleteLabel}
-                title={deleteHint ? `${deleteLabel} — ${deleteHint}` : deleteLabel}
-                onClick={onDelete}
-              >
-                <TrashIcon />
-              </button>
-              <span className="skl" aria-hidden="true" />
-            </>
-          )}
-          <button
-            type="button"
-            className="luk"
-            aria-label="Luk inspektøren"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </span>
+        {onDelete && (
+          <span className="handlinger">
+            <button
+              type="button"
+              className="slet"
+              aria-label={deleteLabel}
+              title={deleteHint ? `${deleteLabel} — ${deleteHint}` : deleteLabel}
+              onClick={onDelete}
+            >
+              <TrashIcon />
+            </button>
+          </span>
+        )}
       </div>
       <div className="undertitel">{subtitle}</div>
     </>

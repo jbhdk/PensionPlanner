@@ -431,22 +431,6 @@ body {
   gap: 10px;
 }
 
-.inspektor .luk {
-  padding: 0 4px;
-  font: inherit;
-  font-size: 15px;
-  color: var(--muted);
-  background: none;
-  border: 0;
-  cursor: pointer;
-}
-
-.inspektor .luk:hover {
-  color: var(--ink);
-}
-
-/* Slet-knappen er skilt fra luk med en lodret streg, jf. de to knappers
-   forskellige alvor — den ene lukker et vindue, den anden fjerner data. */
 .inspektor .slet {
   padding: 2px;
   background: none;
@@ -464,12 +448,6 @@ body {
   width: 15px;
   height: 15px;
   display: block;
-}
-
-.inspektor .skl {
-  width: 1px;
-  height: 13px;
-  background: var(--linje);
 }
 
 .inspektor > .undertitel {

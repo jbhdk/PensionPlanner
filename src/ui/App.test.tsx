@@ -2094,7 +2094,7 @@ describe('fladen', () => {
     await user.clear(beloeb)
     await user.type(beloeb, '75000')
 
-    await user.click(screen.getByRole('button', { name: /Luk inspektøren/ }))
+    await user.tab()
     expect(
       screen.getByRole('button', { name: /Overførslen.*75.000/ }),
     ).toBeTruthy()
@@ -2134,7 +2134,7 @@ describe('fladen', () => {
     // Rækken i navigatoren bærer flytningens navn og ikke dens ender, så
     // byttet ses i skuffens to vælgere ovenfor. Rækken skal stadig stå der
     // med sit beløb.
-    await user.click(screen.getByRole('button', { name: /Luk inspektøren/ }))
+    await user.tab()
     expect(
       screen.getByRole('button', { name: /Overførslen.*50.000/ }),
     ).toBeTruthy()
