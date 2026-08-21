@@ -18,6 +18,15 @@ export function yearAtAge(person: Person, age: number): SimulationYear {
     endepunkt sat til `'WorkEndAge'` `owner.workEndAge`, så perioden flytter
     sig, når erhvervsophørsalderen ændres, uden at posten selv redigeres.
 
+    `'WorkEndAge'` løses forskelligt som `from` og som `to`: erhvervsophørsåret
+    er det første år uden arbejde, aldrig det sidste med. Som `from` regnes
+    året med — en udbetalingsplan, der følger erhvervsophør, betaler sin
+    første rate det år. Som `to` regnes året *ikke* med — en løn eller en
+    overførsel, der følger erhvervsophør, falder sidste gang året før. Uden
+    skellet ville samme år bære en fuld årsløn og en fuld pensionsrate på én
+    gang. En fast alder eller et kalenderår er brugerens eget tal og læses
+    ens i begge roller.
+
     Et udeladt endepunkt bliver ved med at være udeladt — det betyder "fra
     planens start" henholdsvis "til horisontens slut" og er ikke et årstal,
     der kan regnes ud.
@@ -37,16 +46,18 @@ export function periodBounds(
     return { from: period.from, to: period.to }
   }
   return {
-    from: resolveAgeBound(period.from, owner),
-    to: resolveAgeBound(period.to, owner),
+    from: resolveAgeBound(period.from, owner, 'from'),
+    to: resolveAgeBound(period.to, owner, 'to'),
   }
 }
 
 function resolveAgeBound(
   bound: AgeBound | undefined,
   owner: Person,
+  role: 'from' | 'to',
 ): SimulationYear | undefined {
   if (bound === undefined) return undefined
-  const age = bound === 'WorkEndAge' ? owner.workEndAge : bound
-  return yearAtAge(owner, age)
+  if (bound !== 'WorkEndAge') return yearAtAge(owner, bound)
+  const year = yearAtAge(owner, owner.workEndAge)
+  return role === 'to' ? year - 1 : year
 }

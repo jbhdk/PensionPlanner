@@ -395,12 +395,13 @@ describe('simulate', () => {
     const sent = simulateChecked(stopperSent)
 
     // Født 1973: alder 58 falder i 2031, alder 65 i 2038 — samme post, ingen
-    // redigering, kun workEndAge der flytter.
-    expect(tidligt.find((y) => y.year === 2031)!.income).toBeCloseTo(600_000, 6)
-    expect(tidligt.find((y) => y.year === 2032)!.income).toBe(0)
-    expect(sent.find((y) => y.year === 2031)!.income).toBeCloseTo(600_000, 6)
-    expect(sent.find((y) => y.year === 2038)!.income).toBeCloseTo(600_000, 6)
-    expect(sent.find((y) => y.year === 2039)!.income).toBe(0)
+    // redigering, kun workEndAge der flytter. `to` regner erhvervsophørsåret
+    // ikke med, så sidste lønår er året før.
+    expect(tidligt.find((y) => y.year === 2030)!.income).toBeCloseTo(600_000, 6)
+    expect(tidligt.find((y) => y.year === 2031)!.income).toBe(0)
+    expect(sent.find((y) => y.year === 2030)!.income).toBeCloseTo(600_000, 6)
+    expect(sent.find((y) => y.year === 2037)!.income).toBeCloseTo(600_000, 6)
+    expect(sent.find((y) => y.year === 2038)!.income).toBe(0)
   })
 
   it('fremskriver en udgift fra dagens kroner til løbende priser efter planens inflation', () => {
@@ -2331,9 +2332,10 @@ describe('indbetalinger', () => {
     ])
   })
 
-  it('lader bidraget ophøre af sig selv året efter erhvervsophør', () => {
+  it('lader bidraget ophøre af sig selv fra erhvervsophørsåret', () => {
     // Bidraget er ikke rørt: det har ingen periode at komme ud af trit med
-    // lønnens. Lønposten løber til `WorkEndAge`, og bidraget følger med.
+    // lønnens. Lønposten løber til `WorkEndAge`, som ikke tæller
+    // erhvervsophørsåret med, og bidraget følger med.
     const plan = aPlanWithPension({
       balance: 1_000_000,
       birthYear: 1973,
@@ -2354,8 +2356,8 @@ describe('indbetalinger', () => {
     const contributionsIn = (year: number) =>
       years.find((y) => y.year === year)!.contributions
 
-    expect(contributionsIn(2031)).toHaveLength(1)
-    expect(contributionsIn(2032)).toHaveLength(0)
+    expect(contributionsIn(2030)).toHaveLength(1)
+    expect(contributionsIn(2031)).toHaveLength(0)
   })
 
   it('belaster bufferen nettobeløbet og lader AM-delen ligge i årets skat', () => {
@@ -3110,7 +3112,8 @@ describe('indbetalinger', () => {
               source: 'free-assets',
               to: 'aldersopsparing',
               amountInRealKroner: 50_000,
-              period: { anchor: 'PersonAge', from: 'WorkEndAge', to: 'WorkEndAge' },
+              period: { anchor: 'PersonAge', from: 'WorkEndAge' },
+              recurrence: { kind: 'Once' },
             }),
           ],
         })

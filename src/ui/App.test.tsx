@@ -1482,9 +1482,10 @@ describe('fladen', () => {
     expect(til.readOnly).toBe(true)
     expect(til.value).toBe('60')
 
-    // Født 1973, erhvervsophør 60 falder i 2033. Posten har intet fra-endepunkt
-    // og løber derfor fra planens start.
-    expect(screen.getByText(/Posten løber 2026–2033\./)).toBeTruthy()
+    // Født 1973, erhvervsophør 60 falder i 2033, men `Til` regner det år
+    // ikke med. Posten har intet fra-endepunkt og løber derfor fra planens
+    // start.
+    expect(screen.getByText(/Posten løber 2026–2032\./)).toBeTruthy()
   })
 
   it('lægger erhvervsophør-tilvalget på sin egen linje, ikke i enhedskolonnen', async () => {

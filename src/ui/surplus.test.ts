@@ -190,11 +190,11 @@ describe('årets overskud', () => {
     }
 
     // Testen prøver kun det, den siger, hvis planen faktisk skifter fortegn.
-    // Lønåret bærer sig selv; året efter erhvervsophøret gør ikke, for
-    // raterne begynder først som 67.
+    // Lønåret bærer sig selv; erhvervsophørsåret gør ikke, for raterne
+    // begynder først som 67.
     const yearOf = (calendar: number) => years.find((year) => year.year === calendar)!
-    expect(surplus(yearOf(2031), plan.buffer)).toBeGreaterThan(0)
-    expect(surplus(yearOf(2032), plan.buffer)).toBeLessThan(0)
+    expect(surplus(yearOf(2030), plan.buffer)).toBeGreaterThan(0)
+    expect(surplus(yearOf(2031), plan.buffer)).toBeLessThan(0)
   })
 
   it('står højere i et år med en rate end i det samme år uden', () => {

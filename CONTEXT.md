@@ -228,7 +228,7 @@ Den tidsstrækning en post er aktiv i. Formen på dens endepunkter følger `Anch
 _Avoid_: Interval, tidsrum. Forveksl den ikke med et enkelt `SimulationYear`.
 
 **Aldersendepunkt** · `AgeBound`:
-Et tidspunkt angivet ved alder: enten en fast alder, eller en henvisning til `WorkEndAge`. Bruges to steder — som endepunkt i en posts periode, og som start på en beholdnings udbetalingsplan. Sat til erhvervsophør følger punktet `Person.workEndAge` og flytter sig automatisk, uden at posten eller planen selv redigeres. Alderen behøver ikke være et helt år — folkepensionsalderen er 65,5 for én årgang og 72,5 for en anden — og hvilket kalenderår endepunktet rammer, afhænger derfor også af fødselsmåneden.
+Et tidspunkt angivet ved alder: enten en fast alder, eller en henvisning til `WorkEndAge`. Bruges to steder — som endepunkt i en posts periode, og som start på en beholdnings udbetalingsplan. Sat til erhvervsophør følger punktet `Person.workEndAge` og flytter sig automatisk, uden at posten eller planen selv redigeres. Alderen behøver ikke være et helt år — folkepensionsalderen er 65,5 for én årgang og 72,5 for en anden — og hvilket kalenderår endepunktet rammer, afhænger derfor også af fødselsmåneden. Sat til erhvervsophør regnes året med som `from` og ikke med som `to`: erhvervsophørsåret er det første år uden arbejde, aldrig det sidste med, jf. [ADR-0031](./docs/adr/0031-erhvervsophoersaaret-taeller-med-som-from-og-ikke-med-som-to.md). En fast alder læses ens i begge roller.
 _Avoid_: Aldersgrænse, tidspunkt
 
 **Indbetaling** · `Contribution`:
