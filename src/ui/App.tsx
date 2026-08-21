@@ -11,6 +11,7 @@ import { Navigator } from './Navigator'
 import type { AmountUnit } from './real'
 import type { MainGraph } from './ResultGraphs'
 import { ResultGraphs } from './ResultGraphs'
+import { Timeline } from './Timeline'
 import { YearExplanation } from './YearExplanation'
 import { YearTable } from './YearTable'
 import type { Selection } from './selection'
@@ -319,16 +320,19 @@ export function App({
                   <p>{planError}</p>
                 </div>
               ) : resultView === 'Planner' ? (
-                <ResultGraphs
-                  years={years}
-                  plan={plan}
-                  unit={unit}
-                  selected={selected}
-                  onSelect={setSelected}
-                  onSelectYear={explainYear}
-                  mainGraph={mainGraph}
-                  onMainGraphChange={setMainGraph}
-                />
+                <>
+                  <ResultGraphs
+                    years={years}
+                    plan={plan}
+                    unit={unit}
+                    selected={selected}
+                    onSelect={setSelected}
+                    onSelectYear={explainYear}
+                    mainGraph={mainGraph}
+                    onMainGraphChange={setMainGraph}
+                  />
+                  <Timeline plan={plan} selected={selected} onSelect={setSelected} onChange={setPlan} />
+                </>
               ) : (
                 <YearTable years={years} plan={plan} unit={unit} onSelectYear={explainYear} />
               )}

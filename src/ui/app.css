@@ -1454,3 +1454,202 @@ table.aar td .fremskrevet {
   border-color: var(--accent);
   color: var(--paa-accent);
 }
+
+/* ---------- tidslinjeværktøjet, jf. ADR-0036 og docs/mockup/tidslinje.css ----------
+   Under graf-laget, i den plads ADR-0034 afsatte. Egen vandret rulning og
+   egen pixel-pr.-år-skala, uafhængig af graf-lagets — se `Timeline.tsx`s
+   `YEAR_WIDTH`. */
+.tidslinje-lag {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 10px 10px;
+  background: var(--flade);
+  border: 1px solid var(--linje);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tidslinje-hoved {
+  flex: 0 0 auto;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--linje);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tidslinje-hoved .note {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+  margin-left: auto;
+}
+
+/* Rulleområdet: begge retninger for sig, uafhængigt af graf-lagets bredde og
+   x-skala. `.tl-indhold` har den fulde bredde af planens horisont i pixels,
+   så det er dette lag og ikke `.tidslinje-rul`, der ruller. */
+.tidslinje-rul {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  position: relative;
+}
+
+.tl-indhold {
+  position: relative;
+}
+
+.tl-akse {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--top);
+}
+
+.tl-akse-raekke {
+  position: relative;
+  height: 18px;
+  border-bottom: 1px solid var(--linje-svag);
+}
+
+.tl-akse-raekke.aar {
+  border-bottom: 1px solid var(--linje);
+}
+
+.tl-akse-maerke {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  transform: translateX(-50%);
+  font-family: var(--f-tal);
+  font-size: 9.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.tl-akse-raekke.aar .tl-akse-maerke {
+  color: var(--label);
+}
+
+.tl-akse-navn {
+  position: sticky;
+  left: 4px;
+  top: 0;
+  z-index: 1;
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-left: 2px;
+}
+
+.tl-gruppe {
+  border-bottom: 1px solid var(--linje);
+}
+
+.tl-gruppe-hoved {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  width: fit-content;
+  min-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8e99a6;
+  background: #1b222b;
+  border: 0;
+  cursor: pointer;
+}
+
+.tl-gruppe-hoved:hover {
+  color: var(--ink);
+}
+
+.tl-gruppe-hoved .antal {
+  color: var(--muted);
+  font-weight: 400;
+  font-family: var(--f-tal);
+}
+
+.tl-krop {
+  position: relative;
+  padding: 4px 0;
+}
+
+.tl-boks {
+  position: absolute;
+  top: 3px;
+  height: 18px;
+  border: 0;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10.5px;
+  color: #0c0f13;
+  white-space: nowrap;
+  padding: 0 5px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.tl-boks.valgt {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+/* Engangspost eller omsætningspunkt: ét tidspunkt, tegnet som en rombe uden
+   udstrækning — intet at trække i to ender af. Kun romben roteres; navnet
+   ved siden af skal stadig kunne læses vandret. */
+.tl-punkt {
+  position: absolute;
+  top: 3px;
+  width: 12px;
+  height: 18px;
+  transform: translateX(-6px);
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.tl-punkt .rombe {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 12px;
+  height: 12px;
+  transform: rotate(45deg);
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+.tl-punkt .navn {
+  position: absolute;
+  left: 14px;
+  top: 1px;
+  font-size: 10px;
+  color: var(--label);
+  white-space: nowrap;
+}
+
+.tl-punkt.valgt .rombe {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}

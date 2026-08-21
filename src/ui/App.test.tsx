@@ -313,8 +313,9 @@ function lagSats(label: string): string {
   return row.querySelectorAll('td')[2]!.textContent ?? ''
 }
 
-/** En beholdnings navn findes både som navigatorrække og som knap i
-    grafens legend — de to skal kunne skelnes, ikke kun den ene fjernes.
+/** Et objekts navn findes flere steder som en klikbar knap: navigatorrækken,
+    formuegrafens legend for en beholdning, og tidslinjens boks for alt, der
+    får en, jf. ADR-0036 — de skal kunne skelnes, ikke kun den ene findes.
     Denne henter navigatorens, som de fleste tests handler om. */
 function navigatorButton(name: string | RegExp) {
   const navigatorspalte = document.querySelector('.navigatorspalte') as HTMLElement
@@ -590,10 +591,10 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
     expect(screen.queryByLabelText(/Skattebehandling/)).toBeNull()
 
-    await user.click(screen.getByRole('button', { name: /Løn/ }))
+    await user.click(navigatorButton(/Løn/))
     expect(screen.getByLabelText(/Skattebehandling/)).toBeTruthy()
 
     // Bruttolønnen er ikke det tal, folk kalder deres løn — feltet må sige
@@ -605,7 +606,7 @@ describe('fladen', () => {
 
     // En skattefri indtægt har intet arbejdsgiverbidrag i sig, og etiketten
     // lover det ikke.
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
     expect(screen.getByLabelText('Beløb (nutidskroner)')).toBeTruthy()
   })
 
@@ -615,7 +616,7 @@ describe('fladen', () => {
       <App initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })} />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
     await user.selectOptions(screen.getByLabelText(/Retning/), 'Indtægt')
 
     const behandling = screen.getByLabelText(/Skattebehandling/) as HTMLSelectElement
@@ -637,7 +638,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Løn/ }))
+    await user.click(navigatorButton(/Løn/))
     await user.selectOptions(screen.getByLabelText(/Skattebehandling/), 'Pensionsindkomst')
 
     // Løftet om arbejdsgiverbidrag hører til arbejdsindkomsten alene — en
@@ -1224,7 +1225,7 @@ describe('fladen', () => {
       <App initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })} />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
     const forfald = screen.getByLabelText(/Forfald/) as HTMLSelectElement
     expect(forfald.value).toBe('Jævnt fordelt')
 
@@ -1238,7 +1239,7 @@ describe('fladen', () => {
     const entryRender = render(
       <App initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })} />,
     )
-    await user.click(entryRender.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
     expect(firstPeriodenFelt(entryRender.container)).toBe('Gentagelse')
     entryRender.unmount()
 
@@ -1252,9 +1253,7 @@ describe('fladen', () => {
         }}
       />,
     )
-    await user.click(
-      transferRender.getByRole('button', { name: /Overførslen/ }),
-    )
+    await user.click(navigatorButton(/Overførslen/))
     expect(firstPeriodenFelt(transferRender.container)).toBe('Gentagelse')
   })
 
@@ -1264,7 +1263,7 @@ describe('fladen', () => {
       <App initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })} />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
     expect(screen.getByLabelText(/Fra \(år\)/)).toBeTruthy()
     expect(screen.queryByLabelText(/Fra \(alder\)/)).toBeNull()
 
@@ -1280,7 +1279,7 @@ describe('fladen', () => {
       <App initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })} />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
     expect(screen.queryByLabelText(/Hvert/)).toBeNull()
 
     await user.selectOptions(screen.getByLabelText(/Gentagelse/), 'Hvert N. år')
@@ -1301,7 +1300,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
     expect(screen.getByLabelText(/Fra \(år\)/)).toBeTruthy()
     const forfaldFoer = screen.getByLabelText(/Forfald/) as HTMLSelectElement
     expect(
@@ -1339,7 +1338,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
     const til = screen.getByLabelText(/Til \(år\)/) as HTMLInputElement
     await user.type(til, '2035,')
 
@@ -1373,7 +1372,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Løn/ }))
+    await user.click(navigatorButton(/Løn/))
 
     expect(screen.getByText(/Posten falder i 2036 med 162\.889 kr\./)).toBeTruthy()
 
@@ -1393,14 +1392,14 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Løn/ }))
+    await user.click(navigatorButton(/Løn/))
     const regulering = screen.getByLabelText(/Reguleringssats/) as HTMLInputElement
     expect(regulering.value).toBe('3')
 
     await user.click(screen.getByRole('button', { name: /Ophør som 58/ }))
     expect((screen.getByLabelText(/Inflation/) as HTMLInputElement).value).toBe('2')
 
-    await user.click(screen.getByRole('button', { name: /Løn/ }))
+    await user.click(navigatorButton(/Løn/))
     await user.clear(screen.getByLabelText(/Reguleringssats/))
     await user.type(screen.getByLabelText(/Reguleringssats/), '5')
     expect((screen.getByLabelText(/Reguleringssats/) as HTMLInputElement).value).toBe('5')
@@ -1422,7 +1421,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
     await user.selectOptions(screen.getByLabelText(/Forankring/), 'Alder')
 
     const til = screen.getByLabelText(/Til \(alder\)/) as HTMLInputElement
@@ -1455,7 +1454,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
     await user.selectOptions(screen.getByLabelText(/Forankring/), 'Alder')
 
     const fra = screen.getByLabelText(/Fra \(alder\)/)
@@ -1482,7 +1481,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
     await user.selectOptions(screen.getByLabelText(/Forankring/), 'Alder')
 
     const fra = () => screen.getByLabelText(/Fra \(alder\)/) as HTMLInputElement
@@ -1600,7 +1599,7 @@ describe('fladen', () => {
 
     expect(ejer.value).toBe('Person 2')
     // Beholdningen er flyttet, ikke duplikeret.
-    const beholdninger = screen.getByRole('button', { name: /Beholdninger/ })
+    const beholdninger = navigatorButton(/Beholdninger/)
     expect(within(beholdninger).getByText('1')).toBeTruthy()
   })
 
@@ -1611,7 +1610,7 @@ describe('fladen', () => {
     )
 
     await user.click(screen.getByRole('button', { name: '+ Person' }))
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
 
     const ejer = screen.getByLabelText(/Ejer/) as HTMLSelectElement
     expect(ejer.value).toBe('Jesper')
@@ -1691,8 +1690,8 @@ describe('fladen', () => {
       />,
     )
 
-    const indtaegter = screen.getByRole('button', { name: /Indtægter/ })
-    const udgifter = screen.getByRole('button', { name: /Udgifter/ })
+    const indtaegter = navigatorButton(/Indtægter/)
+    const udgifter = navigatorButton(/Udgifter/)
 
     // Grupperne viser kun deres antal — ikke en sum, der ville blive
     // misvisende af poster med begrænset periode eller gentagelse. De
@@ -1700,8 +1699,8 @@ describe('fladen', () => {
     expect(within(indtaegter).getByText('1')).toBeTruthy()
     expect(within(udgifter).getByText('1')).toBeTruthy()
 
-    expect(screen.getByRole('button', { name: /Faste udgifter/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Løn/ })).toBeTruthy()
+    expect(navigatorButton(/Faste udgifter/)).toBeTruthy()
+    expect(navigatorButton(/Løn/)).toBeTruthy()
   })
 
   it('viser overførsler som sin egen gruppe i navigatoren, med flytningens navn i rækken', () => {
@@ -1722,7 +1721,7 @@ describe('fladen', () => {
       />,
     )
 
-    const gruppe = screen.getByRole('button', { name: /Overførsler/ })
+    const gruppe = navigatorButton(/Overførsler/)
     expect(within(gruppe).getByText('1')).toBeTruthy()
     // Rækken viser flytningens eget navn og ikke dens to ender: en etikette,
     // der læste sig selv af beholdningerne, ville skifte under brugeren,
@@ -1749,7 +1748,7 @@ describe('fladen', () => {
       />,
     )
 
-    const gruppe = screen.getByRole('button', { name: /Indbetalinger/ })
+    const gruppe = navigatorButton(/Indbetalinger/)
     expect(within(gruppe).getByText('1')).toBeTruthy()
     // Ingen sum i gruppen: en procent af en lønpost har intet kronebeløb, før
     // året er regnet, og navigatoren viser kun planen.
@@ -1951,7 +1950,7 @@ describe('fladen', () => {
       />,
     )
 
-    const gruppe = screen.getByRole('button', { name: /Indbetalinger/ })
+    const gruppe = navigatorButton(/Indbetalinger/)
     expect(within(gruppe).getByText('2')).toBeTruthy()
     expect(within(navigatorButton(/Lønbidrag/)).getByText('8,00 %')).toBeTruthy()
     expect(within(navigatorButton(/Højt loft/)).getByText('64.200')).toBeTruthy()
@@ -2084,7 +2083,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
+    await user.click(navigatorButton(/Overførslen/))
 
     expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Frie midler')
     expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Anden beholdning')
@@ -2118,7 +2117,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
+    await user.click(navigatorButton(/Overførslen/))
 
     const fra = screen.getByLabelText('Fra') as HTMLSelectElement
     expect(Array.from(fra.options).map((option) => option.value)).toEqual([
@@ -2474,7 +2473,7 @@ describe('fladen', () => {
     await user.click(screen.getByRole('button', { name: '+ Beholdning' }))
 
     expect(navigatorButton(/^Beholdning 2/)).toBeTruthy()
-    const beholdninger = screen.getByRole('button', { name: /Beholdninger/ })
+    const beholdninger = navigatorButton(/Beholdninger/)
     expect(within(beholdninger).getByText('2')).toBeTruthy()
   })
 
@@ -2515,7 +2514,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
+    await user.click(navigatorButton(/Overførslen/))
     expect(screen.getByLabelText(/Fra \(år\)/)).toBeTruthy()
 
     await user.selectOptions(screen.getByLabelText(/Gentagelse/), 'Én gang')
@@ -2547,7 +2546,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
+    await user.click(navigatorButton(/Overførslen/))
 
     const ender = () => [
       (screen.getByLabelText('Fra') as HTMLSelectElement).value,
@@ -2583,7 +2582,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
+    await user.click(navigatorButton(/Overførslen/))
 
     expect(optionsOf('Fra')).toEqual(['Frie midler', 'Anden beholdning'])
     expect(optionsOf('Til')).toEqual(['Frie midler', 'Anden beholdning'])
@@ -2615,7 +2614,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
+    await user.click(navigatorButton(/Overførslen/))
 
     expect(optionsOf('Fra')).toEqual([
       'Frie midler',
@@ -2651,7 +2650,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
+    await user.click(navigatorButton(/Overførslen/))
     await user.selectOptions(screen.getByLabelText('Fra'), 'Frie midler')
 
     expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Frie midler')
@@ -2674,7 +2673,7 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: '+ Overførsel' }))
 
-    await user.click(screen.getByRole('button', { name: /Overførsel 1/ }))
+    await user.click(navigatorButton(/Overførsel 1/))
     expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Aldersopsparing')
     expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Frie midler')
     // Ordningen er oprettet før maj 2007, så døren går op, når personen
@@ -2704,7 +2703,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
+    await user.click(navigatorButton(/Overførslen/))
 
     expect(screen.getByText('Udbetaling')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Fjern udbetaling/ })).toBeTruthy()
@@ -2723,7 +2722,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
+    await user.click(navigatorButton(/Overførslen/))
 
     expect(screen.getByText('Overførsel')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Fjern overførsel/ })).toBeTruthy()
@@ -2752,9 +2751,9 @@ describe('fladen', () => {
     await user.clear(navn)
     await user.type(navn, 'Tømning af opsparingen')
 
-    // To steder: navigatorens række og skuffens hoved.
+    // Tre steder: navigatorens række, skuffens hoved og tidslinjens boks.
     expect(navigatorButton(/Tømning af opsparingen/)).toBeTruthy()
-    expect(screen.getAllByText('Tømning af opsparingen')).toHaveLength(2)
+    expect(screen.getAllByText('Tømning af opsparingen')).toHaveLength(3)
 
     await user.selectOptions(screen.getByLabelText('Fra'), 'Anden beholdning')
 
@@ -2774,7 +2773,7 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /Overførslen/ }))
+    await user.click(navigatorButton(/Overførslen/))
 
     await user.selectOptions(screen.getByLabelText('Til'), 'Frie midler')
 
@@ -2807,7 +2806,7 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: '+ Overførsel' }))
 
-    const raekke = screen.getByRole('button', { name: /Overførsel 1/ })
+    const raekke = navigatorButton(/Overførsel 1/)
     expect(raekke).toBeTruthy()
 
     await user.click(raekke)
@@ -2857,7 +2856,7 @@ describe('fladen', () => {
     expect(udgifter2028()).toBe('-41.616')
 
     // Inputfeltet i skuffen er og bliver i nutidskroner, jf. issue #12.
-    await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
+    await user.click(navigatorButton(/Faste udgifter/))
     expect((screen.getByLabelText(/Beløb/) as HTMLInputElement).value).toBe('40000')
   })
 

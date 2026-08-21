@@ -188,8 +188,11 @@ describe('feltforklaringerne', () => {
     })
 
     // Tilvalget er sit eget spørgsmål og har sin egen tekst — den hænger på
-    // afkrydsningsfeltets etiket og ikke på aldersfeltets.
-    await user.click(screen.getByRole('button', { name: /Nyt tag/ }))
+    // afkrydsningsfeltets etiket og ikke på aldersfeltets. Navnet findes nu
+    // også som en boks på tidslinjen under grafen, jf. ADR-0036 — klikket
+    // scopes derfor til navigatorens egen række.
+    const navigatorspalte = document.querySelector('.navigatorspalte') as HTMLElement
+    await user.click(within(navigatorspalte).getByRole('button', { name: /Nyt tag/ }))
     const tilvalg = screen
       .getByLabelText('Følger erhvervsophør')
       .closest('label') as HTMLElement

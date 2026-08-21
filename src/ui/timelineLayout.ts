@@ -187,11 +187,7 @@ export function timelineLayout(plan: Plan): TimelineGroup[] {
     ),
   ]
 
-  // Bruges som start-/sluttidspunkt for et åbent endepunkt, alene til
-  // pakningens sortering — planens start henholdsvis den seneste horisont
-  // nogen af husstandens personer når.
-  const openStart = plan.startYear
-  const openEnd = Math.max(...plan.household.persons.map((person) => person.birthYear + person.horizon))
+  const { start: openStart, end: openEnd } = timelineBounds(plan)
 
   return timelineGroupOrder.map((name) => {
     const packed = pack(
@@ -203,7 +199,18 @@ export function timelineLayout(plan: Plan): TimelineGroup[] {
   })
 }
 
-function endpointYear(endpoint: TimelineEndpoint, fallback: SimulationYear): SimulationYear {
+/** Planens start og den seneste horisont, nogen af husstandens personer når —
+    start-/sluttidspunktet et åbent endepunkt bruges som, og de samme grænser
+    `Timeline.tsx` tegner x-aksen ud fra, så aksen og pakningen aldrig kan
+    komme til at regne på hver sin horisont. */
+export function timelineBounds(plan: Plan): { start: SimulationYear; end: SimulationYear } {
+  return {
+    start: plan.startYear,
+    end: Math.max(...plan.household.persons.map((person) => person.birthYear + person.horizon)),
+  }
+}
+
+export function endpointYear(endpoint: TimelineEndpoint, fallback: SimulationYear): SimulationYear {
   return endpoint.kind === 'Open' ? fallback : endpoint.year
 }
 
