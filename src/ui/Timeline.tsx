@@ -209,12 +209,7 @@ export function Timeline({
 
   return (
     <div className="tidslinje-lag">
-      <div className="tidslinje-hoved">
-        Tidslinjen
-        <span className="note">
-          Egen vandret rulning, uafhængig af Formuegrafens skala · lodret rulning for grupperne
-        </span>
-      </div>
+      <div className="tidslinje-hoved">Tidslinjen</div>
       <div className="tidslinje-rul">
         <div className="tl-indhold" style={{ width: contentWidth }}>
           <div className="tl-akse">
