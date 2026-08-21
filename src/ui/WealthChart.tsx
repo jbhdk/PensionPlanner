@@ -123,7 +123,7 @@ export function WealthChart({
     .domain([0, Math.max(1, n - 1)])
     .range([left, right])
   const y = scaleLinear()
-    .domain([0, maxTop])
+    .domain([0, axis.domainTop])
     .range([height - M.bottom, M.top])
 
   const areaGenerator = d3Area<BandPoint>()

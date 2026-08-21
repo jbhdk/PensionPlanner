@@ -70,7 +70,7 @@ export function SurplusChart({
   const right = width - M.right
 
   const y = scaleLinear()
-    .domain([surplusSpan.bottom, surplusSpan.top === surplusSpan.bottom ? 1 : surplusSpan.top])
+    .domain([surplusSpan.bottom, axis.domainTop === surplusSpan.bottom ? 1 : axis.domainTop])
     .range([height - M.bottom, M.top])
 
   const bandWidth = n > 0 ? (right - left) / n : right - left

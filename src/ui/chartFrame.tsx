@@ -67,6 +67,12 @@ export type KroneAxis = {
   name: string
   /** Venstremargenen, udmålt efter det længste mærkat. */
   left: number
+  /** Toppen, y-skalaens domæne skal bruge — det øverste gittermærkat, som kan
+      stå op til et halvt trin over det egentlige spænd, jf. `ticks`. Bruger
+      en kalder i stedet det rå `top`, den selv gav `kroneAxis`, ville
+      mærkatet tegnes over det punkt, skalaen regner som toppen af pladen —
+      ind i enhedsnavnet ovenover. */
+  domainTop: number
 }
 
 /** Kroneaksen for et spænd, der kan ligge på begge sider af nul.
@@ -94,8 +100,9 @@ export function kroneAxis(bottom: number, top: number): KroneAxis {
 
   const longest = Math.max(0, ...[...labels, name].map((label) => label.length))
   const left = Math.max(MARGIN.left, longest * LABEL_CHAR_WIDTH + LABEL_GAP)
+  const domainTop = ticks.at(-1) ?? top
 
-  return { ticks, labels, name, left }
+  return { ticks, labels, name, left, domainTop }
 }
 
 /** Kroneaksens mærker: enheden som overskrift over mærkatsøjlen, og en

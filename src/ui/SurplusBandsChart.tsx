@@ -87,7 +87,7 @@ export function SurplusBandsChart({
   const right = width - M.right
 
   const y = scaleLinear()
-    .domain([bandSpan.bottom, bandSpan.top === bandSpan.bottom ? 1 : bandSpan.top])
+    .domain([bandSpan.bottom, axis.domainTop === bandSpan.bottom ? 1 : axis.domainTop])
     .range([height - M.bottom, M.top])
 
   const bandWidth = n > 0 ? (right - left) / n : right - left
