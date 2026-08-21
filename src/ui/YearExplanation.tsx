@@ -61,7 +61,7 @@ const TAX_LAYER_LABELS: Record<TaxLayer, string> = {
 }
 
 /** Forklar-året overtager resultatspalten, jf. issue #13 — den har sit eget
-    spaltehoved med en vej tilbage frem for Formuen/Årstabellen-fanerne. */
+    spaltehoved med en vej tilbage frem for Planlæggeren/Årstabellen-fanerne. */
 export function YearExplanation({
   year,
   years,

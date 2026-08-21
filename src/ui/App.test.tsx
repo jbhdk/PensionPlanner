@@ -219,7 +219,7 @@ function yearRow(year: number): number {
   return index
 }
 
-/** Årstabellen ligger bag sin egen fane, med Formuen som standardfane. */
+/** Årstabellen ligger bag sin egen fane, med Planlæggeren som standardfane. */
 async function showYearTable(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
 }
@@ -3071,12 +3071,13 @@ describe('fladen', () => {
     expect(cells('Frie midler')[2]).toBe('—')
   })
 
-  it('viser Formuen som standardfane, og skifter til Årstabellen ved klik', async () => {
+  it('viser Planlæggeren som standardfane, med Formuen som hovedgraf, og skifter til Årstabellen ved klik', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)
 
-    expect(screen.getByRole('button', { name: 'Formuen', pressed: true })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Planlæggeren', pressed: true })).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Formuegraf' })).toBeTruthy()
+    expect(document.querySelector('.hovedgraf-plads [aria-label="Formuegraf"]')).toBeTruthy()
     expect(screen.queryByRole('table')).toBeNull()
 
     await user.click(screen.getByRole('button', { name: 'Årstabellen' }))
@@ -3086,29 +3087,47 @@ describe('fladen', () => {
     expect(screen.queryByRole('img', { name: 'Formuegraf' })).toBeNull()
   })
 
-  it('har Overskuddet som tredje visning mellem Formuen og Årstabellen', async () => {
-    const user = userEvent.setup()
+  it('viser Fordelingen og Overskuddet som mini-grafer ved siden af Formuen, kun to faner i alt', async () => {
     render(<App initialPlan={aThreeYearPlan()} />)
 
     const omskifter = document.querySelector('.omskifter')!
     expect(
       Array.from(omskifter.querySelectorAll('button')).map((knap) => knap.textContent),
-    ).toEqual(['Formuen', 'Overskuddet', 'Årstabellen'])
+    ).toEqual(['Planlæggeren', 'Årstabellen'])
 
-    await user.click(screen.getByRole('button', { name: 'Overskuddet' }))
-
-    expect(screen.getByRole('button', { name: 'Overskuddet', pressed: true })).toBeTruthy()
+    expect(screen.getByRole('img', { name: 'Fordelingsgraf' })).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Overskudsgraf' })).toBeTruthy()
-    expect(screen.queryByRole('img', { name: 'Formuegraf' })).toBeNull()
-    expect(screen.queryByRole('table')).toBeNull()
+    expect(document.querySelector('.mini-graferne [aria-label="Fordelingsgraf"]')).toBeTruthy()
+    expect(document.querySelector('.mini-graferne [aria-label="Overskudsgraf"]')).toBeTruthy()
   })
 
-  it('åbner forklar-året ved klik på en søjle i overskudsgrafen', async () => {
+  it('bytter Overskuddet ind som hovedgraf ved klik på mini-grafen', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)
-    await user.click(screen.getByRole('button', { name: 'Overskuddet' }))
 
-    await user.click(document.querySelector('svg rect[data-year="2027"]')!)
+    const overskudKnap = document
+      .querySelector('.mini-graferne')!
+      .querySelector('[aria-label="Overskudsgraf"]')!
+      .closest('button')!
+    await user.click(overskudKnap)
+
+    expect(document.querySelector('.hovedgraf-plads [aria-label="Overskudsgraf"]')).toBeTruthy()
+    // Formuen står nu som mini i stedet, og Fordelingen rørte sig ikke.
+    expect(document.querySelector('.mini-graferne [aria-label="Formuegraf"]')).toBeTruthy()
+    expect(document.querySelector('.mini-graferne [aria-label="Fordelingsgraf"]')).toBeTruthy()
+  })
+
+  it('åbner forklar-året ved klik på en søjle i overskudsgrafen, når den er hovedgraf', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+
+    const overskudKnap = document
+      .querySelector('.mini-graferne')!
+      .querySelector('[aria-label="Overskudsgraf"]')!
+      .closest('button')!
+    await user.click(overskudKnap)
+
+    await user.click(document.querySelector('.hovedgraf-plads svg rect[data-year="2027"]')!)
 
     expect(screen.getByRole('heading', { name: '2027' })).toBeTruthy()
   })
@@ -4170,7 +4189,7 @@ describe('fladen', () => {
       await user.click(screen.getByRole('button', { name: 'Fortryd' }))
 
       expect(screen.queryByText(/ingen fortrydelse/i)).toBeNull()
-      expect(screen.getByRole('button', { name: 'Formuen' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Planlæggeren' })).toBeTruthy()
       expect(loadPlan()).toEqual({ kind: 'Loaded', plan })
     })
 
@@ -4232,7 +4251,8 @@ describe('fladen', () => {
       await user.click(iBekraeftelsen().getByRole('button', { name: 'Slet alt' }))
 
       expect(document.querySelector('.skuffe')).toBeNull()
-      expect(screen.getByRole('button', { name: 'Formuen', pressed: true })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Planlæggeren', pressed: true })).toBeTruthy()
+      expect(document.querySelector('.hovedgraf-plads [aria-label="Formuegraf"]')).toBeTruthy()
     })
 
     it('lader enheden stå: den er en aflæsningspræference og ikke plandata', async () => {

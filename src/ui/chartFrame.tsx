@@ -5,17 +5,23 @@ import { kroner, millioner } from './format'
 
 /** Grafernes fælles ramme: den målte plads, kroneaksen og årsaksen.
 
-    Formuegrafen og overskudsgrafen svarer på hver sit spørgsmål og tegner
-    hver sin slags form — et stablet areal mod søjler om en nul-linje — men
-    de står i den samme ramme og skal blive ved med at gøre det. Trinnet på
-    y-aksen, skiftet til millioner, venstremargenens udmåling og årstallene
-    på x-aksen ligger derfor ét sted: to grafer, der trappede deres akser
-    hver sin vej, ville ikke kunne læses ved siden af hinanden. */
+    Formuen, Fordelingen og Overskuddet svarer på hver sit spørgsmål og
+    tegner hver sin slags form — et stablet areal, divergerende bånd, søjler
+    om en nul-linje — men de står i den samme ramme og skal blive ved med at
+    gøre det. Trinnet på y-aksen, skiftet til millioner, venstremargenens
+    udmåling og årstallene på x-aksen ligger derfor ét sted: tre grafer, der
+    trappede deres akser hver sin vej, ville ikke kunne læses ved siden af
+    hinanden — og hovedgraf og mini-graf skal kunne bytte plads uden at
+    tegne om. */
 
 // Top og bund har hver sin ekstra linje til aksens navn: enheden over
 // y-mærkaterne, tidsenheden under årstallene. Uden dem er det tal på en akse,
 // og læseren må gætte, hvad de tæller.
 export const MARGIN = { top: 22, right: 8, bottom: 34, left: 58 }
+
+// Mini-grafen tegner ingen akse, jf. ADR-0033, og har derfor kun brug for et
+// par pixels luft til kanterne — ikke pladsen en akses mærkater kræver.
+export const MINI_MARGIN = { top: 4, right: 4, bottom: 4, left: 4 }
 
 // Aksemærkaterne står i monospace ved 10 px, hvor hvert tegn fylder 0,6 em.
 // Margenen kan derfor udmåles af mærkatets længde frem for at måles i DOM'en.
@@ -92,22 +98,10 @@ export function kroneAxis(bottom: number, top: number): KroneAxis {
   return { ticks, labels, name, left }
 }
 
-/** Akser, hvis venstremargen er afstemt til den bredeste. To paneler over
-    hinanden skal dele x-akse, og det gør de kun, hvis plotfladen begynder
-    samme sted — ellers står det samme år to steder på skærmen, alt efter
-    hvilket panel man læser. Trinnet og enheden er stadig hver akses egen:
-    panelerne har hver sin skala, og det er dét, der holder et fortegnsskift
-    fra at forsvinde i en stabling. */
-export function alignedAxes(axes: KroneAxis[]): KroneAxis[] {
-  const left = Math.max(...axes.map((axis) => axis.left))
-  return axes.map((axis) => ({ ...axis, left }))
-}
-
 /** Kroneaksens mærker: enheden som overskrift over mærkatsøjlen, og en
     gitterlinje pr. trin med nul trukket frem som basislinje.
 
-    `top` er panelets overkant og dermed den linje, enheden står over. Den
-    er `MARGIN.top` i en graf med ét panel og panelets egen i en med to. */
+    `top` er panelets overkant og dermed den linje, enheden står over. */
 export function KroneAxisMarks({
   axis,
   y,

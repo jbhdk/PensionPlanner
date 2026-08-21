@@ -41,8 +41,11 @@ export function holdingColor(holdingIndex: number): string {
 // Underskuddet er violet og ikke rød: rød er forbeholdt den negative buffer
 // alene, jf. `app.css`, og et underskud er ingen fejltilstand — det er
 // beløbet, der mangler at blive flyttet, jf. ADR-0026.
-const SURPLUS = CATEGORICAL_PALETTE[2]!
-const DEFICIT = CATEGORICAL_PALETTE[6]!
+//
+// Eksporteret, så Overskudsgrafens egen legend — Overskud mod Underskud —
+// kan vise præcis de to farver, søjlerne selv bruger.
+export const SURPLUS = CATEGORICAL_PALETTE[2]!
+export const DEFICIT = CATEGORICAL_PALETTE[6]!
 
 /** Årets overskud er ét begreb og to ord, og fortegnet er det, der skiller
     dem — derfor én funktion af beløbet og ikke to farver at vælge imellem. */

@@ -73,7 +73,7 @@ describe('WealthChart', () => {
     expect(screen.getByText('Anden beholdning')).toBeTruthy()
   })
 
-  it('viser legend selv med kun én beholdning — grafen har ingen anden titel, der navngiver den', () => {
+  it('viser legend selv med kun én beholdning — grafens egen titel navngiver ikke beholdningen', () => {
     const plan = aPlan()
     const years = simulate(plan)
     render(<WealthChart years={years} plan={plan} unit="Real" />)
@@ -421,6 +421,33 @@ describe('WealthChart', () => {
 
     const skraverede = Array.from(container.querySelectorAll('svg [data-hatch]'))
     expect(skraverede).toHaveLength(0)
+  })
+
+  it('tegner ingen akse og ingen legend i mini-tilstand, jf. ADR-0033 — kun formen', () => {
+    const plan = aPlanWithSecondHolding()
+    const years = simulate(plan)
+    const { container } = render(
+      <WealthChart years={years} plan={plan} unit="Real" mode="mini" />,
+    )
+
+    expect(container.querySelectorAll('.graf-akse-y, .graf-akse-x')).toHaveLength(0)
+    expect(container.querySelector('.graf-legend')).toBeNull()
+    expect(screen.queryByText('Frie midler')).toBeNull()
+
+    // Formen — begge beholdningers bånd — står der stadig.
+    expect(container.querySelectorAll('svg [data-holding]')).toHaveLength(2)
+  })
+
+  it('lader mini-grafen fylde det meste af sin egen plads ud, uden en akses margen', () => {
+    const plan = aPlan({ balance: 1_000_000 })
+    const years = simulate(plan)
+    const { container } = render(<WealthChart years={years} plan={plan} unit="Real" mode="mini" />)
+
+    // Ingen mærkater at måle margenen på, så det stablede areal starter
+    // næsten helt ude ved venstre kant — ikke ved hovedgrafens 58 px.
+    const path = container.querySelector('path[data-holding]')!
+    const forsteX = Number(path.getAttribute('d')!.match(/M([\d.]+)/)![1])
+    expect(forsteX).toBeLessThan(20)
   })
 })
 

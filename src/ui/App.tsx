@@ -9,8 +9,8 @@ import { defaultPlan } from './defaultPlan'
 import { Inspector } from './Inspector'
 import { Navigator } from './Navigator'
 import type { AmountUnit } from './real'
-import { SurplusChart } from './SurplusChart'
-import { WealthChart } from './WealthChart'
+import type { MainGraph } from './ResultGraphs'
+import { ResultGraphs } from './ResultGraphs'
 import { YearExplanation } from './YearExplanation'
 import { YearTable } from './YearTable'
 import type { Selection } from './selection'
@@ -28,14 +28,12 @@ function download(contents: string, filename: string): void {
   URL.revokeObjectURL(url)
 }
 
-/** Resultatspaltens visninger. Formuen er standardfanen, jf. issue #12 —
-    man justerer i navigatoren og konstaterer visuelt på grafen, om planen
-    holder; tabellen er laget man går ned i bagefter. Overskuddet står
-    imellem dem: samme år, men strømmene frem for niveauet, jf. ADR-0026.
-    Forklar-året er ikke en fjerde fane, men en visning der overtager
-    resultatspalten helt, jf. issue #13 — den har sin egen vej tilbage til
-    Årstabellen. */
-type ResultView = 'Wealth' | 'Surplus' | 'YearTable' | 'YearExplanation'
+/** Resultatspaltens visninger. Planlæggeren er standardfanen, jf. issue #12
+    — man justerer i navigatoren og konstaterer visuelt på graf-laget, om
+    planen holder; tabellen er laget man går ned i bagefter. Forklar-året er
+    ikke en tredje fane, men en visning der overtager resultatspalten helt,
+    jf. issue #13 — den har sin egen vej tilbage til Årstabellen. */
+type ResultView = 'Planner' | 'YearTable' | 'YearExplanation'
 
 /** Fladen: topbjælken, navigatoren til venstre, resultatspalten til højre og
     inspektørskuffen, der glider ind over resultatet, når en linje vælges.
@@ -57,7 +55,11 @@ export function App({
 }) {
   const [plan, setPlan] = useState(initialPlan)
   const [selected, setSelected] = useState<Selection>(null)
-  const [resultView, setResultView] = useState<ResultView>('Wealth')
+  const [resultView, setResultView] = useState<ResultView>('Planner')
+  // Hvilken af de tre grafer der står som hovedgraf, jf. ADR-0033. Løftet
+  // herop af samme grund som `resultView`: en kasseret plan skal nulstille
+  // den, ligesom den nulstiller enhver anden af resultatspaltens tilstande.
+  const [mainGraph, setMainGraph] = useState<MainGraph>('Wealth')
   const [unit, setUnit] = useState<AmountUnit>('Real')
   const [explainedYear, setExplainedYear] = useState<number | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
@@ -101,7 +103,8 @@ export function App({
     setPlan(defaultPlan())
     setSelected(null)
     setExplainedYear(null)
-    setResultView('Wealth')
+    setResultView('Planner')
+    setMainGraph('Wealth')
     setImportError(null)
     setConfirmingDelete(false)
     setLoadError(undefined)
@@ -286,16 +289,10 @@ export function App({
               <div className="resultathoved">
                 <span className="omskifter">
                   <button
-                    aria-pressed={resultView === 'Wealth'}
-                    onClick={() => setResultView('Wealth')}
+                    aria-pressed={resultView === 'Planner'}
+                    onClick={() => setResultView('Planner')}
                   >
-                    Formuen
-                  </button>
-                  <button
-                    aria-pressed={resultView === 'Surplus'}
-                    onClick={() => setResultView('Surplus')}
-                  >
-                    Overskuddet
+                    Planlæggeren
                   </button>
                   <button
                     aria-pressed={resultView === 'YearTable'}
@@ -318,20 +315,16 @@ export function App({
                   <h3>Planen kan ikke simuleres</h3>
                   <p>{planError}</p>
                 </div>
-              ) : resultView === 'Wealth' ? (
-                <WealthChart
+              ) : resultView === 'Planner' ? (
+                <ResultGraphs
                   years={years}
                   plan={plan}
                   unit={unit}
                   selected={selected}
                   onSelect={setSelected}
-                />
-              ) : resultView === 'Surplus' ? (
-                <SurplusChart
-                  years={years}
-                  plan={plan}
-                  unit={unit}
                   onSelectYear={explainYear}
+                  mainGraph={mainGraph}
+                  onMainGraphChange={setMainGraph}
                 />
               ) : (
                 <YearTable years={years} plan={plan} unit={unit} onSelectYear={explainYear} />
