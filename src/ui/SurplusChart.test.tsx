@@ -509,9 +509,9 @@ describe('SurplusChart', () => {
     expect(onSelectYear).toHaveBeenCalledWith(years[0]!.year)
   })
 
-  it('tegner en anden graf i løbende priser end i dagens kroner', () => {
+  it('tegner en anden graf i fremtidskroner end i nutidskroner', () => {
     // Posterne reguleres ikke, mens priserne stiger to procent om året: målt
-    // i dagens kroner skrumper overskuddet år for år, målt i løbende priser
+    // i nutidskroner skrumper overskuddet år for år, målt i fremtidskroner
     // står det stille. To forskellige grafer af de samme år, jf. ADR-0001.
     const plan = aPlan({
       horizon: 62,

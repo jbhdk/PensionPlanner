@@ -61,7 +61,7 @@ describe('entryNote', () => {
     const note = entryNote([], entry)
 
     expect(note).not.toMatch(/Posten/)
-    expect(note).toMatch(/dagens kroner/)
+    expect(note).toMatch(/nutidskroner/)
   })
 
   it('henviser ikke til et år, den ikke har nævnt', () => {

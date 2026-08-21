@@ -9,7 +9,7 @@ describe('inRealKroner', () => {
     expect(inRealKroner(40_000, 2026, plan)).toBeCloseTo(40_000, 6)
   })
 
-  it('deflaterer et senere års løbende priser tilbage til dagens kroner', () => {
+  it('deflaterer et senere års fremtidskroner tilbage til nutidskroner', () => {
     const plan = aPlan({ startYear: 2026, inflationAssumption: 0.02 })
 
     expect(inRealKroner(40_800, 2027, plan)).toBeCloseTo(40_000, 6)

@@ -395,7 +395,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
           }
         />
         <NumberField
-          label="Saldo (dagens kroner)"
+          label="Saldo (nutidskroner)"
           help="Holding.balance"
           unit="kr."
           value={holding.balance}
@@ -787,8 +787,8 @@ function EntryFields({
              invariant fanger det, jf. ADR-0007. */
           label={
             income && entry.taxTreatment === 'EarnedIncome'
-              ? 'Beløb, brutto (dagens kroner)'
-              : 'Beløb (dagens kroner)'
+              ? 'Beløb, brutto (nutidskroner)'
+              : 'Beløb (nutidskroner)'
           }
           help="Entry.amountInRealKroner"
           unit="kr."
@@ -1236,7 +1236,7 @@ function ContributionFields({
               />
             ) : (
               <NumberField
-                label="Fast beløb (dagens kroner)"
+                label="Fast beløb (nutidskroner)"
                 help="Contribution.amountInRealKroner"
                 unit="kr."
                 value={contribution.amountInRealKroner}
@@ -1261,7 +1261,7 @@ function ContributionFields({
         ) : (
           <>
             <NumberField
-              label="Fast beløb (dagens kroner)"
+              label="Fast beløb (nutidskroner)"
               help="Contribution.amountInRealKroner"
               unit="kr."
               value={contribution.amountInRealKroner}
@@ -1278,7 +1278,7 @@ function ContributionFields({
                 end intet valg. */}
             <Hint>
               En procent skal have en post at måle af, og kilden er en beholdning — derfor
-              kun kronebeløbet. Det er tastet i dagens kroner og følger planens
+              kun kronebeløbet. Det er tastet i nutidskroner og følger planens
               inflationsantagelse, som en overførsel gør.
             </Hint>
           </>
@@ -1460,7 +1460,7 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
           onChange={(name) => onChange(withTransferEnd(plan, id, 'to', holdingByName[name]!))}
         />
         <NumberField
-          label="Beløb (dagens kroner)"
+          label="Beløb (nutidskroner)"
           help="Transfer.amountInRealKroner"
           unit="kr."
           value={transfer.amountInRealKroner}

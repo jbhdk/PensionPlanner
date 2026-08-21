@@ -81,9 +81,9 @@ describe('WealthChart', () => {
     expect(screen.getByText('Frie midler')).toBeTruthy()
   })
 
-  it('ændrer stablingens geometri, når kronetypen skifter til løbende priser', () => {
-    // Voksende saldo (afkast over inflationen), så løbende priser og dagens
-    // kroner reelt tegner to forskellige grafer — ikke kun samme tal to
+  it('ændrer stablingens geometri, når kronetypen skifter til fremtidskroner', () => {
+    // Voksende saldo (afkast over inflationen), så fremtidskroner og
+    // nutidskroner reelt tegner to forskellige grafer — ikke kun samme tal to
     // gange.
     const plan = aPlan({ inflationAssumption: 0.02, grossReturn: 0.05 })
     const years = simulate(plan)

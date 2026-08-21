@@ -167,8 +167,8 @@ function tegnUdtryk() {
   document.getElementById('planspalte').innerHTML = planspalte();
   document.getElementById('resultat').innerHTML =
     '<div class="resultathoved"><span class="titel">Resultatet</span>' +
-    '<span class="omskifter"><button aria-pressed="true">Dagens kroner</button>' +
-    '<button aria-pressed="false">Løbende priser</button></span></div>' +
+    '<span class="omskifter"><button aria-pressed="true">Nutidskroner</button>' +
+    '<button aria-pressed="false">Fremtidskroner</button></span></div>' +
     graf() + tabel();
   Array.prototype.forEach.call(document.querySelectorAll('.kappe nav button'), function (b) {
     b.setAttribute('aria-current', b.dataset.u === UDTRYK);

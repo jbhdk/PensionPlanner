@@ -6,7 +6,7 @@ import { assessHousehold, totalHouseholdTax, totalTaperBase } from './assessHous
 import { totalTax } from './assessTax'
 
 /** Den sekundære testsøm: husstandens skat for ét simuleringsår, kaldbar uden
-    at bygge en plan. Alt herunder er i løbende priser, jf. ADR-0001.
+    at bygge en plan. Alt herunder er i fremtidskroner, jf. ADR-0001.
 
     Denne fil prøver det, der er husstandens eget — aktieindkomstens fælles
     progressionsgrænse og summen af det hele. Personens egne lag og fradrag

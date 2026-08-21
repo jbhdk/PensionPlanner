@@ -231,7 +231,7 @@ function behFelterN(b) {
 
   var grund = felt('Navn', inp(b.navn, 'tekst')) +
     felt('Ejer', vlg([persN(b.ejer).navn])) +
-    felt('Saldo (dagens kroner)', inp(KN(b.saldo), 'tal'), 'kr.');
+    felt('Saldo (nutidskroner)', inp(KN(b.saldo), 'tal'), 'kr.');
   if (b.type === 'frie') {
     grund += felt('Beskatningsform', vlg(['Aktieindkomst', 'Kapitalindkomst'])) +
       felt('Buffer', '<input type="radio" ' + (b.buffer ? 'checked' : '') + ' style="width:auto">');
@@ -566,8 +566,8 @@ function tabelN() {
 
 function resultatN() {
   var enheder = '<span class="omskifter hoejre">' +
-    '<button aria-pressed="true">Dagens kroner</button>' +
-    '<button aria-pressed="false">Løbende priser</button></span>';
+    '<button aria-pressed="true">Nutidskroner</button>' +
+    '<button aria-pressed="false">Fremtidskroner</button></span>';
 
   if (N.tabel === 'fane') {
     var h = ['<div class="resultathoved"><span class="omskifter">' +

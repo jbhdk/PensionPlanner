@@ -49,13 +49,13 @@ _Avoid_: Kirkeskattepligtig
 Ét kalenderår. Den mindste tidsenhed motoren regner i, og den enhed al skat opgøres i.
 _Avoid_: Periode, step, tick
 
-**Løbende priser** · `Nominal`:
-Beløb i det pågældende simuleringsårs egne kroner. Alt internt i motoren regnes i løbende priser.
-_Avoid_: Nominelle kroner, fremskrevne beløb
+**Fremtidskroner** · `Nominal`:
+Beløb i det pågældende simuleringsårs egne kroner. Alt internt i motoren regnes i fremtidskroner.
+_Avoid_: Nominelle kroner, fremskrevne beløb, løbende priser
 
-**Dagens kroner** · `Real`:
+**Nutidskroner** · `Real`:
 Beløb deflateret tilbage til startårets prisniveau. Standardvisningen i brugerfladen.
-_Avoid_: Reale kroner, faste priser, nutidskroner
+_Avoid_: Reale kroner, faste priser, dagens kroner
 
 ### Formue og pensioner
 
@@ -92,7 +92,7 @@ Engangshandlingen hvor en livrentes saldo ved udbetalingsstart bliver til en liv
 _Avoid_: Kapitalisering, annuitisering, konvertering, ophør
 
 **Omsætningsfaktor** · `ConversionFactor`:
-Forholdet mellem selskabets oplyste årlige ydelse og dets oplyste depot ved udbetalingsstart. Anvendes én gang på det faktisk fremskrevne depot og ændres aldrig derefter. De to oplyste tal er hverken dagens kroner eller løbende priser, men enhedsløse: de bruges kun som kvotient, og prisniveauet går ud med sig selv i divisionen. Brugeren taster dem, som selskabet oplyser dem, og fladen hverken deflaterer eller fremskriver dem.
+Forholdet mellem selskabets oplyste årlige ydelse og dets oplyste depot ved udbetalingsstart. Anvendes én gang på det faktisk fremskrevne depot og ændres aldrig derefter. De to oplyste tal er hverken nutidskroner eller fremtidskroner, men enhedsløse: de bruges kun som kvotient, og prisniveauet går ud med sig selv i divisionen. Brugeren taster dem, som selskabet oplyser dem, og fladen hverken deflaterer eller fremskriver dem.
 _Avoid_: Annuitetsdivisor, annuitetsfaktor, kapitaliseringsfaktor
 
 **Kapitalpension** · `CapitalPension`:
@@ -208,7 +208,7 @@ _Avoid_: Testcase, eksempel, referenceberegning
 ### Pengestrømme
 
 **Post** · `Entry`:
-En navngiven ind- eller udbetaling med beløb i dagens kroner, ejer, periode og gentagelse. Indtægtsposter bærer desuden en skattebehandling og en egen reguleringssats; udgiftsposter har ingen af delene og følger planens inflationsantagelse.
+En navngiven ind- eller udbetaling med beløb i nutidskroner, ejer, periode og gentagelse. Indtægtsposter bærer desuden en skattebehandling og en egen reguleringssats; udgiftsposter har ingen af delene og følger planens inflationsantagelse.
 _Avoid_: Linje, række, cashflow, transaktion
 
 **Retning** · `Direction`:
@@ -290,15 +290,15 @@ En af de otte faste dele, `Surplus` består af: indtægtsposter, ydelser, udbeta
 _Avoid_: Kategori, gruppe, lag, stak, segment, komponent
 
 **Postår** · `EntryYear`:
-Én posts beløb i ét simuleringsår, i årets egne løbende priser — kun for de poster der faktisk falder i året. Forfaldet står ikke her; det er en egenskab ved posten selv.
+Én posts beløb i ét simuleringsår, i årets egne fremtidskroner — kun for de poster der faktisk falder i året. Forfaldet står ikke her; det er en egenskab ved posten selv.
 _Avoid_: Postresultat, årspost, betaling
 
 **Indbetalingsår** · `ContributionYear`:
-Én indbetalings to beløb i ét simuleringsår, i årets egne løbende priser — kun for de indbetalinger der faktisk falder i året. Det ene er, hvad der forlod kilden; det andet, hvad der landede i beholdningen. Forskellen er AM-bidraget, som allerede står i personens eget skattelag og derfor ikke gentages her.
+Én indbetalings to beløb i ét simuleringsår, i årets egne fremtidskroner — kun for de indbetalinger der faktisk falder i året. Det ene er, hvad der forlod kilden; det andet, hvad der landede i beholdningen. Forskellen er AM-bidraget, som allerede står i personens eget skattelag og derfor ikke gentages her.
 _Avoid_: Bidragsår, indbetalingsresultat, indskud
 
 **Overførselsår** · `TransferYear`:
-Én overførsels beløb i ét simuleringsår, i årets egne løbende priser — kun for de overførsler der faktisk falder i året. To af dem står der altid: hvad planen bad om, og hvad der faktisk forlod afgiveren, når saldoen ikke rakte. De to er ens i næsten alle år, og linjen findes for de år, hvor de ikke er: en tavs afkortning er den slags fejl, der aldrig viser sig. Er afgiverens `PayoutTaxation` `Chargeable`, bærer linjen desuden det, der landede i de frie midler; afgiften er kilen mellem de to og gentages ikke selv. Formen følger afgiveren, ligesom `CapYear`s følger loftets: en `TaxFree`-afgiver har ingen kile, og et felt, hvor de to altid var ens, ville påstå, at der var noget at se. Forfaldet står ikke her; det er en egenskab ved overførslen selv.
+Én overførsels beløb i ét simuleringsår, i årets egne fremtidskroner — kun for de overførsler der faktisk falder i året. To af dem står der altid: hvad planen bad om, og hvad der faktisk forlod afgiveren, når saldoen ikke rakte. De to er ens i næsten alle år, og linjen findes for de år, hvor de ikke er: en tavs afkortning er den slags fejl, der aldrig viser sig. Er afgiverens `PayoutTaxation` `Chargeable`, bærer linjen desuden det, der landede i de frie midler; afgiften er kilen mellem de to og gentages ikke selv. Formen følger afgiveren, ligesom `CapYear`s følger loftets: en `TaxFree`-afgiver har ingen kile, og et felt, hvor de to altid var ens, ville påstå, at der var noget at se. Forfaldet står ikke her; det er en egenskab ved overførslen selv.
 _Avoid_: Overførselsresultat, flytning, hævning
 
 **Personår** · `PersonYear`:

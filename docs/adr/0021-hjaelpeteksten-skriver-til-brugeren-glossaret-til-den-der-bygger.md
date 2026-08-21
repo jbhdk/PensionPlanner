@@ -26,6 +26,6 @@ Stilreglerne står som prosa i registrets egen dokumentationskommentar og ikke h
 
 ## Se også
 
-- [ADR-0001](./0001-nominel-regning-real-visning.md) — hvorfor etiketterne siger *dagens kroner*, og hvorfor en forklaring, der nævner et beløb, skal mene det samme som tallet ved siden af
+- [ADR-0001](./0001-nominel-regning-real-visning.md) — hvorfor etiketterne siger *nutidskroner*, og hvorfor en forklaring, der nævner et beløb, skal mene det samme som tallet ved siden af
 - [ADR-0007](./0007-indbetalinger-er-bevaegelser-og-loennen-er-brutto.md) — den ene `Hint`, der ikke måtte flyttes bag en hover
 - [ADR-0012](./0012-fladen-laeser-motorens-svar-frem-for-at-gentage-udledningen.md) — en forklaring beskriver, hvad en kolonne er, og regner aldrig selv efter, hvad der står i den

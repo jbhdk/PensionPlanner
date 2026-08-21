@@ -56,7 +56,7 @@ export type RateBasis = {
   projected: boolean
 }
 
-/** En post, sammen med dens beløb i årets egne, løbende priser — for de
+/** En post, sammen med dens beløb i årets egne, fremtidskroner — for de
     poster der rent faktisk falder i det pågældende år. Forfaldet står ikke
     her: det er en egenskab ved posten selv og læses fra `Plan.entries`,
     ligesom en beholdnings navn og afkastsatser læses fra `Plan` og ikke
@@ -66,7 +66,7 @@ export type EntryYear = {
   amount: Nominal
 }
 
-/** Én indbetalings to beløb i ét simuleringsår, i årets egne løbende priser
+/** Én indbetalings to beløb i ét simuleringsår, i årets egne fremtidskroner
     — kun for de indbetalinger der faktisk falder i året. Det ene er, hvad der
     forlod kilden; det andet, hvad der landede i beholdningen. Differencen er
     AM-bidraget, som allerede står i personens eget skattelag og derfor ikke
@@ -79,7 +79,7 @@ export type ContributionYear = {
   intoHolding: Nominal
 }
 
-/** Én overførsels beløb i ét simuleringsår, i årets egne løbende priser —
+/** Én overførsels beløb i ét simuleringsår, i årets egne fremtidskroner —
     kun for de overførsler der faktisk falder i året. To af felterne står
     altid: `requested` er, hvad planen bad om, og `moved` er, hvad der
     faktisk forlod afgiveren, når dens primosaldo ikke rakte. De to er ens i
@@ -191,7 +191,7 @@ export type HoldingYear = {
 }
 
 /** Én omsat livrentes årlige ydelse i ét simuleringsår, i årets egne
-    løbende priser. Beholdningen står med saldo nul fra omsætningsåret og
+    fremtidskroner. Beholdningen står med saldo nul fra omsætningsåret og
     frem, og linjen er dermed det eneste spor, ordningen sætter i et
     årsresultat bagefter — derfor bærer den beholdningens id, så ydelsen kan
     føres tilbage til den livrente, den kom af.

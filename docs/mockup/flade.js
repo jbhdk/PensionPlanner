@@ -162,7 +162,7 @@ function beholdningsdetalje(b) {
   h.push('<h4>Beholdningen</h4>');
   h.push(felt('Navn', input('text', b.navn, 150)));
   h.push(felt('Ejer', '<select><option>' + person(b.ejer).navn + '</option></select>'));
-  h.push(felt('Saldo', input('number', K(b.saldo)), 'kr. (dagens kroner)'));
+  h.push(felt('Saldo', input('number', K(b.saldo)), 'kr. (nutidskroner)'));
   if (b.type === 'frie') {
     h.push(felt('Beskatningsform', '<select><option>Aktieindkomst</option><option>Kapitalindkomst</option></select>'));
     h.push(felt('Buffer', '<input type="radio" checked style="width:auto">'));
@@ -345,7 +345,7 @@ function tegnFormuegraf(data, serier, hoejde, maerker) {
       '" text-anchor="end" font-size="10" fill="#7d7a74">' + mio(v) + '</text>');
   }
   /* Enheden står som overskrift over mærkatsøjlen. Hvilke kroner det er,
-     dagens eller årets egne, står i omskifteren over grafen. */
+     nutidskroner eller årets egne, står i omskifteren over grafen. */
   s.push('<text x="' + (M.l - 6) + '" y="' + (M.t - 8) +
     '" text-anchor="end" font-size="10" fill="#57544f">mio. kr.</text>');
 
@@ -876,8 +876,8 @@ function tegnResultatspalte() {
   h.push('<span class="hoejre">');
   if (TILSTAND.skaerm !== 'fejl') {
     h.push('<span class="omskifter">' +
-      '<button aria-pressed="' + (TILSTAND.kroner === 'real') + '" onclick="saetKroner(\'real\')">Dagens kroner</button>' +
-      '<button aria-pressed="' + (TILSTAND.kroner === 'nominal') + '" onclick="saetKroner(\'nominal\')">Løbende priser</button>' +
+      '<button aria-pressed="' + (TILSTAND.kroner === 'real') + '" onclick="saetKroner(\'real\')">Nutidskroner</button>' +
+      '<button aria-pressed="' + (TILSTAND.kroner === 'nominal') + '" onclick="saetKroner(\'nominal\')">Fremtidskroner</button>' +
       '</span>');
   }
   h.push('</span></div>');

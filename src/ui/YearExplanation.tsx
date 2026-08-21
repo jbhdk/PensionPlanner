@@ -663,7 +663,7 @@ function CapsBlock({
     ADR-0012's forstand: begge tal står på den linje, den viser.
 
     Beløbene i noten går gennem `display` som beløbene selv. En note i
-    løbende priser ved siden af et tal i dagens kroner er den fælde,
+    fremtidskroner ved siden af et tal i nutidskroner er den fælde,
     fladekortet fandt, jf. ADR-0001.
 
     `PerYear` har ingen note: dens tre tal står i deres egne kolonner, og

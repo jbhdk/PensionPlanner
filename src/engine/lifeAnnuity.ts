@@ -19,7 +19,7 @@ export function isLifeAnnuity(holding: Holding): holding is LifeAnnuityHolding {
 
     De to tal er enhedsløse. De bruges udelukkende som kvotient, og
     prisniveauet går ud med sig selv i divisionen — faktoren er derfor et
-    rent forhold, der kan ganges på et depot i løbende priser uden at nogen
+    rent forhold, der kan ganges på et depot i fremtidskroner uden at nogen
     af de to skal deflateres eller fremskrives først.
 
     Er depotet nul, er der ingen kvotient, og svaret er nul frem for `NaN`.

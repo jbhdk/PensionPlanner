@@ -8,8 +8,8 @@ import type { AmountUnit } from './real'
 import { toDisplayKroner } from './real'
 import { surplus } from './surplus'
 
-/** Årstabellen: én række pr. simuleringsår. Alle beløb deflateres til dagens
-    kroner her — motoren leverer dem i løbende priser. */
+/** Årstabellen: én række pr. simuleringsår. Alle beløb deflateres til
+    nutidskroner her — motoren leverer dem i fremtidskroner. */
 export function YearTable({
   years,
   plan,

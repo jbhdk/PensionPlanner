@@ -306,10 +306,10 @@ export function App({
                 </span>
                 <span className="omskifter hoejre">
                   <button aria-pressed={unit === 'Real'} onClick={() => setUnit('Real')}>
-                    Dagens kroner
+                    Nutidskroner
                   </button>
                   <button aria-pressed={unit === 'Nominal'} onClick={() => setUnit('Nominal')}>
-                    Løbende priser
+                    Fremtidskroner
                   </button>
                 </span>
               </div>

@@ -71,8 +71,8 @@ export type KroneAxis = {
     løber op i millioner, og aksen skifter derfor enhed frem for at klippe det
     yderste ciffer af viewBox'ens venstre kant.
 
-    Hvilke kroner det er, dagens eller årets egne, står i omskifteren over
-    grafen og gentages ikke på aksen. */
+    Hvilke kroner det er, nutidskroner eller årets egne, står i omskifteren
+    over grafen og gentages ikke på aksen. */
 export function kroneAxis(bottom: number, top: number): KroneAxis {
   const magnitude = Math.max(Math.abs(bottom), Math.abs(top)) || 1
   const step = 10 ** Math.floor(Math.log10(magnitude)) / 2

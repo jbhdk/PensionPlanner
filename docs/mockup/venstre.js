@@ -533,8 +533,8 @@ function tabelV() {
 
 function resultatV() {
   return '<div class="resultathoved"><span class="titel">Resultatet</span>' +
-    '<span class="omskifter"><button aria-pressed="true">Dagens kroner</button>' +
-    '<button aria-pressed="false">Løbende priser</button></span></div>' + grafV() + tabelV();
+    '<span class="omskifter"><button aria-pressed="true">Nutidskroner</button>' +
+    '<button aria-pressed="false">Fremtidskroner</button></span></div>' + grafV() + tabelV();
 }
 
 /* ---------- sammensætning ---------- */

@@ -271,7 +271,7 @@ ubesvaret spørgsmål om, hvad planspalten så viser, og den svarer ikke på mer
 browserfaner gør. Planvælgeren i topbjælken bliver.
 
 Klik på en række i årstabellen for at åbne forklar-året. Klik på en beholdning i venstre
-spalte for at folde detaljeruden ud. Omskifteren mellem dagens kroner og løbende priser
+spalte for at folde detaljeruden ud. Omskifteren mellem nutidskroner og fremtidskroner
 virker.
 
 **2043 er årsvalget, der betyder noget.** Ratepensionerne er tømt året før, så de rammer
@@ -331,7 +331,7 @@ forklar-årets regnetabel har fået **Beholdningsskat** som sin egen kolonne ved
 afkastet — én kolonne for begge satser, så afkast og skat kan efterregnes hver for sig.
 
 **Enhedsfælden rammer også noterne.** En note som "7,50 % over 641.200" ved siden af et
-beløb i dagens kroner skal deflateres på samme måde som beløbet. Det stod forkert i
+beløb i nutidskroner skal deflateres på samme måde som beløbet. Det stod forkert i
 første udkast og var ikke til at se uden at regne efter.
 
 **Årstabellens Netto-kolonne ser forkert ud i omsætningsåret.** 2054 viser −1.214.111,

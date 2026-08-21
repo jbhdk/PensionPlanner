@@ -404,7 +404,7 @@ describe('simulate', () => {
     expect(sent.find((y) => y.year === 2038)!.income).toBe(0)
   })
 
-  it('fremskriver en udgift fra dagens kroner til løbende priser efter planens inflation', () => {
+  it('fremskriver en udgift fra nutidskroner til fremtidskroner efter planens inflation', () => {
     // Udgiften har ingen egen sats — den følger planens inflation, som en
     // overførsel gør.
     const plan = aPlan({
@@ -3085,7 +3085,7 @@ describe('indbetalinger', () => {
 
     it('løfter beløbet med planens inflationsantagelse, som en overførsel gør', () => {
       // Bidraget er ikke en indtægt og har derfor ingen reguleringssats at
-      // følge. Beløbet er tastet i dagens kroner og løftes til årets egne.
+      // følge. Beløbet er tastet i nutidskroner og løftes til årets egne.
       const plan = aPlanWithPension({
         balance: 1_000_000,
         inflationAssumption: 0.02,

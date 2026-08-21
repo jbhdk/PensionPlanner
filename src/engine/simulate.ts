@@ -61,11 +61,11 @@ import type {
   YearResult,
 } from './yearResult'
 
-/** En post sammen med dens beløb i årets løbende priser, for de poster der
+/** En post sammen med dens beløb i årets fremtidskroner, for de poster der
     rent faktisk falder i det pågældende år. */
 type ActiveEntry = { entry: Entry; amount: Nominal }
 
-/** En overførsel sammen med dens beløb i årets løbende priser, for de
+/** En overførsel sammen med dens beløb i årets fremtidskroner, for de
     overførsler der rent faktisk falder i det pågældende år: hvad planen bad
     om, hvad afgiverens saldo rakte til (`amount`), og hvad der landede hos
     modtageren (`landed`) — lavere end `amount`, når afgiveren er
@@ -79,7 +79,7 @@ type ActiveTransfer = {
   landed: Nominal
 }
 
-/** En indbetaling sammen med dens to beløb i årets løbende priser, dens
+/** En indbetaling sammen med dens to beløb i årets fremtidskroner, dens
     forfald og den beholdning, pengene forlader — for de indbetalinger der
     rent faktisk falder i det pågældende år.
 
@@ -133,7 +133,7 @@ type ActiveAnnuity = {
   benefit: Nominal
 }
 
-/** Fremskriver planen år for år i løbende priser. Ren funktion: samme plan
+/** Fremskriver planen år for år i fremtidskroner. Ren funktion: samme plan
     giver altid samme årsrække, og planen røres ikke.
 
     En foldning over årene: hvert år åbner sine beholdningsrækker på det
@@ -1260,7 +1260,7 @@ function ownerOf(plan: Plan, entry: Entry): Person {
   return plan.household.persons.find((person) => person.id === entry.owner)!
 }
 
-/** Faktoren der løfter dagens kroner op i årets egne. En indtægt følger sin
+/** Faktoren der løfter nutidskroner op i årets egne. En indtægt følger sin
     egen reguleringssats, uafhængig af planens inflationsantagelse; en udgift
     har ingen egen sats og følger inflationen, som en overførsel gør.
     Startåret er prisniveauet, så faktoren er 1 dér.

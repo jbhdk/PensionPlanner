@@ -62,10 +62,10 @@ export const fieldHelp = {
     'Det, planen kaldes i vælgeren foroven. To fremskrivninger af den samme husstand kan hedde hver sit, så de kan skelnes — ordet indgår ikke i nogen beregning.',
 
   'Plan.startYear':
-    'Det første år, fremskrivningen regner. Det er samtidig det år, alle beløb i dagens kroner måles i: 20.000 kr. tastet et sted i planen er 20.000 kr., som de er værd netop dette år.',
+    'Det første år, fremskrivningen regner. Det er samtidig det år, alle beløb i nutidskroner måles i: 20.000 kr. tastet et sted i planen er 20.000 kr., som de er værd netop dette år.',
 
   'Plan.inflationAssumption':
-    'Hvor meget priserne ventes at stige om året. Den gør to ting: udgifterne vokser med den gennem hele forløbet, og den regner de fremskrevne beløb tilbage igen, når visningen står i dagens kroner.',
+    'Hvor meget priserne ventes at stige om året. Den gør to ting: udgifterne vokser med den gennem hele forløbet, og den regner de fremskrevne beløb tilbage igen, når visningen står i nutidskroner.',
 
   'Plan.section20ProjectionAssumption':
     'Hvor meget skattens beløbsgrænser ventes at stige om året, efter det sidste år hvor de officielle satser kendes. Den afgør, hvornår en voksende indkomst rammer topskatten — sat lavt rammer den tidligere.',
@@ -160,7 +160,7 @@ export const fieldHelp = {
     'Det, posten kaldes i listen og i forklaringen af et år. Det indgår ikke i nogen beregning.',
 
   'Entry.amountInRealKroner':
-    'Hvor stort beløbet er, målt i dagens kroner. Det skrives én gang og vokser selv gennem forløbet — en indtægt med sin egen reguleringssats, en udgift med planens inflation.',
+    'Hvor stort beløbet er, målt i nutidskroner. Det skrives én gang og vokser selv gennem forløbet — en indtægt med sin egen reguleringssats, en udgift med planens inflation.',
 
   'Entry.direction':
     'Om beløbet kommer ind i husstanden eller går ud af den. Tallet skrives positivt begge veje; det er valget her, der afgør fortegnet.',
@@ -218,7 +218,7 @@ export const fieldHelp = {
     'Hvor stor en del af lønposten der går ind i ordningen. Stiger lønnen, stiger indbetalingen med den, uden at noget skal rettes.',
 
   'Contribution.amountInRealKroner':
-    'Hvor meget der indbetales, målt i dagens kroner. Beløbet følger planens inflation gennem forløbet og ikke lønnens eget tempo.',
+    'Hvor meget der indbetales, målt i nutidskroner. Beløbet følger planens inflation gennem forløbet og ikke lønnens eget tempo.',
 
   // ---------- Overførslen ----------
 
@@ -232,7 +232,7 @@ export const fieldHelp = {
     'Den beholdning, pengene lander i. Det er altid frie midler — skal de ind i en pensionsordning, er det en indbetaling i stedet, med et loft og en skattevirkning.',
 
   'Transfer.amountInRealKroner':
-    'Hvor meget der flyttes, målt i dagens kroner. Beløbet følger planens inflation gennem forløbet, og der flyttes aldrig mere, end afgiveren havde ved årets begyndelse.',
+    'Hvor meget der flyttes, målt i nutidskroner. Beløbet følger planens inflation gennem forløbet, og der flyttes aldrig mere, end afgiveren havde ved årets begyndelse.',
 
   // ---------- Forklar-årets overførselskolonner ----------
 

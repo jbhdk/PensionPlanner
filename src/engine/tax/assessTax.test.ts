@@ -6,7 +6,7 @@ import type { TaxAssessmentInput } from './assessTax'
 /** Den sekundære testsøm er husstandens skat for ét simuleringsår, jf.
     ADR-0014. Denne fil prøver de regler, der er den enkelte persons — lagene,
     fradragene og marginalskatten — og når dem gennem husstandssømmet frem
-    for udenom. Alt herunder er i løbende priser, jf. ADR-0001. */
+    for udenom. Alt herunder er i fremtidskroner, jf. ADR-0001. */
 
 /** En husstand på én person med kun det sat, som testen handler om. Nul i
     kommune- og kirkeskat er ikke en realistisk plan, men det holder hvert lag

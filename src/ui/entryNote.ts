@@ -60,7 +60,7 @@ export function entryPeriodLabel(years: YearResult[], entry: Entry): string | un
 }
 
 /** Hvad beløbet fremskrives med. Ingen af tilfældene gentager året — det har
-    `periodSentence` allerede sagt — og ingen af dem sætter "dagens kroner" og
+    `periodSentence` allerede sagt — og ingen af dem sætter "nutidskroner" og
     "det års egne kroner" op mod hinanden uden at forklare forskellen.
 
     `yearNamed` fortæller, om der er et år at pege tilbage på. Er der ikke,
@@ -69,10 +69,10 @@ export function entryPeriodLabel(years: YearResult[], entry: Entry): string | un
 function regulationSentence(entry: Entry, yearNamed: boolean): string {
   if (entry.direction === 'Expense') {
     return entry.recurrence.kind === 'Once' && yearNamed
-      ? 'Beløbet tastes i dagens kroner og følger planens inflation frem til det år — kun indtægter har deres egen reguleringssats.'
-      : 'Udgiften står i dagens kroner og følger planens inflationsantagelse — kun indtægter har deres egen reguleringssats.'
+      ? 'Beløbet tastes i nutidskroner og følger planens inflation frem til det år — kun indtægter har deres egen reguleringssats.'
+      : 'Udgiften står i nutidskroner og følger planens inflationsantagelse — kun indtægter har deres egen reguleringssats.'
   }
   return entry.recurrence.kind === 'Once' && yearNamed
-    ? 'Beløbet tastes i dagens kroner, og satsen bærer det op til det år — den gentager ingenting. Er satsen nul, følger beløbet ikke priserne og er dermed mindre værd, jo længere ude posten ligger.'
+    ? 'Beløbet tastes i nutidskroner, og satsen bærer det op til det år — den gentager ingenting. Er satsen nul, følger beløbet ikke priserne og er dermed mindre værd, jo længere ude posten ligger.'
     : 'Reguleringssatsen er indtægtens egen og adskilt fra planens inflationsantagelse.'
 }

@@ -484,7 +484,7 @@ describe('fladen', () => {
     expect(screen.queryByRole('button', { name: /gem/i })).toBeNull()
   })
 
-  it('viser én række i årstabellen pr. simuleringsår, i dagens kroner', async () => {
+  it('viser én række i årstabellen pr. simuleringsår, i nutidskroner', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)
     await showYearTable(user)
@@ -495,7 +495,7 @@ describe('fladen', () => {
     expect(within(rows[1]!).getByText('2026')).toBeTruthy()
     expect(within(rows[3]!).getByText('2028')).toBeTruthy()
 
-    // Udgiften er tastet i dagens kroner og står derfor uændret år efter år,
+    // Udgiften er tastet i nutidskroner og står derfor uændret år efter år,
     // selv om motoren fremskriver den med inflationen bag facaden.
     const headers = within(rows[0]!)
       .getAllByRole('columnheader')
@@ -523,7 +523,7 @@ describe('fladen', () => {
 
   it('viser årets overskud i sin egen kolonne, deflateret som de øvrige beløb', async () => {
     // Planen har ingen indtægt og ingen skat: året koster de 40.000, og det
-    // er dem, der mangler at blive flyttet. Beløbet står i dagens kroner år
+    // er dem, der mangler at blive flyttet. Beløbet står i nutidskroner år
     // efter år, selv om motoren løfter udgiften med inflationen bag facaden.
     const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)
@@ -601,12 +601,12 @@ describe('fladen', () => {
     // noten: taster brugeren nettolønnen og lægger et bidrag oveni, går alle
     // tal op og er alligevel forkerte, og ingen invariant fanger det.
     expect(screen.getByText(/brutto inklusive arbejdsgiverbidrag/i)).toBeTruthy()
-    expect(screen.getByLabelText('Beløb, brutto (dagens kroner)')).toBeTruthy()
+    expect(screen.getByLabelText('Beløb, brutto (nutidskroner)')).toBeTruthy()
 
     // En skattefri indtægt har intet arbejdsgiverbidrag i sig, og etiketten
     // lover det ikke.
     await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
-    expect(screen.getByLabelText('Beløb (dagens kroner)')).toBeTruthy()
+    expect(screen.getByLabelText('Beløb (nutidskroner)')).toBeTruthy()
   })
 
   it('gør en udgiftspost til en indtægtspost, og skattebehandlingen følger med', async () => {
@@ -642,7 +642,7 @@ describe('fladen', () => {
 
     // Løftet om arbejdsgiverbidrag hører til arbejdsindkomsten alene — en
     // pensionsudbetaling har intet i sig.
-    expect(screen.getByLabelText('Beløb (dagens kroner)')).toBeTruthy()
+    expect(screen.getByLabelText('Beløb (nutidskroner)')).toBeTruthy()
     expect(screen.queryByText(/brutto inklusive arbejdsgiverbidrag/i)).toBeNull()
 
     // Og skatten følger med: 400.000 uden AM-bidrag og uden arbejdsfradrag
@@ -1148,7 +1148,7 @@ describe('fladen', () => {
       'Navn',
       'Type',
       'Ejer',
-      'Saldo (dagens kroner)',
+      'Saldo (nutidskroner)',
       'Buffer',
     ])
   })
@@ -1818,7 +1818,7 @@ describe('fladen', () => {
     expect(sectionLabels('Indbetalingen')).toEqual(['Navn', 'Kilde', 'Destination'])
     // Kun den ene beløbsform: en procent skal have en post at måle af, og
     // kontakten "Angives som" ville være et valg, der aldrig kan træffes.
-    expect(sectionLabels('Beløb')).toEqual(['Fast beløb (dagens kroner)'])
+    expect(sectionLabels('Beløb')).toEqual(['Fast beløb (nutidskroner)'])
     expect(sectionLabels('Perioden')).toEqual([
       'Gentagelse',
       'Forankring',
@@ -1891,7 +1891,7 @@ describe('fladen', () => {
     await user.selectOptions(kilde, 'Frie midler · Jesper')
 
     expect(screen.queryByRole('heading', { name: /^Følger/ })).toBeNull()
-    expect(sectionLabels('Beløb')).toEqual(['Fast beløb (dagens kroner)'])
+    expect(sectionLabels('Beløb')).toEqual(['Fast beløb (nutidskroner)'])
     expect(sectionLabels('Perioden')).toEqual([
       'Gentagelse',
       'Forankring',
@@ -1982,7 +1982,7 @@ describe('fladen', () => {
     await user.click(screen.getByRole('button', { name: '+ Indbetaling' }))
 
     await user.click(navigatorButton(/Indbetaling 1/))
-    expect(sectionLabels('Beløb')).toEqual(['Fast beløb (dagens kroner)'])
+    expect(sectionLabels('Beløb')).toEqual(['Fast beløb (nutidskroner)'])
   })
 
   it('tilføjer en indbetaling fra de frie midler, når husstandens eneste ordning er en aktiesparekonto', async () => {
@@ -2065,8 +2065,8 @@ describe('fladen', () => {
 
     // De to former er hvert sit felt, ikke to værdier i ét: procenten er væk,
     // og der spørges nu om kroner.
-    expect(sectionLabels('Beløb')).toEqual(['Angives som', 'Fast beløb (dagens kroner)'])
-    expect(screen.getByLabelText('Fast beløb (dagens kroner)')).toBeTruthy()
+    expect(sectionLabels('Beløb')).toEqual(['Angives som', 'Fast beløb (nutidskroner)'])
+    expect(screen.getByLabelText('Fast beløb (nutidskroner)')).toBeTruthy()
     expect(screen.queryByLabelText('Procent')).toBeNull()
   })
 
@@ -2259,9 +2259,9 @@ describe('fladen', () => {
   })
 
   it('deflaterer loftlinjens note på samme måde som dens beløb', async () => {
-    // Enhedsfælden, fladekortet fandt: en note i løbende priser ved siden af
-    // et beløb i dagens kroner, jf. ADR-0001. Forklar-året er i dagens
-    // kroner hele vejen, og noten skal følge den samme omregning som
+    // Enhedsfælden, fladekortet fandt: en note i fremtidskroner ved siden af
+    // et beløb i nutidskroner, jf. ADR-0001. Forklar-året er i nutidskroner
+    // hele vejen, og noten skal følge den samme omregning som
     // kolonnerne — ellers ville primosaldoen stå på sine nominelle 174.200
     // mod et loft, der også viser 174.200, og et råderum på nul, mens der
     // alligevel stod 3.416 kr. indskudt ved siden af.
@@ -2840,23 +2840,23 @@ describe('fladen', () => {
     expect(document.querySelector('.navigatorspalte')).toBeNull()
   })
 
-  it('slår årstabellen om til løbende priser, uden at røre inputfeltet i skuffen', async () => {
+  it('slår årstabellen om til fremtidskroner, uden at røre inputfeltet i skuffen', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)
     await showYearTable(user)
 
-    expect(screen.getByRole('button', { name: 'Dagens kroner', pressed: true })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Nutidskroner', pressed: true })).toBeTruthy()
     const udgifter2028 = () => yearCell(3, 'Udgifter')
     expect(udgifter2028()).toBe('-40.000')
 
-    await user.click(screen.getByRole('button', { name: 'Løbende priser' }))
+    await user.click(screen.getByRole('button', { name: 'Fremtidskroner' }))
 
-    expect(screen.getByRole('button', { name: 'Løbende priser', pressed: true })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Fremtidskroner', pressed: true })).toBeTruthy()
     // 40.000 kr. fremskrevet to år med 2 % — planens inflation, som posten
     // her følger 1:1.
     expect(udgifter2028()).toBe('-41.616')
 
-    // Inputfeltet i skuffen er og bliver i dagens kroner, jf. issue #12.
+    // Inputfeltet i skuffen er og bliver i nutidskroner, jf. issue #12.
     await user.click(screen.getByRole('button', { name: /Faste udgifter/ }))
     expect((screen.getByLabelText(/Beløb/) as HTMLInputElement).value).toBe('40000')
   })
@@ -3164,13 +3164,13 @@ describe('fladen', () => {
     expect(within(hoved).getByText('Satsår 2026')).toBeTruthy()
   })
 
-  it('viser balancestriben for det valgte år, i dagens kroner', async () => {
+  it('viser balancestriben for det valgte år, i nutidskroner', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aThreeYearPlan()} />)
     await showYearTable(user)
 
     const rows = within(screen.getByRole('table')).getAllByRole('row')
-    await user.click(rows[1]!) // 2026 — startåret, hvor dagens kroner og løbende priser er ét
+    await user.click(rows[1]!) // 2026 — startåret, hvor nutidskroner og fremtidskroner er ét
 
     const stribe = document.querySelector('.balancestribe') as HTMLElement
     expect(stripeAmount(stribe, 'Formue primo')).toBe('1.000.000')
@@ -3812,7 +3812,7 @@ describe('fladen', () => {
     await showYearTable(user)
 
     const rows = within(screen.getByRole('table')).getAllByRole('row')
-    await user.click(rows[1]!) // 2026 — startåret, hvor dagens kroner og løbende priser er ét
+    await user.click(rows[1]!) // 2026 — startåret, hvor nutidskroner og fremtidskroner er ét
 
     const holdingsTable = document.querySelector('table.beholdningstabel') as HTMLElement
     const cells = (name: string) =>
@@ -4242,12 +4242,12 @@ describe('fladen', () => {
       const user = userEvent.setup()
       render(<App initialPlan={aThreeYearPlan()} />)
 
-      await user.click(screen.getByRole('button', { name: 'Løbende priser' }))
+      await user.click(screen.getByRole('button', { name: 'Fremtidskroner' }))
       await user.click(iTopbjaelken().getByRole('button', { name: 'Slet alt' }))
       await user.click(iBekraeftelsen().getByRole('button', { name: 'Slet alt' }))
 
       expect(
-        screen.getByRole('button', { name: 'Løbende priser', pressed: true }),
+        screen.getByRole('button', { name: 'Fremtidskroner', pressed: true }),
       ).toBeTruthy()
     })
   })

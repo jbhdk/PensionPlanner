@@ -32,7 +32,7 @@ export type HoldingVariant =
 type HoldingBase = {
   id: HoldingId
   name: string
-  /** Saldoen ved planens startår, hvor dagens kroner og løbende priser er ét. */
+  /** Saldoen ved planens startår, hvor nutidskroner og fremtidskroner er ét. */
   balance: Real
   /** Andel pr. år, ikke procent: 0,07 er 7 %. Nettoafkastsatsen er
       bruttoafkast minus ÅOP og udledes, hvor den vises, jf. ADR-0003. */
@@ -284,7 +284,7 @@ export type Transfer = {
 }
 
 /** Beløbsangivelsen på et lønkildet bidrag: enten en procent af lønposten,
-    eller et fast kronebeløb i dagens kroner. Formen er felterne selv — der er
+    eller et fast kronebeløb i nutidskroner. Formen er felterne selv — der er
     ikke et tredje felt ved siden af dem, der siger hvilken af de to der
     gælder, og et bidrag kan derfor ikke bære begge tal på én gang. */
 type ContributionAmount = { percentageOfEntry: number } | { amountInRealKroner: Real }

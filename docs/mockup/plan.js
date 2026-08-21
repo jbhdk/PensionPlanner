@@ -94,7 +94,7 @@ var YDELSER = [
   { navn: 'ATP', ejer: 'a', beloeb: 26000, startAlder: 72 }
 ];
 
-/* Beløb i dagens kroner. retning: ind | ud. */
+/* Beløb i nutidskroner. retning: ind | ud. */
 var POSTER = [
   { navn: 'Løn', ejer: 'j', retning: 'ind', beloeb: 1150000, skat: 'Arbejdsindkomst',
     forankring: 'alder', periode: 'Nu – Jespers erhvervsophør', gentagelse: 'Hvert år', forfald: 'Jævnt' },
@@ -134,7 +134,7 @@ var OVERFOERSLER = [
 
    Et lønkildet bidrag arver periode, forankring, gentagelse og forfald fra sin
    post og bærer derfor kun destinationen og en beløbsangivelse: enten en
-   procent af posten eller et fast beløb i dagens kroner. Et beholdningskildet
+   procent af posten eller et fast beløb i nutidskroner. Et beholdningskildet
    bidrag har ingen post at arve fra og bærer dem alle selv.
 
    Fradragsretten og loftet står ikke her: begge følger destinationens variant
