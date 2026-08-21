@@ -372,10 +372,10 @@ function bufferPointer(plan: Plan): string | undefined {
     ADR-0016.
 
     Afgiveren skal være en beholdning, en overførsel må hente fra i det år,
-    den begynder: en variant, hvis `PayoutTaxation` er `TaxFree`, og — er den
-    en pensionsordning — først fra dens `PayoutAge`. En hævning fra en
-    aldersopsparing før den alder koster 20 % i afgift og er ikke noget,
-    planen skal kunne beskrive, jf. ADR-0020 og ADR-0022.
+    den begynder: en variant, hvis `PayoutTaxation` ikke er `PersonalIncome`,
+    og — er den en pensionsordning — først fra dens `PayoutAge`. En hævning
+    fra en aldersopsparing før den alder koster 20 % i afgift og er ikke
+    noget, planen skal kunne beskrive, jf. ADR-0020 og ADR-0022.
 
     Reglen er `transferAllowedFrom`s og stilles ét sted; her udledes alene,
     hvilken af de to betingelser der svigtede, så beskeden kan sige hvorfor.
@@ -403,24 +403,15 @@ function transferEnds(plan: Plan): string | undefined {
     const start = periodBounds(transfer.period, owner).from ?? plan.startYear
     if (!transferAllowedFrom(from, owner, start)) {
       // Reglen har afgjort, at en af de to betingelser svigtede; her udledes
-      // alene hvilken. Er varianten skattefri på vejen ud, og har den en dør,
-      // er det døren — kun en pensionsordning har en. Ellers er det
-      // varianten selv.
-      if (isPensionScheme(from) && payoutTaxation(from) === 'TaxFree') {
+      // alene hvilken. Er varianten ikke personlig indkomst på vejen ud, og
+      // har den en dør, er det døren — kun en pensionsordning har en, og både
+      // den skattefri og den afgiftspligtige kan stå bag den. Ellers er det
+      // varianten selv: en `PersonalIncome` tømmes af en udbetalingsplan.
+      if (isPensionScheme(from) && payoutTaxation(from) !== 'PersonalIncome') {
         return (
           `Overførslen ${transfer.name} henter fra beholdningen ${from.name} fra ` +
           `${start}, men dens pensionsudbetalingsalder nås først i ` +
           `${payoutYear(from, owner)}.`
-        )
-      }
-      // De to øvrige former har hver sin grund, og den ene må ikke låne den
-      // andens: en afgiftspligtig ordning tømmes ikke af en udbetalingsplan,
-      // for loven binder hverken dens varighed eller dens årlige beløb, jf.
-      // ADR-0029. Vejen ud af den bygges i en senere skive.
-      if (payoutTaxation(from) === 'Chargeable') {
-        return (
-          `Overførslen ${transfer.name} kommer fra beholdningen ${from.name}, hvis ` +
-          `udbetaling koster en afgift. Værktøjet kan endnu ikke regne på den.`
         )
       }
       return (

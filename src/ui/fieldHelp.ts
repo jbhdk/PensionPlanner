@@ -232,7 +232,7 @@ export const fieldHelp = {
     'Det, flytningen hedder i listen og i forklaringen af et år. Hedder den noget om, hvad pengene skal bruges til, kan to hævninger fra den samme opsparing skelnes fra hinanden. Det indgår ikke i nogen beregning.',
 
   'Transfer.from':
-    'Den beholdning, pengene tages fra. Det kan være enhver opsparing, der ikke koster skat at hæve af — også en aldersopsparing eller en aktiesparekonto, som netop tømmes på denne måde. En ratepension kan derimod ikke: dens udbetaling er bundet af en plan.',
+    'Den beholdning, pengene tages fra. Det kan være enhver opsparing, ejeren selv kan hæve af, når hun vil — frie midler, en aldersopsparing, en aktiesparekonto eller en kapitalpension. En ratepension er bundet af en udbetalingsplan og kan ikke vælges her; en kapitalpension koster til gengæld en afgift på vejen ud.',
 
   'Transfer.to':
     'Den beholdning, pengene lander i. Det er altid frie midler — skal de ind i en pensionsordning, er det en indbetaling i stedet, med et loft og en skattevirkning.',
@@ -249,7 +249,13 @@ export const fieldHelp = {
     'Det beløb, planen bad om i året. Det er tallet fra flytningen selv, løftet med inflationen frem til året.',
 
   'TransferYear.moved':
-    'Det beløb, der faktisk skiftede plads. Det er lavere end det ønskede, når afgiveren ikke havde nok at give af — hverken fra årets begyndelse eller fra de flytninger, der står før denne i planen. Resten blev ikke flyttet og står stadig, hvor den stod.',
+    'Det beløb, der faktisk forlod afgiveren. Det er lavere end det ønskede, når der ikke var nok at give af — hverken fra årets begyndelse eller fra de flytninger, der står før denne i planen. Resten blev ikke hævet og står stadig, hvor den stod.',
+
+  'TransferYear.charge':
+    'Det, staten tog af beløbet på vejen ud. Den rammer kun en hævning fra en kapitalpension, hvor en fast andel går fra hver eneste gang, uanset hvad året ellers rummer af indkomst. Er cellen tom, kostede flytningen ingenting.',
+
+  'TransferYear.landed':
+    'Det, der nåede frem til den beholdning, pengene skulle over på. Det er mindre end det hævede, når der var en afgift undervejs, og ellers præcis det samme beløb.',
 
   // ---------- Årstabellens kolonner ----------
 
@@ -290,10 +296,10 @@ export const fieldHelp = {
     'Det, ordningerne tilsammen tømte sig med i året. Pengene flytter sig blot over på bufferbeholdningen — husstanden havde dem i forvejen — og kun skatten af dem forsvinder. De er dér, året henter sine penge, når lønnen er hørt op.',
 
   'SurplusBand.TransfersIn':
-    'Penge, planen hentede hjem fra en anden beholdning og over på bufferbeholdningen. Formuen er den samme bagefter, men beløbet står nu dér, hvor årets regninger betales fra, og det er netop dét, et år med for lidt mangler.',
+    'Penge, planen hentede hjem fra en anden beholdning og over på bufferbeholdningen. Beløbet er det, der landede — kom det fra en kapitalpension, er afgiften trukket fra undervejs. Ellers er formuen den samme bagefter, og pengene står nu dér, hvor årets regninger betales fra.',
 
   'SurplusBand.Tax':
-    'Alt, året kostede i personlige afgifter til det offentlige — ikke det, ordningerne selv trækker af deres eget afkast. Beløbet er større, end de synlige indtægter kan forklare, fordi afkast uden for ordningerne også beskattes, mens afkastet selv ikke tæller med her.',
+    'Alt, året kostede i personlig skat til det offentlige — ikke det, ordningerne selv trækker af deres eget afkast. Beløbet er større, end de synlige indtægter kan forklare, fordi afkast uden for ordningerne også beskattes, mens afkastet selv ikke tæller med her.',
 
   'TaxAssessment.total':
     'Hvad personen selv betaler i indkomstskat i året, alle lag lagt sammen. Aktieindkomstens del står ikke med her: den regnes af husstandens samlede gevinst på aktier og kan ikke deles mellem to.',

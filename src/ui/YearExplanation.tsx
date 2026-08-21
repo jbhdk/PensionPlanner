@@ -486,13 +486,17 @@ function OtherTransfersBlock({
   )
 }
 
-/** Årets overførsler: hvad planen bad om, og hvad der faktisk flyttede sig.
+/** Årets overførsler: hvad planen bad om, hvad der faktisk forlod
+    afgiveren, hvad staten tog undervejs, og hvad der landede hos
+    modtageren.
 
-    De to tal står ved siden af hinanden, fordi de kan være forskellige.
-    Afgiverens saldo ved årets begyndelse er alt, der er at give af, og et
-    fast kronebeløb, der overstiger den, afkortes — en tavs afkortning er den
-    slags fejl, der aldrig viser sig, jf. ADR-0022. I de fleste år er de to
-    ens, og linjen siger da blot, hvad der blev flyttet.
+    De fire tal kan alle være forskellige. Afgiverens saldo ved årets
+    begyndelse er alt, der er at give af, og et fast kronebeløb, der
+    overstiger den, afkortes — en tavs afkortning er den slags fejl, der
+    aldrig viser sig, jf. ADR-0022. Afgiften rammer kun en hævning fra en
+    `Chargeable` ordning og er cellen tom for enhver anden afgiver, jf.
+    ADR-0029. I de fleste år er de to sidste tal ens med det hævede, og
+    linjen siger da blot, hvad der blev flyttet.
 
     Rækken hedder de to ender ved navn, som indbetalingens gør. Hvilke
     overførsler tabellen fører, afgøres af `counts`: bufferbeholdningen står
@@ -519,7 +523,9 @@ function TransfersTable({
           <tr>
             <th title={fieldHelp['TransferYear.transfer']}>Overførsel</th>
             <th title={fieldHelp['TransferYear.requested']}>Bedt om</th>
-            <th title={fieldHelp['TransferYear.moved']}>Flyttet</th>
+            <th title={fieldHelp['TransferYear.moved']}>Hævet</th>
+            <th title={fieldHelp['TransferYear.charge']}>Afgift</th>
+            <th title={fieldHelp['TransferYear.landed']}>Ind på kontoen</th>
           </tr>
         </thead>
         <tbody>
@@ -532,6 +538,18 @@ function TransfersTable({
               <td>{name(transfer.transfer)}</td>
               <td>{kroner(display(transfer.requested))}</td>
               <td>{kroner(display(transfer.moved))}</td>
+              <td>
+                {transfer.payoutTaxation === 'Chargeable'
+                  ? kroner(display(transfer.moved - transfer.landed))
+                  : ''}
+              </td>
+              <td>
+                {kroner(
+                  display(
+                    transfer.payoutTaxation === 'Chargeable' ? transfer.landed : transfer.moved,
+                  ),
+                )}
+              </td>
             </tr>
             ))}
         </tbody>

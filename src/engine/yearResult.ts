@@ -17,11 +17,15 @@ import type { LayerAmount, MarginalTaxRates, TaxAssessment } from './tax/assessT
     bufferen ikke er negativ.
 
     Likviditet andetsteds er præcis de beholdninger, en overførsel kan nå i
-    netop det år: de øvrige frie midler, aktiesparekontoen, og en
-    aldersopsparing, hvis året har passeret dens `PayoutAge`. En ratepension
-    tæller ikke med — den kan kun nås af en udbetalingsplan, der binder ti år
-    frem, og det er en anden plan og ikke en manglende overførsel, jf.
-    ADR-0022. */
+    netop det år — de øvrige frie midler, aktiesparekontoen, og en
+    aldersopsparing eller en kapitalpension, hvis året har passeret dens
+    `PayoutAge` — men målt med det beløb, overførslen ville lande med, og
+    ikke med saldoen. En kapitalpension, hvis afgift æder forskellen, er en
+    beholdning, overførslen kan nå og alligevel ikke lukke hullet med, jf.
+    ADR-0029; `Incomplete` ville ellers love noget, planen ikke kan indfri.
+    En ratepension tæller slet ikke med — den kan kun nås af en
+    udbetalingsplan, der binder ti år frem, og det er en anden plan og ikke
+    en manglende overførsel, jf. ADR-0022. */
 export type BufferState = 'Incomplete' | 'Unsustainable'
 
 /** Hvorfor et loft er brudt i ét simuleringsår, jf. ADR-0018:
@@ -75,23 +79,37 @@ export type ContributionYear = {
   intoHolding: Nominal
 }
 
-/** Én overførsels to beløb i ét simuleringsår, i årets egne løbende priser
-    — kun for de overførsler der faktisk falder i året. Det ene er, hvad
-    planen bad om; det andet, hvad der faktisk blev flyttet, når afgiverens
-    primosaldo ikke rakte.
+/** Én overførsels beløb i ét simuleringsår, i årets egne løbende priser —
+    kun for de overførsler der faktisk falder i året. To af felterne står
+    altid: `requested` er, hvad planen bad om, og `moved` er, hvad der
+    faktisk forlod afgiveren, når dens primosaldo ikke rakte. De to er ens i
+    næsten alle år, og linjen findes for de år, hvor de ikke er: en tavs
+    afkortning er den slags fejl, der aldrig viser sig.
 
-    De to er ens i næsten alle år, og linjen findes for de år, hvor de ikke
-    er: en tavs afkortning er den slags fejl, der aldrig viser sig. Samme
-    greb som `CapYear` under et `OnBalance`-loft, hvor det afviste beløb
-    ellers ville have været usynligt, jf. ADR-0019 og ADR-0022.
+    En union på afgiverens `PayoutTaxation`, som `CapYear` er det på loftets
+    form, jf. ADR-0029. En `Chargeable`-afgiver giver linjen et tredje
+    beløb, `landed` — det, der nåede frem til de frie midler — og afgiften
+    selv står ikke på linjen: den er `moved` minus `landed` og udledes, hvor
+    den vises, ligesom `NetReturn` og `CapYear`s råderum. En `TaxFree`-afgiver
+    har ingen kile mellem de to og bærer derfor ikke feltet — et felt, hvor
+    de to altid var ens, ville påstå, at der var noget at se.
 
     Forfaldet står ikke her; det er en egenskab ved overførslen selv og læses
     fra `Plan.transfers`, ligesom `EntryYear` læser sit fra `Plan.entries`. */
-export type TransferYear = {
-  transfer: TransferId
-  requested: Nominal
-  moved: Nominal
-}
+export type TransferYear =
+  | {
+      payoutTaxation: 'TaxFree'
+      transfer: TransferId
+      requested: Nominal
+      moved: Nominal
+    }
+  | {
+      payoutTaxation: 'Chargeable'
+      transfer: TransferId
+      requested: Nominal
+      moved: Nominal
+      landed: Nominal
+    }
 
 /** Én persons indbetaling til én slags loftbelagt ordning i ét
     simuleringsår, målt mod det loft der gjaldt. Linjen kan efterregnes af

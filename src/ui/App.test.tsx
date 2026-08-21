@@ -3424,6 +3424,8 @@ describe('fladen', () => {
       'Ind i aktiedepotet',
       '30.000',
       '30.000',
+      '',
+      '30.000',
     ])
 
     expect(screen.queryByRole('heading', { name: 'Overførslerne', level: 3 })).toBeNull()
@@ -3953,7 +3955,7 @@ describe('fladen', () => {
     expect(cells).toEqual(['Indbetalingen', '48.000', '44.160'])
   })
 
-  it('viser overførslens to beløb i forklar-året, så en afkortning kan ses', async () => {
+  it('viser overførslens beløb i forklar-året, så en afkortning kan ses', async () => {
     // En tavs afkortning er den slags fejl, der aldrig viser sig: uden
     // linjen ville planen bede om 300.000 og flytte 200.000, uden at noget
     // på skærmen sagde det, jf. ADR-0022.
@@ -3988,7 +3990,7 @@ describe('fladen', () => {
       .getAllByRole('cell')
       .map((cell) => cell.textContent)
 
-    expect(cells).toEqual(['Overførslen', '300.000', '200.000'])
+    expect(cells).toEqual(['Overførslen', '300.000', '200.000', '', '200.000'])
   })
 
   it('opdaterer forklar-året med det samme, når noget rettes i skuffen, mens forklaringen er åben', async () => {

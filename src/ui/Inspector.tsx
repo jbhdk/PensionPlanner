@@ -7,6 +7,8 @@ import {
   isOpenToContributions,
   isPensionScheme,
   isUniquePerPerson,
+  payoutTaxation,
+  transferCharge,
 } from '../engine/holdingVariant'
 import type {
   Anchor,
@@ -59,7 +61,7 @@ import {
   TextField,
   ToggleField,
 } from './fields'
-import { procent } from './format'
+import { kroner, procent } from './format'
 import {
   addPayoutSchedule,
   addPayoutStart,
@@ -1517,6 +1519,21 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
             onChange(withTransfer(plan, id, (t) => ({ ...t, amountInRealKroner })))
           }
         />
+        {/* Denne plans tal og ikke feltets — en Hint og ikke en forklaring,
+            jf. ADR-0021. Afgiften rammer kun en kapitalpension, og beløbet
+            her er det ubeskårne: rækker ordningens saldo ikke til det
+            ønskede, afkortes det først, og forklar-året viser det faktiske. */}
+        {from && payoutTaxation(from) === 'Chargeable' && (
+          <Hint>
+            Kapitalpensionens afgift trækkes fra på vejen ud. Af{' '}
+            {kroner(transfer.amountInRealKroner)} kr. lander{' '}
+            {kroner(
+              transfer.amountInRealKroner -
+                transferCharge(from, transfer.amountInRealKroner, latestRateYear()),
+            )}{' '}
+            kr. i de frie midler.
+          </Hint>
+        )}
       </Section>
       <PeriodSection
         value={transfer}

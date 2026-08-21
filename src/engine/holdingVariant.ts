@@ -475,3 +475,13 @@ export function cap(
 export function cappedVariant(holding: Holding): CappedVariant | undefined {
   return cappedVariants.find((variant) => variant === holding.variant)
 }
+
+/** Afgiften af et beløb, der forlader beholdningen — nul for enhver variant,
+    der ingen bærer. Satsen slås op i satsåret på nøjagtig samme måde som
+    beholdningsskattens, jf. `holdingTaxRate`; forskellen er, hvad den ganges
+    med. Beholdningsskatten ganges med årets afkast, afgiften med det beløb,
+    der forlader beholdningen på vejen ud, jf. ADR-0029. */
+export function transferCharge(holding: Holding, amount: Nominal, rates: RateYear): Nominal {
+  const rate = table[holding.variant].chargeRate
+  return rate === undefined ? 0 : amount * rates.taxRates[rate]
+}

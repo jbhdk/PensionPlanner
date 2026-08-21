@@ -7,6 +7,7 @@ import type {
   PayoutSchedule,
   Plan,
 } from './plan'
+import { yearAtAge } from './age'
 import { simulate } from './simulate'
 import { totalTaperBase } from './tax/assessHousehold'
 import { totalTax } from './tax/assessTax'
@@ -1227,6 +1228,7 @@ describe('overførsler', () => {
     ).toBe(200_000)
     expect(bufferBalance(year)).toBe(800_000)
     expect(year.transfers.find((t) => t.transfer === 'ud')).toEqual({
+      payoutTaxation: 'TaxFree',
       transfer: 'ud',
       requested: 150_000,
       moved: 0,
@@ -1431,19 +1433,19 @@ describe('pensionsbeholdninger', () => {
     expect(() => simulate(outOf('LifeAnnuity'))).toThrow(/udbetalingsplan/i)
   })
 
-  it('afviser en overførsel ud af en kapitalpension, og siger ikke det forkerte om hvorfor', () => {
-    // Ordningens `PayoutTaxation` er `Chargeable`, og der er endnu ingen vej
-    // ud af den. Afvisningen må ikke låne ratepensionens begrundelse:
+  it('afviser en overførsel ud af en kapitalpension før dens pensionsudbetalingsalder', () => {
+    // Kapitalpensionen har samme dør som de øvrige pensionsordninger: en
+    // overførsel må først hente fra den, når `PayoutAge` er nået, jf.
+    // ADR-0029. Beskeden må ikke låne ratepensionens begrundelse —
     // kapitalpensionens udbetaling er hverken personlig indkomst eller noget,
-    // en udbetalingsplan kan bære — loven binder hverken dens varighed eller
-    // dens årlige beløb, jf. ADR-0029.
+    // en udbetalingsplan kan bære.
     const plan = aPlanWithPensionScheme('CapitalPension', {
       transfers: [
         aTransfer({ from: 'ordning', to: 'free-assets', amountInRealKroner: 10_000 }),
       ],
     })
 
-    expect(() => simulate(plan)).toThrow(/afgift/i)
+    expect(() => simulate(plan)).toThrow(/pensionsudbetalingsalder/i)
     expect(() => simulate(plan)).not.toThrow(/udbetalingsplan/i)
   })
 
@@ -3871,7 +3873,7 @@ describe('overførsel ud af en skattefri ordning', () => {
     const truncated = years.find((y) => y.year === oldAgeSavingsPayoutYear)!
 
     expect(truncated.transfers).toEqual([
-      { transfer: 'transfer', requested: 150_000, moved: 100_000 },
+      { payoutTaxation: 'TaxFree', transfer: 'transfer', requested: 150_000, moved: 100_000 },
     ])
     // Året før falder overførslen ikke, og linjen findes derfor ikke.
     expect(years.find((y) => y.year === oldAgeSavingsPayoutYear - 1)!.transfers).toEqual([])
@@ -4030,6 +4032,125 @@ describe('overførsel ud af en skattefri ordning', () => {
 
     expect(stateIn(oldAgeSavingsPayoutYear - 1)).toBe('Unsustainable')
     expect(stateIn(oldAgeSavingsPayoutYear)).toBe('Incomplete')
+  })
+})
+
+/** En kapitalpension, gyldig at oprette — før udgangen af 2012 — med en
+    fast `payoutAgeOverride`, så testene ikke selv skal regne sig frem til
+    det kalenderår, regimet ville give. */
+function aCapitalPension(balance: number): Holding {
+  return {
+    id: 'ordning',
+    name: 'Ordning',
+    variant: 'CapitalPension',
+    balance,
+    grossReturn: 0,
+    annualCostRate: 0,
+    openedOn: { year: 2012, month: 12 },
+    payoutAgeOverride: 65,
+  }
+}
+
+describe('overførsel ud af en afgiftspligtig ordning', () => {
+  it('trækker afgiften af det, der forlod ordningen, og lader resten lande i de frie midler', () => {
+    // Kapitalpensionens afgift er 40 %, jf. docs/satser/2026.md. Et hævet
+    // beløb på 100.000 lander derfor med 60.000 i de frie midler, og
+    // afgiften — de 40.000 imellem — forlader husstanden gennem skatten og
+    // ikke gennem en bevægelse, jf. ADR-0029. Overførslen falder én gang,
+    // ved `PayoutAge`, så linjen kan findes uden at kende kalenderåret.
+    const plan = aPlan({
+      balance: 0,
+      holdings: [aCapitalPension(1_000_000)],
+      transfers: [
+        aTransfer({
+          from: 'ordning',
+          to: 'free-assets',
+          amountInRealKroner: 100_000,
+          period: { anchor: 'PersonAge', from: 65 },
+          recurrence: { kind: 'Once' },
+        }),
+      ],
+    })
+
+    const year = simulateChecked(plan).find((y) => y.transfers.length > 0)!
+
+    expect(holding(year, 'ordning').closingBalance).toBe(900_000)
+    expect(bufferBalance(year)).toBe(60_000)
+    expect(year.transfers).toEqual([
+      {
+        payoutTaxation: 'Chargeable',
+        transfer: 'transfer',
+        requested: 100_000,
+        moved: 100_000,
+        landed: 60_000,
+      },
+    ])
+  })
+
+  it('afkorter til saldoen, før afgiften regnes af det, der faktisk forlod ordningen', () => {
+    // Bad om 1.500.000 fra en ordning med kun 1.000.000 at give af: hævet
+    // bliver 1.000.000, og afgiften er 40 % af netop det beløb — ikke af det
+    // ønskede, og ikke afkortet en anden gang efter afgiften.
+    const plan = aPlan({
+      balance: 0,
+      holdings: [aCapitalPension(1_000_000)],
+      transfers: [
+        aTransfer({
+          from: 'ordning',
+          to: 'free-assets',
+          amountInRealKroner: 1_500_000,
+          period: { anchor: 'PersonAge', from: 65 },
+          recurrence: { kind: 'Once' },
+        }),
+      ],
+    })
+
+    const year = simulateChecked(plan).find((y) => y.transfers.length > 0)!
+
+    expect(holding(year, 'ordning').closingBalance).toBe(0)
+    expect(bufferBalance(year)).toBe(600_000)
+    expect(year.transfers).toEqual([
+      {
+        payoutTaxation: 'Chargeable',
+        transfer: 'transfer',
+        requested: 1_500_000,
+        moved: 1_000_000,
+        landed: 600_000,
+      },
+    ])
+  })
+
+  it('kalder året uholdbart, når afgiften æder det, en kapitalpension ellers ville have dækket', () => {
+    // Eksemplet fra ADR-0029: en buffer på −70.000 og en kapitalpension på
+    // 100.000 dækker kun 60.000 af hullet efter de 40 % i afgift, og
+    // `Incomplete` ville ellers love noget, en overførsel ikke kan indfri.
+    // Året er det, hvor `PayoutAge` 65 nås — folkepensionen er ikke begyndt
+    // endnu, så bufferen står stadig præcis ved sin startsaldo.
+    const plan = aPlan({
+      balance: -70_000,
+      holdings: [aCapitalPension(100_000)],
+    })
+    const doorOpen = yearAtAge(plan.household.persons[0]!, 65)
+
+    const year = simulateChecked(plan).find((y) => y.year === doorOpen)!
+
+    expect(bufferBalance(year)).toBe(-70_000)
+    expect(year.bufferState).toBe('Unsustainable')
+  })
+
+  it('kalder samme hul ufuldstændigt, når det landede beløb rækker', () => {
+    // Modstykket til testen ovenfor: et mindre hul, som de 60.000, en fuld
+    // tømning ville lande med, sagtens dækker.
+    const plan = aPlan({
+      balance: -50_000,
+      holdings: [aCapitalPension(100_000)],
+    })
+    const doorOpen = yearAtAge(plan.household.persons[0]!, 65)
+
+    const year = simulateChecked(plan).find((y) => y.year === doorOpen)!
+
+    expect(bufferBalance(year)).toBe(-50_000)
+    expect(year.bufferState).toBe('Incomplete')
   })
 })
 

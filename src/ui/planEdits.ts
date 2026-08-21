@@ -468,11 +468,11 @@ export function withTransfer(
 
 /** De beholdninger, en overførsels ene ende kan pege på.
 
-    De to ender har hver sin regel, jf. ADR-0016 og ADR-0022: afgiveren skal
-    være en variant, hvis `PayoutTaxation` er `TaxFree` — også
-    aldersopsparingen og aktiesparekontoen, som netop tømmes af en overførsel
-    — og destinationen skal være frie midler, for ind i en ordning er det en
-    indbetaling.
+    De to ender har hver sin regel, jf. ADR-0016 og ADR-0029: afgiveren skal
+    være en variant, hvis `PayoutTaxation` ikke er `PersonalIncome` — også
+    aldersopsparingen, aktiesparekontoen og kapitalpensionen, som netop
+    tømmes af en overførsel — og destinationen skal være frie midler, for ind
+    i en ordning er det en indbetaling.
 
     Ét sted, fordi tre spørger: skuffens to lister, byttegrebet herunder, og
     svaret på om en overførsel overhovedet kan tilføjes. Regnet hvert sit sted
@@ -481,7 +481,7 @@ export function transferEndOptions(plan: Plan, end: 'from' | 'to'): Holding[] {
   const holdings = plan.household.persons.flatMap((person) => person.holdings)
   return end === 'to'
     ? holdings.filter(isFreeAssets)
-    : holdings.filter((holding) => payoutTaxation(holding) === 'TaxFree')
+    : holdings.filter((holding) => payoutTaxation(holding) !== 'PersonalIncome')
 }
 
 /** Sætter den ene ende af en overførsel. Vælges den beholdning, der allerede

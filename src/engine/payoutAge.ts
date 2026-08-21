@@ -90,23 +90,27 @@ export function payoutStartYear(start: AgeBound, owner: Person): SimulationYear 
 /** Om en `Transfer` må hente fra beholdningen i året — de to betingelser, der
     tilsammen er "de beholdninger, en overførsel kan nå".
 
-    Den første er variantens: kun en `PayoutTaxation` på `TaxFree` kan tømmes
-    af en overførsel, fordi overførslen ingen skattevirkning har, og en
-    udbetaling, der er personlig indkomst, skal gennem en `PayoutSchedule`.
-    Den anden er årets: en pensionsordnings dør er låst indtil dens
-    `PayoutAge`. Aktiesparekontoen og de frie varianter har ingen dør, og
-    reglen rører dem ikke. Begge dele står i ADR-0022.
+    Den første er variantens: en overførsel må hente fra enhver variant,
+    hvis `PayoutTaxation` ikke er `PersonalIncome` — både en `TaxFree` og en
+    `Chargeable`. Skellet er ikke, om flytningen koster noget, men om loven
+    binder både start, varighed og årligt beløb: gør den det, skal pengene
+    gennem en `PayoutSchedule` i stedet, og en overførsel ville påstå en
+    lovregel, der ikke findes. Den anden er årets: en pensionsordnings dør er
+    låst indtil dens `PayoutAge`. Aktiesparekontoen og de frie varianter har
+    ingen dør, og reglen rører dem ikke. Begge dele står i ADR-0022 og
+    ADR-0029.
 
-    Ét spørgsmål med ét svar, fordi to steder spørger om det samme:
-    `validatePlan` afviser en plan, der beder om det umulige, og
+    Ét spørgsmål med ét svar, fordi tre steder spørger om det samme:
+    `validatePlan` afviser en plan, der beder om det umulige,
+    `transferEndOptions` tilbyder kun det, fladen selv ville acceptere, og
     `BufferState` afgør `Incomplete` mod `Unsustainable` på præcis de
     beholdninger, en manglende overførsel kunne have nået. Regnet hvert sit
-    sted kunne de to komme til at læse den samme brøkalder forskelligt. */
+    sted kunne de komme til at læse den samme brøkalder forskelligt. */
 export function transferAllowedFrom(
   holding: Holding,
   owner: Person,
   year: SimulationYear,
 ): boolean {
-  if (payoutTaxation(holding) !== 'TaxFree') return false
+  if (payoutTaxation(holding) === 'PersonalIncome') return false
   return !isPensionScheme(holding) || year >= payoutYear(holding, owner)
 }

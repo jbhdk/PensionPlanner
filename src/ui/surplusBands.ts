@@ -51,15 +51,19 @@ export const surplusBandOrder: { name: SurplusBandName; label: string; direction
     pointen med opdelingen, og det er kun sandt, fordi hvert bånd er målt på
     den bevægelse, det rent faktisk gjorde på bufferen:
 
-    - **Skatten** er husstandens egen. Beholdningsskatten trækkes fra igen:
-      den er trukket af beholdningens saldo sammen med afkastet og passerer
+    - **Skatten** er husstandens egen, plus afgiften på en overførsel ud af
+      en `Chargeable` ordning: begge forlader husstanden uden at passere
+      bufferen selv, jf. ADR-0029. Beholdningsskatten trækkes fra igen: den
+      er trukket af beholdningens saldo sammen med afkastet og passerer
       aldrig bufferen, jf. ADR-0026.
     - **Indbetalingen** er `intoHolding` og ikke `fromSource`. AM-delen
       forlod bufferen som en del af årets skat og ligger allerede i
       skattebåndet; talt med begge steder ville bidraget betales to gange.
-    - **Overførslerne** tæller kun med, når den ene ende er bufferen. En
-      flytning mellem to andre beholdninger rører den ikke og hverken løfter
-      eller sænker årets overskud.
+    - **Overførslerne** tæller kun med, når den ene ende er bufferen, og
+      beløbet ind er det, der landede — er afgiveren `Chargeable`, er
+      afgiften trukket fra undervejs, jf. ADR-0029. En flytning mellem to
+      andre beholdninger rører hverken bånd og hverken løfter eller sænker
+      årets overskud.
 
     Udledt af årsresultatet frem for gemt, ganske som `surplus` selv. */
 export function surplusBands(year: YearResult, plan: Plan): SurplusBand[] {
@@ -67,11 +71,11 @@ export function surplusBands(year: YearResult, plan: Plan): SurplusBand[] {
     IncomeEntries: entryTotal(year, plan, 'Income'),
     Benefits: benefitTotal(year),
     Payouts: sum(year.holdings, (holding) => holding.payout),
-    TransfersIn: transferTotal(year, plan, ({ to }) => to === plan.buffer),
+    TransfersIn: transferTotal(year, plan, ({ to }) => to === plan.buffer, 'landed'),
     Tax: year.tax - sum(year.holdings, (holding) => holding.tax),
     ExpenseEntries: entryTotal(year, plan, 'Expense'),
     Contributions: contributionTotal(year, plan),
-    TransfersOut: transferTotal(year, plan, ({ from }) => from === plan.buffer),
+    TransfersOut: transferTotal(year, plan, ({ from }) => from === plan.buffer, 'moved'),
   }
 
   return surplusBandOrder.map((band) => ({ ...band, amount: amounts[band.name] }))
@@ -98,15 +102,25 @@ function benefitTotal(year: YearResult): Nominal {
   })
 }
 
+/** Summen af de overførsler, `counts` udpeger, målt i `amount`: `'moved'` er
+    det, der forlod afgiveren, og `'landed'` er det, der nåede frem — de to
+    er ens, når afgiveren er `TaxFree`, og forskellen er afgiften, når den
+    er `Chargeable`, jf. ADR-0029. `TransfersOut` måler altid `'moved'`:
+    bufferen selv er aldrig en `Chargeable` afgiver, så feltet findes ikke
+    på den ende. */
 function transferTotal(
   year: YearResult,
   plan: Plan,
   counts: (ends: { from: string; to: string }) => boolean,
+  amount: 'moved' | 'landed',
 ): Nominal {
   const ends = new Map(plan.transfers.map((transfer) => [transfer.id, transfer]))
-  return sum(year.transfers, (transfer) =>
-    counts(ends.get(transfer.transfer)!) ? transfer.moved : 0,
-  )
+  return sum(year.transfers, (transfer) => {
+    if (!counts(ends.get(transfer.transfer)!)) return 0
+    return amount === 'landed' && transfer.payoutTaxation === 'Chargeable'
+      ? transfer.landed
+      : transfer.moved
+  })
 }
 
 /** En `EntrySourced` indbetaling har altid bufferen som kilde: lønnen landede

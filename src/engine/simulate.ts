@@ -37,6 +37,8 @@ import {
   hasDeductibility,
   payoutScheduleOf,
   payoutStartOf,
+  payoutTaxation,
+  transferCharge,
 } from './holdingVariant'
 import { conversionFactor, isLifeAnnuity } from './lifeAnnuity'
 import { rateYearFor } from './rates/rates'
@@ -63,11 +65,19 @@ import type {
     rent faktisk falder i det pågældende år. */
 type ActiveEntry = { entry: Entry; amount: Nominal }
 
-/** En overførsel sammen med dens to beløb i årets løbende priser, for de
+/** En overførsel sammen med dens beløb i årets løbende priser, for de
     overførsler der rent faktisk falder i det pågældende år: hvad planen bad
-    om, og hvad afgiverens saldo rakte til. De to er ens i næsten alle år, og
-    forskellen er den, `TransferYear` gør synlig. */
-type ActiveTransfer = { transfer: Transfer; requested: Nominal; amount: Nominal }
+    om, hvad afgiverens saldo rakte til (`amount`), og hvad der landede hos
+    modtageren (`landed`) — lavere end `amount`, når afgiveren er
+    `Chargeable`, jf. ADR-0029. `from` er afgiverens egen beholdning, så dens
+    variant kan slås op uden et andet opslag i planen. */
+type ActiveTransfer = {
+  transfer: Transfer
+  from: Holding
+  requested: Nominal
+  amount: Nominal
+  landed: Nominal
+}
 
 /** En indbetaling sammen med dens to beløb i årets løbende priser, dens
     forfald og den beholdning, pengene forlader — for de indbetalinger der
@@ -172,7 +182,7 @@ function simulateYear(
   // Overførslerne afkortes, før noget vejes ind, af samme grund som
   // lofterne: kun det, der faktisk flyttede sig, må forrente sig i den ende,
   // det landede i.
-  const transfers = transfersInYear(plan, year, opening)
+  const transfers = transfersInYear(plan, year, opening, rates)
 
   // Lofterne opgøres, før noget vejes ind. En loftform, der afkorter selve
   // indbetalingen, skal være afgjort først — ellers forrenter penge sig et
@@ -210,9 +220,9 @@ function simulateYear(
   // Overførslen vejer ind i begge ender, jf. ADR-0004 — men enderne spørges
   // hver for sig: en jævn overførsel til eller fra bufferen vejer nul i
   // bufferens ende og fuldt i den andens, jf. ADR-0024.
-  const afterTransfers = transfers.reduce((years, { transfer, amount }) => {
+  const afterTransfers = transfers.reduce((years, { transfer, amount, landed }) => {
     const { from, to, timing } = transfer
-    return withWeightedFlow(years, from, to, amount, timing, plan.buffer)
+    return withWeightedFlow(years, from, to, amount, landed, timing, plan.buffer)
   }, afterEntries)
   // Indbetalingen vejer ind i begge ender som en overførsel. Bufferen fik
   // hele bruttolønnen vægtet ind med posten, og uden modposten her ville de
@@ -221,7 +231,7 @@ function simulateYear(
   // skat rører aldrig afkastgrundlaget.
   const afterContributions = contributions.reduce(
     (years, { contribution, from, intoHolding, timing }) =>
-      withWeightedFlow(years, from, contribution.to, intoHolding, timing, plan.buffer),
+      withWeightedFlow(years, from, contribution.to, intoHolding, intoHolding, timing, plan.buffer),
     afterTransfers,
   )
   // Raten vejer kun ind i afgiverens ende. Forfaldet er ikke et felt på
@@ -267,11 +277,14 @@ function simulateYear(
   // faktiske, vægtede afkast og bæres af beholdningen selv.
   const credited = creditReturn(annuitised, rates)
 
-  // En overførsel flytter sit fulde beløb mellem afgiver og modtager. Den
-  // rammer aldrig skatten eller pengestrømmen, jf. `Transfer`.
+  // En overførsel flytter sit fulde beløb ud af afgiveren, men kun det, der
+  // landede, ind i modtageren — de to er de samme, når afgiveren er
+  // `TaxFree`, og forskellen er afgiften, når den er `Chargeable`, jf.
+  // ADR-0029. Afgiften selv rammer aldrig pengestrømmen: den forlader
+  // husstanden gennem `tax`-leddet nedenfor, ikke gennem en bevægelse her.
   const moved = transfers.reduce(
-    (years, { transfer, amount }) =>
-      withMovement(withMovement(years, transfer.from, -amount), transfer.to, amount),
+    (years, { transfer, amount, landed }) =>
+      withMovement(withMovement(years, transfer.from, -amount), transfer.to, landed),
     credited,
   )
 
@@ -370,9 +383,10 @@ function simulateYear(
   )
 
   // Lukningen gør rækkerne til årsresultatets beholdningsår. Først dér er
-  // alle tre bærere af årets skat kendt, og først dér kan de lægges sammen.
+  // alle fire bærere af årets skat kendt, og først dér kan de lægges sammen.
   const holdings = closeYear(settled)
-  const tax = totalYearTax(household, holdings)
+  const transferChargeTotal = transfers.reduce((sum, { amount, landed }) => sum + (amount - landed), 0)
+  const tax = totalYearTax(household, holdings, transferChargeTotal)
 
   return {
     year,
@@ -391,11 +405,17 @@ function simulateYear(
       fromSource,
       intoHolding,
     })),
-    transfers: transfers.map(({ transfer, requested, amount }) => ({
-      transfer: transfer.id,
-      requested,
-      moved: amount,
-    })),
+    transfers: transfers.map(({ transfer, from, requested, amount, landed }) =>
+      payoutTaxation(from) === 'Chargeable'
+        ? {
+            payoutTaxation: 'Chargeable' as const,
+            transfer: transfer.id,
+            requested,
+            moved: amount,
+            landed,
+          }
+        : { payoutTaxation: 'TaxFree' as const, transfer: transfer.id, requested, moved: amount },
+    ),
     persons: plan.household.persons.map((person, index) => ({
       person: person.id,
       shareIncome: shareIncomeByPerson.get(person.id)!,
@@ -407,7 +427,7 @@ function simulateYear(
       caps: contributionsByPersonId.get(person.id)!.caps,
     })),
     shareIncomeTax: household.shareIncomeTax,
-    bufferState: bufferState(plan, holdings, year),
+    bufferState: bufferState(plan, holdings, year, rates),
     capBreach: capBreach([...contributionsByPersonId.values()]),
   }
 }
@@ -424,9 +444,14 @@ function sumOver(holdings: HoldingYear[], of: (holding: HoldingYear) => Nominal)
     det år, og ikke summen af alle øvrige, jf. ADR-0022. Summen af alle øvrige
     talte likviditet med, som ingen overførsel kunne hente: en ratepension kan
     kun nås af en udbetalingsplan, der binder ti år frem, og en aldersopsparing
-    først fra sin `PayoutAge`. Spørgsmålet stilles derfor gennem
-    `transferAllowedFrom`, det samme opslag, `validatePlan` afviser en umulig
-    overførsel med — de to må ikke kunne svare hver sit.
+    eller en kapitalpension først fra sin `PayoutAge`. Spørgsmålet stilles
+    derfor gennem `transferAllowedFrom`, det samme opslag, `validatePlan`
+    afviser en umulig overførsel med — de to må ikke kunne svare hver sit.
+
+    Målt er ikke saldoen, men det beløb, en fuld tømning ville lande med, jf.
+    ADR-0029: en kapitalpension på 100.000 med 40 % i afgift dækker kun
+    60.000 af et hul, og talte saldoen med uden fradrag, ville `Incomplete`
+    love noget, en overførsel ikke kan indfri.
 
     Året er årets, og svaret kan derfor skifte undervejs: den samme plan er
     `Unsustainable`, mens aldersopsparingens dør er lukket, og `Incomplete`
@@ -435,21 +460,24 @@ function bufferState(
   plan: Plan,
   holdings: HoldingYear[],
   year: SimulationYear,
+  rates: RateYear,
 ): BufferState | undefined {
   const buffer = holdings.find((holding) => holding.holding === plan.buffer)!
   if (buffer.closingBalance >= 0) return undefined
 
-  const reachable = new Set(
-    plan.household.persons.flatMap((person) =>
+  const closingBalanceOf = new Map(
+    holdings.map((holding) => [holding.holding, holding.closingBalance]),
+  )
+  const elsewhere = plan.household.persons
+    .flatMap((person) =>
       person.holdings
         .filter((holding) => holding.id !== plan.buffer)
-        .filter((holding) => transferAllowedFrom(holding, person, year))
-        .map((holding) => holding.id),
-    ),
-  )
-  const elsewhere = holdings
-    .filter((holding) => reachable.has(holding.holding))
-    .reduce((sum, holding) => sum + holding.closingBalance, 0)
+        .filter((holding) => transferAllowedFrom(holding, person, year)),
+    )
+    .reduce((sum, holding) => {
+      const closingBalance = closingBalanceOf.get(holding.id)!
+      return sum + (closingBalance - transferCharge(holding, closingBalance, rates))
+    }, 0)
 
   return elsewhere >= -buffer.closingBalance ? 'Incomplete' : 'Unsustainable'
 }
@@ -488,19 +516,26 @@ function weightedNetFlow(entries: ActiveEntry[], buffer: HoldingId): Nominal {
     De to ender spørges hver for sig, og de kan svare forskelligt, jf.
     `weightAt`. Det er ikke en inkonsistens: vægten er en egenskab ved enden
     og ikke ved strømmen, og en jævn rate mister derfor `½ × beløbet` i
-    ordningen uden at give noget som helst på bufferen. */
+    ordningen uden at give noget som helst på bufferen.
+
+    De to ender kan også få hvert sit beløb: en overførsel ud af en
+    `Chargeable` ordning mister `fromAmount` i afgiverens ende, men kun det,
+    der landede, i modtagerens — afgiften forlader husstanden og forrenter
+    sig ingen steder, jf. ADR-0029. Ens for enhver anden bevægelse, hvor de to
+    beløb er de samme. */
 function withWeightedFlow(
   years: HoldingYears,
   from: HoldingId,
   to: HoldingId,
-  amount: Nominal,
+  fromAmount: Nominal,
+  toAmount: Nominal,
   timing: Timing,
   buffer: HoldingId,
 ): HoldingYears {
   return withFlow(
-    withFlow(years, from, -amount * weightAt(from, timing, buffer)),
+    withFlow(years, from, -fromAmount * weightAt(from, timing, buffer)),
     to,
-    amount * weightAt(to, timing, buffer),
+    toAmount * weightAt(to, timing, buffer),
   )
 }
 
@@ -1335,6 +1370,10 @@ function ownerOfHolding(plan: Plan, holding: HoldingId): Person {
   )!
 }
 
+function holdingById(plan: Plan, id: HoldingId): Holding {
+  return plan.household.persons.flatMap((person) => person.holdings).find((h) => h.id === id)!
+}
+
 /** Årets overførsler, hver afkortet til det, afgiveren havde at give af.
 
     Råderummet er primosaldoen ført med årets egne overførsler: en beholdning,
@@ -1343,7 +1382,9 @@ function ownerOfHolding(plan: Plan, holding: HoldingId): Person {
     ikke et tidsskridt, jf. ADR-0006 — så en beholdning, pengene ubestridt
     landede i, har også noget at give af. Målte afkortningen mod primosaldoen
     alene, ville en ordning, der fyldes op og tømmes i samme år, aldrig kunne
-    give noget fra sig.
+    give noget fra sig. Det, en modtagende beholdning har at give videre, er
+    det, den faktisk fik ind — er den selv en `Chargeable` afgiver længere
+    nede i planens rækkefølge, er det beløbet efter afgift, ikke før.
 
     Afkortes gør den stadig: et fast kronebeløb kunne ellers drive en ordning
     negativ, og en beholdning, der ikke er bufferen, må ikke gå under nul, jf.
@@ -1358,24 +1399,32 @@ function ownerOfHolding(plan: Plan, holding: HoldingId): Person {
     samle sig, og dens negative saldo er hele modellens måde at sige, at
     planen ikke holder, jf. ADR-0002 og ADR-0008. Afkortede en overførsel
     den, ville signalet forsvinde i stedet for at vise sig — og derfor føres
-    dens rest ufortrødent negativ, hvor en anden beholdning stopper ved nul. */
+    dens rest ufortrødent negativ, hvor en anden beholdning stopper ved nul.
+
+    Afgiften rammer `amount` — det, der rent faktisk forlod afgiveren — og
+    aldrig `requested`: beløbet måles hos afgiveren, ganske som en
+    indbetaling fra lønnen måles på bruttolønnen, og afkortningen til
+    saldoen sker derfor før afgiften og ikke efter, jf. ADR-0029. */
 function transfersInYear(
   plan: Plan,
   year: SimulationYear,
   opening: ReadonlyMap<HoldingId, Nominal>,
+  rates: RateYear,
 ): ActiveTransfer[] {
   const remaining = new Map(opening)
   return plan.transfers.flatMap((transfer) => {
     if (!transferAppliesInYear(transfer, year, ownerOfHolding(plan, transfer.from))) return []
 
+    const from = holdingById(plan, transfer.from)
     const requested = transfer.amountInRealKroner * transferProjection(plan, year)
     const room = remaining.get(transfer.from)!
     const amount =
       transfer.from === plan.buffer ? requested : Math.min(requested, Math.max(0, room))
+    const landed = amount - transferCharge(from, amount, rates)
 
     remaining.set(transfer.from, room - amount)
-    remaining.set(transfer.to, remaining.get(transfer.to)! + amount)
-    return [{ transfer, requested, amount }]
+    remaining.set(transfer.to, remaining.get(transfer.to)! + landed)
+    return [{ transfer, from, requested, amount, landed }]
   })
 }
 
