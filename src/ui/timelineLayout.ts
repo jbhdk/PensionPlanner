@@ -1,4 +1,4 @@
-import { periodBounds } from '../engine/age'
+import { periodBounds, personLastYear } from '../engine/age'
 import { payoutStartYear } from '../engine/payoutAge'
 import type { AgeBound, Period, Person, PersonId, Plan, Recurrence, SimulationYear } from '../engine/plan'
 import { CATEGORICAL_PALETTE, holdingColor, orderedHoldings } from './palette'
@@ -171,8 +171,22 @@ export function timelineLayout(plan: Plan): TimelineGroup[] {
           color: holdingColor(holdingIndex.get(holding.id)!),
           row: 0,
         }
+        // Livrentens boks viser ydelsen, ikke omsætningen, jf. ADR-0037: venstre
+        // kant er omsætningstidspunktet, højre kant er ejerens egen horisont —
+        // låst uden håndtag, for det er ikke noget brugeren trækker. `to` er
+        // sidste inkluderede år, og `boxStyle` lægger selv ét helt år til for
+        // at dække det, ligesom for en `to`, der følger erhvervsophør — derfor
+        // trækkes ét år fra her, så boksens højre kant lander præcis på
+        // horisontens eget mærke på aksen og ikke ét år forbi det.
         if (holding.variant === 'LifeAnnuity') {
-          return [{ ...base, point: true, at: resolveStart(holding.payout.start, person) }]
+          return [
+            {
+              ...base,
+              point: false,
+              from: resolveStart(holding.payout.start, person),
+              to: { kind: 'Locked', year: personLastYear(person) - 1 },
+            },
+          ]
         }
         const from = resolveStart(holding.payout.start, person)
         return [

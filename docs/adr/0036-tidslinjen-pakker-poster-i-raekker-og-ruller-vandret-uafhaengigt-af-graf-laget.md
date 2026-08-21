@@ -20,6 +20,7 @@ Under graf-laget fra ADR-0033 til -0035 kommer et nyt værktøj: en tidslinje, d
 
 ## Se også
 
+- [ADR-0037](./0037-livrentens-boks-paa-tidslinjen-viser-ydelsen-ikke-omsaetningen.md) — afløser denne på livrentens punkt-mod-boks-skel; ratepensionens boks og de øvrige fire gruppers farvevalg står uændret
 - [ADR-0033](./0033-graferne-staar-i-tre-faste-pladser-en-mini-bytter-sig-ind-ved-klik.md), [ADR-0034](./0034-hovedgrafen-har-fast-hoejde-og-mini-graferne-staar-i-en-soejle-til-hoejre.md), [ADR-0035](./0035-inspektoerskuffen-er-en-fast-tredje-spalte.md) — graf-laget og skuffen, som tidslinjen står under og ved siden af, og hvis synkronisering denne ADR bevidst ikke gentager
 - [ADR-0031](./0031-erhvervsophoersaaret-taeller-med-som-from-og-ikke-med-som-to.md) — hvordan et `AgeBound` sat til erhvervsophør regnes, som den låste endepunktsregel bygger på
 - [ADR-0032](./0032-pensionsudbetalingsalderen-tastes-direkte-den-udledes-ikke-af-oprettelsestidspunktet.md) — `PayoutAge` som en egenskab ved ordningen, relevant for udbetalingsbokse

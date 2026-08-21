@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { yearAtAge } from '../engine/age'
+import { personLastYear, yearAtAge } from '../engine/age'
 import type { Plan } from '../engine/plan'
 import { holdingColor, orderedHoldings } from './palette'
 import {
@@ -69,7 +69,7 @@ describe('tidslinjens lag', () => {
     expect(transfers.items[0]!.target).toEqual({ kind: 'transfer', id: 'omplacering' })
   })
 
-  it('giver et item for en udbetalingsplan og for en livrentes omsætningspunkt, men intet for en ordning uden udbetaling', () => {
+  it('giver et boks-item for en udbetalingsplan og for en livrentes ydelse, men intet for en ordning uden udbetaling', () => {
     const plan = aPlan({
       holdings: [
         {
@@ -100,6 +100,7 @@ describe('tidslinjens lag', () => {
     })
 
     const groups = timelineLayout(plan)
+    const jesper = plan.household.persons[0]!
     const payouts = groups.find((g) => g.name === 'HoldingPayouts')!
 
     expect(payouts.items.map((item) => item.target)).toEqual([
@@ -112,8 +113,9 @@ describe('tidslinjens lag', () => {
     const livrente = payouts.items.find(
       (item) => item.target.kind === 'holding' && item.target.id === 'livrente',
     )!
-    expect(ratepension.point).toBe(false)
-    expect(livrente.point).toBe(true)
+    if (ratepension.point || livrente.point) throw new Error('begge er bokse, ikke punkter')
+    expect(livrente.from).toEqual({ kind: 'Free', year: yearAtAge(jesper, 68) })
+    expect(livrente.to).toEqual({ kind: 'Locked', year: personLastYear(jesper) - 1 })
   })
 
   it('markerer et endepunkt bundet til erhvervsophør som låst og opløser det til rette kalenderår', () => {
@@ -244,7 +246,7 @@ describe('tidslinjens lag', () => {
     expect(item.at).toEqual({ kind: 'Free', year: 2030 })
   })
 
-  it('opløser en udbetalingsplans start og varighed, og en livrentes omsætning følger erhvervsophør', () => {
+  it('opløser en udbetalingsplans start og varighed, og en livrentes boks til ejerens horisont', () => {
     const plan = aPlan({
       holdings: [
         {
@@ -284,11 +286,12 @@ describe('tidslinjens lag', () => {
     const livrente = payouts.items.find(
       (item) => item.target.kind === 'holding' && item.target.id === 'livrente',
     )!
-    if (ratepension.point || !livrente.point) throw new Error('formen er byttet om')
+    if (ratepension.point || livrente.point) throw new Error('begge er bokse, ikke punkter')
 
     expect(ratepension.from).toEqual({ kind: 'Locked', year: startYear })
     expect(ratepension.to).toEqual({ kind: 'Free', year: startYear + 14 })
-    expect(livrente.at).toEqual({ kind: 'Free', year: yearAtAge(jesper, 68) })
+    expect(livrente.from).toEqual({ kind: 'Free', year: yearAtAge(jesper, 68) })
+    expect(livrente.to).toEqual({ kind: 'Locked', year: personLastYear(jesper) - 1 })
   })
 
   it('pakker overlappende poster i hver sin række, og ikke-overlappende i samme, nulstillet pr. gruppe', () => {

@@ -167,7 +167,7 @@ describe('applyTimelineDrag', () => {
     expect(holding).toMatchObject({ payout: { start: 67, duration: 18 } })
   })
 
-  it('rykker en livrentes omsætningstidspunkt, når punktet trækkes', () => {
+  it('rykker en livrentes omsætningstidspunkt, når boksens fra-håndtag trækkes', () => {
     const plan = aPlan({
       holdings: [
         {
@@ -187,9 +187,65 @@ describe('applyTimelineDrag', () => {
     })
     const item = timelineLayout(plan).find((g) => g.name === 'HoldingPayouts')!.items[0]!
 
-    const next = applyTimelineDrag(plan, item, 'point', -1)
+    const next = applyTimelineDrag(plan, item, 'from', -1)
 
     const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'livrente')!
     expect(holding).toMatchObject({ payout: { start: 67 } })
+  })
+
+  it('klemmer livrentens fra-håndtag til pensionsudbetalingsalderen, ikke længere ned', () => {
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'livrente',
+          name: 'Livrente',
+          variant: 'LifeAnnuity',
+          payoutAge: 67,
+          balance: 800_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+          quotedReserve: 1_000_000,
+          quotedAnnualBenefit: 50_000,
+          bonusRate: 0,
+          payout: { start: 68 },
+        },
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'HoldingPayouts')!.items[0]!
+
+    // Fem år tilbage ville lande på 63, men pensionsudbetalingsalderen er 67
+    // — trækket klemmes, det bliver ikke afvist bagefter.
+    const next = applyTimelineDrag(plan, item, 'from', -5)
+
+    const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'livrente')!
+    expect(holding).toMatchObject({ payout: { start: 67 } })
+  })
+
+  it('klemmer livrentens fra-håndtag til ét år før ejerens horisont, ikke længere op', () => {
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'livrente',
+          name: 'Livrente',
+          variant: 'LifeAnnuity',
+          payoutAge: 67,
+          balance: 800_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+          quotedReserve: 1_000_000,
+          quotedAnnualBenefit: 50_000,
+          bonusRate: 0,
+          payout: { start: 68 },
+        },
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'HoldingPayouts')!.items[0]!
+
+    // Tredive år frem ville lande på 98, men standardpersonens horisont er 90
+    // — ét år før det, 89, er det seneste boksen selv kan vise uden at vende om.
+    const next = applyTimelineDrag(plan, item, 'from', 30)
+
+    const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'livrente')!
+    expect(holding).toMatchObject({ payout: { start: 89 } })
   })
 })
