@@ -38,7 +38,7 @@ export function defaultPlan(): Plan {
           name: 'Person 1',
           birthYear: startYear - 40,
           birthMonth: 1,
-          workEndAge: 65,
+          workEndAge: 63,
           horizon: 90,
           municipality: 'Silkeborg',
           churchMember: false,

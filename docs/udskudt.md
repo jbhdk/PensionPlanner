@@ -96,7 +96,7 @@ Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog 
 
 **Konsekvens:** Afkastmodellen skal bygges om, når det tages op — stokastisk simulation kræver volatilitet og korrelation, som et enkelt forventet afkast ikke indeholder. Prisen er kendt og accepteret.
 
-## Behøvsdrevne udbetalinger
+## Behovsdrevne udbetalinger
 
 **Status:** Udskudt. Motoren er plan-drevet, jf. [ADR-0002](./adr/0002-plan-drevet-motor-med-frie-midler-som-buffer.md).
 
