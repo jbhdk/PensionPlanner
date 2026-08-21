@@ -291,29 +291,6 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
       onAdd: () => onChange(addPerson(plan)),
     },
     {
-      id: 'beholdninger',
-      title: 'Beholdninger',
-      count: String(holdings.length),
-      summary: `${kroner(holdingSum)} kr.`,
-      // Én liste pr. person med ejerens navn over. Kassen har altid vist
-      // begge personers beholdninger efter hinanden, men uden skellet var det
-      // ikke til at se, hvem der ejede hvad — og rækkefølgen kan kun flyttes
-      // inden for den ene ejers egne, jf. `moveHolding`.
-      blocks: persons.map((person) => ({
-        id: `beholdninger-${person.id}`,
-        heading: person.name,
-        rows: person.holdings.map((holding) => ({
-          id: holding.id,
-          name: holding.name,
-          value: kroner(holding.balance),
-          target: { kind: 'holding', id: holding.id },
-        })),
-        onMove: (id, to) => onChange(moveHolding(plan, id, to)),
-      })),
-      addLabel: '+ Beholdning',
-      onAdd: () => onChange(addHolding(plan)),
-    },
-    {
       id: 'indtaegter',
       title: 'Indtægter',
       count: String(income.length),
@@ -357,6 +334,29 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
       ],
       addLabel: '+ Udgift',
       onAdd: () => onChange(addEntry(plan, 'Expense')),
+    },
+    {
+      id: 'beholdninger',
+      title: 'Beholdninger',
+      count: String(holdings.length),
+      summary: `${kroner(holdingSum)} kr.`,
+      // Én liste pr. person med ejerens navn over. Kassen har altid vist
+      // begge personers beholdninger efter hinanden, men uden skellet var det
+      // ikke til at se, hvem der ejede hvad — og rækkefølgen kan kun flyttes
+      // inden for den ene ejers egne, jf. `moveHolding`.
+      blocks: persons.map((person) => ({
+        id: `beholdninger-${person.id}`,
+        heading: person.name,
+        rows: person.holdings.map((holding) => ({
+          id: holding.id,
+          name: holding.name,
+          value: kroner(holding.balance),
+          target: { kind: 'holding', id: holding.id },
+        })),
+        onMove: (id, to) => onChange(moveHolding(plan, id, to)),
+      })),
+      addLabel: '+ Beholdning',
+      onAdd: () => onChange(addHolding(plan)),
     },
     {
       // Ingen sum her heller. En procent af en lønpost har intet kronebeløb,
