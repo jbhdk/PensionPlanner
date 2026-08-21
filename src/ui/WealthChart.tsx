@@ -1,6 +1,6 @@
 import { scaleLinear } from 'd3-scale'
 import { area as d3Area, curveLinear } from 'd3-shape'
-import { isFreeAssets } from '../engine/holdingVariant'
+import { isPensionScheme } from '../engine/holdingVariant'
 import type { Plan } from '../engine/plan'
 import type { BufferState, YearResult } from '../engine/yearResult'
 import { bufferStateClasses, bufferStateLabels } from './bufferState'
@@ -137,7 +137,7 @@ export function WealthChart({
     holding,
     color: holdingColor(si),
     path: areaGenerator(bands[si]!) ?? undefined,
-    free: isFreeAssets(holding),
+    locked: isPensionScheme(holding),
     opacity:
       selected?.kind === 'holding' && selected.id !== holding.id ? DESELECTED_OPACITY : 1,
   }))
@@ -185,7 +185,7 @@ export function WealthChart({
             <g key={band.holding.id}>
               <path
                 data-holding={band.holding.id}
-                data-free-assets={band.free}
+                data-pension-scheme={band.locked}
                 d={band.path}
                 fill={band.color}
                 fillOpacity={band.opacity}
@@ -194,8 +194,12 @@ export function WealthChart({
               />
               {/* Skraveringen ligger oven på beholdningens egen farve frem
                   for at erstatte den: farven siger hvilken beholdning,
-                  skraveringen at den er bundet. */}
-              {!band.free && (
+                  skraveringen at den er bundet. Bundet er her
+                  `isPensionScheme` — en `PayoutAge` loven låser op til —
+                  og ikke `isFreeAssets`: aktiesparekontoen har et loft, men
+                  ejeren hæver af den, når hun vil, og skal derfor ikke se
+                  bunden ud, jf. CONTEXT.md's `PensionScheme`. */}
+              {band.locked && (
                 <path
                   data-hatch={band.holding.id}
                   d={band.path}
@@ -237,7 +241,7 @@ export function WealthChart({
                       stroke="var(--flade)"
                       strokeWidth={2}
                     />
-                    {!band.free && (
+                    {band.locked && (
                       <path
                         d={band.path}
                         fill="url(#skravering)"
@@ -310,7 +314,7 @@ export function WealthChart({
               >
                 <span
                   className="svatch"
-                  data-free-assets={isFreeAssets(holding)}
+                  data-pension-scheme={isPensionScheme(holding)}
                   style={{ background: holdingColor(si) }}
                 />
                 {holding.name}

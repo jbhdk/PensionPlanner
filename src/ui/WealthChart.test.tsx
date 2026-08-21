@@ -383,10 +383,10 @@ describe('WealthChart', () => {
       'anden-beholdning',
       'ratepension',
     ])
-    expect(lag.map((el) => el.getAttribute('data-free-assets'))).toEqual([
-      'true',
-      'true',
+    expect(lag.map((el) => el.getAttribute('data-pension-scheme'))).toEqual([
       'false',
+      'false',
+      'true',
     ])
 
     // Kun det bundne bånd bærer skraveringen, og den ligger oven på
@@ -396,6 +396,31 @@ describe('WealthChart', () => {
     const ratepension = lag[2]!
     expect(skraverede[0]!.getAttribute('d')).toBe(ratepension.getAttribute('d'))
     expect(ratepension.getAttribute('fill')).not.toBe(skraverede[0]!.getAttribute('fill'))
+  })
+
+  it('skraverer ikke aktiesparekontoen, selvom den ikke er frie midler', () => {
+    // Aktiesparekontoen har et indskudsloft og er derfor ikke `FreeAssets`,
+    // men den har ingen `PayoutAge` — ejeren hæver af den, når hun vil. Det
+    // er `isPensionScheme`, der afgør skraveringen, ikke `isFreeAssets`, så
+    // kontoen skal stå uskraveret ligesom de frie midler.
+    const plan = aPlan({
+      balance: 1_000_000,
+      holdings: [
+        {
+          id: 'aktiesparekonto',
+          name: 'Aktiesparekonto',
+          variant: 'ShareSavingsAccount',
+          balance: 300_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+    const years = simulate(plan)
+    const { container } = render(<WealthChart years={years} plan={plan} unit="Real" />)
+
+    const skraverede = Array.from(container.querySelectorAll('svg [data-hatch]'))
+    expect(skraverede).toHaveLength(0)
   })
 })
 

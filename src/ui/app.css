@@ -790,9 +790,11 @@ table.aar th,
   font-weight: 600;
 }
 
-/* Bundne beholdninger bærer samme skravering i legenden som i grafens bånd,
-   så prøven og båndet kan genkendes som det samme. */
-.formuegraf-legend .svatch[data-free-assets='false'] {
+/* Bundne beholdninger — pensionsordninger, jf. `isPensionScheme` — bærer
+   samme skravering i legenden som i grafens bånd, så prøven og båndet kan
+   genkendes som det samme. Aktiesparekontoen har et loft, men ejeren hæver
+   af den, når hun vil, og er derfor ikke bundet i denne forstand. */
+.formuegraf-legend .svatch[data-pension-scheme='true'] {
   background-image: repeating-linear-gradient(
     45deg,
     transparent 0 2px,
