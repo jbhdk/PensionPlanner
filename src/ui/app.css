@@ -824,24 +824,29 @@ table.aar th,
   font-family: var(--f-broed);
 }
 
+/* Hele årets gruppe er klikbar, søjlerne selv iberegnet — ikke kun
+   klikfeltet, der ligger under dem. */
+.overskudsgraf .aarssoejler {
+  cursor: pointer;
+}
+
 /* Årets klikfelt i overskudsgrafen dækker hele søjlens højde og er usynligt:
    det er ikke en flade i grafen, men det areal, klikket må ramme. */
 .overskudsgraf .aarsfelt {
   fill: transparent;
-  cursor: pointer;
 }
 
 /* Aksernes gitterlinjer er tilbagetrukne — data er det, der skal ses, jf.
    dataviz-skillets "recessive grid/axes". Basislinjen ved 0 er trukket
-   svagt frem, så bunden af stablingen er til at følge. */
+   tydeligere frem end de øvrige, så bunden af stablingen er til at følge. */
 .graf-akse-y .gitterlinje {
   stroke: var(--linje-svag);
   stroke-width: 1;
 }
 
 .graf-akse-y .basislinje {
-  stroke: var(--linje);
-  stroke-width: 1;
+  stroke: var(--label);
+  stroke-width: 2;
 }
 
 .graf-akse-y text,

@@ -5,6 +5,7 @@ import {
   KroneAxisMarks,
   MARGIN,
   YearAxisMarks,
+  ZeroLine,
   alignedAxes,
   kroneAxis,
   useMeasuredPlot,
@@ -107,13 +108,6 @@ export function SurplusChart({
   const left = bandAxis.left
   const right = width - MARGIN.right
 
-  // De to paneler deler x-skalaen selv og ikke kun dens udstrækning: samme
-  // år, samme sted, jf. ADR-0026. Den er formuegrafens egen, så de tre
-  // visninger kan lægges over hinanden.
-  const x = scaleLinear()
-    .domain([0, Math.max(1, n - 1)])
-    .range([left, right])
-
   const plotHeight = height - MARGIN.top - MARGIN.bottom - PANEL_GAP
   const bandPanel = { top: MARGIN.top, bottom: MARGIN.top + plotHeight * BAND_PANEL_SHARE }
   const surplusPanel = { top: bandPanel.bottom + PANEL_GAP, bottom: height - MARGIN.bottom }
@@ -121,9 +115,20 @@ export function SurplusChart({
   const bandY = panelScale(bandSpan, bandPanel)
   const surplusY = panelScale(surplusSpan, surplusPanel)
 
-  const step = n > 1 ? x(1) - x(0) : right - left
-  const barWidth = Math.max(1, step * BAR_FILL)
+  // Søjlerne sidder i deres egen ligestore plads pr. år, ikke på selve
+  // aksens yderpunkter. Sådan bliver hvert mellemrum ens, og både første
+  // og sidste søjle holder sig selv inden for aksens bredde uden at blive
+  // tyndere end de andre.
+  const bandWidth = n > 0 ? (right - left) / n : right - left
+  const barWidth = Math.max(1, bandWidth * BAR_FILL)
   const surplusZero = surplusY(0)
+
+  // Årstallet under aksen skal stå under sin egen søjle og ikke på et
+  // pointskift, der er uafhængigt af pladsernes bredde — samme funktion,
+  // søjlerne selv bruger til at finde deres midte.
+  const x = scaleLinear()
+    .domain([0, Math.max(1, n - 1)])
+    .range([left + bandWidth / 2, left + (Math.max(1, n - 1) + 0.5) * bandWidth])
 
   return (
     <div className="graf overskudsgraf">
@@ -141,25 +146,29 @@ export function SurplusChart({
             />
           </g>
           {years.map((year, i) => {
-            // Første og sidste søjle sidder på selve plotkanten og ville
-            // ellers rage ud i margenen med sin halve bredde.
-            const x0 = Math.max(left, x(i) - barWidth / 2)
-            const x1 = Math.min(right, x(i) + barWidth / 2)
+            const columnX0 = x(i) - bandWidth / 2
+            const columnX1 = x(i) + bandWidth / 2
+            const x0 = x(i) - barWidth / 2
+            const x1 = x(i) + barWidth / 2
             // Søjlen hænger i nul-linjen begge veje: et overskud står på
             // den, et underskud under den. Højden er afstanden, og fortegnet
             // bærer den ikke — SVG kender ikke negativ højde.
             const edge = surplusY(surpluses[i]!)
             return (
-              <g key={year.year} onClick={() => onSelectYear(year.year)}>
+              <g
+                key={year.year}
+                className="aarssoejler"
+                onClick={() => onSelectYear(year.year)}
+              >
                 {/* Klikfeltet dækker begge paneler i fuld højde og ikke kun
                     søjlen selv: et år, der går næsten lige op, har næsten
                     ingen søjle at ramme — og året skal kunne rammes fra
                     begge paneler. */}
                 <rect
                   className="aarsfelt"
-                  x={x0}
+                  x={columnX0}
                   y={MARGIN.top}
-                  width={x1 - x0}
+                  width={columnX1 - columnX0}
                   height={height - MARGIN.top - MARGIN.bottom}
                 />
                 {stacks[i]!.bands.map((band, bandIndex) => (
@@ -187,6 +196,10 @@ export function SurplusChart({
               </g>
             )
           })}
+          {/* Nul er den ene linje, en søjlegraf ikke må miste under sine
+              egne søjler — den tegnes derfor igen her, ovenpå. */}
+          <ZeroLine axis={bandAxis} y={bandY} right={right} />
+          <ZeroLine axis={surplusAxis} y={surplusY} right={right} />
           <YearAxisMarks years={years} x={x} left={left} right={right} height={height} />
         </svg>
       </div>

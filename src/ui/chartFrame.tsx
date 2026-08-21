@@ -144,6 +144,27 @@ export function KroneAxisMarks({
   )
 }
 
+/** Nul-linjen alene, tegnet oven på data i stedet for under. `KroneAxisMarks`
+    tegner den også, men dernede forsvinder den bag søjler og bånd, der når
+    ned til den — og nul er den ene linje, en søjlegraf ikke må miste, for
+    det er den, et fortegnsskift læses fra. */
+export function ZeroLine({
+  axis,
+  y,
+  right,
+}: {
+  axis: KroneAxis
+  y: ScaleLinear<number, number>
+  right: number
+}) {
+  if (!axis.ticks.includes(0)) return null
+  return (
+    <g className="graf-akse-y">
+      <line x1={axis.left} x2={right} y1={y(0)} y2={y(0)} className="basislinje" />
+    </g>
+  )
+}
+
 /** Årsaksens mærker: hvert tiende år, plus altid første og sidste, så en kort
     horisont ikke står uden en eneste årsmarkering. */
 export function YearAxisMarks({
@@ -175,8 +196,12 @@ export function YearAxisMarks({
         .map((yearTick) => {
           const index = yearTick - years[0]!.year
           // Tæt på højre kant ankres årstallet til højre i stedet for at
-          // centreres, så det ikke rager ud over viewBox'en.
-          const anchor = x(index) > right - 20 ? 'end' : 'middle'
+          // centreres, så det ikke rager ud over viewBox'en. Kanten er selve
+          // canvas'et og ikke plottets — søjlernes egen plads giver typisk
+          // rigeligt med luft til at nå derhen, jf. Formuegrafens rene
+          // punktskala, der ikke har den luft.
+          const canvasRight = right + MARGIN.right
+          const anchor = x(index) + 2 * LABEL_CHAR_WIDTH > canvasRight ? 'end' : 'middle'
           return (
             <text
               key={yearTick}
