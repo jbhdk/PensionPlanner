@@ -112,7 +112,6 @@ body {
   position: sticky; left: 4px; top: 0; z-index: 1; font-size: 9px; color: var(--muted);
   text-transform: uppercase; letter-spacing: .06em; padding-left: 2px;
 }
-.tl-akse-ophoer { border-bottom: 1px solid var(--linje); height: 20px; }
 .tl-gitter { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--linje-svag); }
 .tl-gitter.femte { background: var(--linje); }
 
@@ -144,7 +143,7 @@ body {
 /* Håndtaget i hver ende — kun tegnet, når endepunktet er frit. Et låst
    endepunkt har ingen kant at gribe i, jf. ADR-0036. */
 .tl-haandtag {
-  position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize;
+  position: absolute; top: 3px; height: 18px; width: 6px; cursor: ew-resize;
   background: rgba(255,255,255,.28);
 }
 .tl-haandtag.fra { left: 0; border-radius: 3px 0 0 3px; }
@@ -178,7 +177,7 @@ body {
 }
 .tl-ophoer-greb {
   position: absolute; top: 0; transform: translateX(-50%); z-index: 5;
-  background: var(--accent); color: var(--paa-accent); font-size: 9.5px; font-family: var(--f-tal);
+  background: var(--accent); opacity: .5; color: var(--paa-accent); font-size: 9.5px; font-family: var(--f-tal);
   padding: 1px 6px; border-radius: 0 0 4px 4px; cursor: ew-resize; white-space: nowrap;
   pointer-events: auto;
 }

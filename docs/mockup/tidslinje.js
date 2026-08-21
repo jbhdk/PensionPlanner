@@ -180,6 +180,11 @@ function tlAkse() {
   }
   s.push('</div>');
 
+  /* Erhvervsophørets eget mærkat sidder på personens egen aldersrække, ikke i
+     en delt række for sig — det gør entydigt, hvis greb hører til hvem.
+     Rækken er stadig del af den sticky akse, så mærkatet forbliver synligt,
+     uanset hvor langt ned man har rullet i grupperne, og aldrig oven i en
+     gruppeoverskrift. */
   PERSONER.forEach(function (p) {
     s.push('<div class="tl-akse-raekke">');
     for (var a2 = aarNu(); a2 <= aarSlut(); a2++) {
@@ -189,19 +194,11 @@ function tlAkse() {
       s.push('<span class="tl-akse-maerke" style="left:' + xT(a2) + 'px">' + alder + '</span>');
     }
     s.push('<span class="tl-akse-navn">' + p.navn.slice(0, 1) + '</span>');
-    s.push('</div>');
-  });
-
-  /* Erhvervsophørets eget mærkat sidder i aksens egen række, sammen med
-     resten af aksen — altid synligt, uanset hvor langt ned man har rullet i
-     grupperne, og aldrig oven i en gruppeoverskrift. */
-  s.push('<div class="tl-akse-raekke tl-akse-ophoer">');
-  PERSONER.forEach(function (p) {
     var x = xT(p.foedselsaar + p.erhvervsophoerAlder);
     s.push('<div class="tl-ophoer-greb" data-ophoer="' + p.id + '" style="left:' + x + 'px">' +
       p.navn + ' · ' + p.erhvervsophoerAlder + '</div>');
+    s.push('</div>');
   });
-  s.push('</div>');
 
   s.push('</div>');
   return s.join('');
@@ -298,7 +295,7 @@ function tlIndhold() {
     samlet += GRUPPE_HOVED_H + raekker * RAEKKE_H + 4;
   });
 
-  var akseHoejde = 18 * (2 + PERSONER.length); /* årstal + én række pr. person + ophørsrækken */
+  var akseHoejde = 18 * (1 + PERSONER.length); /* årstal + én række pr. person */
   s.push('<div style="position:absolute;left:0;top:' + akseHoejde + 'px;right:0;height:' + samlet + 'px;pointer-events:none">' +
     PERSONER.map(function (p) { return tlOphoerLinje(p, samlet); }).join('') + '</div>');
 
