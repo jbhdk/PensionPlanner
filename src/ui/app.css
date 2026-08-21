@@ -123,10 +123,13 @@ body {
   border-left: 1px solid var(--linje);
 }
 
-/* Skuffen ligger oven på resultatspalten, men skubber indholdet fri af sig,
-   så den aldrig dækker årstabellens sidste kolonne. */
+/* Skuffen ligger oven på resultatspalten, men skubber både indholdet og
+   spaltens egen scrollbar fri af sig, så hverken årstabellens sidste kolonne
+   eller scrollbaren ender under skuffen. En padding rykker kun indholdet —
+   scrollbaren tegnes stadig ved boksens kant og forsvandt derfor under
+   skuffen; en margin gør boksen selv smallere, så scrollbaren ryger med. */
 .spalter.med-skuffe > .resultatspalte {
-  padding-right: 356px;
+  margin-right: 356px;
 }
 
 /* Flex-søjle, så en graf kan fylde resten af spalten under
@@ -1332,7 +1335,7 @@ table.aar td .fremskrevet {
   }
 
   .spalter.med-skuffe > .resultatspalte {
-    padding-right: 0;
+    margin-right: 0;
   }
 
   .skuffe {
