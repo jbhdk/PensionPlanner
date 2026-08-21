@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tidslinjeværktøjet — Pensionsplanner</title>
+<link rel="stylesheet" href="tidslinje.css">
+</head>
+<body>
+
+<div class="kappe">
+  <b>Tidslinjeværktøjet</b>
+  <span class="note"> — mock-up til godkendelse, jf. ADR-0036. Navigatoren er udeladt her; det er
+  tidslinjen under graf-laget og dens samspil med Formuegrafen og Inspektøren, der skal godkendes.
+  Prøv at trække i en boks' ender og krop, og i den orange erhvervsophørslinje.</span>
+</div>
+
+<div class="app">
+  <div class="topbjaelke">
+    <span class="maerke">Pensionsplanner</span>
+    <span class="plannavn">Ophør som 58</span>
+  </div>
+  <div class="spalter">
+    <div class="spalte resultatspalte">
+      <div class="resultathoved">
+        <span class="titel">Planlæggeren</span>
+        <span class="omskifter">
+          <button aria-pressed="true">Nutidskroner</button>
+          <button aria-pressed="false">Fremtidskroner</button>
+        </span>
+      </div>
+      <div class="graf-lag" id="graf-t"></div>
+      <div class="tidslinje-lag">
+        <div class="tidslinje-hoved">Tidslinjen
+          <span class="note">Egen vandret rulning, uafhængig af grafens x-skala · lodret rulning for grupperne</span>
+        </div>
+        <div class="tidslinje-rul" id="tl-rul"></div>
+      </div>
+    </div>
+    <aside class="skuffe" aria-label="Inspektør">
+      <div class="spaltehoved">Inspektør</div>
+      <div id="inspektor-t"></div>
+    </aside>
+  </div>
+</div>
+
+<script src="plan.js"></script>
+<script src="tidslinje.js"></script>
+</body>
+</html>

@@ -1,0 +1,199 @@
+/* Tidslinjeværktøjet — mock-up til godkendelse, jf. ADR-0036. Udtrykket er
+   4a · Aften, samme variabler som navigator.css, så siden kan stå alene uden
+   at hente noget udefra. */
+
+:root {
+  --f-titel: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --f-broed: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --f-tal: "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  --laerred: #14181e;
+  --flade: #202730;
+  --top: #141920;
+  --ink: #e6ebf1;
+  --label: #a6b0bc;
+  --muted: #78838f;
+  --linje: #2f3843;
+  --linje-svag: #262e38;
+  --accent: #e0a33a;
+  --paa-accent: #191204;
+  --felt-bg: #141920;
+  --felt-kant: #333d49;
+
+  --kat-indtaegter: #199e70;
+  --kat-udgifter: #e66767;
+  --kat-indbetalinger: #3987e5;
+  --kat-overfoersler: #9085e9;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; height: 100vh; overflow: hidden;
+  display: flex; flex-direction: column;
+  background: #1b1e22; font-family: var(--f-broed); font-size: 13px;
+}
+
+.kappe {
+  flex: 0 0 auto; background: #101317; color: #d6d9dd; padding: 10px 18px;
+  font: 13px/1.4 var(--f-broed);
+}
+.kappe b { font-weight: 600; }
+.kappe .note { color: #83888f; font-size: 12px; }
+
+.app {
+  flex: 1 1 auto; min-height: 0; position: relative;
+  display: flex; flex-direction: column;
+  background: var(--laerred); color: var(--ink);
+}
+.topbjaelke {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 14px; padding: 11px 18px;
+  background: var(--top); border-bottom: 1px solid var(--linje);
+}
+.maerke { font-family: var(--f-titel); font-weight: 650; font-size: 15px; }
+.plannavn { color: var(--muted); }
+.topbjaelke .hoejre { margin-left: auto; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+
+.spalter { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0,1fr) 320px; }
+.spalte { min-width: 0; height: 100%; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
+.spalte + .spalte, aside.skuffe { border-left: 1px solid var(--linje); }
+
+.spaltehoved {
+  flex: 0 0 auto; padding: 13px 16px; border-bottom: 1px solid var(--linje); background: var(--top);
+  font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+  display: flex; align-items: center; gap: 8px;
+}
+
+.resultathoved {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 9px 16px;
+  border-bottom: 1px solid var(--linje); background: var(--top);
+}
+.resultathoved .titel { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.omskifter { display: inline-flex; border: 1px solid var(--felt-kant); border-radius: 4px; overflow: hidden; margin-left: auto; }
+.omskifter button { font: inherit; font-size: 12px; border: 0; background: var(--felt-bg); color: var(--muted); padding: 4px 12px; cursor: pointer; }
+.omskifter button[aria-pressed="true"] { background: var(--accent); color: var(--paa-accent); }
+
+/* ---------- graf-laget (uændret fra ADR-0034, kun formuegrafen medtaget her,
+   for at vise farvegenbruget mellem den og tidslinjens beholdningsbokse) --- */
+.graf-lag { flex: 0 0 260px; margin: 10px 10px 0; padding: 10px 14px 4px; background: var(--flade); border: 1px solid var(--linje); border-radius: 6px; }
+.graf-lag svg { display: block; width: 100%; height: auto; }
+.graflegende { display: flex; flex-wrap: wrap; gap: 5px 14px; padding: 7px 4px 2px; font-size: 11px; color: var(--muted); }
+.graflegende span { display: inline-flex; align-items: center; gap: 5px; }
+.graflegende i { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+
+/* ---------- tidslinjen ---------- */
+
+.tidslinje-lag {
+  flex: 1 1 auto; min-height: 0; margin: 10px 10px 12px;
+  background: var(--flade); border: 1px solid var(--linje); border-radius: 6px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.tidslinje-hoved {
+  flex: 0 0 auto; padding: 9px 14px; border-bottom: 1px solid var(--linje);
+  font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+  display: flex; align-items: center; gap: 10px;
+}
+.tidslinje-hoved .note { text-transform: none; letter-spacing: 0; font-size: 11px; margin-left: auto; }
+
+/* Selve rulleområdet: begge retninger for sig, uafhængigt af graf-lagets
+   bredde og x-skala, jf. ADR-0036. */
+.tidslinje-rul { flex: 1 1 auto; min-height: 0; overflow: auto; position: relative; }
+.tl-indhold { position: relative; }
+
+.tl-akse { position: sticky; top: 0; z-index: 6; background: var(--top); }
+.tl-akse-raekke { position: relative; height: 18px; border-bottom: 1px solid var(--linje-svag); }
+.tl-akse-raekke.aar { border-bottom: 1px solid var(--linje); }
+.tl-akse-maerke {
+  position: absolute; top: 0; height: 100%; display: flex; align-items: center;
+  transform: translateX(-50%); font-family: var(--f-tal); font-size: 9.5px; color: var(--muted);
+  white-space: nowrap;
+}
+.tl-akse-raekke.aar .tl-akse-maerke { color: var(--label); }
+.tl-akse-navn {
+  position: sticky; left: 4px; top: 0; z-index: 1; font-size: 9px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .06em; padding-left: 2px;
+}
+.tl-akse-ophoer { border-bottom: 1px solid var(--linje); height: 20px; }
+.tl-gitter { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--linje-svag); }
+.tl-gitter.femte { background: var(--linje); }
+
+.tl-gruppe { border-bottom: 1px solid var(--linje); }
+.tl-gruppe-hoved {
+  position: sticky; left: 0; z-index: 3; width: fit-content; min-width: 100%;
+  display: flex; align-items: center; gap: 8px; padding: 6px 14px;
+  font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+  color: #8e99a6; background: #1b222b; cursor: pointer; user-select: none;
+}
+.tl-gruppe-hoved:hover { color: var(--ink); }
+.tl-gruppe-hoved .vip { width: 10px; color: var(--muted); font-size: 10px; transform: rotate(90deg); transition: transform .12s; }
+.tl-gruppe.foldet .tl-gruppe-hoved .vip { transform: none; }
+.tl-gruppe-hoved .antal { color: var(--muted); font-weight: 400; font-family: var(--f-tal); }
+.tl-gruppe.foldet .tl-krop { display: none; }
+
+.tl-krop { position: relative; padding: 4px 0; }
+.tl-raekke { position: relative; height: 24px; }
+
+.tl-boks {
+  position: absolute; top: 3px; height: 18px; border-radius: 3px;
+  display: flex; align-items: center; overflow: hidden; cursor: pointer;
+  font-size: 10.5px; color: #0c0f13; white-space: nowrap; padding: 0 5px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.25);
+}
+.tl-boks.valgt { outline: 2px solid var(--ink); outline-offset: 1px; }
+.tl-boks .navn { overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+
+/* Håndtaget i hver ende — kun tegnet, når endepunktet er frit. Et låst
+   endepunkt har ingen kant at gribe i, jf. ADR-0036. */
+.tl-haandtag {
+  position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize;
+  background: rgba(255,255,255,.28);
+}
+.tl-haandtag.fra { left: 0; border-radius: 3px 0 0 3px; }
+.tl-haandtag.til { right: 0; border-radius: 0 3px 3px 0; }
+.tl-haandtag:hover { background: rgba(255,255,255,.55); }
+.tl-boks.krop-fri { cursor: grab; }
+.tl-boks.krop-fri:active { cursor: grabbing; }
+
+/* Engangspost eller omsætningspunkt: ét tidspunkt, tegnet som en rombe uden
+   udstrækning — intet at trække i to ender af. */
+.tl-punkt {
+  position: absolute; top: 3px; width: 12px; height: 18px;
+  transform: translateX(-6px); cursor: pointer;
+}
+.tl-punkt .rombe {
+  position: absolute; left: 3px; top: 3px; width: 12px; height: 12px;
+  transform: rotate(45deg); box-shadow: inset 0 0 0 1px rgba(0,0,0,.3);
+}
+.tl-punkt .navn {
+  position: absolute; left: 14px; top: 1px; font-size: 10px; color: var(--label);
+  white-space: nowrap;
+}
+.tl-punkt.valgt .rombe { outline: 2px solid var(--ink); outline-offset: 1px; }
+
+/* Erhvervsophørs-håndtaget: en lodret linje gennem hele gruppeområdet, med et
+   grebbart mærkat i toppen — samme felt som Inspektørens Erhvervsophør,
+   jf. ADR-0036. */
+.tl-ophoer {
+  position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent);
+  opacity: .8; z-index: 4;
+}
+.tl-ophoer-greb {
+  position: absolute; top: 0; transform: translateX(-50%); z-index: 5;
+  background: var(--accent); color: var(--paa-accent); font-size: 9.5px; font-family: var(--f-tal);
+  padding: 1px 6px; border-radius: 0 0 4px 4px; cursor: ew-resize; white-space: nowrap;
+  pointer-events: auto;
+}
+
+/* ---------- inspektøren (forenklet — feltdesignet selv er ikke til revision
+   her, kun at et klik på en boks åbner den) ---------- */
+aside.skuffe { display: flex; flex-direction: column; overflow-y: auto; }
+.inspektor { padding: 0 16px 16px; }
+.inspektor .titel { font-family: var(--f-titel); font-size: 16px; font-weight: 650; padding: 14px 0 0; }
+.inspektor .undertitel { color: var(--muted); font-size: 12px; padding: 3px 0 0; }
+.inspektor .afsnit { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--linje); }
+.inspektor .afsnit h3 { margin: 0 0 8px; font-size: 10px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: #8e99a6; }
+.inspektor .felt { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 12px; }
+.inspektor .felt label { color: var(--label); }
+.inspektor .felt .vaerdi { font-family: var(--f-tal); text-align: right; }
+.inspektor .felt .laast { color: var(--muted); font-style: italic; }
+.inspektor .hint { color: var(--muted); font-size: 11px; margin-top: 8px; line-height: 1.5; }
+.tomrude { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 12px; line-height: 1.6; }
