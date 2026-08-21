@@ -1462,6 +1462,9 @@ table.aar td .fremskrevet {
 .tidslinje-lag {
   flex: 1 1 auto;
   min-height: 0;
+  /* Samme gulv som `.mini-graferne`s smalle søjle, så boksen ikke kan
+     klemmes tyndere end det, tidslinjen selv kan tegnes læseligt i. */
+  min-width: 260px;
   margin: 0 10px 10px;
   background: var(--flade);
   border: 1px solid var(--linje);

@@ -20,9 +20,13 @@ const GROUP_TITLES: Record<TimelineGroupName, string> = {
   Transfers: 'Overførsler',
 }
 
-/** Pixel pr. år på tidslinjens egen skala — uafhængig af graf-lagets, jf.
-    ADR-0036. Samme værdi som mock-uppens `PXY`. */
-const YEAR_WIDTH = 18
+/** Gulvet for pixel pr. år på tidslinjens egen skala — uafhængig af graf-
+    lagets, jf. ADR-0036. Den faktiske bredde regnes af komponenten selv ud
+    fra `.tidslinje-rul`s målte plads og vokser derover, så tidslinjen fylder
+    sin boks — men går aldrig under gulvet, for en tyndere boks end dette kan
+    ikke rammes og trækkes præcist, den samme begrundelse ADR-0036 selv giver
+    for tidslinjens uafhængige skala. Samme værdi som mock-uppens `PXY`. */
+const MIN_YEAR_WIDTH = 18
 
 /** Højde pr. pakket række, samme værdi som mock-uppens `RAEKKE_H`. */
 const ROW_HEIGHT = 24
@@ -45,17 +49,23 @@ const HANDLE_WIDTH = 6
     hvilken række en post lander i, jf. `timelineLayout.ts`s pakning. Højre
     kant lægger et helt år til `to`, så sidste års boks dækker hele det år og
     ikke kun dets startpunkt — samme regel som mock-uppens `tlBoks`. */
-function boxStyle(from: SimulationYear, to: SimulationYear, start: SimulationYear, row: number) {
-  const left = (from - start) * YEAR_WIDTH
-  const right = (to - start) * YEAR_WIDTH + YEAR_WIDTH
+function boxStyle(
+  from: SimulationYear,
+  to: SimulationYear,
+  start: SimulationYear,
+  row: number,
+  yearWidth: number,
+) {
+  const left = (from - start) * yearWidth
+  const right = (to - start) * yearWidth + yearWidth
   return { left: `${left}px`, width: `${right - left}px`, top: `${row * ROW_HEIGHT}px` }
 }
 
 /** Punktets venstre kant og lodrette plads. Et punkt har ingen udstrækning —
     det er hverken en kortere boks eller en boks med bredde nul, men en anden
     figur helt, jf. ADR-0036. */
-function pointStyle(at: SimulationYear, start: SimulationYear, row: number) {
-  return { left: `${(at - start) * YEAR_WIDTH}px`, top: `${row * ROW_HEIGHT}px` }
+function pointStyle(at: SimulationYear, start: SimulationYear, row: number, yearWidth: number) {
+  return { left: `${(at - start) * yearWidth}px`, top: `${row * ROW_HEIGHT}px` }
 }
 
 /** Kroppen kan kun trækkes som helhed, når begge endepunkter er lukkede og
@@ -74,11 +84,12 @@ function handleStyle(
   to: SimulationYear,
   start: SimulationYear,
   row: number,
+  yearWidth: number,
 ) {
   const left =
     edge === 'from'
-      ? (from - start) * YEAR_WIDTH
-      : (to - start) * YEAR_WIDTH + YEAR_WIDTH - HANDLE_WIDTH
+      ? (from - start) * yearWidth
+      : (to - start) * yearWidth + yearWidth - HANDLE_WIDTH
   return { left: `${left}px`, top: `${row * ROW_HEIGHT}px` }
 }
 
@@ -147,10 +158,31 @@ export function Timeline({
   // Navigator.tsx's `grabbed`.
   const lastDelta = useRef(0)
 
+  // Rullelagets målte bredde, så tidslinjens skala kan følge sin boks —
+  // samme ResizeObserver-mønster som chartFrame.tsx's `useMeasuredPlot`.
+  // Ubrugt (0) i test-miljø uden en rigtig layoutmotor, hvor `yearWidth`
+  // derfor blot lander på sit gulv, `MIN_YEAR_WIDTH`.
+  const railRef = useRef<HTMLDivElement>(null)
+  const [railWidth, setRailWidth] = useState(0)
+
+  useEffect(() => {
+    const rail = railRef.current
+    if (!rail || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width
+      if (width) setRailWidth(width)
+    })
+    observer.observe(rail)
+    return () => observer.disconnect()
+  }, [])
+
+  const yearsCount = end - start + 1
+  const yearWidth = Math.max(MIN_YEAR_WIDTH, railWidth / yearsCount)
+
   useEffect(() => {
     if (!drag) return
     const onMouseMove = (event: MouseEvent) => {
-      const rawDelta = Math.round((event.clientX - drag.startX) / YEAR_WIDTH)
+      const rawDelta = Math.round((event.clientX - drag.startX) / yearWidth)
       if (drag.kind === 'item') {
         if (rawDelta === lastDelta.current) return
         lastDelta.current = rawDelta
@@ -196,7 +228,7 @@ export function Timeline({
   // tilsvarende foldning af de samme fem grupper, jf. ADR-0036.
   const [folded, setFolded] = useState<Partial<Record<TimelineGroupName, boolean>>>({})
 
-  const contentWidth = `${(end - start + 1) * YEAR_WIDTH}px`
+  const contentWidth = `${yearsCount * yearWidth}px`
   // Erhvervsophørslinjens fulde udstrækning: aksens højde (kalenderåret plus
   // én række pr. person) og summen af de synlige gruppers højde, en foldet
   // gruppe bidrager kun sin overskrift, jf. mock-uppens `tlIndhold`.
@@ -210,7 +242,7 @@ export function Timeline({
   return (
     <div className="tidslinje-lag">
       <div className="tidslinje-hoved">Tidslinjen</div>
-      <div className="tidslinje-rul">
+      <div className="tidslinje-rul" ref={railRef}>
         <div className="tl-indhold" style={{ width: contentWidth }}>
           <div className="tl-akse">
             <div className="tl-akse-raekke aar">
@@ -218,7 +250,7 @@ export function Timeline({
                 <span
                   key={year}
                   className="tl-akse-maerke"
-                  style={{ left: `${(year - start) * YEAR_WIDTH}px` }}
+                  style={{ left: `${(year - start) * yearWidth}px` }}
                 >
                   {year}
                 </span>
@@ -230,7 +262,7 @@ export function Timeline({
                   <span
                     key={age}
                     className="tl-akse-maerke"
-                    style={{ left: `${(person.birthYear + age - start) * YEAR_WIDTH}px` }}
+                    style={{ left: `${(person.birthYear + age - start) * yearWidth}px` }}
                   >
                     {age}
                   </span>
@@ -239,7 +271,7 @@ export function Timeline({
                 <div
                   className="tl-ophoer-greb"
                   data-person={person.id}
-                  style={{ left: `${(person.birthYear + person.workEndAge - start) * YEAR_WIDTH}px` }}
+                  style={{ left: `${(person.birthYear + person.workEndAge - start) * yearWidth}px` }}
                   onMouseDown={startPersonDrag(person.id)}
                 >
                   {person.name} · {person.workEndAge}
@@ -256,7 +288,7 @@ export function Timeline({
                 key={person.id}
                 className="tl-ophoer"
                 data-person={person.id}
-                style={{ left: `${(person.birthYear + person.workEndAge - start) * YEAR_WIDTH}px` }}
+                style={{ left: `${(person.birthYear + person.workEndAge - start) * yearWidth}px` }}
               />
             ))}
           </div>
@@ -280,7 +312,7 @@ export function Timeline({
                           type="button"
                           key={targetKey(item.target)}
                           className={'tl-punkt' + (sameSelection(selected, item.target) ? ' valgt' : '')}
-                          style={pointStyle(endpointYear(item.at, start), start, item.row)}
+                          style={pointStyle(endpointYear(item.at, start), start, item.row, yearWidth)}
                           onMouseDown={item.at.kind === 'Free' ? startDrag(item, 'point') : undefined}
                           onClick={() => onSelect(item.target)}
                         >
@@ -301,7 +333,10 @@ export function Timeline({
                             (sameSelection(selected, item.target) ? ' valgt' : '') +
                             (canDragBody(item) ? ' krop-fri' : '')
                           }
-                          style={{ ...boxStyle(fromYear, toYear, start, item.row), background: item.color }}
+                          style={{
+                            ...boxStyle(fromYear, toYear, start, item.row, yearWidth),
+                            background: item.color,
+                          }}
                           onMouseDown={canDragBody(item) ? startDrag(item, 'body') : undefined}
                           onClick={() => onSelect(item.target)}
                         >
@@ -310,14 +345,14 @@ export function Timeline({
                         {item.from.kind === 'Free' && (
                           <div
                             className="tl-haandtag fra"
-                            style={handleStyle('from', fromYear, toYear, start, item.row)}
+                            style={handleStyle('from', fromYear, toYear, start, item.row, yearWidth)}
                             onMouseDown={startDrag(item, 'from')}
                           />
                         )}
                         {item.to.kind === 'Free' && (
                           <div
                             className="tl-haandtag til"
-                            style={handleStyle('to', fromYear, toYear, start, item.row)}
+                            style={handleStyle('to', fromYear, toYear, start, item.row, yearWidth)}
                             onMouseDown={startDrag(item, 'to')}
                           />
                         )}
