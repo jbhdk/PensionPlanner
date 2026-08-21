@@ -40,20 +40,14 @@ type HoldingBase = {
   annualCostRate: number
 }
 
-/** År og måned for den aftale, der oprettede en pensionsordning. Dagen er
-    ikke med: begge lovskel falder på den første i en måned, og en dag mere
-    ville være et felt, ingen kan svare rigtigt på. */
-export type OpenedOn = { year: number; month: number }
-
-/** Det, en `PensionScheme` bærer ud over `HoldingBase`. Felterne hænger på de
+/** Det, en `PensionScheme` bærer ud over `HoldingBase`. Feltet hænger på de
     fire varianter og aldrig på grundformen: en aktiesparekonto og frie midler
     har ingen udbetalingsalder, og et felt, de aldrig bruger, er en løgn i det
     gemte skema, jf. ADR-0015. */
 type PensionScheme = {
-  openedOn: OpenedOn
-  /** Sat alene i de overførselstilfælde, hvor en lavere alder er bevaret.
-      Er den sat, vinder den over den udledte. */
-  payoutAgeOverride?: number
+  /** Den tidligste alder, ordningen lovligt må udbetales — tastet som
+      pensionsselskabet oplyser den, jf. ADR-0032. Kan være en brøkalder. */
+  payoutAge: number
 }
 
 /** Den af de to beregningsmåder, en udbetalingsplan regner årets rate efter.
@@ -144,10 +138,10 @@ export type Holding =
 export type PayoutScheduleHolding = Extract<Holding, { variant: 'InstalmentPension' }>
 
 /** De medlemmer af unionen, der er en `PensionScheme`. Udledt af unionen selv
-    frem for skrevet som en liste ved siden af den: en ottende variant med et
-    oprettelsestidspunkt er med af sig selv, og en liste kunne komme ud af
+    frem for skrevet som en liste ved siden af den: en ottende variant med en
+    pensionsudbetalingsalder er med af sig selv, og en liste kunne komme ud af
     trit med det, typen bærer. */
-export type PensionSchemeHolding = Extract<Holding, { openedOn: OpenedOn }>
+export type PensionSchemeHolding = Extract<Holding, { payoutAge: number }>
 
 /** De varianter, en `PensionSchemeHolding` kan have. Udledt af unionen på
     samme måde og af samme grund. */

@@ -79,7 +79,7 @@ describe('removePerson', () => {
                 id: 'marias-ratepension',
                 name: 'Marias ratepension',
                 variant: 'InstalmentPension',
-                openedOn: { year: 2018, month: 1 },
+                payoutAge: 67,
                 balance: 1_000_000,
                 grossReturn: 0,
                 annualCostRate: 0,
@@ -193,7 +193,7 @@ describe('removeHolding', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 1_000_000,
           grossReturn: 0,
           annualCostRate: 0,
@@ -232,7 +232,7 @@ describe('indbetalingens pegere overlever ikke det, de peger på', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 0,
           grossReturn: 0,
           annualCostRate: 0,
@@ -300,40 +300,41 @@ describe('indbetalingens pegere overlever ikke det, de peger på', () => {
 })
 
 describe('withVariant', () => {
-  it('giver beholdningen et oprettelsestidspunkt, når den bliver en pensionsordning', () => {
-    // Et typeskift må ikke kunne skrive en ordning uden det tidspunkt, der
-    // afgør, hvornår den må udbetales. Gættet er planens startår og januar
-    // — det eneste tidspunkt, en ren redigering kender uden at spørge
-    // kalenderen — og brugeren retter det i skuffen ved siden af.
-    const plan = withVariant(aPlan({ startYear: 2026 }), 'free-assets', 'InstalmentPension')
+  it('giver beholdningen en pensionsudbetalingsalder, når den bliver en pensionsordning', () => {
+    // Et typeskift må ikke kunne skrive en ordning uden den alder, der
+    // afgør, hvornår den må udbetales. Den lander på nul, ligesom
+    // livrentens oplyste tal gør ved samme skifte, og brugeren taster det,
+    // selskabet oplyser, i skuffen ved siden af.
+    const plan = withVariant(aPlan(), 'free-assets', 'InstalmentPension')
 
     const holding = plan.household.persons[0]!.holdings[0]!
     expect(holding.variant).toBe('InstalmentPension')
-    expect(holding).toMatchObject({ openedOn: { year: 2026, month: 1 } })
+    expect(holding).toMatchObject({ payoutAge: 0 })
   })
 
-  it('fjerner oprettelsestidspunktet igen, når ordningen bliver til frie midler', () => {
+  it('fjerner pensionsudbetalingsalderen igen, når ordningen bliver til frie midler', () => {
     // Feltet må ikke blive liggende på en variant, der ikke har det: en
-    // opsparingskonto med et oprettelsestidspunkt er en løgn i det gemte
-    // skema, og den ville komme tilbage til live ved næste typeskift.
+    // opsparingskonto med en pensionsudbetalingsalder er en løgn i det
+    // gemte skema, og den ville komme tilbage til live ved næste typeskift.
     const ordning = withVariant(aPlan(), 'free-assets', 'OldAgeSavings')
 
     const holding = withVariant(ordning, 'free-assets', 'SavingsAccount')
       .household.persons[0]!.holdings[0]!
     expect(holding.variant).toBe('SavingsAccount')
-    expect(holding).not.toHaveProperty('openedOn')
+    expect(holding).not.toHaveProperty('payoutAge')
   })
 
-  it('bevarer oprettelsestidspunktet, når den ene pensionsordning bliver den anden', () => {
-    // Ratepensionen og livrenten deler regime: skiftet ændrer beskatningen
-    // på vejen ud, ikke hvornår ordningen blev oprettet.
-    const plan = aPlan({ variant: 'InstalmentPension', openedOn: { year: 2004, month: 9 } })
+  it('bevarer pensionsudbetalingsalderen, når den ene pensionsordning bliver den anden', () => {
+    // Ratepensionen og livrenten deler ordningens dør: skiftet ændrer
+    // beskatningen på vejen ud, ikke hvornår ordningen tidligst må
+    // udbetales.
+    const plan = aPlan({ variant: 'InstalmentPension', payoutAge: 62 })
 
     const holding = withVariant(plan, 'free-assets', 'LifeAnnuity')
       .household.persons[0]!.holdings[0]!
     expect(holding).toMatchObject({
       variant: 'LifeAnnuity',
-      openedOn: { year: 2004, month: 9 },
+      payoutAge: 62,
     })
   })
 })
@@ -373,7 +374,7 @@ describe('addTransfer og addContribution', () => {
                 id: 'ratepension',
                 name: 'Ratepension',
                 variant: 'InstalmentPension',
-                openedOn: { year: 2018, month: 1 },
+                payoutAge: 67,
                 balance: 0,
                 grossReturn: 0,
                 annualCostRate: 0,
@@ -420,7 +421,7 @@ describe('rækkefølgen i planen', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 0,
           grossReturn: 0,
           annualCostRate: 0,

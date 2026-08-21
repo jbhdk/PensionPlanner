@@ -3,7 +3,6 @@ import type {
   Entry,
   Holding,
   HoldingVariant,
-  OpenedOn,
   Municipality,
   Period,
   Plan,
@@ -29,9 +28,9 @@ type Options = {
   holdings?: Holding[]
   grossReturn?: number
   annualCostRate?: number
-  /** Bufferbeholdningens oprettelsestidspunkt. Bruges kun, når `variant` er
-      en pensionsordning — de tre øvrige varianter har ikke feltet. */
-  openedOn?: OpenedOn
+  /** Bufferbeholdningens pensionsudbetalingsalder. Bruges kun, når `variant`
+      er en pensionsordning — de tre øvrige varianter har ikke feltet. */
+  payoutAge?: number
   entries?: Entry[]
   transfers?: Transfer[]
   contributions?: Contribution[]
@@ -62,7 +61,7 @@ export function aPlan(options: Options = {}): Plan {
     horizon = 90,
     balance = 1_000_000,
     variant = 'SavingsAccount',
-    openedOn = { year: 2018, month: 1 },
+    payoutAge = 67,
     holdings = [],
     grossReturn = 0,
     annualCostRate = 0,
@@ -102,7 +101,7 @@ export function aPlan(options: Options = {}): Plan {
               balance,
               grossReturn,
               annualCostRate,
-              openedOn,
+              payoutAge,
             }),
             ...holdings,
           ],
@@ -117,7 +116,7 @@ export function aPlan(options: Options = {}): Plan {
     uden et cast, som netop ville skjule det, felternes plads i unionen er
     til for.
 
-    Oprettelsestidspunktet skrives kun for de fire pensionsordninger, og
+    Pensionsudbetalingsalderen skrives kun for de fire pensionsordninger, og
     livrentens tre omsætningsfelter kun for den. En fixture, der gav dem til
     de øvrige, ville skrive en plan, typen ikke tillader.
 
@@ -131,14 +130,14 @@ export function aHolding(options: {
   balance: number
   grossReturn?: number
   annualCostRate?: number
-  openedOn?: OpenedOn
+  payoutAge?: number
   quotedReserve?: number
   quotedAnnualBenefit?: number
   bonusRate?: number
 }): Holding {
   const {
     variant,
-    openedOn = { year: 2018, month: 1 },
+    payoutAge = 67,
     grossReturn = 0,
     annualCostRate = 0,
     quotedReserve = 0,
@@ -149,11 +148,11 @@ export function aHolding(options: {
   const base = { ...rest, grossReturn, annualCostRate }
   switch (variant) {
     case 'LifeAnnuity':
-      return { ...base, variant, openedOn, quotedReserve, quotedAnnualBenefit, bonusRate }
+      return { ...base, variant, payoutAge, quotedReserve, quotedAnnualBenefit, bonusRate }
     case 'InstalmentPension':
     case 'OldAgeSavings':
     case 'CapitalPension':
-      return { ...base, variant, openedOn }
+      return { ...base, variant, payoutAge }
     default:
       return { ...base, variant }
   }
@@ -361,7 +360,7 @@ export function aPlanWithEveryBufferFlow(): Plan {
         id: 'ratepension',
         name: 'Ratepension',
         variant: 'InstalmentPension',
-        openedOn: { year: 2018, month: 1 },
+        payoutAge: 67,
         balance: 1_500_000,
         grossReturn: 0.04,
         annualCostRate: 0.005,
@@ -371,7 +370,7 @@ export function aPlanWithEveryBufferFlow(): Plan {
         id: 'livrente',
         name: 'Livrente',
         variant: 'LifeAnnuity',
-        openedOn: { year: 2018, month: 1 },
+        payoutAge: 67,
         balance: 800_000,
         grossReturn: 0.04,
         annualCostRate: 0.005,

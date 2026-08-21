@@ -535,3 +535,122 @@ describe('v11 → v12: overførslen og indbetalingen bærer et navn', () => {
     expect(v12).toEqual({ name: 'Plan', transfers: [], contributions: [] })
   })
 })
+
+describe('v12 → v13: pensionsudbetalingsalderen tastes, den udledes ikke længere', () => {
+  it('udleder alderen af oprettelsestidspunktet og ejerens folkepensionsalder, som motoren gjorde', () => {
+    // Jesper er født i juni 1973, folkepensionsalder 70. Ratepensionen er
+    // oprettet i 2018 — det nyeste regime, tre år før — og lander derfor på
+    // 67. Aktiesparekontoen har hverken oprettelsestidspunkt eller
+    // udbetalingsalder og skal stå urørt.
+    const v12: unknown = {
+      household: {
+        persons: [
+          {
+            id: 'jesper',
+            birthYear: 1973,
+            birthMonth: 6,
+            holdings: [
+              {
+                id: 'ratepension',
+                name: 'Ratepension',
+                variant: 'InstalmentPension',
+                balance: 300,
+                openedOn: { year: 2018, month: 1 },
+              },
+              {
+                id: 'aktiesparekonto',
+                name: 'ASK',
+                variant: 'ShareSavingsAccount',
+                balance: 200,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const migrated = runMigrations(v12, 12, 13, migrations) as {
+      household: { persons: Array<{ holdings: Array<Record<string, unknown>> }> }
+    }
+    const [ratepension, aktiesparekonto] = migrated.household.persons[0]!.holdings
+
+    expect(ratepension).toEqual({
+      id: 'ratepension',
+      name: 'Ratepension',
+      variant: 'InstalmentPension',
+      balance: 300,
+      payoutAge: 67,
+    })
+    expect(aktiesparekonto).toEqual({
+      id: 'aktiesparekonto',
+      name: 'ASK',
+      variant: 'ShareSavingsAccount',
+      balance: 200,
+    })
+  })
+
+  it('lader en bevaret udbetalingsalder vinde over den udledte, som payoutAge() gjorde', () => {
+    const v12: unknown = {
+      household: {
+        persons: [
+          {
+            id: 'jesper',
+            birthYear: 1973,
+            birthMonth: 6,
+            holdings: [
+              {
+                id: 'livrente',
+                name: 'Livrente',
+                variant: 'LifeAnnuity',
+                balance: 400,
+                openedOn: { year: 2020, month: 6 },
+                payoutAgeOverride: 60,
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const migrated = runMigrations(v12, 12, 13, migrations) as {
+      household: { persons: Array<{ holdings: Array<Record<string, unknown>> }> }
+    }
+
+    expect(migrated.household.persons[0]!.holdings[0]!.payoutAge).toBe(60)
+  })
+
+  it('giver det faste regime 60 år uanset ejerens folkepensionsalder', () => {
+    const v12: unknown = {
+      household: {
+        persons: [
+          {
+            id: 'jesper',
+            birthYear: 1985,
+            birthMonth: 6,
+            holdings: [
+              {
+                id: 'aldersopsparing',
+                name: 'Aldersopsparing',
+                variant: 'OldAgeSavings',
+                balance: 500,
+                openedOn: { year: 2001, month: 3 },
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    const migrated = runMigrations(v12, 12, 13, migrations) as {
+      household: { persons: Array<{ holdings: Array<Record<string, unknown>> }> }
+    }
+
+    expect(migrated.household.persons[0]!.holdings[0]!.payoutAge).toBe(60)
+  })
+
+  it('lader en plan uden personer stå med en tom husstand', () => {
+    const migrated = runMigrations({ name: 'Plan' }, 12, 13, migrations)
+
+    expect(migrated).toEqual({ name: 'Plan', household: { persons: [] } })
+  })
+})

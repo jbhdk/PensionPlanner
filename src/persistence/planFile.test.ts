@@ -40,7 +40,7 @@ describe('planFile', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 2_000_000,
           grossReturn: 0.06,
           annualCostRate: 0.005,
@@ -49,7 +49,7 @@ describe('planFile', () => {
           id: 'livrente',
           name: 'Livrente',
           variant: 'LifeAnnuity',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 1_000_000,
           grossReturn: 0.05,
           annualCostRate: 0.004,
@@ -61,7 +61,7 @@ describe('planFile', () => {
           id: 'aldersopsparing',
           name: 'Aldersopsparing',
           variant: 'OldAgeSavings',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 300_000,
           grossReturn: 0.07,
           annualCostRate: 0.006,
@@ -70,7 +70,7 @@ describe('planFile', () => {
           id: 'kapitalpension',
           name: 'Kapitalpension',
           variant: 'CapitalPension',
-          openedOn: { year: 2005, month: 3 },
+          payoutAge: 60,
           balance: 250_000,
           grossReturn: 0.05,
           annualCostRate: 0.005,
@@ -91,9 +91,11 @@ describe('planFile', () => {
     // oprettelsestidspunkt, deres udbetalingsalder udledes af, v8 → v9, hvor
     // satsreguleringen kom til at hedde det, den løfter, v9 → v10, hvor
     // overførslens periode blev en fuld periode, v10 → v11, hvor livrenten
-    // fik sine omsætningsfelter, og v11 → v12, hvor overførslen og
-    // indbetalingen fik hver sit navn.
-    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(12)
+    // fik sine omsætningsfelter, v11 → v12, hvor overførslen og
+    // indbetalingen fik hver sit navn, og v12 → v13, hvor
+    // oprettelsestidspunktet blev til en tastet pensionsudbetalingsalder,
+    // jf. ADR-0032.
+    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(13)
   })
 
   it('bærer en plan med indbetalinger hele vejen rundt', () => {
@@ -119,7 +121,7 @@ describe('planFile', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 500_000,
           grossReturn: 0.06,
           annualCostRate: 0.005,
@@ -147,7 +149,7 @@ describe('planFile', () => {
           id: 'aldersopsparing',
           name: 'Aldersopsparing',
           variant: 'OldAgeSavings',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 0,
           grossReturn: 0.04,
           annualCostRate: 0.004,

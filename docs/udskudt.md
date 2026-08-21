@@ -52,25 +52,15 @@ Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog 
 
 **Hvad der skal bygges, når det tages op:** Et fradragsregnskab pr. indbetaling med restsaldo og valgt fordeling, opfyldningsfradraget som satstal i `RateYear`, og et felt på livrenten der skiller den privattegnede fra den arbejdsgiveradministrerede. Så længe kun den arbejdsgiveradministrerede findes, findes den skelnen ikke, og det er den billige del af fravalget.
 
-## Pensionsbeskatningslovens § 1 a, stk. 2
+## Afledt folkepensionsalder i `AgeBound`
 
-**Status:** Udskudt, undersøgt og belagt i [pensionsudbetalingsalderen](./satser/pensionsudbetalingsalder.md). De tre udbetalingsregimer er bygget, jf. [#38](https://github.com/jbhdk/PensionPlanner/issues/38); det er alene stk. 2's fødselsdatotabel, der ikke er.
+**Status:** Fravalgt. `AgeBound` er en fast alder eller `'WorkEndAge'`, og den får ikke `'StatePensionAge'` ved siden af. `PayoutAge` tastes nu direkte på ordningen, jf. [ADR-0032](./adr/0032-pensionsudbetalingsalderen-tastes-direkte-den-udledes-ikke-af-oprettelsestidspunktet.md), og er dermed hverken afledt eller en kandidat til denne liste længere.
 
-**Hvorfor det betyder noget:** [PBL § 1 a](https://danskelove.dk/pensionsbeskatningsloven/1a), stk. 1, definerer pensionsudbetalingsalderen som tidspunktet tre år før folkepensionsalderen — det, `FromJanuary2018` regner. Ved siden af den bærer stk. 2 en overgangstabel indekseret efter **fødselsdato** og ikke efter oprettelsestidspunkt: født til og med 31. december 1958 giver 60 år, 1. januar – 30. juni 1959 giver 60½, 1. juli – 31. december 1959 giver 61, og 1. januar – 30. juni 1960 giver 61½. De to slags overgangsregel måler altså hver sin ting, og en ordning kan være omfattet af begge.
-
-**Prisen ved at lade den ligge:** Tabellen rammer alene personer født før 1961, som alle er fyldt 65 i 2026 — husstanden har ingen af dem. Og den går kun én vej: for de årgange, den dækker, er dens alder lavere end den, de tre regimer giver, så en plan kan ikke komme til at se mere fri ud, end den er. Skulle husstanden rumme en person født før 1961, ville hendes ordninger derimod se ud til at åbne for sent, og hendes broperiode ville se længere ud, end den er.
-
-**Hvad der skal bygges, når det tages op:** Tabellen hører i [pensionsudbetalingsalderen](./satser/pensionsudbetalingsalder.md) ved siden af de tre regimer — den er lovfastsat og ikke § 20-reguleret — og udledningen bliver et trin i `payoutAge` efter regimeopslaget. Det kræver hverken et nyt felt eller et led i migrationskæden: fødselsdatoen står allerede på personen. Det, der derimod skal afgøres først, er samspillet: om stk. 2 afløser regimets alder for de fire årgangsintervaller, eller om den lægger sig som en nedre grænse under den. Det spørgsmål er ikke besvaret, og det skal det være, før koden rører sig.
-
-## Afledte aldre i `AgeBound`
-
-**Status:** Fravalgt. `AgeBound` er en fast alder eller `'WorkEndAge'`, og den får hverken `'StatePensionAge'` eller `'PayoutAge'` ved siden af.
-
-**Hvorfor det betyder noget:** Begge de aldre kan flytte sig, uden at brugeren rører planen. Folkepensionsalderen er kun et skøn for de årgange, Folketinget endnu ikke har vedtaget — hustruens er en af dem — og en ordnings `PayoutAge` følger med den for to af de tre udbetalingsregimer. Et endepunkt, der pegede på dem, ville flytte sig af sig selv: ATP'ens start, en udgiftspost fra folkepensionsalderen, en udbetalingsplan sat til at begynde så tidligt loven tillader.
+**Hvorfor det betyder noget:** Folkepensionsalderen kan flytte sig, uden at brugeren rører planen — den er kun et skøn for de årgange, Folketinget endnu ikke har vedtaget, hustruens er en af dem. Et endepunkt, der pegede på den, ville flytte sig af sig selv: ATP'ens start, en udgiftspost fra folkepensionsalderen.
 
 **Prisen ved at lade det ligge:** Rykker et skøn, står tallet forkert i planen, indtil brugeren selv retter det. Det er accepteret. Skønnene rykker sig sjældent — et par gange i et helt planforløb — og et felt i det gemte skema koster for altid, hvor rettelsen koster ét minut de gange, det sker. `'WorkEndAge'` bliver stående, fordi den er det modsatte: den er hele værktøjets håndtag og ændres hver gang et scenarie sammenlignes.
 
-**Hvad der skal bygges, hvis det tages op:** Kun et nyt medlem i `AgeBound` og opløsningen af det i `resolveAgeBound`. `'StatePensionAge'` ville være billig — enhver person har præcis én, så den giver mening alle de steder `AgeBound` bruges. `'PayoutAge'` ville ikke: den er en egenskab ved ordningen og ikke ved personen, og den ville være meningsløs på en post.
+**Hvad der skal bygges, hvis det tages op:** Et nyt medlem i `AgeBound` og opløsningen af det i `resolveAgeBound`. Det ville være billigt — enhver person har præcis én folkepensionsalder, så den giver mening alle de steder `AgeBound` bruges.
 
 ## Efterladtescenarie (dødsfald)
 

@@ -25,8 +25,8 @@ import { fieldHelp } from './fieldHelp'
 /** En plan, der er rig nok til at tegne alle forklar-årets tabeller:
     aktieindkomst til husstandens skattetabel, en ordning med et loft, et
     lønkildet bidrag, poster i begge retninger, og en livrente, der omsættes
-    i planens allerførste år — den bevarede udbetalingsalder er 53, den
-    alder ejeren fylder i startåret. */
+    i planens allerførste år — pensionsudbetalingsalderen er tastet til 53,
+    den alder ejeren fylder i startåret. */
 function aRichPlan(): Plan {
   return aPlan({
     variant: 'ShareDepot',
@@ -38,7 +38,7 @@ function aRichPlan(): Plan {
         id: 'ratepension',
         name: 'Ratepension',
         variant: 'InstalmentPension',
-        openedOn: { year: 2018, month: 1 },
+        payoutAge: 67,
         balance: 1_000_000,
         grossReturn: 0.04,
         annualCostRate: 0.005,
@@ -47,8 +47,7 @@ function aRichPlan(): Plan {
         id: 'livrente',
         name: 'Livrente',
         variant: 'LifeAnnuity',
-        openedOn: { year: 2018, month: 1 },
-        payoutAgeOverride: 53,
+        payoutAge: 53,
         balance: 800_000,
         grossReturn: 0.045,
         annualCostRate: 0.006,

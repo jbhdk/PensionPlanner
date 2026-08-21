@@ -59,7 +59,7 @@ function aPlanThatTurnsNegative(): Plan {
         id: 'ratepension',
         name: 'Ratepension',
         variant: 'InstalmentPension',
-        openedOn: { year: 2018, month: 1 },
+        payoutAge: 67,
         balance: 1_500_000,
         grossReturn: 0.04,
         annualCostRate: 0.005,

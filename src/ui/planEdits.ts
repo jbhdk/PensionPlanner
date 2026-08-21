@@ -329,16 +329,15 @@ export function withPayoutSchedule(
 /** Skifter beholdningens variant, og flytter med det de felter, den nye
     variant har og den gamle ikke havde — eller omvendt.
 
-    Bliver beholdningen en pensionsordning, skal den have et
-    oprettelsestidspunkt: uden det er der intet regime at udlede
-    udbetalingsalderen af. Gættet er planens startår og januar, det nyeste
-    regime, og brugeren retter det i skuffen ved siden af. Bliver den til
-    noget, der ikke er en ordning, forsvinder både tidspunktet og en bevaret
-    alder igen — et felt, varianten ikke har, må ikke ligge og vente i det
-    gemte skema.
+    Bliver beholdningen en pensionsordning, skal den have en
+    pensionsudbetalingsalder: den lander på nul, ligesom livrentens to
+    oplyste tal gør ved samme skifte, og brugeren taster det, selskabet
+    oplyser, i skuffen ved siden af. Bliver den til noget, der ikke er en
+    ordning, forsvinder alderen igen — et felt, varianten ikke har, må ikke
+    ligge og vente i det gemte skema.
 
-    Skiftet fra én ordning til en anden bevarer begge dele: det ændrer
-    beskatningen på vejen ud, ikke hvornår ordningen blev oprettet. */
+    Skiftet fra én ordning til en anden bevarer den: det ændrer
+    beskatningen på vejen ud, ikke hvornår ordningen tidligst må udbetales. */
 export function withVariant(plan: Plan, id: string, variant: HoldingVariant): Plan {
   return withHolding(plan, id, (holding) => {
     // Grundformen skrives ud felt for felt frem for at blive skrabet af det,
@@ -357,12 +356,7 @@ export function withVariant(plan: Plan, id: string, variant: HoldingVariant): Pl
 
     const scheme = {
       ...base,
-      openedOn: isPensionScheme(holding)
-        ? holding.openedOn
-        : { year: plan.startYear, month: 1 },
-      ...(isPensionScheme(holding) && holding.payoutAgeOverride !== undefined
-        ? { payoutAgeOverride: holding.payoutAgeOverride }
-        : {}),
+      payoutAge: isPensionScheme(holding) ? holding.payoutAge : 0,
     }
     // De tre omsætningsfelter er livrentens egne. Bliver beholdningen en
     // livrente, skal den have dem — er den det allerede, står de urørt.

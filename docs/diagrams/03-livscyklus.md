@@ -22,10 +22,10 @@ stateDiagram-v2
     end note
 
     note right of PayingOut
-        Starts no earlier than payoutAge().
+        Starts no earlier than payoutAge.
         At least 10 years, and the last
         instalment no later than 30 years
-        after payoutAge().
+        after payoutAge.
     end note
 ```
 
@@ -65,7 +65,7 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> Working
     Working --> Bridge : workEndAge
-    Working --> DrawingPension : workEndAge after payoutAge()
+    Working --> DrawingPension : workEndAge after payoutAge
     Bridge --> DrawingPension : first holding may pay out
     DrawingPension --> StatePensioner : statePensionAge
     StatePensioner --> [*] : horizon
@@ -84,6 +84,6 @@ stateDiagram-v2
 
 ## Åbne punkter
 
-- **`Bridge` kan mangle helt.** Ligger `workEndAge` efter første ordnings `payoutAge()`, findes fasen ikke. Brugerfladen skal sige noget fornuftigt frem for at vise en tom periode.
+- **`Bridge` kan mangle helt.** Ligger `workEndAge` efter første ordnings `payoutAge`, findes fasen ikke. Brugerfladen skal sige noget fornuftigt frem for at vise en tom periode.
 - **`Depleted` er ikke det samme som slettet.** En tømt ratepension skal blive stående i årstabellen med saldo nul, ellers knækker formuegrafens stablede areal. Saldoen bliver præcis nul, fordi den sidste rate fejer resten med efter afkast og beholdningsskat.
 - **`Ceased` er den eneste tilstand, der afhænger af en anden persons tilstand.** Det er indgangen til efterladtescenariet.

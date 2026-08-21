@@ -8,7 +8,7 @@ import {
   payoutStartOf,
   payoutTaxation,
 } from './holdingVariant'
-import { payoutStartYear, payoutYear, reached, transferAllowedFrom } from './payoutAge'
+import { payoutStartYear, payoutYear, transferAllowedFrom } from './payoutAge'
 import { periodBounds } from './age'
 import type {
   AgeBound,
@@ -61,36 +61,8 @@ export function validatePlan(plan: Plan): string | undefined {
     entryOwners(plan) ??
     oneOfEachUniqueVariant(plan) ??
     entrySourcedDestination(plan) ??
-    capitalPensionClosedForNewSchemes(plan) ??
     payoutSchedules(plan)
   )
-}
-
-/** Kapitalpensionen har været lukket for nytegning siden udgangen af 2012 —
-    en ordning med et senere oprettelsestidspunkt er en tilstand, der ikke
-    findes i virkeligheden, og afvises derfor ved indgangen frem for at
-    regne videre på en aftale, ingen kunne have indgået, jf. ADR-0020 og
-    `OpenToContributions` i CONTEXT.md.
-
-    Reglen står ved siden af `oneOfEachUniqueVariant` og ikke inde i
-    `contributionEnds`: den handler om beholdningen selv og ikke om nogen
-    indbetaling til den — en kapitalpension uden en eneste indbetaling i
-    planen skal afvises lige så vel som en, der har. */
-function capitalPensionClosedForNewSchemes(plan: Plan): string | undefined {
-  const closedFrom = { year: 2013, month: 1 }
-  for (const person of plan.household.persons) {
-    for (const holding of person.holdings) {
-      if (holding.variant !== 'CapitalPension') continue
-      if (reached(holding.openedOn, closedFrom)) {
-        return (
-          `Beholdningen ${holding.name} er en kapitalpension oprettet i ` +
-          `${holding.openedOn.month}/${holding.openedOn.year}. Kapitalpensionen har ` +
-          `været lukket for nytegning siden udgangen af 2012.`
-        )
-      }
-    }
-  }
-  return undefined
 }
 
 /** Udbetalingsplanens lovregler, jf. [PBL § 11 A, stk.

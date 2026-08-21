@@ -1,3 +1,5 @@
+import { deriveStatePensionAge } from '../engine/statePensionAge'
+
 /** Ét led i migrationskæden: løfter data fra skemaversion `from` til `from + 1`. */
 export type Migration = {
   from: number
@@ -330,6 +332,87 @@ export const migrations: Migration[] = [
             contribution.source,
           )} \u2192 ${nameOf(holdings, contribution.to)}`,
         })),
+      }
+    },
+  },
+  {
+    // v12 \u2192 v13, jf. ADR-0032: en pensionsordnings udbetalingsalder tastes
+    // nu direkte, i stedet for at blive udledt af et oprettelsestidspunkt og
+    // et regels\u00e6t. Migrationen regner hver ordnings alder ud \u00e9n gang, af de
+    // gamle openedOn- og payoutAgeOverride-felter og ejerens f\u00f8dselsdato \u2014
+    // pr\u00e6cis den udledning, den levende motor foretog indtil nu.
+    //
+    // De tre regimers datoskel st\u00e5r frosne herunder og importeres ikke fra
+    // payoutAge.ts, som mister dem i denne version: loven er lukket for
+    // evigt \u2014 der kommer intet fjerde regime \u2014 og et led, der importerede
+    // fra levende motorkode, ville risikere at \u00e6ndre mening, den dag nogen
+    // r\u00f8rte ved den af en helt anden grund. Ingen af k\u00e6dens \u00f8vrige led
+    // importerer fra motoren, af samme grund; de hardkoder deres egne
+    // fakta, som variantnavnene i v7 \u2192 v8.
+    //
+    // `deriveStatePensionAge` er derimod levende, aktivt vedligeholdt data \u2014
+    // ikke en del af det, der fryses her \u2014 og genbruges derfor som den er.
+    //
+    // Kilde: pensionsbeskatningslovens \u00a7 1 a, stk. 1 \u26a0\ufe0e \u2014 kun det nyeste
+    // regime (tre \u00e5r f\u00f8r folkepensionsalderen) er bekr\u00e6ftet i selve
+    // lovteksten; de to \u00e6ldre regimers datoskel hviler p\u00e5 sekund\u00e6re kilder.
+    //
+    // \u00c5bent punkt, som migrationen bevidst ikke regner: \u00a7 1 a, stk. 2 b\u00e6rer
+    // en anden tabel, indekseret efter f\u00f8dselsdato og ikke efter
+    // oprettelsestidspunkt, som for personer f\u00f8dt f\u00f8r 1961 ville give en
+    // lavere alder end de tre regimer herunder. Det rammer kun ejere, der i
+    // 2026 allerede er fyldt 65, og det g\u00f8r aldrig en migreret plan mere fri,
+    // end den er \u2014 kun mindre.
+    from: 12,
+    migrate: (data) => {
+      const pensionSchemes = ['InstalmentPension', 'LifeAnnuity', 'OldAgeSavings', 'CapitalPension']
+
+      function payoutAgeFor(
+        openedOn: { year: number; month: number },
+        payoutAgeOverride: number | undefined,
+        birthYear: number,
+        birthMonth: number,
+      ): number {
+        if (payoutAgeOverride !== undefined) return payoutAgeOverride
+        const statePensionAge = deriveStatePensionAge(birthYear, birthMonth).age
+        const reached = (skel: { year: number; month: number }) =>
+          openedOn.year !== skel.year ? openedOn.year > skel.year : openedOn.month >= skel.month
+        if (reached({ year: 2018, month: 1 })) return statePensionAge - 3
+        if (reached({ year: 2007, month: 5 })) return statePensionAge - 5
+        return 60
+      }
+
+      const plan = data as {
+        household?: { persons?: Array<Record<string, unknown>> }
+        [key: string]: unknown
+      }
+
+      return {
+        ...plan,
+        household: {
+          persons: (plan.household?.persons ?? []).map((person) => ({
+            ...person,
+            holdings: ((person.holdings ?? []) as Array<Record<string, unknown>>).map(
+              (holding) => {
+                if (!pensionSchemes.includes(holding.variant as string)) return holding
+                const { openedOn, payoutAgeOverride, ...rest } = holding as {
+                  openedOn: { year: number; month: number }
+                  payoutAgeOverride?: number
+                  [key: string]: unknown
+                }
+                return {
+                  ...rest,
+                  payoutAge: payoutAgeFor(
+                    openedOn,
+                    payoutAgeOverride,
+                    person.birthYear as number,
+                    person.birthMonth as number,
+                  ),
+                }
+              },
+            ),
+          })),
+        },
       }
     },
   },

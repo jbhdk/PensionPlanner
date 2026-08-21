@@ -119,17 +119,8 @@ export const fieldHelp = {
   'Holding.grossReturn':
     'Hvor meget beholdningen ventes at vokse om året, før omkostninger. Det er ét fast skøn for hele forløbet og ikke en markedsudvikling — og det er det tal, planen er allermest følsom over for.',
 
-  'Holding.openedOn':
-    'Tidspunktet for den aftale, der satte ordningen i verden. Det afgør, efter hvilket regelsæt den tidligste udbetaling regnes, og måneden er med, fordi begge lovskel falder midt i et år — en ordning fra april 2007 må tømmes tidligere end en fra maj samme år.',
-
-  'Holding.payoutRegime':
-    'Det regelsæt, ordningens tidligste udbetaling regnes efter, afgjort af hvornår den blev tegnet. De to nyeste sætter grænsen fem eller tre år før folkepensionsalderen og flytter sig derfor med den; det ældste er fast 60 år og rører sig ikke.',
-
   'Holding.payoutAge':
-    'Det tidligste tidspunkt, loven tillader penge trukket ud af netop denne ordning. Falder det efter det år, arbejdet stopper, skal årene imellem betales af frie midler — og to ordninger hos samme person kan have hver sit.',
-
-  'Holding.payoutAgeOverride':
-    'Den lavere grænse, en ordning har taget med sig fra en flytning mellem selskaber, sat direkte frem for udledt af tegningstidspunktet. Står feltet tomt, gælder det, regelsættet giver; står der et tal, er det tallet, der tæller.',
+    'Det tidligste tidspunkt, pensionsselskabet oplyser, at netop denne ordning må udbetales. Falder det efter det år, arbejdet stopper, skal årene imellem betales af frie midler — og to ordninger hos samme person kan have hver sit.',
 
   'PayoutSchedule.start':
     'Den alder, hvor ordningen begynder at blive tømt. Bundet til erhvervsophør flytter hele forløbet sig, hvis året for arbejdets ophør senere ændres — og tidligere end lovens egen grænse kan den ikke sættes.',

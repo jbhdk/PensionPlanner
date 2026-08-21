@@ -115,7 +115,7 @@ function aPlanWithTwoOwners(): Plan {
               id: 'aldersopsparing',
               name: 'Aldersopsparing',
               variant: 'OldAgeSavings',
-              openedOn: { year: 2000, month: 1 },
+              payoutAge: 60,
               balance: 500_000,
               grossReturn: 0,
               annualCostRate: 0,
@@ -1393,7 +1393,7 @@ describe('pensionsbeholdninger', () => {
             id: 'ratepension',
             name: 'Ratepension',
             variant: 'InstalmentPension' as const,
-            openedOn: { year: 2018, month: 1 },
+            payoutAge: 67,
             balance: 1_000_000,
             grossReturn: 0,
             annualCostRate: 0,
@@ -1449,44 +1449,6 @@ describe('pensionsbeholdninger', () => {
     expect(() => simulate(plan)).toThrow(/pensionsudbetalingsalder/i)
     expect(() => simulate(plan)).not.toThrow(/udbetalingsplan/i)
   })
-
-  it('afviser en kapitalpension oprettet efter udgangen af 2012', () => {
-    // Ordningen har været lukket for nytegning siden udgangen af 2012 — et
-    // senere oprettelsestidspunkt er en tilstand, der ikke findes i
-    // virkeligheden, jf. ADR-0020 og OpenToContributions i CONTEXT.md.
-    const plan = aPlan({
-      balance: 0,
-      holdings: [
-        aHolding({
-          id: 'kapitalpension',
-          name: 'Kapitalpension',
-          variant: 'CapitalPension',
-          balance: 250_000,
-          openedOn: { year: 2013, month: 1 },
-        }),
-      ],
-    })
-
-    expect(() => simulate(plan)).toThrow(/Kapitalpension.*lukket for nytegning/is)
-  })
-
-  it('tillader en kapitalpension oprettet i december 2012', () => {
-    // Grænsetilfældet: skellet falder ved udgangen af 2012, ikke før.
-    const plan = aPlan({
-      balance: 0,
-      holdings: [
-        aHolding({
-          id: 'kapitalpension',
-          name: 'Kapitalpension',
-          variant: 'CapitalPension',
-          balance: 250_000,
-          openedOn: { year: 2012, month: 12 },
-        }),
-      ],
-    })
-
-    expect(() => simulate(plan)).not.toThrow()
-  })
 })
 
 
@@ -1499,7 +1461,7 @@ describe('beholdningsskat', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 1_000_000,
           grossReturn: 0.07,
           annualCostRate: 0.005,
@@ -1530,7 +1492,7 @@ describe('beholdningsskat', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 1_000_000,
           grossReturn: 0.07,
           annualCostRate: 0.005,
@@ -1562,9 +1524,6 @@ describe('beholdningsskat', () => {
             balance: 500_000,
             grossReturn: 0.06,
             annualCostRate: 0.01,
-            // Kapitalpensionen alene har været lukket for nytegning siden
-            // udgangen af 2012 — de øvrige tre beholder fixturens standard.
-            ...(variant === 'CapitalPension' ? { openedOn: { year: 2010, month: 1 } } : {}),
           }),
         ],
       })
@@ -1664,7 +1623,7 @@ describe('beholdningsskat', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 1_000_000,
           grossReturn: -0.1,
           annualCostRate: 0,
@@ -1690,7 +1649,7 @@ describe('beholdningsskat', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 1_000_000,
           grossReturn: 0.07,
           annualCostRate: 0.005,
@@ -1732,8 +1691,8 @@ describe('aktiesparekontoen', () => {
   })
 
   it('henter fra aktiesparekontoen uden en udbetalingsalder at vente på', () => {
-    // Kontoen er hverken frie midler eller en pensionsordning: den har intet
-    // `OpenedOn` og ingen `PayoutAge`, og ejeren hæver af den, når hun vil.
+    // Kontoen er hverken frie midler eller en pensionsordning: den har ingen
+    // `PayoutAge`, og ejeren hæver af den, når hun vil.
     // Det er dét, der lukker musefælden fra etape 2, jf. ADR-0022.
     const plan = aPlanWithShareSavingsAccount({
       shareSavingsAccount: 100_000,
@@ -1911,7 +1870,7 @@ describe('aktiesparekontoen', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 0,
           grossReturn: 0,
           annualCostRate: 0,
@@ -2150,7 +2109,7 @@ describe('aktiesparekontoen', () => {
             id: 'ratepension',
             name: 'Ratepension',
             variant: 'InstalmentPension',
-            openedOn: { year: 2018, month: 1 },
+            payoutAge: 67,
             balance: 0,
             grossReturn: 0,
             annualCostRate: 0,
@@ -2262,14 +2221,14 @@ describe('indbetalinger', () => {
     id: 'ratepension',
     name: 'Ratepension',
     variant: 'InstalmentPension',
-    openedOn: { year: 2018, month: 1 },
+    payoutAge: 67,
   } as const
   const lifeAnnuity = { id: 'livrente', name: 'Livrente', variant: 'LifeAnnuity' } as const
   const oldAgeSavings = {
     id: 'aldersopsparing',
     name: 'Aldersopsparing',
     variant: 'OldAgeSavings',
-    openedOn: { year: 2018, month: 1 },
+    payoutAge: 67,
   } as const
 
   /** Fixturens buffer plus én ordning at betale ind i. Uden afkast, med
@@ -2700,7 +2659,7 @@ describe('indbetalinger', () => {
             id: 'ratepension-2',
             name: 'Ratepension 2',
             variant: 'InstalmentPension',
-            openedOn: { year: 2018, month: 1 },
+            payoutAge: 67,
             balance: 0,
             grossReturn: 0,
             annualCostRate: 0,
@@ -3209,7 +3168,7 @@ describe('indbetalingens pegere', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 0,
           grossReturn: 0,
           annualCostRate: 0,
@@ -3275,7 +3234,7 @@ describe('indbetalingens pegere', () => {
                 id: 'kapitalpension',
                 name: 'Kapitalpension',
                 variant: 'CapitalPension',
-                openedOn: { year: 2010, month: 1 },
+                payoutAge: 67,
                 balance: 0,
                 grossReturn: 0,
                 annualCostRate: 0,
@@ -3328,7 +3287,7 @@ describe('indbetalingens pegere', () => {
                 id: 'marias-ratepension',
                 name: 'Marias ratepension',
                 variant: 'InstalmentPension',
-                openedOn: { year: 2018, month: 1 },
+                payoutAge: 67,
                 balance: 0,
                 grossReturn: 0,
                 annualCostRate: 0,
@@ -3384,7 +3343,7 @@ describe('indbetalingens pegere', () => {
                 id: 'aldersopsparing',
                 name: 'Aldersopsparing',
                 variant: 'OldAgeSavings',
-                openedOn: { year: 2018, month: 1 },
+                payoutAge: 67,
                 balance: 0,
                 grossReturn: 0,
                 annualCostRate: 0,
@@ -3430,7 +3389,7 @@ describe('indbetalingens pegere', () => {
                 id: 'marias-ratepension',
                 name: 'Marias ratepension',
                 variant: 'InstalmentPension',
-                openedOn: { year: 2018, month: 1 },
+                payoutAge: 67,
                 balance: 0,
                 grossReturn: 0,
                 annualCostRate: 0,
@@ -3475,7 +3434,7 @@ describe('ratepensionens udbetaling', () => {
             id: 'ratepension',
             name: 'Ratepension',
             variant: 'InstalmentPension',
-            openedOn: { year: 2018, month: 1 },
+            payoutAge: 67,
             balance: 1_000_000,
             grossReturn: 0,
             annualCostRate: 0,
@@ -3509,7 +3468,7 @@ describe('ratepensionens udbetaling', () => {
             id: 'ratepension',
             name: 'Ratepension',
             variant: 'InstalmentPension',
-            openedOn: { year: 2018, month: 1 },
+            payoutAge: 67,
             balance: 4_000_000,
             grossReturn: 0,
             annualCostRate: 0,
@@ -3544,7 +3503,7 @@ describe('ratepensionens udbetaling', () => {
             id: 'ratepension',
             name: 'Ratepension',
             variant: 'InstalmentPension',
-            openedOn: { year: 2018, month: 1 },
+            payoutAge: 67,
             balance: 1_000_000,
             grossReturn: 0.05,
             annualCostRate: 0,
@@ -3579,7 +3538,7 @@ describe('ratepensionens udbetaling', () => {
             id: 'ratepension',
             name: 'Ratepension',
             variant: 'InstalmentPension',
-            openedOn: { year: 2018, month: 1 },
+            payoutAge: 67,
             balance: 1_000_000,
             grossReturn: 0.05,
             annualCostRate: 0,
@@ -3607,7 +3566,7 @@ describe('ratepensionens udbetaling', () => {
             id: 'ratepension',
             name: 'Ratepension',
             variant: 'InstalmentPension',
-            openedOn: { year: 2018, month: 1 },
+            payoutAge: 67,
             balance: 1_000_000,
             grossReturn: 0.05,
             annualCostRate: 0,
@@ -3645,7 +3604,7 @@ describe('ratepensionens udbetaling', () => {
               id: 'ratepension',
               name: 'Ratepension',
               variant: 'InstalmentPension',
-              openedOn: { year: 2018, month: 1 },
+              payoutAge: 67,
               balance: 1_000_000,
               grossReturn: 0,
               annualCostRate: 0,
@@ -3678,7 +3637,7 @@ describe('ratepensionens udbetaling', () => {
             id: 'ratepension',
             name: 'Ratepension',
             variant: 'InstalmentPension',
-            openedOn: { year: 2018, month: 1 },
+            payoutAge: 67,
             balance: 1_000_000,
             grossReturn: 0,
             annualCostRate: 0,
@@ -3711,7 +3670,7 @@ function aPlanWithPayout(payout: PayoutSchedule): Plan {
         id: 'ratepension',
         name: 'Ratepension',
         variant: 'InstalmentPension',
-        openedOn: { year: 2018, month: 1 },
+        payoutAge: 67,
         balance: 1_000_000,
         grossReturn: 0,
         annualCostRate: 0,
@@ -3775,7 +3734,7 @@ function aPlanWithOldAgeSavings(
         id: 'aldersopsparing',
         name: 'Aldersopsparing',
         variant: 'OldAgeSavings',
-        openedOn: { year: 2000, month: 1 },
+        payoutAge: 60,
         balance: oldAgeSavings,
         grossReturn: options.grossReturn ?? 0,
         annualCostRate: options.annualCostRate ?? 0,
@@ -4038,9 +3997,8 @@ describe('overførsel ud af en skattefri ordning', () => {
   })
 })
 
-/** En kapitalpension, gyldig at oprette — før udgangen af 2012 — med en
-    fast `payoutAgeOverride`, så testene ikke selv skal regne sig frem til
-    det kalenderår, regimet ville give. */
+/** En kapitalpension med en fast pensionsudbetalingsalder, så testene ikke
+    selv skal regne sig frem til det kalenderår. */
 function aCapitalPension(balance: number): Holding {
   return {
     id: 'ordning',
@@ -4049,8 +4007,7 @@ function aCapitalPension(balance: number): Holding {
     balance,
     grossReturn: 0,
     annualCostRate: 0,
-    openedOn: { year: 2012, month: 12 },
-    payoutAgeOverride: 65,
+    payoutAge: 65,
   }
 }
 
@@ -4186,7 +4143,7 @@ describe('livrentens omsætning', () => {
           id: 'livrente',
           name: 'Livrente',
           variant: 'LifeAnnuity',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: annuity.balance ?? 2_000_000,
           grossReturn: annuity.grossReturn ?? 0,
           annualCostRate: 0,
@@ -4639,7 +4596,7 @@ describe('aftrapningen af pensionstillægget', () => {
             id: 'ratepension',
             name: 'Ratepension',
             variant: 'InstalmentPension',
-            openedOn: { year: 2018, month: 1 },
+            payoutAge: 67,
             balance: 1_000_000,
             grossReturn: 0,
             annualCostRate: 0,
@@ -4649,7 +4606,7 @@ describe('aftrapningen af pensionstillægget', () => {
             id: 'livrente',
             name: 'Livrente',
             variant: 'LifeAnnuity',
-            openedOn: { year: 2018, month: 1 },
+            payoutAge: 67,
             balance: 2_000_000,
             grossReturn: 0,
             annualCostRate: 0,
@@ -4706,7 +4663,7 @@ describe('aftrapningen af pensionstillægget', () => {
             id: 'aldersopsparing',
             name: 'Aldersopsparing',
             variant: 'OldAgeSavings',
-            openedOn: { year: 2000, month: 1 },
+            payoutAge: 60,
             balance: 2_000_000,
             grossReturn: 0,
             annualCostRate: 0,
@@ -4896,7 +4853,7 @@ describe('en persons horisont stopper hendes egen indkomst, ikke husstandens udg
           id: 'livrente',
           name: 'Livrente',
           variant: 'LifeAnnuity',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 800_000,
           grossReturn: 0.04,
           annualCostRate: 0.005,
@@ -4983,7 +4940,7 @@ describe('bufferens jævne strømme', () => {
             id: 'ratepension',
             name: 'Ratepension',
             variant: 'InstalmentPension',
-            openedOn: { year: 2018, month: 1 },
+            payoutAge: 67,
             balance: 1_000_000,
             grossReturn: 0,
             annualCostRate: 0,

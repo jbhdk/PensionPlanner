@@ -28,7 +28,7 @@ import type {
 import { latestRateYear } from '../engine/rates/rates'
 import { conversionFactor, isLifeAnnuity } from '../engine/lifeAnnuity'
 import type { LifeAnnuityHolding } from '../engine/lifeAnnuity'
-import { payoutAge, payoutRegime, payoutYear } from '../engine/payoutAge'
+import { payoutYear } from '../engine/payoutAge'
 import { payoutDurationBounds } from '../engine/validatePlan'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
 import type { YearResult } from '../engine/yearResult'
@@ -38,7 +38,6 @@ import {
   danishTiming,
   directions,
   payoutPrinciples,
-  payoutRegimes,
   recurrences,
   timingForOnce,
   contributionAmounts,
@@ -449,7 +448,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
       </Section>
       {isPensionScheme(holding) && (
         <Section title="Udbetaling">
-          <PayoutFields plan={plan} holding={holding} owner={owner} onChange={onChange} />
+          <PayoutFields plan={plan} holding={holding} onChange={onChange} />
         </Section>
       )}
       {isLifeAnnuity(holding) && (
@@ -467,90 +466,30 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
   )
 }
 
-/** Hvornår ordningen tidligst må udbetales — det, brugeren taster, og det,
-    loven gør ved det. Afsnittet står kun på de fire pensionsvarianter: en
-    aktiesparekonto og frie midler har ingen udbetalingsalder, og et felt om
-    en, der ikke findes, ville påstå en lovregel, der heller ikke gør.
-
-    Både regimet og alderen er udledte, jf. ADR-0012: fladen læser dem, hvor
-    de regnes, frem for at gentage udledningen. Alderen retter sig derfor af
-    sig selv, når ejerens fødselsdato flytter folkepensionsalderen — for de
-    to relative regimer, og ikke for det faste. */
+/** Hvornår ordningen tidligst må udbetales. Tastet direkte, som
+    pensionsselskabet oplyser den, jf. ADR-0032 — afsnittet står kun på de
+    fire pensionsvarianter: en aktiesparekonto og frie midler har ingen
+    udbetalingsalder, og et felt om en, der ikke findes, ville påstå en
+    lovregel, der ikke gør. */
 function PayoutFields({
   plan,
   holding,
-  owner,
   onChange,
 }: {
   plan: Plan
   holding: PensionSchemeHolding
-  owner: Person
   onChange: (plan: Plan) => void
 }) {
-  const regime = payoutRegime(holding.openedOn)
-
   return (
-    <>
-      <NumberField
-        label="Oprettet (år)"
-        help="Holding.openedOn"
-        value={holding.openedOn.year}
-        onChange={(year) =>
-          onChange(
-            withPensionScheme(plan, holding.id, (h) => ({
-              ...h,
-              openedOn: { ...h.openedOn, year },
-            })),
-          )
-        }
-      />
-      <NumberField
-        label="Oprettet (måned)"
-        help="Holding.openedOn"
-        unit="1–12"
-        value={holding.openedOn.month}
-        onChange={(month) =>
-          onChange(
-            withPensionScheme(plan, holding.id, (h) => ({
-              ...h,
-              openedOn: { ...h.openedOn, month },
-            })),
-          )
-        }
-      />
-      <LockedField
-        label="Udbetalingsregime"
-        help="Holding.payoutRegime"
-        value={payoutRegimes[regime]}
-        unit="udledt"
-      />
-      <LockedField
-        label="Pensionsudbetalingsalder"
-        help="Holding.payoutAge"
-        value={`${formatNumber(payoutAge(holding, owner))} år`}
-        unit="udledt"
-      />
-      <OptionalNumberField
-        label="Bevaret udbetalingsalder"
-        help="Holding.payoutAgeOverride"
-        unit="år"
-        value={holding.payoutAgeOverride}
-        onChange={(payoutAgeOverride) =>
-          onChange(
-            withPensionScheme(plan, holding.id, (h) => {
-              const { payoutAgeOverride: _forrige, ...rest } = h
-              return payoutAgeOverride === undefined ? rest : { ...rest, payoutAgeOverride }
-            }),
-          )
-        }
-      />
-      {holding.payoutAgeOverride !== undefined && (
-        <Hint>
-          Den bevarede alder gælder frem for den, oprettelsestidspunktet
-          giver. Ryddes feltet, regnes alderen igen af regelsættet.
-        </Hint>
-      )}
-    </>
+    <NumberField
+      label="Pensionsudbetalingsalder"
+      help="Holding.payoutAge"
+      unit="år"
+      value={holding.payoutAge}
+      onChange={(payoutAge) =>
+        onChange(withPensionScheme(plan, holding.id, (h) => ({ ...h, payoutAge })))
+      }
+    />
   )
 }
 
@@ -575,7 +514,7 @@ function ConversionSection({
   owner: Person
   onChange: (plan: Plan) => void
 }) {
-  const earliest = payoutAge(holding, owner)
+  const earliest = holding.payoutAge
   const start = holding.payout?.start
   const factor = conversionFactor(holding)
 
@@ -693,7 +632,7 @@ function PayoutScheduleSection({
   onChange: (plan: Plan) => void
 }) {
   const payout = holding.payout
-  const earliest = payoutAge(holding, owner)
+  const earliest = holding.payoutAge
 
   if (payout === undefined) {
     return (

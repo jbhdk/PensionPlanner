@@ -359,7 +359,7 @@ describe('WealthChart', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 2_000_000,
           grossReturn: 0,
           annualCostRate: 0,

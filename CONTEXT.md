@@ -64,7 +64,7 @@ En pensions- eller opsparingspost med en saldo, du ejer: den forrentes, beskatte
 _Avoid_: Konto, depot, opsparing brugt som samlebetegnelse for dem alle. De to ord er derimod de rigtige i `ShareDepot` og `SavingsAccount`, som er navne på hver sin variant.
 
 **Pensionsordning** · `PensionScheme`:
-De fire varianter, hvis udbetaling loven binder til en alder: `InstalmentPension`, `LifeAnnuity`, `OldAgeSavings` og `CapitalPension`. En kategori og ikke en variant, ganske som `FreeAssets` er det, og den er hverken det ene eller det andet af de to skel, den ligner: aktiesparekontoen er ikke frie midler, men den er heller ingen pensionsordning — den har intet `OpenedOn` og ingen `PayoutAge`, og ejeren hæver af den, når hun vil.
+De fire varianter, hvis udbetaling loven binder til en alder: `InstalmentPension`, `LifeAnnuity`, `OldAgeSavings` og `CapitalPension`. En kategori og ikke en variant, ganske som `FreeAssets` er det, og den er hverken det ene eller det andet af de to skel, den ligner: aktiesparekontoen er ikke frie midler, men den er heller ingen pensionsordning — den har ingen `PayoutAge`, og ejeren hæver af den, når hun vil.
 _Avoid_: Pension, ordning brugt om alt der ikke er frie midler, pensionsprodukt
 
 **Afkast** · `Return`:
@@ -324,20 +324,8 @@ Den alder, en person holder op med at arbejde. En fri beslutning, ikke en lovbes
 _Avoid_: Pensionsalder, pensionering, tilbagetrækning
 
 **Pensionsudbetalingsalder** · `PayoutAge`:
-Den tidligste alder hvor en bestemt ordning lovligt må udbetales. En egenskab ved ordningen, ikke ved personen — samme person kan have flere ordninger med hver sin. Ofte en brøkalder, fordi to af de tre regimer er folkepensionsalderen minus fem eller tre år, og sammenligningen sker derfor i kalenderår og ikke i aldre: året, hvor personen fylder 62,5, indeholder lovlige udbetalingsmåneder, og en plan, der starter dér, findes i virkeligheden.
-_Avoid_: Udbetalingsalder, pensionsalder
-
-**Udbetalingsregime** · `PayoutRegime`:
-Det regelsæt der fastlægger en ordnings pensionsudbetalingsalder, afgjort af oprettelsestidspunktet: `BeforeMay2007` giver fast 60 år, `May2007ToDecember2017` giver fem år før folkepensionsalderen, og `FromJanuary2018` tre år før. Det er aftaletidspunktet for oprettelsen der tæller, ikke hvornår der er indbetalt. De to sidste er relative, og en ordnings alder retter sig derfor af sig selv, når skønnet for ejerens folkepensionsalder ændres.
-_Avoid_: Overgangsregel, aldersgrænse, grandfathering
-
-**Oprettelsestidspunkt** · `OpenedOn`:
-År og måned for den aftale, der oprettede en pensionsordning. Det er den, `PayoutRegime` slås op på, og derfor står den kun på de fire varianter, der har et regime — en aktiesparekonto og frie midler har intet at have den i. Måneden er med, fordi begge lovskel falder midt i et år; dagen er ikke, fordi ingen af dem falder midt i en måned.
-_Avoid_: Oprettelsesdato, startdato, tegningstidspunkt, første indbetaling
-
-**Bevaret udbetalingsalder** · `PayoutAgeOverride`:
-Den lavere pensionsudbetalingsalder, en ordning har taget med sig gennem en overførsel, sat direkte på ordningen frem for udledt af dens `PayoutRegime`. Er den sat, vinder den. Findes, fordi en overført ordning kan bevare den alder, den blev oprettet under, uden at bære det oprettelsestidspunkt, der ville udlede den.
-_Avoid_: Manuel udbetalingsalder, undtagelse, dispensation
+Den tidligste alder hvor en bestemt ordning lovligt må udbetales. En egenskab ved ordningen, ikke ved personen — samme person kan have flere ordninger med hver sin — og brugeren taster den, som pensionsselskabet oplyser den, jf. [ADR-0032](./docs/adr/0032-pensionsudbetalingsalderen-tastes-direkte-den-udledes-ikke-af-oprettelsestidspunktet.md). Kan være en brøkalder, fordi selskabets egen oplysning ofte selv hænger på folkepensionsalderen, som er 65,5 for én årgang og 72,5 for en anden — sammenligningen sker derfor i kalenderår og ikke i aldre: året, hvor personen fylder 62,5, indeholder lovlige udbetalingsmåneder, og en plan, der starter dér, findes i virkeligheden.
+_Avoid_: Udbetalingsalder, pensionsalder, oprettelsestidspunkt, regime
 
 **Folkepensionsalder** · `StatePensionAge`:
 Den lovbestemte alder hvor folkepensionen begynder, fastsat efter fødselsår. For fødselsår hvor den endnu ikke er vedtaget, er den et fremskrevet skøn, som bruges som det står — ændres skønnet, er det tabellen der rettes, ikke den enkelte person.

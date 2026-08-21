@@ -34,15 +34,14 @@ function aPlanWithThreeHoldings(): Plan {
   })
 }
 
-/** En aldersopsparing under det faste regime — oprettet før maj 2007 og
-    dermed med pensionsudbetalingsalderen 60 år. Fixturens person er født i
-    juni 1973 og når den i 2033. */
+/** En aldersopsparing med pensionsudbetalingsalderen 60 år. Fixturens person
+    er født i juni 1973 og når den i 2033. */
 function anOldAgeSavings(id: string, name: string, balance = 500_000): Holding {
   return {
     id,
     name,
     variant: 'OldAgeSavings',
-    openedOn: { year: 2000, month: 1 },
+    payoutAge: 60,
     balance,
     grossReturn: 0,
     annualCostRate: 0,
@@ -113,7 +112,7 @@ function aPensionHolding(id: string, name: string): Holding {
     id,
     name,
     variant: 'InstalmentPension',
-    openedOn: { year: 2018, month: 1 },
+    payoutAge: 67,
     balance: 0,
     grossReturn: 0,
     annualCostRate: 0,
@@ -149,7 +148,7 @@ function aPlanWithPension(): Plan {
         id: 'ratepension',
         name: 'Ratepension',
         variant: 'InstalmentPension',
-        openedOn: { year: 2018, month: 1 },
+        payoutAge: 67,
         balance: 2_000_000,
         grossReturn: 0.07,
         annualCostRate: 0.005,
@@ -325,8 +324,8 @@ function navigatorButton(name: string | RegExp) {
 /** En plan, hvis allerførste år rører alle otte bånd: løn og en fast
     udgift, en ratepension der udbetaler, en livrente der omsættes med det
     samme, et lønkildet bidrag, og en overførsel i hver retning med bufferen
-    i den ene ende. De bevarede udbetalingsaldre er 53 — den alder, ejeren
-    fylder i 2026 — så året kan læses uden at rulle fjorten år frem.
+    i den ene ende. Pensionsudbetalingsalderen er tastet til 53 — den alder,
+    ejeren fylder i 2026 — så året kan læses uden at rulle fjorten år frem.
 
     Fixturens `aPlanWithEveryBufferFlow` rører også dem alle, men aldrig i
     samme år: dens overførsler skifter retning ved erhvervsophøret. */
@@ -341,8 +340,7 @@ function aPlanWithEveryBand(): Plan {
         id: 'ratepension',
         name: 'Ratepension',
         variant: 'InstalmentPension',
-        openedOn: { year: 2018, month: 1 },
-        payoutAgeOverride: 53,
+        payoutAge: 53,
         balance: 1_000_000,
         grossReturn: 0,
         annualCostRate: 0,
@@ -352,8 +350,7 @@ function aPlanWithEveryBand(): Plan {
         id: 'livrente',
         name: 'Livrente',
         variant: 'LifeAnnuity',
-        openedOn: { year: 2018, month: 1 },
-        payoutAgeOverride: 53,
+        payoutAge: 53,
         balance: 1_000_000,
         grossReturn: 0,
         annualCostRate: 0,
@@ -404,8 +401,8 @@ function aThreeYearPlan() {
 }
 
 /** En plan med en ratepension, der må udbetales fra planens allerførste år.
-    Den bevarede udbetalingsalder er 53 — den alder, ejeren fylder i 2026 —
-    så udbetalingen kan ses uden at rulle fjorten år frem. Uden en
+    Pensionsudbetalingsalderen er tastet til 53 — den alder, ejeren fylder i
+    2026 — så udbetalingen kan ses uden at rulle fjorten år frem. Uden en
     udbetalingsplan bliver ordningen stående; med serieprincippet over ti år
     giver den en tiendedel af saldoen det første år. */
 function aPlanWithRatepension(payout?: PayoutSchedule) {
@@ -419,8 +416,7 @@ function aPlanWithRatepension(payout?: PayoutSchedule) {
         id: 'ratepension',
         name: 'Ratepension',
         variant: 'InstalmentPension',
-        openedOn: { year: 2018, month: 1 },
-        payoutAgeOverride: 53,
+        payoutAge: 53,
         balance: 1_000_000,
         grossReturn: 0,
         annualCostRate: 0,
@@ -435,9 +431,9 @@ function aPlanWithPayoutFromStart() {
   return aPlanWithRatepension({ start: 53, duration: 10, principle: 'SerialPrinciple' })
 }
 
-/** En plan med en livrente, der omsættes i planens allerførste år. Den
-    bevarede udbetalingsalder er 53 — den alder, ejeren fylder i 2026 — så
-    omsætningen kan ses uden at rulle fjorten år frem.
+/** En plan med en livrente, der omsættes i planens allerførste år.
+    Pensionsudbetalingsalderen er tastet til 53 — den alder, ejeren fylder i
+    2026 — så omsætningen kan ses uden at rulle fjorten år frem.
 
     Selskabet oplyser et depot på 1.000.000 kr. og en årlig ydelse på 51.200
     kr.: kvotienten er 5,12 %, og på det fremskrevne depot på 1.000.000 kr.
@@ -453,8 +449,7 @@ function aPlanWithLifeAnnuity(payout?: { start: AgeBound }) {
         id: 'livrente',
         name: 'Livrente',
         variant: 'LifeAnnuity',
-        openedOn: { year: 2018, month: 1 },
-        payoutAgeOverride: 53,
+        payoutAge: 53,
         balance: 1_000_000,
         grossReturn: 0,
         annualCostRate: 0,
@@ -835,29 +830,22 @@ describe('fladen', () => {
     expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
   })
 
-  it('giver en ny kapitalpension et oprettelsestidspunkt og dermed en udbetalingsalder', async () => {
-    // Ordningen er en `PensionScheme` som de tre øvrige: uden et
-    // oprettelsestidspunkt var der intet regelsæt at udlede alderen af.
-    // Gættet er planens startår, og brugeren retter det i feltet ved siden
-    // af — 2026 falder under det nyeste regime, og fixturens person, født i
-    // juni 1973, har folkepensionsalder 70 og dermed 67.
+  it('giver en ny kapitalpension en pensionsudbetalingsalder, brugeren taster', async () => {
+    // Ordningen er en `PensionScheme` som de tre øvrige: uden en
+    // pensionsudbetalingsalder var planen ikke fuldt beskrevet. Feltet
+    // lander på nul, og brugeren taster det, selskabet oplyser, i feltet
+    // ved siden af.
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithSecondHolding()} />)
 
     await user.click(navigatorButton(/Anden beholdning/))
     await user.selectOptions(screen.getByLabelText(/Type/), 'Kapitalpension')
 
-    expect((screen.getByLabelText('Oprettet (år)') as HTMLInputElement).value).toBe('2026')
-    expect(lockedField('Pensionsudbetalingsalder').querySelector('.laast')!.textContent).toBe(
-      '67 år',
-    )
+    const alder = screen.getByLabelText('Pensionsudbetalingsalder')
+    expect((alder as HTMLInputElement).value).toBe('0')
 
-    // Gættet er planens startår, men ordningen har været lukket for
-    // nytegning siden udgangen af 2012 — brugeren retter det til dét
-    // tidspunkt, hendes egen kapitalpension faktisk blev oprettet.
-    const aar = screen.getByLabelText('Oprettet (år)')
-    await user.clear(aar)
-    await user.type(aar, '2005')
+    await user.clear(alder)
+    await user.type(alder, '60')
 
     // Og planen kan så regnes: resultatspalten viser årstabellen og ikke
     // beskeden om, at planen ikke kan simuleres.
@@ -1034,7 +1022,7 @@ describe('fladen', () => {
               id: 'kapitalpension',
               name: 'Kapitalpension',
               variant: 'CapitalPension',
-              openedOn: { year: 2005, month: 1 },
+              payoutAge: 60,
               balance: 0,
               grossReturn: 0,
               annualCostRate: 0,
@@ -1178,70 +1166,38 @@ describe('fladen', () => {
     expect(nettoafkast.textContent).toContain('udledt')
   })
 
-  it('viser ordningens udbetalingsregime og den alder, det giver, som udledte felter', async () => {
+  it('viser ordningens pensionsudbetalingsalder som et tastet felt', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithPension()} />)
 
     await user.click(navigatorButton(/Ratepension/))
 
-    // Ordningen er oprettet i januar 2018, og ejeren er født i 1973 og har
-    // folkepensionsalder 70. Det nyeste regime giver tre år før — 67.
-    const regime = lockedField('Udbetalingsregime')
-    expect(regime.querySelector('.laast')!.textContent).toBe('1. januar 2018 eller senere')
-    expect(regime.textContent).toContain('udledt')
-
-    const alder = lockedField('Pensionsudbetalingsalder')
-    expect(alder.querySelector('.laast')!.textContent).toBe('67 år')
-    expect(alder.textContent).toContain('udledt')
+    expect((screen.getByLabelText('Pensionsudbetalingsalder') as HTMLInputElement).value).toBe(
+      '67',
+    )
   })
 
-  it('flytter begge udledte felter, når oprettelsesåret skifter regime', async () => {
+  it('retter pensionsudbetalingsalderen, når brugeren taster et nyt tal', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithPension()} />)
 
     await user.click(navigatorButton(/Ratepension/))
-    const aar = screen.getByLabelText('Oprettet (år)')
-    await user.clear(aar)
-    await user.type(aar, '2005')
+    const alder = screen.getByLabelText('Pensionsudbetalingsalder')
+    await user.clear(alder)
+    await user.type(alder, '60')
 
-    // Før 1. maj 2007 er alderen fast 60 og ser ikke på ejeren overhovedet.
-    expect(lockedField('Udbetalingsregime').querySelector('.laast')!.textContent).toBe(
-      'Før 1. maj 2007',
-    )
-    expect(lockedField('Pensionsudbetalingsalder').querySelector('.laast')!.textContent).toBe(
-      '60 år',
-    )
+    expect((alder as HTMLInputElement).value).toBe('60')
   })
 
-  it('lader en bevaret udbetalingsalder slå igennem på det viste tal', async () => {
-    const user = userEvent.setup()
-    render(<App initialPlan={aPlanWithPension()} />)
-
-    await user.click(navigatorButton(/Ratepension/))
-    await user.type(screen.getByLabelText('Bevaret udbetalingsalder'), '60')
-
-    // Regimet står stadig — det er jo det, ordningen blev oprettet under —
-    // men alderen er den bevarede.
-    expect(lockedField('Udbetalingsregime').querySelector('.laast')!.textContent).toBe(
-      '1. januar 2018 eller senere',
-    )
-    expect(lockedField('Pensionsudbetalingsalder').querySelector('.laast')!.textContent).toBe(
-      '60 år',
-    )
-  })
-
-  it('viser hverken oprettelsestidspunkt eller udbetalingsalder på en aktiesparekonto', async () => {
+  it('viser ingen pensionsudbetalingsalder på en aktiesparekonto', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlan({ holdings: [aShareSavingsAccount()] })} />)
 
     await user.click(navigatorButton(/Aktiesparekonto/))
 
-    // Kontoen har intet regime: ejeren hæver af den, når hun vil, og et felt
-    // om en udbetalingsalder ville påstå en lovregel, der ikke findes.
-    expect(screen.queryByLabelText('Oprettet (år)')).toBeNull()
-    expect(
-      Array.from(document.querySelectorAll('.etiket')).map((e) => e.textContent),
-    ).not.toContain('Pensionsudbetalingsalder')
+    // Kontoen har ingen: ejeren hæver af den, når hun vil, og et felt om en
+    // udbetalingsalder ville påstå en lovregel, der ikke findes.
+    expect(screen.queryByLabelText('Pensionsudbetalingsalder')).toBeNull()
   })
 
   it('lader ikke bufferen udpeges til en pensionsbeholdning, og siger hvorfor', async () => {
@@ -1964,7 +1920,7 @@ describe('fladen', () => {
                     id: 'aldersopsparing',
                     name: 'Aldersopsparing',
                     variant: 'OldAgeSavings',
-                    openedOn: { year: 2018, month: 1 },
+                    payoutAge: 67,
                     balance: 0,
                     grossReturn: 0,
                     annualCostRate: 0,
@@ -3326,7 +3282,7 @@ describe('fladen', () => {
               id: 'livrente',
               name: 'Livrente',
               variant: 'LifeAnnuity',
-              openedOn: { year: 2018, month: 1 },
+              payoutAge: 67,
               balance: 1_000_000,
               grossReturn: 0,
               annualCostRate: 0,
@@ -3845,7 +3801,7 @@ describe('fladen', () => {
           id: 'ratepension',
           name: 'Ratepension',
           variant: 'InstalmentPension',
-          openedOn: { year: 2018, month: 1 },
+          payoutAge: 67,
           balance: 1_000_000,
           grossReturn: 0.07,
           annualCostRate: 0.005,
@@ -4028,7 +3984,7 @@ describe('fladen', () => {
           id: 'kapitalpension',
           name: 'Kapitalpension',
           variant: 'CapitalPension',
-          openedOn: { year: 2005, month: 1 },
+          payoutAge: 60,
           balance: 500_000,
           grossReturn: 0.06,
           annualCostRate: 0.01,
