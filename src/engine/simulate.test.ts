@@ -292,6 +292,28 @@ describe('simulate', () => {
     expect(expensesIn(2036)).toBe(420_000)
   })
 
+  it('lader en "Hvert N. år"-post uden eksplicit "Fra" tælle fra planens startår', () => {
+    const plan = aPlan({
+      startYear: 2026,
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      entries: [
+        anExpense({
+          amountInRealKroner: 420_000,
+          period: { anchor: 'CalendarYear' },
+          recurrence: { kind: 'EveryNYears', n: 8 },
+        }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+    const expensesIn = (year: number) => years.find((y) => y.year === year)!.expenses
+
+    expect(expensesIn(2026)).toBe(420_000)
+    expect(expensesIn(2029)).toBe(0)
+    expect(expensesIn(2034)).toBe(420_000)
+  })
+
   it('forankrer en post til en fast alder, så perioden følger personens fødselsår', () => {
     const plan = aPlan({
       startYear: 2026,
