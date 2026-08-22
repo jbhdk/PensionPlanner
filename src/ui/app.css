@@ -1693,6 +1693,48 @@ table.aar td .fremskrevet {
   opacity: 0.8;
 }
 
+/* Tidslinjens musefølgende årsmarkør, jf. ADR-0038 og hovedgrafens
+   `.aarsmarkoer`/`.aarsmarkoer-plade` — samme sprog, men tegnet i
+   almindeligt HTML/CSS som resten af tidslinjen, og med mærkatet stående i
+   den faste akse foroven i stedet for forneden, hvor grafens akse sidder. */
+.tl-aarsmarkoer-linjer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.tl-aarsmarkoer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed var(--ink);
+}
+
+.tl-aarsmarkoer-etiket {
+  position: absolute;
+  top: 0;
+  /* 17px og ikke akserækkens fulde 18px: rækken selv er en border-box med en
+     1px bundkant, så dens tekst reelt centreres i de øverste 17px — uden
+     samme mål her ville mærkatet stå en tøddel lavere end de statiske
+     årstal, som `.tl-akse-maerke` centrerer i netop det rum. */
+  height: 17px;
+  display: flex;
+  align-items: center;
+  z-index: 7;
+  transform: translateX(-50%);
+  background: var(--laerred);
+  color: var(--ink);
+  font-family: var(--f-tal);
+  font-size: 9.5px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
 .tl-gruppe {
   border-bottom: 1px solid var(--linje);
 }

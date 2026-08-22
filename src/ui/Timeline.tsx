@@ -167,6 +167,12 @@ export function Timeline({
   const groups = timelineLayout(plan)
   const { start, end } = timelineBounds(plan)
   const [drag, setDrag] = useState<Drag | null>(null)
+  // Den musefølgende årsmarkør, jf. ADR-0038 — samme sprog som hovedgrafens
+  // `YearCursor`, men tegnet i almindeligt HTML/CSS som resten af
+  // tidslinjen, og med mærkatet stående i den faste akse foroven i stedet
+  // for forneden.
+  const [hoveredYear, setHoveredYear] = useState<SimulationYear | null>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   // Sidst committede tag — et ref og ikke tilstand, for `mousemove` skal
   // kunne sammenligne mod den uden at vente på en gentegning, jf.
   // Navigator.tsx's `grabbed`.
@@ -238,6 +244,19 @@ export function Timeline({
       setDrag({ kind: 'person', personId, startX: event.clientX, startPlan: plan })
     }
   }
+
+  // Musen snapper til det nærmeste årsmærke — samme princip som graf-lagets
+  // `useYearCursor`, blot regnet af pixel-position i stedet for et allerede
+  // kendt indeks, for tidslinjens rækker har intet årsfelt at hoveres.
+  // Rundet og ikke gulvet, så markøren ligger om musens midtpunkt: den
+  // skifter år, når musen har passeret det halve mellemrum til nabomærket,
+  // ikke i det øjeblik musen krydser årets egen kolonnegrænse.
+  function updateHoveredYear(event: ReactMouseEvent) {
+    const rect = contentRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const year = start + Math.round((event.clientX - rect.left) / yearWidth)
+    setHoveredYear(Math.min(end, Math.max(start, year)))
+  }
   // Foldning er tidslinjens egen tilstand, uafhængig af Navigatorens
   // tilsvarende foldning af de samme fem grupper, jf. ADR-0036.
   const [folded, setFolded] = useState<Partial<Record<TimelineGroupName, boolean>>>({})
@@ -252,12 +271,23 @@ export function Timeline({
       sum + GROUP_HEADER_HEIGHT + (folded[group.name] ? 0 : group.rowCount * ROW_HEIGHT),
     0,
   )
+  // Samme kant som de statiske årsmærker og boksenes venstre kant, jf.
+  // `boxStyle`/`.tl-akse-maerke` — ikke årets midte, som `pointStyle` bruger
+  // til punkter uden udstrækning. Markøren skal kunne aflæses mod de samme
+  // mærker, den selv lægger sig oven på.
+  const markerLeft = hoveredYear === null ? null : (hoveredYear - start) * yearWidth
 
   return (
     <div className="tidslinje-lag">
       <div className="tidslinje-hoved">Tidslinjen</div>
       <div className="tidslinje-rul" ref={railRef}>
-        <div className="tl-indhold" style={{ width: contentWidth }}>
+        <div
+          className="tl-indhold"
+          ref={contentRef}
+          style={{ width: contentWidth }}
+          onMouseMove={updateHoveredYear}
+          onMouseLeave={() => setHoveredYear(null)}
+        >
           <div className="tl-akse">
             <div className="tl-akse-raekke aar">
               {yearMarks(start, end).map((year) => (
@@ -292,6 +322,11 @@ export function Timeline({
                 </div>
               </div>
             ))}
+            {markerLeft !== null && (
+              <div className="tl-aarsmarkoer-etiket" style={{ left: `${markerLeft}px` }}>
+                {hoveredYear}
+              </div>
+            )}
           </div>
           <div
             className="tl-ophoer-linjer"
@@ -306,6 +341,14 @@ export function Timeline({
               />
             ))}
           </div>
+          {markerLeft !== null && (
+            <div
+              className="tl-aarsmarkoer-linjer"
+              style={{ top: `${axisHeight}px`, height: `${groupsHeight}px` }}
+            >
+              <div className="tl-aarsmarkoer" style={{ left: `${markerLeft}px` }} />
+            </div>
+          )}
           {groups.map((group) => (
             <div key={group.name} className={'tl-gruppe' + (folded[group.name] ? ' foldet' : '')}>
               <button
