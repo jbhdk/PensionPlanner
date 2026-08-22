@@ -40,7 +40,14 @@ type TimelineItemBase = {
 }
 
 export type TimelineItem = TimelineItemBase &
-  ({ point: true; at: TimelineEndpoint } | { point: false; from: TimelineEndpoint; to: TimelineEndpoint })
+  (
+    | { point: true; at: TimelineEndpoint }
+    /** `marks` er de kalenderår, en `EveryNYears`-post rammer inden for sin
+        periode — tom for enhver anden gentagelse. Regnet her og ikke i
+        `Timeline.tsx`, som kun omsætter årstal til pixels, jf. samme
+        arbejdsdeling som resten af laget. */
+    | { point: false; from: TimelineEndpoint; to: TimelineEndpoint; marks: SimulationYear[] }
+  )
 
 export type TimelineGroup = {
   name: TimelineGroupName
@@ -81,6 +88,18 @@ function resolveStart(start: AgeBound, owner: Person): { kind: 'Locked' | 'Free'
   return start === 'WorkEndAge' ? { kind: 'Locked', year } : { kind: 'Free', year }
 }
 
+/** En `EveryNYears`-posts egne gentagelsesår, fra dens opløste `from` med
+    skridt `n` til og med dens opløste `to` — samme formel som motorens
+    `matchesRecurrence` i `simulate.ts`, så tidslinjen aldrig kan vise en
+    anden gentagelse end den, motoren faktisk regner på. Et åbent endepunkt
+    er allerede løst til plan-startåret hhv. horisontens slut her, ligesom
+    motoren selv falder tilbage til plan-startåret ved et udeladt `from`. */
+function everyNYearMarks(from: SimulationYear, to: SimulationYear, n: number): SimulationYear[] {
+  const marks: SimulationYear[] = []
+  for (let year = from; year <= to; year += n) marks.push(year)
+  return marks
+}
+
 /** Fælles opbygning for `Entry`, `Transfer` og et beholdningskildet
     `Contribution` — de tre bærer hver sin periode og gentagelse på samme
     form. En engangspost (`recurrence.kind === 'Once'`) er et punkt uden
@@ -90,16 +109,24 @@ function periodItem(
   period: Period,
   recurrence: Recurrence,
   owner: Person,
+  openStart: SimulationYear,
+  openEnd: SimulationYear,
 ): TimelineItem {
   const shared = { ...base, color: CATEGORY_COLOR[base.group], row: 0 }
   if (recurrence.kind === 'Once') {
     return { ...shared, point: true, at: resolvePeriodEndpoint(period, 'from', owner) }
   }
+  const from = resolvePeriodEndpoint(period, 'from', owner)
+  const to = resolvePeriodEndpoint(period, 'to', owner)
   return {
     ...shared,
     point: false,
-    from: resolvePeriodEndpoint(period, 'from', owner),
-    to: resolvePeriodEndpoint(period, 'to', owner),
+    from,
+    to,
+    marks:
+      recurrence.kind === 'EveryNYears'
+        ? everyNYearMarks(endpointYear(from, openStart), endpointYear(to, openEnd), recurrence.n)
+        : [],
   }
 }
 
@@ -111,6 +138,7 @@ export function timelineLayout(plan: Plan): TimelineGroup[] {
     plan.household.persons.flatMap((person) => person.holdings.map((holding) => [holding.id, person])),
   )
   const holdingIndex = new Map(orderedHoldings(plan.household).map((holding, index) => [holding.id, index]))
+  const { start: openStart, end: openEnd } = timelineBounds(plan)
 
   const items: TimelineItem[] = [
     ...plan.entries.map((entry) =>
@@ -124,6 +152,8 @@ export function timelineLayout(plan: Plan): TimelineGroup[] {
         entry.period,
         entry.recurrence,
         personById.get(entry.owner)!,
+        openStart,
+        openEnd,
       ),
     ),
     ...plan.contributions
@@ -142,6 +172,8 @@ export function timelineLayout(plan: Plan): TimelineGroup[] {
           contribution.period,
           contribution.recurrence,
           owner,
+          openStart,
+          openEnd,
         )
       }),
     ...plan.transfers.map((transfer) => {
@@ -157,6 +189,8 @@ export function timelineLayout(plan: Plan): TimelineGroup[] {
         transfer.period,
         transfer.recurrence,
         owner,
+        openStart,
+        openEnd,
       )
     }),
     ...plan.household.persons.flatMap((person) =>
@@ -185,6 +219,7 @@ export function timelineLayout(plan: Plan): TimelineGroup[] {
               point: false,
               from: resolveStart(holding.payout.start, person),
               to: { kind: 'Locked', year: personLastYear(person) - 1 },
+              marks: [],
             },
           ]
         }
@@ -195,13 +230,12 @@ export function timelineLayout(plan: Plan): TimelineGroup[] {
             point: false,
             from,
             to: { kind: 'Free', year: from.year + holding.payout.duration - 1 },
+            marks: [],
           },
         ]
       }),
     ),
   ]
-
-  const { start: openStart, end: openEnd } = timelineBounds(plan)
 
   return timelineGroupOrder.map((name) => {
     const packed = pack(

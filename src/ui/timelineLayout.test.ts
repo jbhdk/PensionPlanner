@@ -246,6 +246,53 @@ describe('tidslinjens lag', () => {
     expect(item.at).toEqual({ kind: 'Free', year: 2030 })
   })
 
+  it('regner en "Hvert N. år"-posts mærke-år fra dens from til og med dens to, med skridt n', () => {
+    const plan = aPlan({
+      entries: [
+        anExpense({
+          amountInRealKroner: 420_000,
+          period: { anchor: 'CalendarYear', from: 2028, to: 2045 },
+          recurrence: { kind: 'EveryNYears', n: 8 },
+        }),
+      ],
+    })
+
+    const groups = timelineLayout(plan)
+    const item = groups.find((g) => g.name === 'ExpenseEntries')!.items[0]!
+
+    if (item.point) throw new Error('posten skal være en periode, ikke et punkt')
+    expect(item.marks).toEqual([2028, 2036, 2044])
+  })
+
+  it('lader en "Hvert N. år"-posts mærke-år tælle fra planens startår, når from ikke er sat, ligesom motoren', () => {
+    const plan = aPlan({
+      startYear: 2026,
+      entries: [
+        anExpense({
+          amountInRealKroner: 420_000,
+          period: { anchor: 'CalendarYear', to: 2040 },
+          recurrence: { kind: 'EveryNYears', n: 5 },
+        }),
+      ],
+    })
+
+    const groups = timelineLayout(plan)
+    const item = groups.find((g) => g.name === 'ExpenseEntries')!.items[0]!
+
+    if (item.point) throw new Error('posten skal være en periode, ikke et punkt')
+    expect(item.marks).toEqual([2026, 2031, 2036])
+  })
+
+  it('giver ingen mærke-år til en post, der ikke gentages hvert N. år', () => {
+    const plan = aPlan({ entries: [aSalary({ amountInRealKroner: 600_000 })] })
+
+    const groups = timelineLayout(plan)
+    const item = groups.find((g) => g.name === 'IncomeEntries')!.items[0]!
+
+    if (item.point) throw new Error('posten skal være en periode, ikke et punkt')
+    expect(item.marks).toEqual([])
+  })
+
   it('opløser en udbetalingsplans start og varighed, og en livrentes boks til ejerens horisont', () => {
     const plan = aPlan({
       holdings: [

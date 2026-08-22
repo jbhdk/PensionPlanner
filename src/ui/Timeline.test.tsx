@@ -153,6 +153,41 @@ describe('Timeline', () => {
     expect(box.style.background).toBe(probe.style.background)
   })
 
+  it('tegner en "Hvert N. år"-post som en farveløs boks med en rombe pr. gentagelse, i stedet for en fyldt boks', () => {
+    const plan = aPlan({
+      entries: [
+        aSalary({
+          amountInRealKroner: 600_000,
+          period: { anchor: 'CalendarYear', from: 2028, to: 2044 },
+          recurrence: { kind: 'EveryNYears', n: 8 },
+        }),
+      ],
+    })
+
+    const { container } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />,
+    )
+
+    const box = screen.getByRole('button', { name: 'Løn' })
+    expect(box.className).toContain('gentaget')
+    expect(box.style.background).toBe('transparent')
+
+    // 2028, 2036, 2044 — tre gentagelser, tre romber.
+    expect(container.querySelectorAll('.tl-maerke')).toHaveLength(3)
+  })
+
+  it('tegner ingen romber for en post, der falder hvert år', () => {
+    const plan = aPlan({ entries: [aSalary({ amountInRealKroner: 600_000 })] })
+
+    const { container } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />,
+    )
+
+    const box = screen.getByRole('button', { name: 'Løn' })
+    expect(box.className).not.toContain('gentaget')
+    expect(container.querySelectorAll('.tl-maerke')).toHaveLength(0)
+  })
+
   it('folder én gruppe ad gangen, uden at røre de andre', async () => {
     const user = userEvent.setup()
     const plan = aPlan({

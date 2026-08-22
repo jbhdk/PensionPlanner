@@ -324,6 +324,7 @@ export function Timeline({
 
                     const fromYear = endpointYear(item.from, start)
                     const toYear = endpointYear(item.to, end)
+                    const repeated = item.marks.length > 0
                     return (
                       <Fragment key={targetKey(item.target)}>
                         <button
@@ -331,17 +332,30 @@ export function Timeline({
                           className={
                             'tl-boks' +
                             (sameSelection(selected, item.target) ? ' valgt' : '') +
-                            (canDragBody(item) ? ' krop-fri' : '')
+                            (canDragBody(item) ? ' krop-fri' : '') +
+                            (repeated ? ' gentaget' : '')
                           }
                           style={{
                             ...boxStyle(fromYear, toYear, start, item.row, yearWidth),
-                            background: item.color,
+                            ...(repeated
+                              ? { background: 'transparent', boxShadow: `inset 0 0 0 1.5px ${item.color}` }
+                              : { background: item.color }),
                           }}
                           onMouseDown={canDragBody(item) ? startDrag(item, 'body') : undefined}
                           onClick={() => onSelect(item.target)}
                         >
                           {item.name}
                         </button>
+                        {item.marks.map((year) => (
+                          <span
+                            key={year}
+                            className="tl-maerke"
+                            style={{
+                              ...pointStyle(year, start, item.row, yearWidth),
+                              background: item.color,
+                            }}
+                          />
+                        ))}
                         {item.from.kind === 'Free' && (
                           <div
                             className="tl-haandtag fra"

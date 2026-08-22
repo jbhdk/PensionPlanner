@@ -1663,6 +1663,19 @@ table.aar td .fremskrevet {
   outline-offset: 1px;
 }
 
+/* En "Hvert N. år"-post: boksen mister sin fyldfarve til fordel for en
+   farvet kant, så romberne — én pr. gentagelse, tegnet af `.tl-maerke` — er
+   det, der bærer farven inde i den. */
+.tl-maerke {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  transform: translate(-6px, 3px) rotate(45deg);
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
 /* Håndtaget i hver ende — kun tegnet, når endepunktet er frit. Et låst eller
    åbent endepunkt har intet håndtag, jf. issue #60. */
 .tl-haandtag {
