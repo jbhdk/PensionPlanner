@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Plan } from '../engine/plan'
@@ -238,6 +238,75 @@ describe('SurplusBandsChart', () => {
     }
   })
 
+  it('tegner en lodret stiplet markør ved det år, musen er over', () => {
+    const plan = aPlanThatTurnsNegative()
+    const years = simulateChecked(plan)
+    const { container } = render(<SurplusBandsChart years={years} plan={plan} unit="Real" />)
+
+    expect(container.querySelector('.aarsmarkoer')).toBeNull()
+
+    const felter = container.querySelectorAll('svg .aarsfelt')
+    fireEvent.mouseEnter(felter[2]!)
+
+    const markoer = container.querySelector('.aarsmarkoer')!
+    expect(markoer).toBeTruthy()
+    expect(markoer.getAttribute('x1')).toBe(markoer.getAttribute('x2'))
+  })
+
+  it('flytter markøren, når musen glider til et andet år, og fjerner den, når musen forlader plottet', () => {
+    const plan = aPlanThatTurnsNegative()
+    const years = simulateChecked(plan)
+    const { container } = render(<SurplusBandsChart years={years} plan={plan} unit="Real" />)
+
+    const felter = container.querySelectorAll('svg .aarsfelt')
+    fireEvent.mouseEnter(felter[0]!)
+    const xVedFoerste = container.querySelector('.aarsmarkoer')!.getAttribute('x1')
+
+    fireEvent.mouseEnter(felter[felter.length - 1]!)
+    const xVedSidste = container.querySelector('.aarsmarkoer')!.getAttribute('x1')
+    expect(xVedSidste).not.toBe(xVedFoerste)
+
+    const plot = container.querySelector('.aarssoejler')!.parentElement!
+    fireEvent.mouseLeave(plot)
+    expect(container.querySelector('.aarsmarkoer')).toBeNull()
+  })
+
+  it('viser et dataglimt med alle otte bånd i deres faste rækkefølge, uden en sum-linje', () => {
+    const plan = aPlanWithEveryBufferFlow()
+    const years = simulateChecked(plan)
+    const { container } = render(<SurplusBandsChart years={years} plan={plan} unit="Real" />)
+
+    expect(container.querySelector('.dataglimt')).toBeNull()
+
+    const felter = container.querySelectorAll('svg .aarsfelt')
+    fireEvent.mouseEnter(felter[0]!)
+
+    const raekker = Array.from(container.querySelectorAll('.dataglimt .dataglimt-raekke'))
+    expect(raekker).toHaveLength(8)
+    expect(container.querySelector('.dataglimt-sum')).toBeNull()
+    surplusBandOrder.forEach((band, i) => {
+      expect(raekker[i]!.textContent).toContain(band.label)
+    })
+
+    const plot = container.querySelector('.aarssoejler')!.parentElement!
+    fireEvent.mouseLeave(plot)
+    expect(container.querySelector('.dataglimt')).toBeNull()
+  })
+
+  it('viser et bånd på 0 kr. i dataglimtet i stedet for at udelade det', () => {
+    // Ingen poster, ingen saldo: hvert bånd står i 0 kr. hvert år.
+    const plan = aPlan({ balance: 0, horizon: 69 })
+    const years = simulateChecked(plan)
+    const { container } = render(<SurplusBandsChart years={years} plan={plan} unit="Real" />)
+
+    fireEvent.mouseEnter(container.querySelectorAll('svg .aarsfelt')[0]!)
+
+    const raekker = Array.from(container.querySelectorAll('.dataglimt .dataglimt-raekke'))
+    expect(raekker).toHaveLength(8)
+    expect(raekker[0]!.textContent).toContain(surplusBandOrder[0]!.label)
+    expect(raekker[0]!.textContent).toContain('0 kr.')
+  })
+
   it('åbner forklar-året ved klik på et bånd', async () => {
     const user = userEvent.setup()
     const plan = aPlanWithEveryBufferFlow()
@@ -339,5 +408,11 @@ describe('SurplusBandsChart', () => {
       new MouseEvent('click', { bubbles: true }),
     )
     expect(onSelectYear).not.toHaveBeenCalled()
+
+    // Og heller ingen markør eller dataglimt: begge hører kun til
+    // hovedgrafen, jf. ADR-0038.
+    fireEvent.mouseEnter(container.querySelector('.aarssoejler')!)
+    expect(container.querySelector('.aarsmarkoer')).toBeNull()
+    expect(container.querySelector('.dataglimt')).toBeNull()
   })
 })

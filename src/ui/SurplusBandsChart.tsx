@@ -2,14 +2,18 @@ import { scaleLinear } from 'd3-scale'
 import type { Plan } from '../engine/plan'
 import type { YearResult } from '../engine/yearResult'
 import {
+  DataGlimpse,
   KroneAxisMarks,
   MARGIN,
   MINI_MARGIN,
   YearAxisMarks,
+  YearCursor,
   ZeroLine,
   kroneAxis,
   useMeasuredPlot,
+  useYearCursor,
 } from './chartFrame'
+import { kroner } from './format'
 import { surplusBandColor } from './palette'
 import type { AmountUnit } from './real'
 import { toDisplayKroner } from './real'
@@ -49,6 +53,7 @@ export function SurplusBandsChart({
   initialHeight?: number
 }) {
   const { plotRef, width, height } = useMeasuredPlot(initialWidth, initialHeight)
+  const { hoveredIndex, enter, leave } = useYearCursor()
   const M = mode === 'main' ? MARGIN : MINI_MARGIN
 
   const n = years.length
@@ -74,6 +79,19 @@ export function SurplusBandsChart({
     })
     return { bands, up, down }
   })
+
+  // Dataglimtets rækker: de otte bånd i deres faste rækkefølge, også dem på
+  // 0 kr. Ingen sum-linje — båndene summerer ikke til ét meningsfuldt tal på
+  // samme måde som Formuens beholdninger, jf. issue #64.
+  const glimpseRows =
+    hoveredIndex === null
+      ? []
+      : stacks[hoveredIndex]!.bands.map((band, bandIndex) => ({
+          key: band.name,
+          label: band.label,
+          value: `${kroner(Math.abs(band.to - band.from))} kr.`,
+          color: surplusBandColor(bandIndex),
+        }))
 
   const bandSpan = span(
     stacks.map((stack) => stack.down).concat(stacks.map((stack) => stack.up)),
@@ -107,49 +125,58 @@ export function SurplusBandsChart({
       <div className="graf-plot" ref={plotRef}>
         <svg role="img" aria-label="Fordelingsgraf" viewBox={`0 0 ${width} ${height}`}>
           {mode === 'main' && <KroneAxisMarks axis={effectiveAxis} y={y} right={right} />}
-          {years.map((year, i) => {
-            const columnX0 = x(i) - bandWidth / 2
-            const columnX1 = x(i) + bandWidth / 2
-            const x0 = x(i) - barWidth / 2
-            const x1 = x(i) + barWidth / 2
-            return (
-              <g
-                key={year.year}
-                className="aarssoejler"
-                onClick={mode === 'main' ? () => onSelectYear(year.year) : undefined}
-              >
-                {/* Hele årets søjlefelt er klikbart og ikke kun båndene selv
-                    — et år, hvor båndene næsten går lige op, har næsten
-                    intet at ramme. Kun i hovedtilstand: mini-grafen bytter
-                    sig frem ved klik i stedet, jf. ADR-0033. */}
-                {mode === 'main' && (
-                  <rect
-                    className="aarsfelt"
-                    x={columnX0}
-                    y={M.top}
-                    width={columnX1 - columnX0}
-                    height={height - M.top - M.bottom}
-                  />
-                )}
-                {stacks[i]!.bands.map((band, bandIndex) => (
-                  <rect
-                    key={band.name}
-                    data-band={band.name}
-                    data-direction={band.direction}
-                    data-year={year.year}
-                    x={x0}
-                    y={Math.min(y(band.from), y(band.to))}
-                    width={x1 - x0}
-                    height={Math.abs(y(band.to) - y(band.from))}
-                    fill={surplusBandColor(bandIndex)}
-                  />
-                ))}
-              </g>
-            )
-          })}
+          <g onMouseLeave={mode === 'main' ? leave : undefined}>
+            {years.map((year, i) => {
+              const columnX0 = x(i) - bandWidth / 2
+              const columnX1 = x(i) + bandWidth / 2
+              const x0 = x(i) - barWidth / 2
+              const x1 = x(i) + barWidth / 2
+              return (
+                <g
+                  key={year.year}
+                  className="aarssoejler"
+                  onClick={mode === 'main' ? () => onSelectYear(year.year) : undefined}
+                  onMouseEnter={mode === 'main' ? () => enter(i) : undefined}
+                >
+                  {/* Hele årets søjlefelt er klikbart og ikke kun båndene selv
+                      — et år, hvor båndene næsten går lige op, har næsten
+                      intet at ramme. Kun i hovedtilstand: mini-grafen bytter
+                      sig frem ved klik i stedet, jf. ADR-0033. */}
+                  {mode === 'main' && (
+                    <rect
+                      className="aarsfelt"
+                      x={columnX0}
+                      y={M.top}
+                      width={columnX1 - columnX0}
+                      height={height - M.top - M.bottom}
+                    />
+                  )}
+                  {stacks[i]!.bands.map((band, bandIndex) => (
+                    <rect
+                      key={band.name}
+                      data-band={band.name}
+                      data-direction={band.direction}
+                      data-year={year.year}
+                      x={x0}
+                      y={Math.min(y(band.from), y(band.to))}
+                      width={x1 - x0}
+                      height={Math.abs(y(band.to) - y(band.from))}
+                      fill={surplusBandColor(bandIndex)}
+                    />
+                  ))}
+                </g>
+              )
+            })}
+          </g>
           <ZeroLine axis={effectiveAxis} y={y} right={right} />
           {mode === 'main' && (
             <YearAxisMarks years={years} x={x} left={left} right={right} height={height} />
+          )}
+          {mode === 'main' && (
+            <YearCursor index={hoveredIndex} x={x} top={M.top} bottom={height - M.bottom} />
+          )}
+          {mode === 'main' && (
+            <DataGlimpse index={hoveredIndex} top={M.top} right={right} rows={glimpseRows} />
           )}
         </svg>
       </div>
