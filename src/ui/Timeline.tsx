@@ -31,6 +31,15 @@ const MIN_YEAR_WIDTH = 18
 /** Højde pr. pakket række, samme værdi som mock-uppens `RAEKKE_H`. */
 const ROW_HEIGHT = 24
 
+/** En rækkes eget indryk fra sin top, matcher CSS-fallbacken `top: 3px` i
+    `.tl-boks`/`.tl-punkt`/`.tl-haandtag`. Uden det indryk sidder øverste
+    række flugtende med gruppens overskrift, som så skjuler en valgt boks'
+    omrids — rækkerne under har altid haft samme luft, fordi boksens 18px
+    højde selv giver 6px slap inden for de 24px, men den slap havde ingen
+    virkning for allerøverste række, som ikke har en tidligere række at låne
+    den fra. */
+const ROW_TOP_INSET = 3
+
 /** Højde pr. akserække (kalenderår og hver persons alder), matcher
     `.tl-akse-raekke`s faste CSS-højde. */
 const AXIS_ROW_HEIGHT = 18
@@ -58,14 +67,14 @@ function boxStyle(
 ) {
   const left = (from - start) * yearWidth
   const right = (to - start) * yearWidth + yearWidth
-  return { left: `${left}px`, width: `${right - left}px`, top: `${row * ROW_HEIGHT}px` }
+  return { left: `${left}px`, width: `${right - left}px`, top: `${row * ROW_HEIGHT + ROW_TOP_INSET}px` }
 }
 
 /** Punktets venstre kant og lodrette plads. Et punkt har ingen udstrækning —
     det er hverken en kortere boks eller en boks med bredde nul, men en anden
     figur helt, jf. ADR-0036. */
 function pointStyle(at: SimulationYear, start: SimulationYear, row: number, yearWidth: number) {
-  return { left: `${(at - start) * yearWidth}px`, top: `${row * ROW_HEIGHT}px` }
+  return { left: `${(at - start) * yearWidth}px`, top: `${row * ROW_HEIGHT + ROW_TOP_INSET}px` }
 }
 
 /** Kroppen kan kun trækkes som helhed, når begge endepunkter er lukkede og
@@ -90,7 +99,7 @@ function handleStyle(
     edge === 'from'
       ? (from - start) * yearWidth
       : (to - start) * yearWidth + yearWidth - HANDLE_WIDTH
-  return { left: `${left}px`, top: `${row * ROW_HEIGHT}px` }
+  return { left: `${left}px`, top: `${row * ROW_HEIGHT + ROW_TOP_INSET}px` }
 }
 
 /** Listenøgle for et item. `Target` rummer også `'plan'` og `'person'`, uden
