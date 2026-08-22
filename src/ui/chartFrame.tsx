@@ -100,78 +100,50 @@ export type GlimpseRow = {
   color?: string
 }
 
-// Skriften i mærkatet er proportional, og tegnbredden kan derfor kun skønnes
-// — samme greb som bufferspændets `SPAN_LABEL_CHAR_WIDTH` i WealthChart.
-const GLIMPSE_CHAR_WIDTH = 5.4
-const GLIMPSE_PADDING = 6
-const GLIMPSE_ROW_HEIGHT = 14
-const GLIMPSE_SWATCH = 8
-const GLIMPSE_GAP = 6
+/** Hovedgrafens dataglimt, jf. ADR-0038: et fast hjørne ud for grafens egen
+    titel, der viser det hoverede års tal, række for række, afsluttet med en
+    sum-linje. Boksen står i et fast hjørne og ikke klæbet til musen, fordi
+    Formuens ni linjer ellers næsten garanteret ville dække det bånd, de
+    beskriver.
 
-/** Hovedgrafens dataglimt, jf. ADR-0038: et fast hjørne i øverste højre
-    hjørne af plottet, der viser det hoverede års tal, række for række,
-    afsluttet med en sum-linje. Boksen står i et fast hjørne og ikke klæbet
-    til musen, fordi Formuens ni linjer ellers næsten garanteret ville dække
-    det bånd, de beskriver.
+    Almindeligt HTML og ikke SVG: boksen hører ikke til plottets
+    koordinatsystem — dens plads er titelrækken ovenover, sat med CSS
+    (`position: absolute` på `.graf`), og bredden følger sit eget indhold i
+    stedet for at skulle skønnes tegn for tegn, sådan `KroneAxisMarks`'
+    mærkater og bufferspændets `SPAN_LABEL_CHAR_WIDTH` er nødt til inde i et
+    SVG.
 
     Komponenten kender ikke til Formuen, Fordelingen eller Overskuddet — den
     tegner blot de rækker, kalderen har regnet ud for det hoverede år, så de
     to andre grafer kan genbruge den uændret. */
 export function DataGlimpse({
   index,
-  top,
-  right,
   rows,
   total,
 }: {
   index: number | null
-  top: number
-  right: number
   rows: GlimpseRow[]
   total?: GlimpseRow
 }) {
   if (index === null) return null
 
   const allRows = total ? [...rows, total] : rows
-  const rowWidth = (row: GlimpseRow) => {
-    const swatch = row.color ? GLIMPSE_SWATCH + GLIMPSE_GAP : 0
-    return swatch + (row.label.length + row.value.length) * GLIMPSE_CHAR_WIDTH + GLIMPSE_GAP
-  }
-  const width = Math.max(0, ...allRows.map(rowWidth)) + 2 * GLIMPSE_PADDING
-  const height = allRows.length * GLIMPSE_ROW_HEIGHT + 2 * GLIMPSE_PADDING
-  const boxX = right - width
 
   return (
-    <g className="dataglimt">
-      <rect className="dataglimt-plade" x={boxX} y={top} width={width} height={height} rx={3} />
-      {allRows.map((row, i) => {
-        const baseline = top + GLIMPSE_PADDING + i * GLIMPSE_ROW_HEIGHT + GLIMPSE_ROW_HEIGHT - 4
-        const labelX = boxX + GLIMPSE_PADDING + (row.color ? GLIMPSE_SWATCH + GLIMPSE_GAP : 0)
-        return (
-          <g
-            key={row.key}
-            className={row === total ? 'dataglimt-raekke dataglimt-sum' : 'dataglimt-raekke'}
-          >
-            {row.color && (
-              <rect
-                className="dataglimt-svatch"
-                x={boxX + GLIMPSE_PADDING}
-                y={baseline - GLIMPSE_SWATCH + 2}
-                width={GLIMPSE_SWATCH}
-                height={GLIMPSE_SWATCH}
-                fill={row.color}
-              />
-            )}
-            <text x={labelX} y={baseline}>
-              {row.label}
-            </text>
-            <text x={boxX + width - GLIMPSE_PADDING} y={baseline} textAnchor="end">
-              {row.value}
-            </text>
-          </g>
-        )
-      })}
-    </g>
+    <div className="dataglimt">
+      {allRows.map((row) => (
+        <div
+          key={row.key}
+          className={row === total ? 'dataglimt-raekke dataglimt-sum' : 'dataglimt-raekke'}
+        >
+          {row.color && (
+            <span className="dataglimt-svatch" style={{ background: row.color }} />
+          )}
+          <span className="dataglimt-etiket">{row.label}</span>
+          <span className="dataglimt-vaerdi">{row.value}</span>
+        </div>
+      ))}
+    </div>
   )
 }
 

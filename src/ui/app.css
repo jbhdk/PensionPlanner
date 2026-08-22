@@ -703,6 +703,7 @@ table.aar th,
    — de stod ikke i flugt, hverken foroven eller nedadtil. Al afstand hører
    nu til `.graf-lag` og dens `gap` alene, så de tre kort får den samme. */
 .graf {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -880,36 +881,57 @@ table.aar th,
   pointer-events: none;
 }
 
-/* Dataglimtet står i et fast hjørne og ikke klæbet til musen, jf. ADR-0038.
-   `pointer-events: none`, fordi boksen ellers ville stjæle museover fra
-   årskolonnen, den selv ligger oven på, og dermed slukke sig selv i det
-   øjeblik musen rammer den. */
+/* Dataglimtet står i et fast hjørne ud for grafens egen titel og ikke
+   klæbet til musen, jf. ADR-0038 — placeret med `position: absolute` på
+   `.graf` (se der), så det flyder oven på plottet uden at presse titlen
+   eller plottets højde. `pointer-events: none`, fordi boksen ellers ville
+   stjæle museover fra årskolonnen, den selv ligger oven på, og dermed
+   slukke sig selv i det øjeblik musen rammer den. Almindeligt HTML og ikke
+   SVG: bredden følger sit eget indhold i stedet for at skulle skønnes tegn
+   for tegn. */
 .dataglimt {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 7px;
+  background: var(--laerred);
+  opacity: 0.92;
+  border: 1px solid var(--linje);
+  border-radius: 3px;
   pointer-events: none;
 }
 
-.dataglimt-plade {
-  fill: var(--laerred);
-  fill-opacity: 0.92;
-  stroke: var(--linje);
-  stroke-width: 1;
-}
-
-.dataglimt-raekke text {
+.dataglimt-raekke {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 10px;
-  fill: var(--label);
+  color: var(--label);
+  white-space: nowrap;
 }
 
-.dataglimt-raekke text:last-child {
+.dataglimt-svatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  flex: 0 0 auto;
+}
+
+.dataglimt-vaerdi {
   font-family: var(--f-tal);
-  fill: var(--ink);
+  color: var(--ink);
+  margin-left: auto;
+  padding-left: 10px;
 }
 
 /* Sum-linjen adskiller sig fra beholdningerne ovenover, som en total gør i
    en tabel — lysere skrift, ingen prøve, for den svarer ikke til én farve i
    legenden. */
-.dataglimt-sum text {
-  fill: var(--ink);
+.dataglimt-sum {
+  color: var(--ink);
   font-weight: 600;
 }
 

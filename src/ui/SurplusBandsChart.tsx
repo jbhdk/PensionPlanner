@@ -121,6 +121,7 @@ export function SurplusBandsChart({
     <div className="graf fordelingsgraf" data-mode={mode}>
       <div className="graf-titel">
         <span className="navn">Fordelingen</span>
+        {mode === 'main' && <DataGlimpse index={hoveredIndex} rows={glimpseRows} />}
       </div>
       <div className="graf-plot" ref={plotRef}>
         <svg role="img" aria-label="Fordelingsgraf" viewBox={`0 0 ${width} ${height}`}>
@@ -174,13 +175,6 @@ export function SurplusBandsChart({
           )}
           {mode === 'main' && (
             <YearCursor index={hoveredIndex} x={x} top={M.top} bottom={height - M.bottom} />
-          )}
-          {/* Glimtet hænger i selve plottets top og ikke i M.top: den plads
-              er aksens egen, reserveret til enhedsnavnet ovenover
-              gitterlinjerne, og glimtet har intet enhedsnavn at give plads
-              til. */}
-          {mode === 'main' && (
-            <DataGlimpse index={hoveredIndex} top={0} right={right} rows={glimpseRows} />
           )}
         </svg>
       </div>

@@ -187,6 +187,9 @@ export function WealthChart({
     <div className="graf formuegraf" data-mode={mode}>
       <div className="graf-titel">
         <span className="navn">Formuen</span>
+        {mode === 'main' && (
+          <DataGlimpse index={hoveredIndex} rows={glimpseRows} total={glimpseTotal} />
+        )}
       </div>
       <div className="graf-plot" ref={plotRef}>
         <svg role="img" aria-label="Formuegraf" viewBox={`0 0 ${width} ${height}`}>
@@ -343,19 +346,6 @@ export function WealthChart({
           )}
           {mode === 'main' && (
             <YearCursor index={hoveredIndex} x={x} top={M.top} bottom={height - M.bottom} />
-          )}
-          {/* Glimtet hænger i selve plottets top og ikke i M.top: den plads
-              er aksens egen, reserveret til enhedsnavnet ovenover
-              gitterlinjerne, og glimtet har intet enhedsnavn at give plads
-              til. */}
-          {mode === 'main' && (
-            <DataGlimpse
-              index={hoveredIndex}
-              top={0}
-              right={right}
-              rows={glimpseRows}
-              total={glimpseTotal}
-            />
           )}
         </svg>
       </div>
