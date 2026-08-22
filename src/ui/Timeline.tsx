@@ -72,9 +72,14 @@ function boxStyle(
 
 /** Punktets venstre kant og lodrette plads. Et punkt har ingen udstrækning —
     det er hverken en kortere boks eller en boks med bredde nul, men en anden
-    figur helt, jf. ADR-0036. */
+    figur helt, jf. ADR-0036. Placeret midt i sit år og ikke ved dets start,
+    for punktet står for hele året og ikke et præcist tidspunkt i det —
+    samme princip for engangspostens punkt som for et gentagelsesmærke. */
 function pointStyle(at: SimulationYear, start: SimulationYear, row: number, yearWidth: number) {
-  return { left: `${(at - start) * yearWidth}px`, top: `${row * ROW_HEIGHT + ROW_TOP_INSET}px` }
+  return {
+    left: `${(at - start + 0.5) * yearWidth}px`,
+    top: `${row * ROW_HEIGHT + ROW_TOP_INSET}px`,
+  }
 }
 
 /** Kroppen kan kun trækkes som helhed, når begge endepunkter er lukkede og
