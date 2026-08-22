@@ -190,31 +190,46 @@ body {
   color: var(--muted);
 }
 
-/* Fanebåndet (Formuen · Årstabellen) og kronetype-omskifteren deler samme
-   kappe, jf. docs/mockup/navigator.css. */
-.resultathoved .omskifter {
+/* Omskifteren: fanebåndet (Planlæggeren · Årstabellen) og kronetypen
+   (Nutidskroner · Fremtidskroner) deler samme pille, jf.
+   docs/mockup/navigator.css. Den står både i resultathovedet og i
+   forklar-årets eget spaltehoved og hænger derfor ikke op i nogen af dem.
+
+   Kanten sidder på knapperne og ikke på kappen. En trykket knap skal male
+   sin accentfarve helt ud til pillens yderkant, ganske som `.knap.primaer`
+   gør — lå kanten på kappen, ville de to gule flader, der står side om side
+   i forklar-året, være 2 px forskellige, fordi kappens grå kant skar en
+   pixel af den trykkede knap foroven og forneden. */
+.omskifter {
   display: inline-flex;
-  border: 1px solid var(--felt-kant);
   border-radius: 4px;
   overflow: hidden;
 }
 
-.resultathoved .omskifter.hoejre {
+.omskifter.hoejre {
   margin-left: auto;
 }
 
-.resultathoved .omskifter button {
+.omskifter button {
   font: inherit;
   font-size: 12px;
-  border: 0;
+  border: 1px solid var(--felt-kant);
   background: var(--felt-bg);
   color: var(--muted);
   padding: 4px 12px;
   cursor: pointer;
 }
 
-.resultathoved .omskifter button[aria-pressed='true'] {
+/* Naboernes fælles kant tegnes én gang og ikke to. */
+.omskifter button + button {
+  margin-left: -1px;
+}
+
+/* Den trykkede knaps egen kant skal ligge oven på naboens, ikke under. */
+.omskifter button[aria-pressed='true'] {
+  position: relative;
   background: var(--accent);
+  border-color: var(--accent);
   color: var(--paa-accent);
 }
 
@@ -1161,7 +1176,6 @@ table.aar td .fremskrevet {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--paa-accent);
-  font-weight: 600;
 }
 
 /* Balanceinvariantens led som stribe: samme kort-baggrund som resten af
