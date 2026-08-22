@@ -161,15 +161,15 @@ describe('SurplusChart', () => {
     const [underskud] = toner.underskud
     expect(underskud).not.toBe(overskud)
 
-    // Begge er palettens egne. En niende farve ville ikke være valideret mod
-    // fladens baggrund, hverken for kontrast eller for farveblindhed.
+    // Begge er palettens egne. En syttende farve ville ikke være valideret
+    // mod fladens baggrund, hverken for kontrast eller for lyshedsbåndet.
     expect(CATEGORICAL_PALETTE).toContain(overskud)
     expect(CATEGORICAL_PALETTE).toContain(underskud)
 
-    // Rød er forbeholdt den negative buffer alene — palettens `#e66767` og
+    // Rød er forbeholdt den negative buffer alene — palettens `#c64668` og
     // fladens `--neg`. Et underskud er ingen fejltilstand, men det beløb, der
     // mangler at blive flyttet, jf. ADR-0026.
-    expect(['#e66767', '#e2685c']).not.toContain(underskud)
+    expect(['#c64668', '#e2685c']).not.toContain(underskud)
   })
 
   it('måler søjlerne mod årstabellens Overskud-kolonne, så de to ikke kan vise forskellige tal', () => {
