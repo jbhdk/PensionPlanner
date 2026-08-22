@@ -15,7 +15,8 @@ import type {
 import { fieldHelp } from './fieldHelp'
 import { kroner, procent } from './format'
 import { danish, danishTiming, variants } from './danish'
-import { inRealKroner } from './real'
+import type { AmountUnit } from './real'
+import { toDisplayKroner } from './real'
 import { returnTax } from './returnTax'
 import { surplus } from './surplus'
 import type { SurplusBand, SurplusBandName } from './surplusBands'
@@ -69,6 +70,8 @@ export function YearExplanation({
   onSelectYear,
   onBack,
   backLabel,
+  unit,
+  onUnitChange,
 }: {
   year: YearResult
   years: YearResult[]
@@ -79,8 +82,13 @@ export function YearExplanation({
       to afhænger af, hvor man kom fra, og afgøres af den ejende komponent,
       der alene kender historikken. */
   backLabel: string
+  /** Delt med resten af resultatspalten, jf. `real.ts`s dokumentationskommentar
+      — forklar-året er én af resultatspaltens visninger og må ikke stå i sin
+      egen enhed, mens Årstabellen og Planlæggeren står i en anden. */
+  unit: AmountUnit
+  onUnitChange: (unit: AmountUnit) => void
 }) {
-  const display = (amount: number) => inRealKroner(amount, year.year, plan)
+  const display = (amount: number) => toDisplayKroner(amount, year.year, plan, unit)
   const index = years.findIndex((y) => y.year === year.year)
   const previous = years[index - 1]
   const next = years[index + 1]
@@ -111,6 +119,21 @@ export function YearExplanation({
           <button type="button" className="knap primaer" onClick={onBack}>
             {backLabel}
           </button>
+          {/* Yderst til højre, ligesom i resultathovedet på Planlæggeren og
+              Årstabellen — samme omskifter, samme plads i bjælken, uanset
+              hvilken af de tre visninger man står i. */}
+          <span className="omskifter">
+            <button type="button" aria-pressed={unit === 'Real'} onClick={() => onUnitChange('Real')}>
+              Nutidskroner
+            </button>
+            <button
+              type="button"
+              aria-pressed={unit === 'Nominal'}
+              onClick={() => onUnitChange('Nominal')}
+            >
+              Fremtidskroner
+            </button>
+          </span>
         </span>
       </div>
 

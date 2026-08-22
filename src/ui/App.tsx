@@ -297,6 +297,8 @@ export function App({
               onSelectYear={explainYear}
               onBack={() => setResultView(returnView)}
               backLabel={returnView === 'YearTable' ? 'Tilbage til tabellen' : 'Tilbage til planlæggeren'}
+              unit={unit}
+              onUnitChange={setUnit}
             />
           ) : (
             <>
