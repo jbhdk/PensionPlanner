@@ -1,6 +1,5 @@
 import { scaleLinear } from 'd3-scale'
 import { area as d3Area, curveLinear } from 'd3-shape'
-import { isPensionScheme } from '../engine/holdingVariant'
 import type { Plan } from '../engine/plan'
 import type { BufferState, YearResult } from '../engine/yearResult'
 import { bufferStateClasses, bufferStateLabels } from './bufferState'
@@ -180,7 +179,6 @@ export function WealthChart({
     holding,
     color: holdingColor(si),
     path: areaGenerator(bands[si]!) ?? undefined,
-    locked: isPensionScheme(holding),
   }))
 
   return (
@@ -194,18 +192,6 @@ export function WealthChart({
       <div className="graf-plot" ref={plotRef}>
         <svg role="img" aria-label="Formuegraf" viewBox={`0 0 ${width} ${height}`}>
           <defs>
-            {/* Skellet mellem bundne beholdninger og frie midler skal kunne
-                ses uden at læse legenden. Stregerne har fladens egen
-                baggrundsfarve, som båndene i forvejen er adskilt med. */}
-            <pattern
-              id="skravering"
-              patternUnits="userSpaceOnUse"
-              width={8}
-              height={8}
-              patternTransform="rotate(45)"
-            >
-              <line x1={0} y1={0} x2={0} y2={8} stroke="var(--flade)" strokeWidth={2.5} />
-            </pattern>
             {/* Dæmpningen er et filter og ikke en farve: båndene beholder
                 deres egne nuancer, de trækkes bare mod gråt. */}
             <filter id="bufferstate-daempning">
@@ -232,27 +218,11 @@ export function WealthChart({
             <g key={band.holding.id}>
               <path
                 data-holding={band.holding.id}
-                data-pension-scheme={band.locked}
                 d={band.path}
                 fill={band.color}
                 stroke="var(--flade)"
                 strokeWidth={2}
               />
-              {/* Skraveringen ligger oven på beholdningens egen farve frem
-                  for at erstatte den: farven siger hvilken beholdning,
-                  skraveringen at den er bundet. Bundet er her
-                  `isPensionScheme` — en `PayoutAge` loven låser op til —
-                  og ikke `isFreeAssets`: aktiesparekontoen har et loft, men
-                  ejeren hæver af den, når hun vil, og skal derfor ikke se
-                  bunden ud, jf. CONTEXT.md's `PensionScheme`. */}
-              {band.locked && (
-                <path
-                  data-hatch={band.holding.id}
-                  d={band.path}
-                  fill="url(#skravering)"
-                  stroke="none"
-                />
-              )}
             </g>
           ))}
           {/* Dæmpningen inde i spændet: båndene tegnes om gennem filteret,
@@ -272,9 +242,6 @@ export function WealthChart({
                     stroke="var(--flade)"
                     strokeWidth={2}
                   />
-                  {band.locked && (
-                    <path d={band.path} fill="url(#skravering)" stroke="none" />
-                  )}
                 </g>
               ))}
             </g>
@@ -361,11 +328,7 @@ export function WealthChart({
         <ul className="graf-legend formuegraf-legend">
           {holdings.map((holding, si) => (
             <li key={holding.id}>
-              <span
-                className="svatch"
-                data-pension-scheme={isPensionScheme(holding)}
-                style={{ background: holdingColor(si) }}
-              />
+              <span className="svatch" style={{ background: holdingColor(si) }} />
               {holding.name}
             </li>
           ))}

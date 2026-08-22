@@ -809,8 +809,7 @@ table.aar th,
 /* Legenden er fælles for de tre grafer: formuegrafens bånd er beholdninger,
    fordelingsgrafens er de otte bånd i `Surplus`, overskudsgrafens er blot
    dets to fortegn — men prøven, ordet og rytmen er den samme. Ingen af dem
-   er klikbare, jf. ADR-0038; kun formuegrafens skravering hører den ene
-   til. */
+   er klikbare, jf. ADR-0038. */
 .graf-legend {
   display: flex;
   flex-wrap: wrap;
@@ -833,18 +832,6 @@ table.aar th,
   height: 10px;
   border-radius: 2px;
   flex: none;
-}
-
-/* Bundne beholdninger — pensionsordninger, jf. `isPensionScheme` — bærer
-   samme skravering i legenden som i grafens bånd, så prøven og båndet kan
-   genkendes som det samme. Aktiesparekontoen har et loft, men ejeren hæver
-   af den, når hun vil, og er derfor ikke bundet i denne forstand. */
-.formuegraf-legend .svatch[data-pension-scheme='true'] {
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent 0 2px,
-    var(--flade) 2px 3.5px
-  );
 }
 
 /* Bufferens to fejltilstande, jf. ADR-0008. Samme røde tone som årstabellen

@@ -296,11 +296,10 @@ describe('WealthChart', () => {
     expect(svg.getAttribute('viewBox')!.split(' ')[2]).toBe('480')
   })
 
-  it('stabler frie midler nederst og skraverer de bundne beholdninger over dem', () => {
+  it('stabler frie midler nederst', () => {
     // Husstandens egen rækkefølge sætter ratepensionen mellem de to frie
     // midler. Grafen stabler alligevel de frie nederst, så stablen kan læses
-    // som "hvad er til rådighed" mod "hvad er bundet" — og skraveringen gør
-    // skellet synligt uden at læse legenden.
+    // som "hvad er til rådighed" mod "hvad er bundet".
     const plan = aPlan({
       balance: 1_000_000,
       holdings: [
@@ -332,44 +331,6 @@ describe('WealthChart', () => {
       'anden-beholdning',
       'ratepension',
     ])
-    expect(lag.map((el) => el.getAttribute('data-pension-scheme'))).toEqual([
-      'false',
-      'false',
-      'true',
-    ])
-
-    // Kun det bundne bånd bærer skraveringen, og den ligger oven på
-    // beholdningens egen farve frem for at erstatte den.
-    const skraverede = Array.from(container.querySelectorAll('svg [data-hatch]'))
-    expect(skraverede.map((el) => el.getAttribute('data-hatch'))).toEqual(['ratepension'])
-    const ratepension = lag[2]!
-    expect(skraverede[0]!.getAttribute('d')).toBe(ratepension.getAttribute('d'))
-    expect(ratepension.getAttribute('fill')).not.toBe(skraverede[0]!.getAttribute('fill'))
-  })
-
-  it('skraverer ikke aktiesparekontoen, selvom den ikke er frie midler', () => {
-    // Aktiesparekontoen har et indskudsloft og er derfor ikke `FreeAssets`,
-    // men den har ingen `PayoutAge` — ejeren hæver af den, når hun vil. Det
-    // er `isPensionScheme`, der afgør skraveringen, ikke `isFreeAssets`, så
-    // kontoen skal stå uskraveret ligesom de frie midler.
-    const plan = aPlan({
-      balance: 1_000_000,
-      holdings: [
-        {
-          id: 'aktiesparekonto',
-          name: 'Aktiesparekonto',
-          variant: 'ShareSavingsAccount',
-          balance: 300_000,
-          grossReturn: 0,
-          annualCostRate: 0,
-        },
-      ],
-    })
-    const years = simulate(plan)
-    const { container } = render(<WealthChart years={years} plan={plan} unit="Real" />)
-
-    const skraverede = Array.from(container.querySelectorAll('svg [data-hatch]'))
-    expect(skraverede).toHaveLength(0)
   })
 
   it('tegner ingen akse og ingen legend i mini-tilstand, jf. ADR-0033 — kun formen', () => {
