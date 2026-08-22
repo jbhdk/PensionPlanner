@@ -175,8 +175,12 @@ export function SurplusBandsChart({
           {mode === 'main' && (
             <YearCursor index={hoveredIndex} x={x} top={M.top} bottom={height - M.bottom} />
           )}
+          {/* Glimtet hænger i selve plottets top og ikke i M.top: den plads
+              er aksens egen, reserveret til enhedsnavnet ovenover
+              gitterlinjerne, og glimtet har intet enhedsnavn at give plads
+              til. */}
           {mode === 'main' && (
-            <DataGlimpse index={hoveredIndex} top={M.top} right={right} rows={glimpseRows} />
+            <DataGlimpse index={hoveredIndex} top={0} right={right} rows={glimpseRows} />
           )}
         </svg>
       </div>
