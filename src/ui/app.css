@@ -33,6 +33,33 @@
   box-sizing: border-box;
 }
 
+/* Rullebjælker i appens egen mørke tone frem for browserens lyse standard —
+   ellers ville hver spalte og tidslinjens rulleområde bryde bruddet med et
+   lyst, fremmed element. `scrollbar-width`/`-color` dækker Firefox,
+   `::-webkit-scrollbar` resten. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--felt-kant) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--felt-kant);
+  border-radius: 5px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
 html,
 body,
 #root {
