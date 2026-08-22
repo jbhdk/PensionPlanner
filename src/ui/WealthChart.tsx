@@ -5,13 +5,17 @@ import type { Plan } from '../engine/plan'
 import type { BufferState, YearResult } from '../engine/yearResult'
 import { bufferStateClasses, bufferStateLabels } from './bufferState'
 import {
+  DataGlimpse,
   KroneAxisMarks,
   MARGIN,
   MINI_MARGIN,
   YearAxisMarks,
+  YearCursor,
   kroneAxis,
   useMeasuredPlot,
+  useYearCursor,
 } from './chartFrame'
+import { kroner } from './format'
 import { holdingColor, orderedHoldings } from './palette'
 import type { AmountUnit } from './real'
 import { toDisplayKroner } from './real'
@@ -89,6 +93,7 @@ export function WealthChart({
   initialHeight?: number
 }) {
   const { plotRef, width, height } = useMeasuredPlot(initialWidth, initialHeight)
+  const { hoveredIndex, enter, leave } = useYearCursor()
 
   const holdings = orderedHoldings(plan.household)
   const n = years.length
@@ -147,6 +152,27 @@ export function WealthChart({
       x1: Math.min(right, x(span.toIndex) + halfStep),
     }
   })
+
+  // Dataglimtets rækker: alle beholdninger, også dem på 0 kr., i samme
+  // rækkefølge som legenden, afsluttet med en sum-linje for den samlede
+  // formue. Kun regnet, når musen rent faktisk står over et år.
+  const glimpseRows =
+    hoveredIndex === null
+      ? []
+      : holdings.map((holding, si) => ({
+          key: holding.id,
+          label: holding.name,
+          value: `${kroner(bands[si]![hoveredIndex]!.y1 - bands[si]![hoveredIndex]!.y0)} kr.`,
+          color: holdingColor(si),
+        }))
+  const glimpseTotal =
+    hoveredIndex === null
+      ? undefined
+      : {
+          key: 'i-alt',
+          label: 'I alt',
+          value: `${kroner(bands.at(-1)?.[hoveredIndex]?.y1 ?? 0)} kr.`,
+        }
 
   // Båndene tegnes op til to gange i et markeret spænd — i deres egne farver
   // og dæmpet ovenpå — så formen ligger ét sted.
@@ -295,18 +321,38 @@ export function WealthChart({
               mønster som Overskuddet og Fordelingen, jf. ADR-0038. Kun i
               hovedtilstand: mini-grafen bytter sig frem ved klik i stedet,
               jf. ADR-0033. */}
-          {mode === 'main' &&
-            years.map((year, i) => (
-              <g key={year.year} className="aarssoejler" onClick={() => onSelectYear(year.year)}>
-                <rect
-                  className="aarsfelt"
-                  x={Math.max(left, x(i) - halfStep)}
-                  y={M.top}
-                  width={Math.min(right, x(i) + halfStep) - Math.max(left, x(i) - halfStep)}
-                  height={height - M.top - M.bottom}
-                />
-              </g>
-            ))}
+          {mode === 'main' && (
+            <g onMouseLeave={leave}>
+              {years.map((year, i) => (
+                <g
+                  key={year.year}
+                  className="aarssoejler"
+                  onClick={() => onSelectYear(year.year)}
+                  onMouseEnter={() => enter(i)}
+                >
+                  <rect
+                    className="aarsfelt"
+                    x={Math.max(left, x(i) - halfStep)}
+                    y={M.top}
+                    width={Math.min(right, x(i) + halfStep) - Math.max(left, x(i) - halfStep)}
+                    height={height - M.top - M.bottom}
+                  />
+                </g>
+              ))}
+            </g>
+          )}
+          {mode === 'main' && (
+            <YearCursor index={hoveredIndex} x={x} top={M.top} bottom={height - M.bottom} />
+          )}
+          {mode === 'main' && (
+            <DataGlimpse
+              index={hoveredIndex}
+              top={M.top}
+              right={right}
+              rows={glimpseRows}
+              total={glimpseTotal}
+            />
+          )}
         </svg>
       </div>
       {mode === 'main' && (

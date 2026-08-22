@@ -870,6 +870,49 @@ table.aar th,
   font-family: var(--f-broed);
 }
 
+/* Hovedgrafens musefølgende markør, jf. ADR-0038 — af samme slags som
+   fladekortets milepæle: en tynd, stiplet streg, der ikke må læses som en
+   del af selve dataene. */
+.aarsmarkoer {
+  stroke: var(--label);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  pointer-events: none;
+}
+
+/* Dataglimtet står i et fast hjørne og ikke klæbet til musen, jf. ADR-0038.
+   `pointer-events: none`, fordi boksen ellers ville stjæle museover fra
+   årskolonnen, den selv ligger oven på, og dermed slukke sig selv i det
+   øjeblik musen rammer den. */
+.dataglimt {
+  pointer-events: none;
+}
+
+.dataglimt-plade {
+  fill: var(--laerred);
+  fill-opacity: 0.92;
+  stroke: var(--linje);
+  stroke-width: 1;
+}
+
+.dataglimt-raekke text {
+  font-size: 10px;
+  fill: var(--label);
+}
+
+.dataglimt-raekke text:last-child {
+  font-family: var(--f-tal);
+  fill: var(--ink);
+}
+
+/* Sum-linjen adskiller sig fra beholdningerne ovenover, som en total gør i
+   en tabel — lysere skrift, ingen prøve, for den svarer ikke til én farve i
+   legenden. */
+.dataglimt-sum text {
+  fill: var(--ink);
+  font-weight: 600;
+}
+
 /* Hele årets gruppe er klikbar, søjlerne/båndene/stablingen selv iberegnet
    — ikke kun klikfeltet, der ligger under dem. Gælder alle tre grafer ens,
    jf. ADR-0038; ingen af dem klikker i mini-tilstand, hvor grafen slet ikke

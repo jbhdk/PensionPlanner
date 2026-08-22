@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Plan } from '../engine/plan'
@@ -385,6 +385,107 @@ describe('WealthChart', () => {
 
     // Formen — begge beholdningers bånd — står der stadig.
     expect(container.querySelectorAll('svg [data-holding]')).toHaveLength(2)
+  })
+
+  it('tegner en lodret stiplet markør ved det år, musen er over', () => {
+    const plan = aPlanWithSecondHolding()
+    const years = simulate(plan)
+    const { container } = render(<WealthChart years={years} plan={plan} unit="Real" />)
+
+    expect(container.querySelector('.aarsmarkoer')).toBeNull()
+
+    const felter = container.querySelectorAll('svg .aarsfelt')
+    fireEvent.mouseEnter(felter[2]!)
+
+    const markoer = container.querySelector('.aarsmarkoer')!
+    expect(markoer).toBeTruthy()
+    expect(markoer.getAttribute('x1')).toBe(markoer.getAttribute('x2'))
+  })
+
+  it('flytter markøren, når musen glider til et andet år, og fjerner den, når musen forlader plottet', () => {
+    const plan = aPlanWithSecondHolding()
+    const years = simulate(plan)
+    const { container } = render(<WealthChart years={years} plan={plan} unit="Real" />)
+
+    const felter = container.querySelectorAll('svg .aarsfelt')
+    fireEvent.mouseEnter(felter[0]!)
+    const xVedFoerste = container.querySelector('.aarsmarkoer')!.getAttribute('x1')
+
+    fireEvent.mouseEnter(felter[felter.length - 1]!)
+    const xVedSidste = container.querySelector('.aarsmarkoer')!.getAttribute('x1')
+    expect(xVedSidste).not.toBe(xVedFoerste)
+
+    const plot = container.querySelector('.aarssoejler')!.parentElement!
+    fireEvent.mouseLeave(plot)
+    expect(container.querySelector('.aarsmarkoer')).toBeNull()
+  })
+
+  it('viser et dataglimt med beløb pr. beholdning i legendens rækkefølge, afsluttet med en sum-linje', () => {
+    const plan = aPlanWithSecondHolding()
+    const years = simulate(plan)
+    const { container } = render(<WealthChart years={years} plan={plan} unit="Real" />)
+
+    expect(container.querySelector('.dataglimt')).toBeNull()
+
+    const felter = container.querySelectorAll('svg .aarsfelt')
+    fireEvent.mouseEnter(felter[0]!)
+
+    const raekker = Array.from(container.querySelectorAll('.dataglimt .dataglimt-raekke'))
+    expect(raekker).toHaveLength(3)
+    expect(raekker[0]!.textContent).toContain('Frie midler')
+    expect(raekker[0]!.textContent).toContain('1.000.000')
+    expect(raekker[1]!.textContent).toContain('Anden beholdning')
+    expect(raekker[1]!.textContent).toContain('500.000')
+    expect(raekker[2]!.textContent).toContain('1.500.000')
+
+    const plot = container.querySelector('.aarssoejler')!.parentElement!
+    fireEvent.mouseLeave(plot)
+    expect(container.querySelector('.dataglimt')).toBeNull()
+  })
+
+  it('viser en beholdning på 0 kr. i dataglimtet i stedet for at udelade den', () => {
+    // Bufferen tømmes med det samme, mens den anden beholdning står urørt —
+    // dataglimtet skal stadig navngive bufferen med et 0-beløb.
+    const plan = aPlanWithSecondHolding()
+    const tom = {
+      ...plan,
+      household: {
+        persons: [
+          {
+            ...plan.household.persons[0]!,
+            holdings: [
+              { ...plan.household.persons[0]!.holdings[0]!, balance: 0 },
+              plan.household.persons[0]!.holdings[1]!,
+            ],
+          },
+        ],
+      },
+    }
+    const years = simulate(tom)
+    const { container } = render(<WealthChart years={years} plan={tom} unit="Real" />)
+
+    fireEvent.mouseEnter(container.querySelectorAll('svg .aarsfelt')[0]!)
+
+    const raekker = Array.from(container.querySelectorAll('.dataglimt .dataglimt-raekke'))
+    expect(raekker).toHaveLength(3)
+    expect(raekker[0]!.textContent).toContain('Frie midler')
+    expect(raekker[0]!.textContent).toContain('0 kr.')
+  })
+
+  it('følger dataglimtets beløb den valgte kronetype', () => {
+    const plan = aPlan({ inflationAssumption: 0.02, grossReturn: 0.05 })
+    const years = simulate(plan)
+
+    const real = render(<WealthChart years={years} plan={plan} unit="Real" />)
+    fireEvent.mouseEnter(real.container.querySelectorAll('svg .aarsfelt')[5]!)
+    const vaerdiReal = real.container.querySelector('.dataglimt-raekke')!.textContent
+    real.unmount()
+
+    const nominal = render(<WealthChart years={years} plan={plan} unit="Nominal" />)
+    fireEvent.mouseEnter(nominal.container.querySelectorAll('svg .aarsfelt')[5]!)
+    const vaerdiNominal = nominal.container.querySelector('.dataglimt-raekke')!.textContent
+
+    expect(vaerdiReal).not.toBe(vaerdiNominal)
   })
 
   it('lader mini-grafen fylde det meste af sin egen plads ud, uden en akses margen', () => {

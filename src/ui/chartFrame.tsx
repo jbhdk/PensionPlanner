@@ -58,6 +58,123 @@ export function useMeasuredPlot(initialWidth: number, initialHeight: number) {
   return { plotRef, width, height }
 }
 
+/** Hvilket år musen står over i hovedgrafens plot, jf. ADR-0038. Ingen
+    pixel-regning: kalderen melder et indeks ind, når musen går ind over en
+    given årskolonne — de kolonner, klikket allerede rammer via `.aarsfelt` —
+    og markøren snapper dermed til nærmeste år uden selv at måle noget.
+    `leave` nulstiller kun, når musen forlader plottet, ikke når den glider
+    fra én årskolonne til den næste, fordi kolonnerne tiler uden mellemrum. */
+export function useYearCursor() {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  return {
+    hoveredIndex,
+    enter: setHoveredIndex,
+    leave: () => setHoveredIndex(null),
+  }
+}
+
+/** Den lodrette stiplede markør, af samme slags som milepælene i
+    fladekortet, jf. ADR-0038. Ingen streg, når intet år er hoveret. */
+export function YearCursor({
+  index,
+  x,
+  top,
+  bottom,
+}: {
+  index: number | null
+  x: ScaleLinear<number, number>
+  top: number
+  bottom: number
+}) {
+  if (index === null) return null
+  const cx = x(index)
+  return <line className="aarsmarkoer" x1={cx} x2={cx} y1={top} y2={bottom} />
+}
+
+export type GlimpseRow = {
+  key: string
+  label: string
+  value: string
+  /** Prøven foran mærkatet — udeladt for en sum-linje, der ikke svarer til
+      én farve i legenden. */
+  color?: string
+}
+
+// Skriften i mærkatet er proportional, og tegnbredden kan derfor kun skønnes
+// — samme greb som bufferspændets `SPAN_LABEL_CHAR_WIDTH` i WealthChart.
+const GLIMPSE_CHAR_WIDTH = 5.4
+const GLIMPSE_PADDING = 6
+const GLIMPSE_ROW_HEIGHT = 14
+const GLIMPSE_SWATCH = 8
+const GLIMPSE_GAP = 6
+
+/** Hovedgrafens dataglimt, jf. ADR-0038: et fast hjørne i øverste højre
+    hjørne af plottet, der viser det hoverede års tal, række for række,
+    afsluttet med en sum-linje. Boksen står i et fast hjørne og ikke klæbet
+    til musen, fordi Formuens ni linjer ellers næsten garanteret ville dække
+    det bånd, de beskriver.
+
+    Komponenten kender ikke til Formuen, Fordelingen eller Overskuddet — den
+    tegner blot de rækker, kalderen har regnet ud for det hoverede år, så de
+    to andre grafer kan genbruge den uændret. */
+export function DataGlimpse({
+  index,
+  top,
+  right,
+  rows,
+  total,
+}: {
+  index: number | null
+  top: number
+  right: number
+  rows: GlimpseRow[]
+  total?: GlimpseRow
+}) {
+  if (index === null) return null
+
+  const allRows = total ? [...rows, total] : rows
+  const rowWidth = (row: GlimpseRow) => {
+    const swatch = row.color ? GLIMPSE_SWATCH + GLIMPSE_GAP : 0
+    return swatch + (row.label.length + row.value.length) * GLIMPSE_CHAR_WIDTH + GLIMPSE_GAP
+  }
+  const width = Math.max(0, ...allRows.map(rowWidth)) + 2 * GLIMPSE_PADDING
+  const height = allRows.length * GLIMPSE_ROW_HEIGHT + 2 * GLIMPSE_PADDING
+  const boxX = right - width
+
+  return (
+    <g className="dataglimt">
+      <rect className="dataglimt-plade" x={boxX} y={top} width={width} height={height} rx={3} />
+      {allRows.map((row, i) => {
+        const baseline = top + GLIMPSE_PADDING + i * GLIMPSE_ROW_HEIGHT + GLIMPSE_ROW_HEIGHT - 4
+        const labelX = boxX + GLIMPSE_PADDING + (row.color ? GLIMPSE_SWATCH + GLIMPSE_GAP : 0)
+        return (
+          <g
+            key={row.key}
+            className={row === total ? 'dataglimt-raekke dataglimt-sum' : 'dataglimt-raekke'}
+          >
+            {row.color && (
+              <rect
+                className="dataglimt-svatch"
+                x={boxX + GLIMPSE_PADDING}
+                y={baseline - GLIMPSE_SWATCH + 2}
+                width={GLIMPSE_SWATCH}
+                height={GLIMPSE_SWATCH}
+                fill={row.color}
+              />
+            )}
+            <text x={labelX} y={baseline}>
+              {row.label}
+            </text>
+            <text x={boxX + width - GLIMPSE_PADDING} y={baseline} textAnchor="end">
+              {row.value}
+            </text>
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
 export type KroneAxis = {
   /** Gitterlinjernes værdier, nedefra og op. Nul er altid iblandt dem, når
       spændet rummer det. */
