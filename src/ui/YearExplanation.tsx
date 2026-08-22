@@ -68,12 +68,17 @@ export function YearExplanation({
   plan,
   onSelectYear,
   onBack,
+  backLabel,
 }: {
   year: YearResult
   years: YearResult[]
   plan: Plan
   onSelectYear: (year: number) => void
   onBack: () => void
+  /** "Tilbage til tabellen" eller "Tilbage til planlæggeren" — hvilken af de
+      to afhænger af, hvor man kom fra, og afgøres af den ejende komponent,
+      der alene kender historikken. */
+  backLabel: string
 }) {
   const display = (amount: number) => inRealKroner(amount, year.year, plan)
   const index = years.findIndex((y) => y.year === year.year)
@@ -104,7 +109,7 @@ export function YearExplanation({
             </button>
           )}
           <button type="button" className="knap primaer" onClick={onBack}>
-            Tilbage til tabellen
+            {backLabel}
           </button>
         </span>
       </div>

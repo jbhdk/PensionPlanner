@@ -65,6 +65,13 @@ export function App({
   const [mainGraph, setMainGraph] = useState<MainGraph>('Wealth')
   const [unit, setUnit] = useState<AmountUnit>('Real')
   const [explainedYear, setExplainedYear] = useState<number | null>(null)
+  // Skærmen forklar-året overtog resultatspalten fra, jf. issue #13 — man
+  // kan komme dertil både fra en graf og fra årstabellen, og "tilbage" skal
+  // føre til det, man faktisk kom fra, ikke til et fast mål. Sat, når man
+  // går ind i forklar-året, og ikke rørt ved bladring mellem år undervejs
+  // (klik på "forrige"/"næste" kalder samme funktion, men ændrer ikke,
+  // hvor man oprindelig kom fra).
+  const [returnView, setReturnView] = useState<Exclude<ResultView, 'YearExplanation'>>('Planner')
   const [importError, setImportError] = useState<string | null>(null)
   // Fejlen er en tilstand og ikke en egenskab ved fladen: brugeren skal kunne
   // komme ud af den uden at genindlæse siden.
@@ -85,6 +92,7 @@ export function App({
   }, [plan, loadError])
 
   function explainYear(year: number) {
+    if (resultView !== 'YearExplanation') setReturnView(resultView)
     setExplainedYear(year)
     setResultView('YearExplanation')
   }
@@ -108,6 +116,7 @@ export function App({
     setSelected(null)
     setExplainedYear(null)
     setResultView('Planner')
+    setReturnView('Planner')
     setMainGraph('Wealth')
     setImportError(null)
     setConfirmingDelete(false)
@@ -286,7 +295,8 @@ export function App({
               years={years}
               plan={plan}
               onSelectYear={explainYear}
-              onBack={() => setResultView('YearTable')}
+              onBack={() => setResultView(returnView)}
+              backLabel={returnView === 'YearTable' ? 'Tilbage til tabellen' : 'Tilbage til planlæggeren'}
             />
           ) : (
             <>

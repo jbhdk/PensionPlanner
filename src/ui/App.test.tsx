@@ -4037,6 +4037,35 @@ describe('fladen', () => {
     expect(screen.getByRole('heading', { name: '2026' })).toBeTruthy()
   })
 
+  it('fører tilbage til planlæggeren, når forklar-året blev åbnet fra en graf, ikke til tabellen', async () => {
+    // Klikket kom fra grafen — tabellen har slet ikke været vist i dette
+    // forløb — og vejen tilbage skal gå til dét sted, ikke til et fast mål.
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />)
+
+    await user.click(document.querySelector('.hovedgraf-plads svg .aarsfelt')!)
+    expect(screen.getByRole('heading', { name: '2026' })).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Tilbage til planlæggeren' }))
+
+    expect(document.querySelector('.graf-lag')).toBeTruthy()
+    expect(document.querySelector('.tabelramme')).toBeNull()
+  })
+
+  it('bevarer vejen tilbage til planlæggeren, selvom man har bladret mellem årene undervejs', async () => {
+    const user = userEvent.setup()
+    render(<App initialPlan={aThreeYearPlan()} />) // 2026–2028
+
+    await user.click(document.querySelector('.hovedgraf-plads svg .aarsfelt')!)
+    expect(screen.getByRole('heading', { name: '2026' })).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: '2027 ›' }))
+    expect(screen.getByRole('heading', { name: '2027' })).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Tilbage til planlæggeren' }))
+    expect(document.querySelector('.graf-lag')).toBeTruthy()
+  })
+
   describe('eksport og import', () => {
     let createdBlobs: Blob[]
 
