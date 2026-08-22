@@ -807,8 +807,9 @@ table.aar th,
 
 /* Legenden er fælles for de tre grafer: formuegrafens bånd er beholdninger,
    fordelingsgrafens er de otte bånd i `Surplus`, overskudsgrafens er blot
-   dets to fortegn — men prøven, ordet og rytmen er den samme. Kun
-   formuegrafens klikbare knap og dens skravering hører den ene til. */
+   dets to fortegn — men prøven, ordet og rytmen er den samme. Ingen af dem
+   er klikbare, jf. ADR-0038; kun formuegrafens skravering hører den ene
+   til. */
 .graf-legend {
   display: flex;
   flex-wrap: wrap;
@@ -831,25 +832,6 @@ table.aar th,
   height: 10px;
   border-radius: 2px;
   flex: none;
-}
-
-.formuegraf-legend button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font: inherit;
-  color: inherit;
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-}
-
-/* Valgt matcher navigatorrækkernes .valgt — samme beholdning, samme
-   fremhævning, uanset om man klikker legenden eller navigatoren. */
-.formuegraf-legend button.valgt {
-  color: var(--ink);
-  font-weight: 600;
 }
 
 /* Bundne beholdninger — pensionsordninger, jf. `isPensionScheme` — bærer
@@ -888,19 +870,21 @@ table.aar th,
   font-family: var(--f-broed);
 }
 
-/* Hele årets gruppe er klikbar, søjlerne selv iberegnet — ikke kun
-   klikfeltet, der ligger under dem. Gælder Overskudsgrafens søjler og
-   Fordelingsgrafens bånd ens; ingen af dem klikker i mini-tilstand, hvor
-   grafen slet ikke tegner klikfeltet, jf. ADR-0033. */
+/* Hele årets gruppe er klikbar, søjlerne/båndene/stablingen selv iberegnet
+   — ikke kun klikfeltet, der ligger under dem. Gælder alle tre grafer ens,
+   jf. ADR-0038; ingen af dem klikker i mini-tilstand, hvor grafen slet ikke
+   tegner klikfeltet, jf. ADR-0033. */
 .overskudsgraf .aarssoejler,
-.fordelingsgraf .aarssoejler {
+.fordelingsgraf .aarssoejler,
+.formuegraf .aarssoejler {
   cursor: pointer;
 }
 
-/* Årets klikfelt dækker hele søjlens/båndets højde og er usynligt: det er
-   ikke en flade i grafen, men det areal, klikket må ramme. */
+/* Årets klikfelt dækker hele kolonnens højde og er usynligt: det er ikke en
+   flade i grafen, men det areal, klikket må ramme. */
 .overskudsgraf .aarsfelt,
-.fordelingsgraf .aarsfelt {
+.fordelingsgraf .aarsfelt,
+.formuegraf .aarsfelt {
   fill: transparent;
 }
 

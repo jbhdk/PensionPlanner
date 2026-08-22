@@ -6,7 +6,6 @@ import { aPlan, aSalary, anExpense } from '../engine/testing/planFixture'
 import { simulateChecked } from '../engine/testing/simulateChecked'
 import { ResultGraphs } from './ResultGraphs'
 import type { MainGraph } from './ResultGraphs'
-import type { Selection } from './selection'
 
 /** En plan med både en indtægt og en udgift, så alle tre grafer har noget
     at vise: Fordelingens bånd og Overskuddets søjle rører sig kun, når der
@@ -21,8 +20,8 @@ function aResultPlan() {
   })
 }
 
-/** Den kontrollerede brug, `App` selv står for: `mainGraph` og `selected`
-    er tilstand hos den ejende komponent, ikke i `ResultGraphs` selv. */
+/** Den kontrollerede brug, `App` selv står for: `mainGraph` er tilstand hos
+    den ejende komponent, ikke i `ResultGraphs` selv. */
 function Harness({
   onSelectYear = () => {},
   initialMainGraph = 'Wealth',
@@ -32,7 +31,6 @@ function Harness({
 }) {
   const [plan] = useState(aResultPlan)
   const years = simulateChecked(plan)
-  const [selected, setSelected] = useState<Selection>(null)
   const [mainGraph, setMainGraph] = useState<MainGraph>(initialMainGraph)
 
   return (
@@ -40,8 +38,6 @@ function Harness({
       years={years}
       plan={plan}
       unit="Real"
-      selected={selected}
-      onSelect={setSelected}
       onSelectYear={onSelectYear}
       mainGraph={mainGraph}
       onMainGraphChange={setMainGraph}
@@ -117,21 +113,26 @@ describe('ResultGraphs', () => {
     ).toBeTruthy()
   })
 
-  it('kalder onSelect fra Formuens legend, kun når den er hovedgraf', async () => {
+  it('kalder onSelectYear fra Formuens søjler, men ikke fra en mini-graf', async () => {
     const user = userEvent.setup()
-    render(<Harness initialMainGraph="Fordeling" />)
+    const onSelectYear = vi.fn()
+    render(<Harness onSelectYear={onSelectYear} initialMainGraph="Fordeling" />)
 
-    // Formuen står som mini og har ingen legend at klikke på.
-    expect(document.querySelector('.mini-graferne .formuegraf-legend')).toBeNull()
-
-    // Klik på selve mini-grafen bytter den frem i stedet.
+    // Formuen står som mini: et klik på grafen bytter den frem i stedet for
+    // at åbne forklar-året.
     const formueKnap = document
       .querySelector('.mini-graferne')!
       .querySelector('[aria-label="Formuegraf"]')!
       .closest('button')!
     await user.click(formueKnap)
+    expect(onSelectYear).not.toHaveBeenCalled()
 
+    // Klikket bragte Formuen frem som hovedgraf, med sin egen legend.
     expect(document.querySelector('.hovedgraf-plads [aria-label="Formuegraf"]')).toBeTruthy()
     expect(document.querySelector('.formuegraf-legend')).toBeTruthy()
+
+    // Nu er Formuen hovedgraf: et klik i et års kolonne åbner forklar-året.
+    await user.click(document.querySelector('.hovedgraf-plads svg .aarsfelt')!)
+    expect(onSelectYear).toHaveBeenCalled()
   })
 })

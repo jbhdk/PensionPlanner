@@ -325,8 +325,6 @@ export function App({
                     years={years}
                     plan={plan}
                     unit={unit}
-                    selected={selected}
-                    onSelect={setSelected}
                     onSelectYear={explainYear}
                     mainGraph={mainGraph}
                     onMainGraphChange={setMainGraph}

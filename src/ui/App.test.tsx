@@ -4012,9 +4012,7 @@ describe('fladen', () => {
     render(<App initialPlan={plan} />)
 
     const graf = screen.getByRole('img', { name: 'Formuegraf' }).closest('.formuegraf')!
-    expect(
-      within(graf as HTMLElement).getByRole('button', { name: 'Kapitalpension' }),
-    ).toBeTruthy()
+    expect(within(graf as HTMLElement).getByText('Kapitalpension')).toBeTruthy()
     expect(graf.querySelector('path[data-holding="kapitalpension"]')).toBeTruthy()
 
     await showYearTable(user)
@@ -4029,47 +4027,14 @@ describe('fladen', () => {
     expect(cells[headers.indexOf('Formue')]!.textContent).toBe('521.175')
   })
 
-  it('åbner inspektøren for beholdningen, når der klikkes på grafens legend', async () => {
+  it('åbner forklar-året ved klik i formuegrafens årskolonne, samme mønster som de to andre grafer', async () => {
     const user = userEvent.setup()
-    const plan = aPlanWithSecondHolding()
-    render(<App initialPlan={plan} />)
+    render(<App initialPlan={aThreeYearPlan()} />)
 
-    // "Anden beholdning" findes både i navigatoren og i grafens legend —
-    // afgrænset til grafen, som er den, testen handler om.
-    const graf = screen.getByRole('img', { name: 'Formuegraf' }).closest('.formuegraf')!
-    await user.click(within(graf as HTMLElement).getByRole('button', { name: 'Anden beholdning' }))
+    // Formuen er allerede hovedgraf som udgangspunkt.
+    await user.click(document.querySelector('.hovedgraf-plads svg .aarsfelt')!)
 
-    const skuffe = screen.getByRole('complementary', { name: 'Inspektør' })
-    expect(within(skuffe).getByText('Anden beholdning')).toBeTruthy()
-
-    // Den valgte beholdnings bånd holder fuld styrke, mens den anden dæmpes.
-    const andenBaand = graf.querySelector('path[data-holding="anden-beholdning"]')!
-    const bufferBaand = graf.querySelector('path[data-holding="free-assets"]')!
-    expect(andenBaand.getAttribute('fill-opacity')).toBe('1')
-    expect(bufferBaand.getAttribute('fill-opacity')).toBe('0.28')
-  })
-
-  it('lader inspektøren falde tilbage på planens felter, når der klikkes på den samme legend en gang til', async () => {
-    const user = userEvent.setup()
-    const plan = aPlanWithSecondHolding()
-    render(<App initialPlan={plan} />)
-
-    const graf = screen.getByRole('img', { name: 'Formuegraf' }).closest('.formuegraf')!
-    const legendKnap = within(graf as HTMLElement).getByRole('button', { name: 'Anden beholdning' })
-    const skuffe = screen.getByRole('complementary', { name: 'Inspektør' })
-
-    await user.click(legendKnap)
-    expect(within(skuffe).getByText('Anden beholdning')).toBeTruthy()
-
-    await user.click(legendKnap)
-    expect(within(skuffe).queryByText('Anden beholdning')).toBeNull()
-    expect(within(skuffe).getByText(plan.name)).toBeTruthy()
-
-    // Med intet valgt skal alle bånd stå med samme styrke igen.
-    const andenBaand = graf.querySelector('path[data-holding="anden-beholdning"]')!
-    const bufferBaand = graf.querySelector('path[data-holding="free-assets"]')!
-    expect(andenBaand.getAttribute('fill-opacity')).toBe('1')
-    expect(bufferBaand.getAttribute('fill-opacity')).toBe('1')
+    expect(screen.getByRole('heading', { name: '2026' })).toBeTruthy()
   })
 
   describe('eksport og import', () => {

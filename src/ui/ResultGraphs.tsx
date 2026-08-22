@@ -1,7 +1,6 @@
 import type { Plan } from '../engine/plan'
 import type { YearResult } from '../engine/yearResult'
 import type { AmountUnit } from './real'
-import type { Selection } from './selection'
 import { SurplusBandsChart } from './SurplusBandsChart'
 import { SurplusChart } from './SurplusChart'
 import { WealthChart } from './WealthChart'
@@ -18,15 +17,12 @@ const GRAPHS: MainGraph[] = ['Wealth', 'Fordeling', 'Overskud']
     anden mini rører sig ikke. De to mini-pladser har derfor ingen egen
     identitet, kun de tre grafer har.
 
-    `mainGraph` er løftet til den ejende komponent, ligesom `selected` er
-    det for `WealthChart` — så et helt kasseret plan nulstiller den samme
-    vej som resten af resultatspaltens tilstand. */
+    `mainGraph` er løftet til den ejende komponent — så et helt kasseret
+    plan nulstiller den samme vej som resten af resultatspaltens tilstand. */
 export function ResultGraphs({
   years,
   plan,
   unit,
-  selected,
-  onSelect,
   onSelectYear,
   mainGraph,
   onMainGraphChange,
@@ -34,8 +30,6 @@ export function ResultGraphs({
   years: YearResult[]
   plan: Plan
   unit: AmountUnit
-  selected: Selection
-  onSelect: (selection: Selection) => void
   onSelectYear: (year: number) => void
   mainGraph: MainGraph
   onMainGraphChange: (graph: MainGraph) => void
@@ -50,8 +44,7 @@ export function ResultGraphs({
             years={years}
             plan={plan}
             unit={unit}
-            selected={selected}
-            onSelect={onSelect}
+            onSelectYear={onSelectYear}
             mode={mode}
           />
         )

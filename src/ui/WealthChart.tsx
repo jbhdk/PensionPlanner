@@ -15,11 +15,6 @@ import {
 import { holdingColor, orderedHoldings } from './palette'
 import type { AmountUnit } from './real'
 import { toDisplayKroner } from './real'
-import type { Selection, Target } from './selection'
-import { sameSelection } from './selection'
-
-// Et fravalgt bånd i legenden træder tilbage, men forsvinder ikke.
-const DESELECTED_OPACITY = 0.28
 
 // Båndene inde i et markeret spænd trækkes mod gråt og mørknes. Farve
 // betyder "her holder planen", gråt at den ikke gør — og markeringen skal
@@ -65,6 +60,12 @@ function bufferSpans(years: YearResult[]): BufferSpan[] {
     stadig, for de er en del af formen; det er kun teksten, der kræver en
     læsbar bredde, mini-grafen ikke har.
 
+    Et klik hvor som helst i et års kolonne åbner forklar-året, samme
+    mønster som Overskuddet og Fordelingen, jf. ADR-0038. Grafen har ikke
+    længere sin egen valgmekanik — legenden navngiver stadig farverne, men
+    reagerer ikke på klik, og grafen lytter ikke til et valg sat andre
+    steder i fladen.
+
     Ingen fast højde eller bredde: grafen måles efter den plads,
     plotcontaineren faktisk har, og tegnes om ved vinduesskift og når
     inspektørskuffen åbner eller lukker, jf. `useMeasuredPlot`.
@@ -74,8 +75,7 @@ export function WealthChart({
   years,
   plan,
   unit,
-  selected = null,
-  onSelect = () => {},
+  onSelectYear = () => {},
   mode = 'main',
   initialWidth = 900,
   initialHeight = 300,
@@ -83,8 +83,7 @@ export function WealthChart({
   years: YearResult[]
   plan: Plan
   unit: AmountUnit
-  selected?: Selection
-  onSelect?: (selection: Selection) => void
+  onSelectYear?: (year: number) => void
   mode?: 'main' | 'mini'
   initialWidth?: number
   initialHeight?: number
@@ -149,15 +148,13 @@ export function WealthChart({
     }
   })
 
-  // Båndene tegnes op til tre gange i et markeret spænd — i deres egne farver,
-  // slukket mod fladen og dæmpet ovenpå — så formen ligger ét sted.
+  // Båndene tegnes op til to gange i et markeret spænd — i deres egne farver
+  // og dæmpet ovenpå — så formen ligger ét sted.
   const bandPaths = holdings.map((holding, si) => ({
     holding,
     color: holdingColor(si),
     path: areaGenerator(bands[si]!) ?? undefined,
     locked: isPensionScheme(holding),
-    opacity:
-      selected?.kind === 'holding' && selected.id !== holding.id ? DESELECTED_OPACITY : 1,
   }))
 
   return (
@@ -209,7 +206,6 @@ export function WealthChart({
                 data-pension-scheme={band.locked}
                 d={band.path}
                 fill={band.color}
-                fillOpacity={band.opacity}
                 stroke="var(--flade)"
                 strokeWidth={2}
               />
@@ -225,54 +221,33 @@ export function WealthChart({
                   data-hatch={band.holding.id}
                   d={band.path}
                   fill="url(#skravering)"
-                  fillOpacity={band.opacity}
                   stroke="none"
                 />
               )}
             </g>
           ))}
-          {/* Dæmpningen inde i spændet. Begge lag gælder: spændet tager
-              mætningen, legendens valg tager dækningen — et fravalgt bånd i et
-              markeret spænd er altså både gråt og trådt tilbage. */}
+          {/* Dæmpningen inde i spændet: båndene tegnes om gennem filteret,
+              der trækker dem mod gråt. */}
           {spans.map((span) => (
-            <g key={`daempning-${span.key}`} clipPath={`url(#${span.clipId})`}>
-              {/* Et dæmpet bånd oven på et mættet blander sig med farven
-                  nedenunder frem for at erstatte den. De fravalgte slukkes
-                  derfor først i fladens egen farve, så kopien lægger sig på
-                  ren bund. */}
-              {bandPaths
-                .filter((band) => band.opacity < 1)
-                .map((band) => (
+            <g
+              key={`daempning-${span.key}`}
+              clipPath={`url(#${span.clipId})`}
+              filter="url(#bufferstate-daempning)"
+            >
+              {bandPaths.map((band) => (
+                <g key={band.holding.id}>
                   <path
-                    key={band.holding.id}
+                    data-buffer-dimmed={band.holding.id}
                     d={band.path}
-                    fill="var(--flade)"
+                    fill={band.color}
                     stroke="var(--flade)"
                     strokeWidth={2}
                   />
-                ))}
-              <g filter="url(#bufferstate-daempning)">
-                {bandPaths.map((band) => (
-                  <g key={band.holding.id}>
-                    <path
-                      data-buffer-dimmed={band.holding.id}
-                      d={band.path}
-                      fill={band.color}
-                      fillOpacity={band.opacity}
-                      stroke="var(--flade)"
-                      strokeWidth={2}
-                    />
-                    {band.locked && (
-                      <path
-                        d={band.path}
-                        fill="url(#skravering)"
-                        fillOpacity={band.opacity}
-                        stroke="none"
-                      />
-                    )}
-                  </g>
-                ))}
-              </g>
+                  {band.locked && (
+                    <path d={band.path} fill="url(#skravering)" stroke="none" />
+                  )}
+                </g>
+              ))}
             </g>
           ))}
           {/* Markeringen selv, foran båndene: to røde kanter og et mærkat.
@@ -316,29 +291,36 @@ export function WealthChart({
           {mode === 'main' && (
             <YearAxisMarks years={years} x={x} left={left} right={right} height={height} />
           )}
+          {/* Klik hvor som helst i et års kolonne åbner forklar-året, samme
+              mønster som Overskuddet og Fordelingen, jf. ADR-0038. Kun i
+              hovedtilstand: mini-grafen bytter sig frem ved klik i stedet,
+              jf. ADR-0033. */}
+          {mode === 'main' &&
+            years.map((year, i) => (
+              <g key={year.year} className="aarssoejler" onClick={() => onSelectYear(year.year)}>
+                <rect
+                  className="aarsfelt"
+                  x={Math.max(left, x(i) - halfStep)}
+                  y={M.top}
+                  width={Math.min(right, x(i) + halfStep) - Math.max(left, x(i) - halfStep)}
+                  height={height - M.top - M.bottom}
+                />
+              </g>
+            ))}
         </svg>
       </div>
       {mode === 'main' && (
         <ul className="graf-legend formuegraf-legend">
-          {holdings.map((holding, si) => {
-            const target: Target = { kind: 'holding', id: holding.id }
-            return (
-              <li key={holding.id}>
-                <button
-                  type="button"
-                  className={sameSelection(selected, target) ? 'valgt' : undefined}
-                  onClick={() => onSelect(sameSelection(selected, target) ? null : target)}
-                >
-                  <span
-                    className="svatch"
-                    data-pension-scheme={isPensionScheme(holding)}
-                    style={{ background: holdingColor(si) }}
-                  />
-                  {holding.name}
-                </button>
-              </li>
-            )
-          })}
+          {holdings.map((holding, si) => (
+            <li key={holding.id}>
+              <span
+                className="svatch"
+                data-pension-scheme={isPensionScheme(holding)}
+                style={{ background: holdingColor(si) }}
+              />
+              {holding.name}
+            </li>
+          ))}
         </ul>
       )}
     </div>

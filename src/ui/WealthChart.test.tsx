@@ -73,6 +73,14 @@ describe('WealthChart', () => {
     expect(screen.getByText('Anden beholdning')).toBeTruthy()
   })
 
+  it('gør ikke længere legenden klikbar — den navngiver kun farverne', () => {
+    const plan = aPlanWithSecondHolding()
+    const years = simulate(plan)
+    render(<WealthChart years={years} plan={plan} unit="Real" />)
+
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+  })
+
   it('viser legend selv med kun én beholdning — grafens egen titel navngiver ikke beholdningen', () => {
     const plan = aPlan()
     const years = simulate(plan)
@@ -171,29 +179,6 @@ describe('WealthChart', () => {
     }
   })
 
-  it('lader begge dæmpninger gælde: spændet tager mætningen, valget dækningen', () => {
-    const plan = aPlanWithBufferFault()
-    const years = simulate(plan)
-    const { container } = render(
-      <WealthChart
-        years={years}
-        plan={plan}
-        unit="Real"
-        selected={{ kind: 'holding', id: 'anden-beholdning' }}
-      />,
-    )
-
-    const valgt = container.querySelector('[data-buffer-dimmed="anden-beholdning"]')!
-    const fravalgt = container.querySelector('[data-buffer-dimmed="free-assets"]')!
-    expect(valgt.getAttribute('fill-opacity')).toBe('1')
-    expect(fravalgt.getAttribute('fill-opacity')).toBe('0.28')
-
-    // Det fravalgte bånd slukkes mod fladen først — ellers ville dets mættede
-    // farve skinne igennem den halvgennemsigtige, dæmpede kopi.
-    const slukning = container.querySelectorAll('svg g[clip-path] > path[fill="var(--flade)"]')
-    expect(slukning.length).toBe(container.querySelectorAll('svg g[clip-path]').length)
-  })
-
   it('navngiver aksernes enheder, så tallene ikke skal gættes', () => {
     const plan = aPlan({ balance: 1_000_000 })
     const years = simulate(plan)
@@ -249,66 +234,30 @@ describe('WealthChart', () => {
     expect(Number(sidsteAar.getAttribute('x'))).toBeLessThanOrEqual(width)
   })
 
-  it('vælger beholdningen og dæmper de andre bånd, når der klikkes på legenden', async () => {
+  it('åbner forklar-året ved klik i et års kolonne, jf. Overskuddet og Fordelingen', async () => {
     const user = userEvent.setup()
     const plan = aPlanWithSecondHolding()
     const years = simulate(plan)
-    const onSelect = vi.fn()
-    const { container, rerender } = render(
-      <WealthChart years={years} plan={plan} unit="Real" onSelect={onSelect} />,
+    const onSelectYear = vi.fn()
+    const { container } = render(
+      <WealthChart years={years} plan={plan} unit="Real" onSelectYear={onSelectYear} />,
     )
 
-    await user.click(screen.getByRole('button', { name: 'Anden beholdning' }))
-    expect(onSelect).toHaveBeenCalledWith({ kind: 'holding', id: 'anden-beholdning' })
-
-    // Klikket alene ændrer ikke grafen — det er den ejende komponent, der
-    // lukker løkken tilbage via `selected`, ligesom navigatorens rækker.
-    rerender(
-      <WealthChart
-        years={years}
-        plan={plan}
-        unit="Real"
-        selected={{ kind: 'holding', id: 'anden-beholdning' }}
-        onSelect={onSelect}
-      />,
-    )
-
-    expect(screen.getByRole('button', { name: 'Anden beholdning' }).className).toContain('valgt')
-
-    const bufferBaand = container.querySelector('path[data-holding="free-assets"]')!
-    const andenBaand = container.querySelector('path[data-holding="anden-beholdning"]')!
-    expect(bufferBaand.getAttribute('fill-opacity')).toBe('0.28')
-    expect(andenBaand.getAttribute('fill-opacity')).toBe('1')
+    // Hele årets klikfelt er klikbart og ikke kun båndene selv — et tyndt
+    // bånd tæt på nul har næsten ingen stabling at ramme.
+    await user.click(container.querySelectorAll('svg .aarsfelt')[0]!)
+    expect(onSelectYear).toHaveBeenCalledWith(years[0]!.year)
   })
 
-  it('fravælger beholdningen, når der klikkes på dens allerede valgte legend, og alle bånd ender ens', async () => {
-    const user = userEvent.setup()
+  it('klikker ikke i mini-tilstand, hvor grafen bytter sig frem i stedet', () => {
     const plan = aPlanWithSecondHolding()
     const years = simulate(plan)
-    const onSelect = vi.fn()
-    const { container, rerender } = render(
-      <WealthChart
-        years={years}
-        plan={plan}
-        unit="Real"
-        selected={{ kind: 'holding', id: 'anden-beholdning' }}
-        onSelect={onSelect}
-      />,
+    const onSelectYear = vi.fn()
+    const { container } = render(
+      <WealthChart years={years} plan={plan} unit="Real" onSelectYear={onSelectYear} mode="mini" />,
     )
 
-    await user.click(screen.getByRole('button', { name: 'Anden beholdning' }))
-    expect(onSelect).toHaveBeenCalledWith(null)
-
-    // Klikket alene ændrer ikke grafen — den ejende komponent lukker løkken
-    // tilbage via `selected`, ligesom ved valget.
-    rerender(
-      <WealthChart years={years} plan={plan} unit="Real" selected={null} onSelect={onSelect} />,
-    )
-
-    const bufferBaand = container.querySelector('path[data-holding="free-assets"]')!
-    const andenBaand = container.querySelector('path[data-holding="anden-beholdning"]')!
-    expect(bufferBaand.getAttribute('fill-opacity')).toBe('1')
-    expect(andenBaand.getAttribute('fill-opacity')).toBe('1')
+    expect(container.querySelectorAll('svg .aarsfelt')).toHaveLength(0)
   })
 
   it('måler sin egen plads og tegner om, når containeren skifter størrelse', () => {
