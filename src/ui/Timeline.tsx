@@ -401,7 +401,7 @@ export function Timeline({
                           onMouseDown={canDragBody(item) ? startDrag(item, 'body') : undefined}
                           onClick={() => onSelect(item.target)}
                         >
-                          {item.name}
+                          <span className="navn">{item.name}</span>
                         </button>
                         {item.marks.map((year) => (
                           <span

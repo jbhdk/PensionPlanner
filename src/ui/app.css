@@ -1628,7 +1628,7 @@ table.aar td .fremskrevet {
   left: 4px;
   top: 0;
   z-index: 1;
-  font-size: 9px;
+  font-size: 10px;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1774,7 +1774,10 @@ table.aar td .fremskrevet {
   overflow: hidden;
   cursor: pointer;
   font: inherit;
-  font-size: 10.5px;
+  /* Samme størrelse som engangspostens `.tl-punkt .navn` — begge er en
+     posts eget navn og skal læses ens, uanset om posten har udstrækning
+     eller ej. */
+  font-size: 10px;
   color: #0c0f13;
   white-space: nowrap;
   padding: 0 5px;
@@ -1794,12 +1797,19 @@ table.aar td .fremskrevet {
 
 /* En "Hvert N. år"-post: boksen mister sin fyldfarve til fordel for en
    farvet kant, så romberne — én pr. gentagelse, tegnet af `.tl-maerke` — er
-   det, der bærer farven inde i den. `.tl-boks`s mørke tekst er sat til at
-   stå på en farvet fyldfarve og forsvinder mod tidslinjens egen mørke bund,
-   når fylden er væk — samme lyse tone som engangspostens `.tl-punkt .navn`,
-   for begge slags tekst sidder nu direkte på bunden. */
-.tl-boks.gentaget {
+   det, der bærer farven inde i den. `.tl-boks`s tekst er ellers centreret
+   med flex til at stå på en farvet fyldfarve i den midterste af boksens
+   18 px — men uden fyldfarve skal navnet i stedet stå præcis som
+   engangspostens `.tl-punkt .navn`: samme lyse tone, samme størrelse og
+   samme lodrette placering, ikke flex-centreret. `position: absolute`
+   tager den ud af det centrerede flex-layout. */
+.tl-boks.gentaget .navn {
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  font-size: 10px;
   color: var(--label);
+  white-space: nowrap;
 }
 
 .tl-maerke {
@@ -1859,6 +1869,10 @@ table.aar td .fremskrevet {
   background: transparent;
   padding: 0;
   cursor: pointer;
+  /* Uden denne arver knappen browserens egen knap-font i stedet for
+     fladens — samme skrift som `.tl-boks`, ellers sidder navnet en tøddel
+     forskudt lodret, selv ved samme font-size. */
+  font: inherit;
 }
 
 .tl-punkt .rombe {
