@@ -74,21 +74,58 @@ export function useYearCursor() {
 }
 
 /** Den lodrette stiplede markør, af samme slags som milepælene i
-    fladekortet, jf. ADR-0038. Ingen streg, når intet år er hoveret. */
+    fladekortet, jf. ADR-0038, med årstallet stående ud for den på x-aksen —
+    en mærkatplade som bufferspændets, så tallet kan læses tydeligt oven på
+    gitterlinjer og søjler lige under aksen. Ingen streg og intet årstal, når
+    intet år er hoveret.
+
+    Pladen centreres om markøren og skubbes kun ind, når den ellers ville
+    rage ud over plottets kant. Den kan lægge sig oven på et af de faste
+    10-års-mærker fra `YearAxisMarks` — pladens egen baggrund dækker det i så
+    fald, uden at `YearAxisMarks` selv behøver vide, hvor musen står. */
 export function YearCursor({
   index,
+  years,
   x,
   top,
   bottom,
+  left,
+  right,
 }: {
   index: number | null
+  years: YearResult[]
   x: ScaleLinear<number, number>
   top: number
   bottom: number
+  left: number
+  right: number
 }) {
   if (index === null) return null
   const cx = x(index)
-  return <line className="aarsmarkoer" x1={cx} x2={cx} y1={top} y2={bottom} />
+  const label = String(years[index]!.year)
+  const plateWidth = label.length * LABEL_CHAR_WIDTH + 8
+  const canvasRight = right + MARGIN.right
+  const plateX = Math.max(left, Math.min(cx - plateWidth / 2, canvasRight - plateWidth))
+  const textY = bottom + 14
+
+  return (
+    <>
+      <line className="aarsmarkoer" x1={cx} x2={cx} y1={top} y2={bottom} />
+      <g className="aarsmarkoer-etiket">
+        <rect
+          className="aarsmarkoer-plade"
+          x={plateX}
+          y={textY - 10}
+          width={plateWidth}
+          height={14}
+          rx={2}
+        />
+        <text x={plateX + 4} y={textY}>
+          {label}
+        </text>
+      </g>
+    </>
+  )
 }
 
 export type GlimpseRow = {

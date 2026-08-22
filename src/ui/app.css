@@ -875,10 +875,28 @@ table.aar th,
    fladekortets milepæle: en tynd, stiplet streg, der ikke må læses som en
    del af selve dataene. */
 .aarsmarkoer {
-  stroke: var(--label);
+  stroke: var(--ink);
   stroke-width: 1;
   stroke-dasharray: 2 3;
   pointer-events: none;
+}
+
+/* Årstallet ud for markøren, jf. ADR-0038 — samme mærkatplade-mønster som
+   bufferspændets (`.bufferstate-spaen .maerkatplade`), fordi tallet skal
+   kunne læses tydeligt oven på gitterlinjer og søjler lige under aksen. */
+.aarsmarkoer-etiket {
+  pointer-events: none;
+}
+
+.aarsmarkoer-plade {
+  fill: var(--laerred);
+  fill-opacity: 0.82;
+}
+
+.aarsmarkoer-etiket text {
+  fill: var(--ink);
+  font-size: 10px;
+  font-family: var(--f-tal);
 }
 
 /* Dataglimtet står i et fast hjørne ud for grafens egen titel og ikke

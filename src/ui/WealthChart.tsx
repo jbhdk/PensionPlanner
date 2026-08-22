@@ -345,7 +345,15 @@ export function WealthChart({
             </g>
           )}
           {mode === 'main' && (
-            <YearCursor index={hoveredIndex} x={x} top={M.top} bottom={height - M.bottom} />
+            <YearCursor
+              index={hoveredIndex}
+              years={years}
+              x={x}
+              top={M.top}
+              bottom={height - M.bottom}
+              left={left}
+              right={right}
+            />
           )}
         </svg>
       </div>
