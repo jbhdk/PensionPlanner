@@ -349,7 +349,7 @@ export const fieldHelp = {
     'Hvad den næste krone ud af en ordning koster husstanden. Ligger indtægten i det spænd, hvor tillægget skæres ned, koster kronen både sin egen skat og det tillæg, den tager væk — og også ægtefællens.',
 
   'YearResult.openingWealth':
-    'Hvad husstanden ejede ved årets begyndelse, alle beholdninger lagt sammen. Det er det samme tal, forrige år sluttede med.',
+    'Hvad husstanden ejede ved årets begyndelse, alle beholdninger lagt sammen. I fremtidskroner er det nøjagtig det beløb, forrige år sluttede med; i nutidskroner kan de to se forskellige ud, fordi hvert år regnes tilbage til sit eget prisniveau.',
 
   'YearResult.conversion':
     'De penge, der forlod formuen, da den livsvarige ordning blev byttet til en fast årlig indtægt. De er hverken brugt eller betalt i skat — de findes bare ikke længere som en opsparing.',
