@@ -29,6 +29,12 @@ const SPAN_BRIGHTNESS = 0.7
 // skønnes. Pladen under det må hellere være et hår for bred end for smal.
 const SPAN_LABEL_CHAR_WIDTH = 5.3
 
+// Skellet mellem to bånd er en synlig lys linje og ikke et fladefarvet
+// mellemrum — ellers forsvinder sømmen mellem to farver, der begge er
+// mørkere end fladen.
+const BAND_STROKE = 'var(--label)'
+const BAND_STROKE_WIDTH = 1
+
 type BandPoint = { y0: number; y1: number }
 
 type BufferSpan = { state: BufferState; fromIndex: number; toIndex: number; fromYear: number }
@@ -220,8 +226,8 @@ export function WealthChart({
                 data-holding={band.holding.id}
                 d={band.path}
                 fill={band.color}
-                stroke="var(--flade)"
-                strokeWidth={2}
+                stroke={BAND_STROKE}
+                strokeWidth={BAND_STROKE_WIDTH}
               />
             </g>
           ))}
@@ -239,8 +245,8 @@ export function WealthChart({
                     data-buffer-dimmed={band.holding.id}
                     d={band.path}
                     fill={band.color}
-                    stroke="var(--flade)"
-                    strokeWidth={2}
+                    stroke={BAND_STROKE}
+                    strokeWidth={BAND_STROKE_WIDTH}
                   />
                 </g>
               ))}
