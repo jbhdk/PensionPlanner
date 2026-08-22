@@ -1779,6 +1779,10 @@ table.aar td .fremskrevet {
   white-space: nowrap;
   padding: 0 5px;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  /* Boksens navn skal kunne læses, selv hvor en rombe fra `.tl-maerke`
+     ligger oven i boksens venstre kant — begge er placeret absolut i
+     samme lag, og romberne tegnes efter boksen i markup'et. */
+  z-index: 1;
 }
 
 .tl-boks.valgt {
@@ -1790,7 +1794,14 @@ table.aar td .fremskrevet {
 
 /* En "Hvert N. år"-post: boksen mister sin fyldfarve til fordel for en
    farvet kant, så romberne — én pr. gentagelse, tegnet af `.tl-maerke` — er
-   det, der bærer farven inde i den. */
+   det, der bærer farven inde i den. `.tl-boks`s mørke tekst er sat til at
+   stå på en farvet fyldfarve og forsvinder mod tidslinjens egen mørke bund,
+   når fylden er væk — samme lyse tone som engangspostens `.tl-punkt .navn`,
+   for begge slags tekst sidder nu direkte på bunden. */
+.tl-boks.gentaget {
+  color: var(--label);
+}
+
 .tl-maerke {
   position: absolute;
   width: 12px;
@@ -1810,6 +1821,9 @@ table.aar td .fremskrevet {
   width: 6px;
   cursor: ew-resize;
   background: rgba(255, 255, 255, 0.28);
+  /* Skal kunne gribes, selv nu hvor boksen har fået løftet sit eget lag
+     for at vise navnet over romberne. */
+  z-index: 2;
 }
 
 .tl-haandtag.fra {
