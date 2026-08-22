@@ -1659,7 +1659,9 @@ table.aar td .fremskrevet {
 }
 
 .tl-boks.valgt {
-  outline: 2px solid var(--ink);
+  /* Samme farve som --ink, men nedtonet — en fuldt lysstærk hvid ring var
+     for skarp mod tidslinjens mørke bund. */
+  outline: 2px solid rgba(230, 235, 241, 0.45);
   outline-offset: 1px;
 }
 
@@ -1743,6 +1745,6 @@ table.aar td .fremskrevet {
 }
 
 .tl-punkt.valgt .rombe {
-  outline: 2px solid var(--ink);
+  outline: 2px solid rgba(230, 235, 241, 0.45);
   outline-offset: 1px;
 }
