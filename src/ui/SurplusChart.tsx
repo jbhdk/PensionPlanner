@@ -2,14 +2,18 @@ import { scaleLinear } from 'd3-scale'
 import type { Plan } from '../engine/plan'
 import type { YearResult } from '../engine/yearResult'
 import {
+  DataGlimpse,
   KroneAxisMarks,
   MARGIN,
   MINI_MARGIN,
   YearAxisMarks,
+  YearCursor,
   ZeroLine,
   kroneAxis,
   useMeasuredPlot,
+  useYearCursor,
 } from './chartFrame'
+import { kroner } from './format'
 import { DEFICIT, SURPLUS, surplusColor } from './palette'
 import type { AmountUnit } from './real'
 import { toDisplayKroner } from './real'
@@ -50,12 +54,28 @@ export function SurplusChart({
   initialHeight?: number
 }) {
   const { plotRef, width, height } = useMeasuredPlot(initialWidth, initialHeight)
+  const { hoveredIndex, enter, leave } = useYearCursor()
   const M = mode === 'main' ? MARGIN : MINI_MARGIN
 
   const n = years.length
   const surpluses = years.map((year) =>
     toDisplayKroner(surplus(year, plan.buffer), year.year, plan, unit),
   )
+
+  // Dataglimtets ene række: årets `Surplus`, mærket efter samme skel som
+  // grafens egen farve på søjlen allerede viser. Ingen sum-linje — der er
+  // kun det ene tal, jf. issue #65.
+  const glimpseRows =
+    hoveredIndex === null
+      ? []
+      : [
+          {
+            key: 'overskud',
+            label: surpluses[hoveredIndex]! < 0 ? 'Underskud' : 'Overskud',
+            value: `${kroner(Math.abs(surpluses[hoveredIndex]!))} kr.`,
+            color: surplusColor(surpluses[hoveredIndex]!),
+          },
+        ]
 
   // Aksen rummer altid nul-linjen, uanset om året skiftede fortegn: en graf,
   // hvis bund var det mindste overskud frem for nul, ville tegne et magert
@@ -91,48 +111,57 @@ export function SurplusChart({
       <div className="graf-plot" ref={plotRef}>
         <svg role="img" aria-label="Overskudsgraf" viewBox={`0 0 ${width} ${height}`}>
           {mode === 'main' && <KroneAxisMarks axis={effectiveAxis} y={y} right={right} />}
-          {years.map((year, i) => {
-            const columnX0 = x(i) - bandWidth / 2
-            const columnX1 = x(i) + bandWidth / 2
-            const x0 = x(i) - barWidth / 2
-            const x1 = x(i) + barWidth / 2
-            // Søjlen hænger i nul-linjen begge veje: et overskud står på
-            // den, et underskud under den. Højden er afstanden, og fortegnet
-            // bærer den ikke — SVG kender ikke negativ højde.
-            const edge = y(surpluses[i]!)
-            return (
-              <g
-                key={year.year}
-                className="aarssoejler"
-                onClick={mode === 'main' ? () => onSelectYear(year.year) : undefined}
-              >
-                {/* Hele årets klikfelt dækker søjlens fulde højde og ikke
-                    kun søjlen selv: et år med et overskud tæt på nul har
-                    næsten ingen søjle at ramme. Kun i hovedtilstand. */}
-                {mode === 'main' && (
+          <g onMouseLeave={mode === 'main' ? leave : undefined}>
+            {years.map((year, i) => {
+              const columnX0 = x(i) - bandWidth / 2
+              const columnX1 = x(i) + bandWidth / 2
+              const x0 = x(i) - barWidth / 2
+              const x1 = x(i) + barWidth / 2
+              // Søjlen hænger i nul-linjen begge veje: et overskud står på
+              // den, et underskud under den. Højden er afstanden, og fortegnet
+              // bærer den ikke — SVG kender ikke negativ højde.
+              const edge = y(surpluses[i]!)
+              return (
+                <g
+                  key={year.year}
+                  className="aarssoejler"
+                  onClick={mode === 'main' ? () => onSelectYear(year.year) : undefined}
+                  onMouseEnter={mode === 'main' ? () => enter(i) : undefined}
+                >
+                  {/* Hele årets klikfelt dækker søjlens fulde højde og ikke
+                      kun søjlen selv: et år med et overskud tæt på nul har
+                      næsten ingen søjle at ramme. Kun i hovedtilstand. */}
+                  {mode === 'main' && (
+                    <rect
+                      className="aarsfelt"
+                      x={columnX0}
+                      y={M.top}
+                      width={columnX1 - columnX0}
+                      height={height - M.top - M.bottom}
+                    />
+                  )}
                   <rect
-                    className="aarsfelt"
-                    x={columnX0}
-                    y={M.top}
-                    width={columnX1 - columnX0}
-                    height={height - M.top - M.bottom}
+                    className="overskudssoejle"
+                    data-year={year.year}
+                    x={x0}
+                    y={Math.min(edge, zero)}
+                    width={x1 - x0}
+                    height={Math.abs(edge - zero)}
+                    fill={surplusColor(surpluses[i]!)}
                   />
-                )}
-                <rect
-                  className="overskudssoejle"
-                  data-year={year.year}
-                  x={x0}
-                  y={Math.min(edge, zero)}
-                  width={x1 - x0}
-                  height={Math.abs(edge - zero)}
-                  fill={surplusColor(surpluses[i]!)}
-                />
-              </g>
-            )
-          })}
+                </g>
+              )
+            })}
+          </g>
           <ZeroLine axis={effectiveAxis} y={y} right={right} />
           {mode === 'main' && (
             <YearAxisMarks years={years} x={x} left={left} right={right} height={height} />
+          )}
+          {mode === 'main' && (
+            <YearCursor index={hoveredIndex} x={x} top={M.top} bottom={height - M.bottom} />
+          )}
+          {mode === 'main' && (
+            <DataGlimpse index={hoveredIndex} top={M.top} right={right} rows={glimpseRows} />
           )}
         </svg>
       </div>

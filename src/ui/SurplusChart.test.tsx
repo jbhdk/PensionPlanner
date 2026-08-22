@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Plan } from '../engine/plan'
@@ -383,6 +383,72 @@ describe('SurplusChart', () => {
     for (const soejle of container.querySelectorAll('svg rect.overskudssoejle')) {
       expect(Number(soejle.getAttribute('height'))).toBe(0)
     }
+  })
+
+  it('tegner en lodret stiplet markør ved det år, musen er over', () => {
+    const plan = aPlanThatTurnsNegative()
+    const years = simulateChecked(plan)
+    const { container } = render(<SurplusChart years={years} plan={plan} unit="Real" />)
+
+    expect(container.querySelector('.aarsmarkoer')).toBeNull()
+
+    const felter = container.querySelectorAll('svg .aarsfelt')
+    fireEvent.mouseEnter(felter[2]!)
+
+    const markoer = container.querySelector('.aarsmarkoer')!
+    expect(markoer).toBeTruthy()
+    expect(markoer.getAttribute('x1')).toBe(markoer.getAttribute('x2'))
+  })
+
+  it('flytter markøren, når musen glider til et andet år, og fjerner den, når musen forlader plottet', () => {
+    const plan = aPlanThatTurnsNegative()
+    const years = simulateChecked(plan)
+    const { container } = render(<SurplusChart years={years} plan={plan} unit="Real" />)
+
+    const felter = container.querySelectorAll('svg .aarsfelt')
+    fireEvent.mouseEnter(felter[0]!)
+    const xVedFoerste = container.querySelector('.aarsmarkoer')!.getAttribute('x1')
+
+    fireEvent.mouseEnter(felter[felter.length - 1]!)
+    const xVedSidste = container.querySelector('.aarsmarkoer')!.getAttribute('x1')
+    expect(xVedSidste).not.toBe(xVedFoerste)
+
+    const plot = container.querySelector('.aarssoejler')!.parentElement!
+    fireEvent.mouseLeave(plot)
+    expect(container.querySelector('.aarsmarkoer')).toBeNull()
+  })
+
+  it('viser et dataglimt med årets Overskud, mærket efter fortegn, uden en sum-linje', () => {
+    const plan = aPlanThatTurnsNegative()
+    const years = simulateChecked(plan)
+    const { container } = render(<SurplusChart years={years} plan={plan} unit="Real" />)
+
+    expect(container.querySelector('.dataglimt')).toBeNull()
+
+    const felter = container.querySelectorAll('svg .aarsfelt')
+    const positivtIndeks = years.findIndex((year) => surplus(year, plan.buffer) > 0)
+    const negativtIndeks = years.findIndex((year) => surplus(year, plan.buffer) < 0)
+    expect(positivtIndeks).toBeGreaterThan(-1)
+    expect(negativtIndeks).toBeGreaterThan(-1)
+
+    fireEvent.mouseEnter(felter[positivtIndeks]!)
+    let raekker = Array.from(container.querySelectorAll('.dataglimt .dataglimt-raekke'))
+    expect(raekker).toHaveLength(1)
+    expect(container.querySelector('.dataglimt-sum')).toBeNull()
+    expect(raekker[0]!.textContent).toContain('Overskud')
+    expect(danskTal(raekker[0]!.textContent!)).toBeCloseTo(
+      surplus(years[positivtIndeks]!, plan.buffer),
+      0,
+    )
+
+    fireEvent.mouseEnter(felter[negativtIndeks]!)
+    raekker = Array.from(container.querySelectorAll('.dataglimt .dataglimt-raekke'))
+    expect(raekker).toHaveLength(1)
+    expect(raekker[0]!.textContent).toContain('Underskud')
+
+    const plot = container.querySelector('.aarssoejler')!.parentElement!
+    fireEvent.mouseLeave(plot)
+    expect(container.querySelector('.dataglimt')).toBeNull()
   })
 
   it('tegner ingen akse og ingen legend i mini-tilstand, jf. ADR-0033 — kun formen', () => {
