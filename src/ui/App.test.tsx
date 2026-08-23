@@ -2876,6 +2876,17 @@ describe('fladen', () => {
             grossReturn: 0,
             annualCostRate: 0,
           },
+          // Den anden ordning, en fordeling kan dele sig til. Tom og uden
+          // afkast, så den ikke rører noget, før en linje peger på den.
+          {
+            id: 'aldersopsparing',
+            name: 'Aldersopsparing',
+            variant: 'OldAgeSavings',
+            payoutAge: 53,
+            balance: 0,
+            grossReturn: 0,
+            annualCostRate: 0,
+          },
         ],
         entries: [aSalary({ amountInRealKroner: 600_000 })],
       })
@@ -2927,6 +2938,7 @@ describe('fladen', () => {
         'Gebyr (nutidskroner)',
         'Forsikringspræmie (nutidskroner)',
         'Ordning',
+        'Andel',
       ])
 
       // Slås sektionen fra, er aftalen væk med sine tal — der er ingen
@@ -2934,6 +2946,66 @@ describe('fladen', () => {
       await user.click(screen.getByRole('button', { name: 'Fjern pension' }))
 
       expect(sectionLabels('Pension')).toEqual([])
+    })
+
+    it('lægger en ordning mere i fordelingen og fjerner den igen', async () => {
+      // Fordelingen er en liste: hver linje peger på sin ordning og bærer sin
+      // andel. Restlinjen bliver stående nederst — præcis én linje er resten,
+      // og det er dét, der får fordelingen til at gå op i hvert eneste år —
+      // og den har hverken en form at vælge eller en knap at fjerne den med.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithSalaryAndPension()} />)
+      await user.click(navigatorButton(/Løn/))
+      await user.click(screen.getByRole('button', { name: '+ Tilføj' }))
+
+      await user.click(screen.getByRole('button', { name: '+ Tilføj ordning' }))
+
+      // Den nye linje står over resten og er en procent, indtil andet
+      // vælges — den ene form, der ikke kan skrive et beløb, aftalen ikke har.
+      expect(sectionLabels('Pension').slice(6)).toEqual([
+        'Ordning',
+        'Andel angives som',
+        'Andel',
+        'Ordning',
+        'Andel',
+      ])
+      expect(
+        screen.getAllByLabelText('Ordning').map((felt) => (felt as HTMLSelectElement).value),
+      ).toEqual(['Aldersopsparing', 'Ratepension'])
+
+      await user.click(screen.getByRole('button', { name: 'Fjern Aldersopsparing' }))
+
+      expect(sectionLabels('Pension').slice(6)).toEqual(['Ordning', 'Andel'])
+    })
+
+    it('skriver en fordelingslinje som en procent af det, der er at fordele', async () => {
+      // Procenten måler indbetalingen efter arbejdsmarkedsbidraget, gebyret
+      // og præmien — de 87.840 og ikke lønnen: 25 % er 21.960, og resten,
+      // 65.880, går til den ordning, restlinjen peger på.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithAgreement()} />)
+      await user.click(navigatorButton(/Løn/))
+      await user.click(screen.getByRole('button', { name: '+ Tilføj ordning' }))
+
+      // Restlinjens andel er et udledt felt uden en kontrol at taste i, så
+      // det ene "Andel" med en etiket er den nye linjes.
+      await user.clear(screen.getByLabelText('Andel'))
+      await user.type(screen.getByLabelText('Andel'), '25')
+
+      await showYearTable(user)
+      await explainYear(user, 2026)
+
+      const indbetalinger = await openBand(user, 'Indbetalinger')
+      const aftale = indbetalinger.querySelector('.aftaletabel') as HTMLElement
+      const celler = [...aftale.querySelectorAll('tbody td')].map((td) => td.textContent)
+      expect(celler.slice(6)).toEqual([
+        'Aldersopsparing',
+        '21.960',
+        '21.960',
+        'Ratepension',
+        '65.880',
+        '65.880',
+      ])
     })
 
     it('lægger arbejdsgiverbidraget til indtægten og aftalens penge i indbetalingerne', async () => {
@@ -2993,10 +3065,86 @@ describe('fladen', () => {
         '-4.800',
         'Ratepension',
         '87.840',
+        '87.840',
       ])
 
       const indtaegter = await openBand(user, 'Indtægtsposter')
       expect(indtaegter.textContent).toContain('Løn · arbejdsgiverbidrag')
+    })
+
+    it('viser fordelingen linje for linje med både det ønskede og det landede', async () => {
+      // Et magert år: 12.000 i bidrag, 960 i AM-bidrag og 2.000 i gebyr og
+      // præmie giver 9.040 at fordele, hvor kronelinjen beder om 12.000. Den
+      // afkortes, og resten bliver nul — og begge dele står, for en tavs
+      // afkortning er den slags fejl, der aldrig viser sig.
+      //
+      // Aftalens eget regnestykke står én gang og gentages ikke på hver
+      // destination: kilen mellem lønnen og ordningerne er den samme, uanset
+      // hvor mange veje pengene siden går.
+      const user = userEvent.setup()
+      const plan = aPlan({
+        startYear: 2026,
+        birthYear: 1973,
+        horizon: 55,
+        balance: 500_000,
+        holdings: [
+          {
+            id: 'ratepension',
+            name: 'Ratepension',
+            variant: 'InstalmentPension',
+            payoutAge: 53,
+            balance: 0,
+            grossReturn: 0,
+            annualCostRate: 0,
+          },
+          {
+            id: 'aldersopsparing',
+            name: 'Aldersopsparing',
+            variant: 'OldAgeSavings',
+            payoutAge: 53,
+            balance: 0,
+            grossReturn: 0,
+            annualCostRate: 0,
+          },
+        ],
+        entries: [
+          aSalary({
+            amountInRealKroner: 100_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.12 },
+              employeeContribution: { amountInRealKroner: 0 },
+              fee: 1_200,
+              insurancePremium: 800,
+              allocation: [
+                { to: 'ratepension', form: 'Amount', amountInRealKroner: 12_000 },
+                { to: 'aldersopsparing', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+      render(<App initialPlan={plan} />)
+
+      await showYearTable(user)
+      await explainYear(user, 2026)
+
+      const indbetalinger = await openBand(user, 'Indbetalinger')
+      const aftale = indbetalinger.querySelector('.aftaletabel') as HTMLElement
+      const celler = [...aftale.querySelectorAll('tbody td')].map((td) => td.textContent)
+      expect(celler).toEqual([
+        'Løn',
+        '12.000',
+        '0',
+        '-960',
+        '-1.200',
+        '-800',
+        'Ratepension',
+        '12.000',
+        '9.040',
+        'Aldersopsparing',
+        '0',
+        '0',
+      ])
     })
 
     it('giver aftalen hverken en kasse på tidslinjen eller en række i navigatoren', async () => {

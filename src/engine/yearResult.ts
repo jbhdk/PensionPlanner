@@ -81,9 +81,21 @@ export type ContributionYear = {
 
 /** Det, én pensionsaftale placerede på én destination i ét simuleringsår, i
     årets egne fremtidskroner. Beholdningens navn står i planen og gentages
-    ikke her, ligesom i `HoldingYear`. */
+    ikke her, ligesom i `HoldingYear`.
+
+    De to beløb er `TransferYear`s to og findes af samme grund: `requested`
+    er, hvad andelen bad om, og `landed` er, hvad der nåede frem. De er ens i
+    næsten alle år, og linjen bærer dem begge for de år, hvor de ikke er — et
+    magert år, hvor det placerede beløb ikke rakte til kronelinjerne, afkorter
+    den sidste af dem, og en tavs afkortning er den slags fejl, der aldrig
+    viser sig.
+
+    Der kommer ingen fejltype ved siden af `CapBreach` og `BufferState` af
+    det. En afkortet fordeling flytter kun pengene, hvor et brudt loft flytter
+    årets skat, og forskellen er synlig i sig selv som de to tal. */
 export type PensionAgreementDestination = {
   holding: HoldingId
+  requested: Nominal
   landed: Nominal
 }
 

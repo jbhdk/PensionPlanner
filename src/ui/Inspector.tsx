@@ -11,6 +11,7 @@ import {
   transferCharge,
 } from '../engine/holdingVariant'
 import type {
+  AllocationLine,
   Anchor,
   Contribution,
   ContributionAmount,
@@ -34,6 +35,7 @@ import { payoutDurationBounds } from '../engine/validatePlan'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
 import type { YearResult } from '../engine/yearResult'
 import {
+  allocationForms,
   anchors,
   danish,
   danishTiming,
@@ -64,9 +66,11 @@ import {
 import type { FieldHelpKey } from './fieldHelp'
 import { kroner, procent } from './format'
 import {
+  addAllocationLine,
   addPayoutSchedule,
   addPayoutStart,
   addPensionAgreement,
+  agreementDestination,
   findContribution,
   findEntry,
   findHolding,
@@ -74,6 +78,7 @@ import {
   findPerson,
   findTransfer,
   formatNumber,
+  removeAllocationLine,
   removeContribution,
   removeEntry,
   removeHolding,
@@ -83,6 +88,7 @@ import {
   removePerson,
   removeTransfer,
   transferEndOptions,
+  withAllocationLine,
   withContribution,
   withDirection,
   withEntry,
@@ -929,9 +935,6 @@ function PensionAgreementSection({
     )
   }
 
-  const line = agreement.allocation[0]
-  const destination = destinations.find((holding) => holding.id === line?.to)
-
   return (
     <Section
       title="Pension"
@@ -996,27 +999,140 @@ function PensionAgreementSection({
           )
         }
       />
-      <SelectField
-        label="Ordning"
-        help="Allocation.to"
-        value={destination?.name ?? ''}
-        options={destinations.map((holding) => holding.name)}
-        onChange={(name) => {
-          const to = destinations.find((holding) => holding.name === name)!
-          onChange(
-            withPensionAgreement(plan, entry.id, (a) => ({
-              ...a,
-              allocation: [{ to: to.id, form: 'Remainder' }],
-            })),
-          )
-        }}
-      />
+      {agreement.allocation.map((line, index) => (
+        <AllocationLineFields
+          key={index}
+          line={line}
+          destinations={destinations}
+          onChange={(next) =>
+            onChange(withAllocationLine(plan, entry.id, index, () => next))
+          }
+          onRemove={
+            line.form === 'Remainder'
+              ? undefined
+              : () => onChange(removeAllocationLine(plan, entry.id, index))
+          }
+        />
+      ))}
+      {/* Knappen står blandt felterne og ikke på overskriftslinjen: den
+          lægger en linje til fordelingen og ikke et afsnit til skuffen, og
+          afsnittets egen knap er den, der fjerner hele aftalen. Den udebliver,
+          når ejeren ingen ordning har tilbage at pege på — samme ordning to
+          gange er en plan, indgangskontrollen afviser. */}
+      {agreementDestination(plan, entry.id) !== undefined && (
+        <button
+          type="button"
+          className="afsnit-tilfoej"
+          title="Del indbetalingen ud på en ordning mere"
+          onClick={() => onChange(addAllocationLine(plan, entry.id))}
+        >
+          + Tilføj ordning
+        </button>
+      )}
       <Hint>
         Begge procenter måles af {entry.name} selv, ligesom de gør på
         lønsedlen. Arbejdsmarkedsbidraget trækkes af de to under ét på vejen
         ind — det opkræves ikke igen, det står allerede i årets skat.
+        Fordelingens procenter måler derimod det, der er tilbage bagefter.
       </Hint>
     </Section>
+  )
+}
+
+/** Én linje i fordelingen: destinationen, formen og det ene tal, formen har.
+
+    Restlinjen har hverken en form at vælge eller en knap at fjerne den med.
+    Præcis én linje er resten, og det er dét, der får fordelingen til at gå
+    op i hvert eneste simuleringsår — kunne den slås fra, ville ét klik skrive
+    en plan, motoren nægter at regne. Dens andel står som et udledt felt, for
+    det er præcis, hvad den er: det, de øvrige linjer ikke tog. */
+function AllocationLineFields({
+  line,
+  destinations,
+  onChange,
+  onRemove,
+}: {
+  line: AllocationLine
+  destinations: Holding[]
+  onChange: (line: AllocationLine) => void
+  onRemove?: () => void
+}) {
+  const destination = destinations.find((holding) => holding.id === line.to)
+
+  return (
+    <div className="fordelingslinje">
+      <SelectField
+        label="Ordning"
+        help="AllocationLine.to"
+        value={destination?.name ?? ''}
+        options={destinations.map((holding) => holding.name)}
+        onChange={(name) => {
+          const to = destinations.find((holding) => holding.name === name)!
+          onChange({ ...line, to: to.id })
+        }}
+      />
+      {line.form === 'Remainder' ? (
+        <LockedField label="Andel" help="AllocationShare.remainder" value="Resten" unit="" />
+      ) : (
+        <>
+          <ToggleField
+            label="Andel angives som"
+            help="AllocationShare.form"
+            value={danish(allocationForms, line.form)}
+            options={Object.keys(allocationForms)}
+            onChange={(choice) =>
+              onChange(
+                allocationForms[choice] === 'Percentage'
+                  ? { to: line.to, form: 'Percentage', percentage: 0 }
+                  : { to: line.to, form: 'Amount', amountInRealKroner: 0 },
+              )
+            }
+          />
+          {line.form === 'Percentage' ? (
+            <NumberField
+              label="Andel"
+              help="AllocationShare.percentage"
+              unit="%"
+              value={asPercent(line.percentage)}
+              onChange={(percent) =>
+                onChange({ to: line.to, form: 'Percentage', percentage: percent / 100 })
+              }
+            />
+          ) : (
+            <NumberField
+              label="Andel (nutidskroner)"
+              help="AllocationShare.amountInRealKroner"
+              unit="kr."
+              value={line.amountInRealKroner}
+              onChange={(amountInRealKroner) =>
+                onChange({ to: line.to, form: 'Amount', amountInRealKroner })
+              }
+            />
+          )}
+        </>
+      )}
+      {/* Knappen står også, når destinationen ikke findes — en linje, hvis
+          beholdning er slettet under den, er netop den, planlæggeren skal
+          kunne komme af med. Den kendes da ikke ved navn, for der er intet
+          navn tilbage at kende den på. */}
+      {onRemove && (
+        <span className="fordelingslinje-handling">
+          <button
+            type="button"
+            className="slet"
+            aria-label={destination ? `Fjern ${destination.name}` : 'Fjern fordelingslinjen'}
+            title={
+              destination
+                ? `Tag ${destination.name} ud af fordelingen`
+                : 'Tag linjen ud af fordelingen'
+            }
+            onClick={onRemove}
+          >
+            <TrashIcon />
+          </button>
+        </span>
+      )}
+    </div>
   )
 }
 

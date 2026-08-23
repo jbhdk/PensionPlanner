@@ -3467,6 +3467,27 @@ describe('pensionsaftalen', () => {
     })
   }
 
+  /** Fixturens buffer plus de tre ordninger, en fordeling kan dele sig
+      mellem. Uden afkast, så fordelingens egne bevægelser står alene, og
+      livrenten uden en udbetalingsstart, så den ikke omsættes undervejs. */
+  function aPlanWithSchemes(options: Parameters<typeof aPlan>[0] = {}): Plan {
+    return aPlan({
+      balance: 1_000_000,
+      ...options,
+      holdings: [
+        aHolding({ ...instalmentPension, balance: 0 }),
+        aHolding({ ...oldAgeSavings, balance: 0 }),
+        aHolding({
+          id: 'livrente',
+          name: 'Livrente',
+          variant: 'LifeAnnuity',
+          payoutAge: 67,
+          balance: 0,
+        }),
+      ],
+    })
+  }
+
   it('lægger arbejdsgiverbidraget til husstandens indtægt og lander resten efter AM-bidrag i ordningen', () => {
     // Lønsedlens tal, jf. ADR-0040: lønnen er 600.000 kr., og arbejdsgiveren
     // lægger de 12 %, der står på sedlen, oven i den. Procenten måler
@@ -3526,7 +3547,7 @@ describe('pensionsaftalen', () => {
         labourMarketContribution: 8_160,
         fee: 0,
         insurancePremium: 0,
-        destinations: [{ holding: 'ratepension', landed: 93_840 }],
+        destinations: [{ holding: 'ratepension', requested: 93_840, landed: 93_840 }],
       },
     ])
   })
@@ -3587,7 +3608,7 @@ describe('pensionsaftalen', () => {
         labourMarketContribution: 8_160,
         fee: 1_200,
         insurancePremium: 4_800,
-        destinations: [{ holding: 'ratepension', landed: 87_840 }],
+        destinations: [{ holding: 'ratepension', requested: 87_840, landed: 87_840 }],
       },
     ])
   })
@@ -3851,7 +3872,7 @@ describe('pensionsaftalen', () => {
         labourMarketContribution: 720,
         fee: 1_200,
         insurancePremium: 7_080,
-        destinations: [{ holding: 'ratepension', landed: 0 }],
+        destinations: [{ holding: 'ratepension', requested: 0, landed: 0 }],
       },
     ])
     expect(year.expenses).toBeCloseTo(8_280, 6)
@@ -4112,6 +4133,269 @@ describe('pensionsaftalen', () => {
     expect(year.entries).toEqual([{ entry: 'salary', amount: 600_000 }])
   })
 
+  describe('fordelingen', () => {
+    /** Det, årets ene aftale placerede på én af sine destinationer. Læst i
+        årsresultatet frem for på beholdningens saldo, som lægger årene
+        sammen — det er det enkelte års fordeling, testene her handler om. */
+    function landedIn(year: YearResult, holdingId: string): number {
+      return year.pensionAgreements[0]!.destinations.find(
+        (destination) => destination.holding === holdingId,
+      )!.landed
+    }
+
+    it('måler en procentlinje af det placerede beløb og ikke af lønnen', () => {
+      // 72.000 + 30.000 = 102.000, AM-bidraget trækkes fra — 93.840 — og det
+      // er dét tal, procenten måler: 25 % er 23.460, og resten er 70.380.
+      // Målte den lønnen, ville aldersopsparingen få 150.000, og fordelingen
+      // kunne ikke gå op i noget år.
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 600_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.12 },
+              employeeContribution: { percentageOfEntry: 0.05 },
+              allocation: [
+                { to: 'aldersopsparing', form: 'Percentage', percentage: 0.25 },
+                { to: 'ratepension', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(holding(year, 'aldersopsparing').closingBalance).toBeCloseTo(23_460, 6)
+      expect(holding(year, 'ratepension').closingBalance).toBeCloseTo(70_380, 6)
+    })
+
+    it('fremskriver en kronelinje med lønpostens egen reguleringssats', () => {
+      // Kronebeløbet er nutidskroner som alt andet i aftalen og løftes med
+      // lønnens sats og ikke med planens inflation: 20.000 kr. er 20.600 kr.,
+      // året efter lønnen er steget 3 %.
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 600_000,
+            regulationRate: 0.03,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.12 },
+              employeeContribution: { percentageOfEntry: 0.05 },
+              allocation: [
+                { to: 'aldersopsparing', form: 'Amount', amountInRealKroner: 20_000 },
+                { to: 'ratepension', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      const [first, second] = simulateChecked(plan)
+
+      expect(landedIn(first!, 'aldersopsparing')).toBeCloseTo(20_000, 6)
+      expect(landedIn(second!, 'aldersopsparing')).toBeCloseTo(20_600, 6)
+
+      // Og resten er det placerede beløb minus den: 618.000 × 0,17 =
+      // 105.060, minus AM-bidraget 8.404,80 er 96.655,20.
+      expect(landedIn(second!, 'ratepension')).toBeCloseTo(96_655.2 - 20_600, 6)
+    })
+
+    it('bærer både hvad andelen bad om og hvad der landede på hver destination', () => {
+      // De to er ens i næsten alle år, og de findes for de år, hvor de ikke
+      // er — ganske som overførslens to. Her rækker beløbet til det hele.
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 600_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.12 },
+              employeeContribution: { percentageOfEntry: 0.05 },
+              allocation: [
+                { to: 'aldersopsparing', form: 'Percentage', percentage: 0.25 },
+                { to: 'ratepension', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(year.pensionAgreements[0]!.destinations).toEqual([
+        { holding: 'aldersopsparing', requested: 23_460, landed: 23_460 },
+        { holding: 'ratepension', requested: 70_380, landed: 70_380 },
+      ])
+    })
+
+    it('tager kronelinjerne i planens rækkefølge og afkorter den sidste, når beløbet ikke rækker', () => {
+      // Et magert år: lønnen er 100.000, arbejdsgiveren lægger 10 % oven i,
+      // og efter AM-bidraget er der 9.200 at fordele. De to kronelinjer beder
+      // om 11.000. Den første får sit fulde beløb, den anden det, der er
+      // tilbage — 3.200 — og resten bliver nul.
+      //
+      // Året afvises ikke ved indgangen: den samme aftale går op på fuld tid
+      // og ikke på deltid, og det kan ikke afgøres uden et årstal, jf.
+      // ADR-0020.
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 100_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.1 },
+              employeeContribution: { amountInRealKroner: 0 },
+              allocation: [
+                { to: 'ratepension', form: 'Amount', amountInRealKroner: 6_000 },
+                { to: 'livrente', form: 'Amount', amountInRealKroner: 5_000 },
+                { to: 'aldersopsparing', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      const year = simulateChecked(plan)[0]!
+      const [first, second, third] = year.pensionAgreements[0]!.destinations
+
+      // Afkortningen får ingen fejltype ved siden af `CapBreach` og
+      // `BufferState`: den flytter kun pengene, hvor et brudt loft flytter
+      // årets skat, og forskellen er synlig i sig selv som linjens to tal.
+      expect(year.capBreach).toBeUndefined()
+
+      expect(first).toEqual({ holding: 'ratepension', requested: 6_000, landed: 6_000 })
+      expect(second!.holding).toBe('livrente')
+      expect(second!.requested).toBeCloseTo(5_000, 6)
+      expect(second!.landed).toBeCloseTo(3_200, 6)
+      expect(third).toEqual({ holding: 'aldersopsparing', requested: 0, landed: 0 })
+    })
+
+    it('deler gebyret og præmien mellem de to grundlag efter det, hver destination fik', () => {
+      // ADR-0043's regnestykke, delt i to: 60.000 i bidrag, 4.800 i
+      // AM-bidrag og 6.000 i gebyr og præmie giver 49.200 at placere, og
+      // halvdelen går hver vej.
+      //
+      // Grundlaget for det ekstra pensionsfradrag følger destinationens
+      // variant, og gebyret og præmien deler sig med pengene: 24.600 fra
+      // ratepensionen plus halvdelen af de 6.000 er 27.600, og satsen er de
+      // 12 %, personen har seksten år før folkepensionsalderen. Fradraget
+      // bliver 3.312 — hvor den samme aftale til en ratepension alene gav
+      // 12 % af 55.200.
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 400_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.15 },
+              employeeContribution: { amountInRealKroner: 0 },
+              fee: 1_200,
+              insurancePremium: 4_800,
+              allocation: [
+                { to: 'ratepension', form: 'Percentage', percentage: 0.5 },
+                { to: 'aldersopsparing', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      const { tax } = simulateChecked(plan)[0]!.persons[0]!
+
+      expect(tax.allowances.extraPensionAllowance).toBeCloseTo(3_312, 6)
+    })
+
+    it('nedsætter den personlige indkomst med ratepensionens andel alene, når fordelingen går begge veje', () => {
+      // Bortseelsesretten følger destinationens variant og deler sig derfor
+      // med fordelingen: 400.000 + 60.000 er 460.000, AM-bidraget 36.800, og
+      // uden for indkomsten står ratepensionens 24.600 plus gebyret og
+      // præmien, som har den uanset destination. 423.200 − 30.600 = 392.600.
+      // Aldersopsparingens egne 24.600 nedsætter ingenting.
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 400_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.15 },
+              employeeContribution: { amountInRealKroner: 0 },
+              fee: 1_200,
+              insurancePremium: 4_800,
+              allocation: [
+                { to: 'ratepension', form: 'Percentage', percentage: 0.5 },
+                { to: 'aldersopsparing', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      const { tax } = simulateChecked(plan)[0]!.persons[0]!
+
+      expect(tax.personalIncome).toBeCloseTo(392_600, 6)
+    })
+
+    it('måler hver slags loft for sig hos personen', () => {
+      // Loftet er personens og gælder personens ordninger af den slags under
+      // ét. En fordeling til to slags giver derfor to linjer og ikke én sum:
+      // ratepensionens 24.600 måles mod 68.700, aldersopsparingens mod de
+      // 9.900, der gælder, indtil der er syv år til folkepensionsalderen.
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 400_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.15 },
+              employeeContribution: { amountInRealKroner: 0 },
+              fee: 1_200,
+              insurancePremium: 4_800,
+              allocation: [
+                { to: 'ratepension', form: 'Percentage', percentage: 0.5 },
+                { to: 'aldersopsparing', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      const { caps } = simulateChecked(plan)[0]!.persons[0]!
+
+      expect(caps.map(({ variant, cap }) => ({ variant, cap }))).toEqual([
+        { variant: 'InstalmentPension', cap: 68_700 },
+        { variant: 'OldAgeSavings', cap: 9_900 },
+      ])
+      expect(caps.map((line) => (line.form === 'PerYear' ? line.paid : 0))).toEqual([
+        expect.closeTo(24_600, 6),
+        expect.closeTo(24_600, 6),
+      ])
+    })
+
+    it('lader en procentlinje over ordningens loft lande fuldt ud og markerer året som loftbrud', () => {
+      // Loftet ændrer skatten og ikke pengene: 80 % af de 93.840 er 75.072,
+      // og hele beløbet lander på ratepensionen, selv om loftet er 68.700.
+      // Det overskydende bliver liggende og mister alene sin fradragsret —
+      // planlæggeren skal kunne indbetale over loftet med vilje, fordi en
+      // firmaordning er, som den er.
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 600_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.12 },
+              employeeContribution: { percentageOfEntry: 0.05 },
+              allocation: [
+                { to: 'ratepension', form: 'Percentage', percentage: 0.8 },
+                { to: 'livrente', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      const year = simulateChecked(plan)[0]!
+
+      expect(holding(year, 'ratepension').closingBalance).toBeCloseTo(75_072, 6)
+      expect(year.capBreach).toBe('LostDeductibility')
+    })
+  })
+
   describe('indgangskontrollen', () => {
     it('afviser en fordeling til en beholdning, ingen arbejdsgiver kan administrere', () => {
       // Samme regel som for det lønkildede bidrag, jf. ADR-0016: der findes
@@ -4272,6 +4556,103 @@ describe('pensionsaftalen', () => {
       })
 
       expect(validatePlan(plan)).toMatch(/resten/i)
+    })
+
+    it('afviser en fordeling, hvis procentlinjer summer til mere end det hele', () => {
+      // 60 % + 60 % kan ikke gå op i noget år, uanset hvad lønnen er, og
+      // fordelingen findes derfor ikke i virkeligheden. En strukturel
+      // umulighed som `UniquePerPerson`, jf. ADR-0020.
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 600_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.12 },
+              employeeContribution: { amountInRealKroner: 0 },
+              allocation: [
+                { to: 'ratepension', form: 'Percentage', percentage: 0.6 },
+                { to: 'aldersopsparing', form: 'Percentage', percentage: 0.6 },
+                { to: 'livrente', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      expect(validatePlan(plan)).toMatch(/120 %/)
+    })
+
+    it('afviser en fordeling, der har samme destination på to linjer', () => {
+      // To linjer til den samme ordning er ét beløb skrevet to steder, og
+      // ingen af dem kan læses uden den anden. Svaret er det samme i alle år
+      // og hører derfor ved indgangen.
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 600_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.12 },
+              employeeContribution: { amountInRealKroner: 0 },
+              allocation: [
+                { to: 'ratepension', form: 'Percentage', percentage: 0.5 },
+                { to: 'ratepension', form: 'Amount', amountInRealKroner: 10_000 },
+                { to: 'livrente', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      expect(validatePlan(plan)).toMatch(/Ratepension.*to gange|to gange.*Ratepension/is)
+    })
+
+    it('lader procenter, der summer til præcis det hele, slippe igennem', () => {
+      // Grænsen går ved mere end det hele. En fordeling, der lægger alt ud i
+      // procenter, findes udmærket — restlinjen bliver da nul hvert år, og
+      // det er stadig formen og ikke et regnestykke, der får den til at gå op.
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 600_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.12 },
+              employeeContribution: { amountInRealKroner: 0 },
+              allocation: [
+                { to: 'ratepension', form: 'Percentage', percentage: 0.6 },
+                { to: 'aldersopsparing', form: 'Percentage', percentage: 0.4 },
+                { to: 'livrente', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      expect(validatePlan(plan)).toBeUndefined()
+    })
+
+    it('afviser ikke en aftale, hvis kronelinjer overstiger det placerede beløb i ét bestemt år', () => {
+      // Lønnen er 100.000, og der er 9.200 at fordele, hvor de to
+      // kronelinjer beder om 11.000. Den samme aftale går op på fuld tid og
+      // ikke på deltid, og indgangen kan derfor ikke svare på det — det er et
+      // årsresultat og står på aftalens egne to tal, jf. ADR-0020.
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 100_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.1 },
+              employeeContribution: { amountInRealKroner: 0 },
+              allocation: [
+                { to: 'ratepension', form: 'Amount', amountInRealKroner: 6_000 },
+                { to: 'livrente', form: 'Amount', amountInRealKroner: 5_000 },
+                { to: 'aldersopsparing', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      expect(validatePlan(plan)).toBeUndefined()
     })
 
     it('afviser en fordeling til en beholdning, der ikke findes', () => {

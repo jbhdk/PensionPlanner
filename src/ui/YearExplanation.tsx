@@ -511,6 +511,12 @@ function ContributionsTable({
     indbetalingstabellen ovenfor, ville dens to beløb påstå, at forskellen
     var AM-bidraget alene — og linjen kunne ikke efterregnes af sig selv.
 
+    Fordelingen står linje for linje med begge sine tal: hvad andelen bad om,
+    og hvad der landede. De to er ens i næsten alle år, og de findes for de
+    år, hvor de ikke er — rakte årets indbetaling ikke til fordelingens
+    kronelinjer, blev den sidste af dem afkortet, og en tavs afkortning er den
+    slags fejl, der aldrig viser sig.
+
     Gebyret og præmien står her og ingen andre steder. De er årets udgifter
     og ingen `Entry`, jf. ADR-0042, og årstabellens Udgifter-kolonne rummer
     dem derfor uden at have en post at pege på — det er denne tabel, dens
@@ -548,20 +554,43 @@ function PensionAgreementsTable({
           <th title={fieldHelp['PensionAgreementYear.fee']}>Gebyr</th>
           <th title={fieldHelp['PensionAgreementYear.insurancePremium']}>Forsikring</th>
           <th title={fieldHelp['PensionAgreementDestination.holding']}>Destination</th>
+          <th title={fieldHelp['PensionAgreementDestination.requested']}>Bad om</th>
           <th title={fieldHelp['PensionAgreementDestination.landed']}>Landede</th>
         </tr>
       </thead>
       <tbody>
         {year.pensionAgreements.flatMap((agreement) =>
-          agreement.destinations.map((destination) => (
+          agreement.destinations.map((destination, index) => (
             <tr key={`${agreement.entry}-${destination.holding}`}>
-              <td>{entryName(agreement.entry)}</td>
-              <td>{kroner(display(agreement.employerContribution))}</td>
-              <td>{kroner(display(agreement.employeeContribution))}</td>
-              <td>{kroner(display(-agreement.labourMarketContribution))}</td>
-              <td>{kroner(display(-agreement.fee))}</td>
-              <td>{kroner(display(-agreement.insurancePremium))}</td>
+              {/* Aftalens eget regnestykke står én gang og spænder over sine
+                  destinationer. Gentaget på hver linje ville de samme fem tal
+                  se ud som fem nye, hver gang fordelingen fik en vej mere —
+                  kilen mellem lønnen og ordningerne er den samme, uanset hvor
+                  mange veje pengene siden går. */}
+              {index === 0 && (
+                <>
+                  <td rowSpan={agreement.destinations.length}>
+                    {entryName(agreement.entry)}
+                  </td>
+                  <td rowSpan={agreement.destinations.length}>
+                    {kroner(display(agreement.employerContribution))}
+                  </td>
+                  <td rowSpan={agreement.destinations.length}>
+                    {kroner(display(agreement.employeeContribution))}
+                  </td>
+                  <td rowSpan={agreement.destinations.length}>
+                    {kroner(display(-agreement.labourMarketContribution))}
+                  </td>
+                  <td rowSpan={agreement.destinations.length}>
+                    {kroner(display(-agreement.fee))}
+                  </td>
+                  <td rowSpan={agreement.destinations.length}>
+                    {kroner(display(-agreement.insurancePremium))}
+                  </td>
+                </>
+              )}
               <td>{holdingName(destination.holding)}</td>
+              <td>{kroner(display(destination.requested))}</td>
               <td>{kroner(display(destination.landed))}</td>
             </tr>
           )),

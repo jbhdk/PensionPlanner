@@ -108,8 +108,12 @@ type ActiveContribution = {
 
 /** Ét beløb, en pensionsaftale placerede på én destination i ét
     simuleringsår. Kilden er altid bufferen: lønnen landede der først, brutto
-    — arbejdsgiverbidraget lagt til af aftalen selv, jf. ADR-0040. */
-type ActivePlacement = { to: HoldingId; landed: Nominal }
+    — arbejdsgiverbidraget lagt til af aftalen selv, jf. ADR-0040.
+
+    `requested` er, hvad andelen bad om, og `landed` er, hvad der nåede frem.
+    De to skilles ad i et magert år, hvor det placerede beløb ikke rakte til
+    kronelinjerne — og det er `landed`, der bevæger penge og møder lofterne. */
+type ActivePlacement = { to: HoldingId; requested: Nominal; landed: Nominal }
 
 /** Én pensionsaftales regnestykke i ét simuleringsår — de to bidrag,
     AM-bidraget og det, der landede hvor.
@@ -511,7 +515,11 @@ function simulateYear(
         labourMarketContribution,
         fee,
         insurancePremium,
-        destinations: placements.map(({ to, landed }) => ({ holding: to, landed })),
+        destinations: placements.map(({ to, requested, landed }) => ({
+          holding: to,
+          requested,
+          landed,
+        })),
       }),
     ),
     transfers: transfers.map(({ transfer, from, requested, amount, landed }) =>
@@ -1415,7 +1423,8 @@ function payoutOf(payouts: ActivePayout[], person: Person): Nominal {
     pensionsfradrag på egen hånd. Går aftalens penge ind i en aldersopsparing,
     er hverken de eller resten omfattet af § 18 eller § 19, og grundlaget er
     nul, hvor indkomsten alligevel er nedsat. Ét tal kunne ikke sige begge
-    dele.
+    dele. Deler fordelingen sig mellem de to slags, deler de to beløb sig med
+    den — pro rata efter det, hver destination fik, jf. ADR-0044.
 
     Loftets eget bidrag er det samme i begge: en indbetaling, der har
     fradragsret, er også den, § 9 L måler. Gebyret og præmien måles derimod
@@ -1435,7 +1444,7 @@ function deductibleOf(
         return {
           withDeductibility: sums.withDeductibility + costs,
           extraPensionAllowanceBase:
-            sums.extraPensionAllowanceBase + (placesWithDeductibility(agreement, plan) ? costs : 0),
+            sums.extraPensionAllowanceBase + costs * deductibleShareOf(agreement, plan),
         }
       },
       {
@@ -1445,16 +1454,29 @@ function deductibleOf(
     )
 }
 
-/** Om aftalens penge går ind i en ordning, hvis indbetaling er omfattet af
-    PBL § 18 eller § 19.
+/** Den del af aftalens penge, der gik ind i en ordning, hvis indbetaling er
+    omfattet af PBL § 18 eller § 19 — målt på det, destinationerne faktisk
+    fik.
 
-    Fordelingen har præcis én linje: `Remainder` er den eneste form,
-    `AllocationShare` kender, og `validatePlan` kræver præcis én af dem.
-    Svaret er dermed destinationens eget. Får fordelingen en dag flere linjer
-    med hver sin variant, skal delingen af gebyret og præmien afgøres frem
-    for at falde ud af den `every`, der står her. */
-function placesWithDeductibility(agreement: ActiveAgreement, plan: Plan): boolean {
-  return agreement.placements.every(({ to }) => hasDeductibility(holdingById(plan, to)))
+    Det er den andel, gebyret og præmien deler sig efter, jf. ADR-0044. De to
+    trækkes af den samlede indbetaling, før fordelingen møder den, og de har
+    derfor ingen destination af sig selv at følge. Pro rata frem for et af de
+    to yderpunkter: en enkelt krone den anden vej ville ellers afgøre hele
+    grundlaget for dem.
+
+    Nul, når intet blev placeret. Et magert år, hvor gebyret og præmien tog
+    det hele, har intet fordelingsforhold at måle med — og der er da heller
+    ingen indbetaling, § 9 L kan måle på. Fradragsretten selv rører det ikke:
+    den følger de to uanset destination, jf. ADR-0043. */
+function deductibleShareOf(agreement: ActiveAgreement, plan: Plan): number {
+  const placed = agreement.placements.reduce((sum, { landed }) => sum + landed, 0)
+  if (placed === 0) return 0
+
+  return (
+    agreement.placements
+      .filter(({ to }) => hasDeductibility(holdingById(plan, to)))
+      .reduce((sum, { landed }) => sum + landed, 0) / placed
+  )
 }
 
 /** Det, årets pensionsaftaler trak af indbetalingerne uden at det blev til
@@ -1611,6 +1633,7 @@ function pensionAgreementsInYear(
         placements: allocate(
           agreement.allocation,
           afterLabourMarketContribution - fee - insurancePremium,
+          projection,
         ),
       },
     ]
@@ -1619,12 +1642,50 @@ function pensionAgreementsInYear(
 
 /** Det placerede beløb delt ud på fordelingens destinationer.
 
-    Præcis én linje er `Remainder` og får det, de øvrige ikke tog — og der er
-    endnu ingen øvrige former, så resten er hele beløbet. Det er formen og
+    Procenterne måler det placerede beløb — indbetalingen efter AM-bidrag,
+    gebyr og præmie — og aldrig lønnen. Kronelinjerne fremskrives med
+    lønpostens egen reguleringssats som alt andet i aftalen. Og præcis én
+    linje er `Remainder` og får det, de øvrige ikke tog: det er formen og
     ikke et regnestykke, der får fordelingen til at gå op i hvert eneste
     simuleringsår. */
-function allocate(allocation: Allocation, placed: Nominal): ActivePlacement[] {
-  return allocation.map((line) => ({ to: line.to, landed: placed }))
+function allocate(
+  allocation: Allocation,
+  placed: Nominal,
+  projection: number,
+): ActivePlacement[] {
+  // Hver linje tager af det, der er tilbage, og aldrig mere end det. Det er
+  // dén skranke, der får de landede beløb til at summe til præcis det
+  // placerede — ikke en efterregning, men formen selv, jf. `Allocation`.
+  let left = placed
+  const claimed = new Map<number, ActivePlacement>()
+  const claim = (index: number, to: HoldingId, requested: Nominal) => {
+    const landed = Math.min(requested, left)
+    left -= landed
+    claimed.set(index, { to, requested, landed })
+  }
+
+  // Procenterne først. De måler det placerede beløb, og deres sum er højst
+  // det hele — mere afvises ved indgangen, jf. ADR-0020 — så skranken rører
+  // dem i praksis aldrig, og en procentlinje får det samme, uanset hvor i
+  // fordelingen den står.
+  allocation.forEach((line, index) => {
+    if (line.form === 'Percentage') claim(index, line.to, placed * line.percentage)
+  })
+
+  // Kronelinjerne dernæst, i planens rækkefølge. Rækker det, der er tilbage,
+  // ikke til dem alle, får den sidste, der når frem, det der er — samme
+  // skranke som to indbetalinger, der deler ét råderum under et loft, jf.
+  // ADR-0019, og af samme grund: en fordeling pro rata sker ikke nogen
+  // steder.
+  allocation.forEach((line, index) => {
+    if (line.form === 'Amount') claim(index, line.to, line.amountInRealKroner * projection)
+  })
+
+  // Restlinjen til sidst, uanset hvor den står: den beder pr. definition om
+  // det, de øvrige ikke tog, og et magert år efterlader den på nul.
+  return allocation.map(
+    (line, index) => claimed.get(index) ?? { to: line.to, requested: left, landed: left },
+  )
 }
 
 /** Årets indbetalinger med deres to beløb, deres forfald og den beholdning,

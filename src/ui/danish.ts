@@ -107,3 +107,11 @@ export const contributionAmounts: Record<string, 'percentageOfEntry' | 'amountIn
   'Procent af posten': 'percentageOfEntry',
   'Fast beløb': 'amountInRealKroner',
 }
+
+/** De to former, en fordelingslinje kan vælges imellem. Resten er ikke
+    iblandt dem: præcis én linje er den, og den vælges ikke til og fra — den
+    er fordelingens form og ikke en tredje mulighed på lige fod med de to. */
+export const allocationForms: Record<string, 'Percentage' | 'Amount'> = {
+  Procent: 'Percentage',
+  Kronebeløb: 'Amount',
+}

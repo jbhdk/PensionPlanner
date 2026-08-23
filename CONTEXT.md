@@ -260,7 +260,7 @@ Hvordan en pensionsaftales placerede beløb deles ud på destinationer. Hver lin
 _Avoid_: Fordelingsnøgle, split, allokering, aktivallokering
 
 **Fordelingslinje** · `AllocationLine`:
-Én linje i en fordeling: en destination og den `AllocationShare`, linjen bærer. Ordet findes, fordi reglerne står om linjen og ikke om fordelingen — præcis én af dem er resten, hver af dem peger på en beholdning, der er `EmployerAdministered` og tilhører lønpostens ejer, og hver af dem bærer sine to tal i `PensionAgreementYear`. Andelen er en diskrimineret union på sin form og aldrig et felt ved siden af et tal: en form uden et tal kan ikke få et, og en med kan ikke undvære det.
+Én linje i en fordeling: en destination og den `AllocationShare`, linjen bærer. Ordet findes, fordi reglerne står om linjen og ikke om fordelingen — præcis én af dem er resten, hver af dem peger på en beholdning, der er `EmployerAdministered` og tilhører lønpostens ejer, ingen to af dem peger på den samme, og hver af dem bærer sine to tal i `PensionAgreementYear`. Andelen er en diskrimineret union på sin form og aldrig et felt ved siden af et tal: en form uden et tal kan ikke få et, og en med kan ikke undvære det.
 _Avoid_: Fordelingspost, destination brugt om linjen — destinationen er den beholdning, linjen peger på, og ikke linjen selv
 
 **Fordelingsandel** · `AllocationShare`:

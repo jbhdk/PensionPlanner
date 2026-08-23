@@ -246,8 +246,20 @@ export const fieldHelp = {
   'PensionAgreement.insurancePremium':
     'Det, der hvert år går til en forsikring — typisk ved tab af erhvervsevne eller ved død — målt i nutidskroner. Pengene forlader husstanden og bliver aldrig til opsparing, men de nedsætter skatten som resten af indbetalingen.',
 
-  'Allocation.to':
-    'Den ordning, hele indbetalingen lander i. Kun ordninger, en arbejdsgiver kan administrere og som står i lønmodtagerens eget navn, kan vælges — valget afgør, om pengene nedsætter skatten, og hvilket loft de måles mod.',
+  'AllocationLine.to':
+    'Den ordning, denne del af indbetalingen lander i. Kun ordninger, en arbejdsgiver kan administrere og som står i lønmodtagerens eget navn, kan vælges — valget afgør, om pengene nedsætter skatten, og hvilket loft de måles mod. Hver ordning står på én linje.',
+
+  'AllocationShare.form':
+    'Om ordningen får en andel af indbetalingen eller et aftalt kronebeløb. En andel følger indbetalingen op og ned af sig selv; et kronebeløb bliver det samme, uanset hvad lønnen gør, indtil det rettes.',
+
+  'AllocationShare.percentage':
+    'Hvor stor en del af indbetalingen der går til denne ordning. Den måler det, der er tilbage efter arbejdsmarkedsbidraget, gebyret og forsikringen — altså de penge, der rent faktisk skal fordeles, og ikke lønnen.',
+
+  'AllocationShare.amountInRealKroner':
+    'Hvor meget der går til denne ordning, målt i nutidskroner. Beløbet følger lønnens egen stigning gennem forløbet, og rækker indbetalingen ikke til alle de aftalte beløb i et år, tages de oppefra og ned, indtil pengene er brugt.',
+
+  'AllocationShare.remainder':
+    'Denne ordning får det, de øvrige linjer ikke tog. Præcis én ordning gør det, og det er dét, der får fordelingen til at gå op krone for krone i hvert eneste år — også de år, hvor lønnen er en anden end forventet.',
 
   // ---------- Overførslen ----------
 
@@ -436,8 +448,11 @@ export const fieldHelp = {
   'PensionAgreementDestination.holding':
     'Den ordning, pengene landede i. Valget afgør resten: om indbetalingen nedsætter skatten, hvilket loft den måles mod, og hvordan pengene beskattes, mens de står der.',
 
+  'PensionAgreementDestination.requested':
+    'Det, denne ordnings andel af fordelingen kom til i året — en procent af det, der var at fordele, et aftalt kronebeløb, eller det de øvrige lod stå. Er tallet højere end det, der landede, rakte årets indbetaling ikke til alle de aftalte kronebeløb.',
+
   'PensionAgreementDestination.landed':
-    'Det, der nåede frem til ordningen: de to bidrag lagt sammen, og arbejdsmarkedsbidraget, gebyret og forsikringen trukket fra. Det er dét beløb, loftet måles mod — de tre fradrag måles ikke mod noget loft, for de er trukket, før pengene nåede ordningen.',
+    'Det, der nåede frem til ordningen: de to bidrag lagt sammen, og arbejdsmarkedsbidraget, gebyret og forsikringen trukket fra, delt ud efter fordelingen. Det er dét beløb, loftet måles mod — de tre fradrag måles ikke mod noget loft, for de er trukket, før pengene nåede ordningen.',
 
   'CapYear.variant':
     'Hvilken slags ordning loftet gælder, og hvem af husstanden det er gjort op for. Loftet er personens og deles af alle vedkommendes ordninger af den slags — to ratepensioner har ét loft mellem sig.',

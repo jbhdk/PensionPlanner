@@ -67,14 +67,17 @@ export function validatePlan(plan: Plan): string | undefined {
   )
 }
 
-/** Pensionsaftalens strukturelle regler. Alle tre er de samme i alle
+/** Pensionsaftalens strukturelle regler. De er alle de samme i alle
     simuleringsår og hører derfor ved indgangen og ikke i årsresultatet, jf.
     ADR-0020: en fordeling, der ikke går op, findes ikke i virkeligheden i
     noget år.
 
     Grænsen mod `PensionAgreementYear`s to tal går netop dér. Et magert år,
     hvor et kronebeløb ikke kan være der, er ikke en indgangsfejl — det er et
-    årsresultat, fordi samme plan kan gå op i ét år og ikke i det næste.
+    årsresultat, fordi samme plan kan gå op i ét år og ikke i det næste. Det
+    er også dét, der skiller de to slags fordelingsfejl fra hinanden: 60 % +
+    60 % går ikke op i noget år, uanset lønnen, hvor et kronebeløb, der ikke
+    kan være der, går op på fuld tid og ikke på deltid.
 
     Destinationsreglen er den lønkildede indbetalings, stillet gennem samme
     opslag: pengene kommer fra en løn begge steder, og en ordning, ingen
@@ -122,6 +125,7 @@ function pensionAgreements(plan: Plan): string | undefined {
       )
     }
 
+    const seen = new Set<HoldingId>()
     for (const line of agreement.allocation) {
       const to = byId.get(line.to)
       if (!to) {
@@ -144,9 +148,56 @@ function pensionAgreements(plan: Plan): string | undefined {
           `arbejdsgiver administrerer, står i lønmodtagerens eget navn.`
         )
       }
+
+      // Samme ordning to gange er ét beløb skrevet to steder, og ingen af de
+      // to linjer kan læses uden den anden. Den står sidst blandt linjens
+      // regler: er ordningen slet ikke en, aftalen kan pege på, er det dén
+      // fejl, planlæggeren skal se — og ikke at den står der to gange.
+      if (seen.has(line.to)) {
+        return (
+          `${subject} fordeler to gange til beholdningen ${to.name}. Hver ordning ` +
+          `står på én linje i fordelingen.`
+        )
+      }
+      seen.add(line.to)
+    }
+
+    // Procenterne måler det placerede beløb, og de kan derfor ikke tilsammen
+    // bede om mere end det hele: 60 % + 60 % går ikke op i noget år, uanset
+    // hvad lønnen er. Spørgsmålet har intet årstal og hører derfor ved
+    // indgangen, hvor et kronebeløb, der ikke kan være der, er et
+    // årsresultat.
+    //
+    // Tolerancen findes, fordi procenterne er andele og ikke decimaltal:
+    // tre linjer på en tredjedel hver kan summe til en anelse over 1 i binær
+    // aritmetik, og en fordeling, der går op på papiret, skal ikke afvises af
+    // det sidste ciffer.
+    const percentages = agreement.allocation.reduce(
+      (sum, line) => sum + (line.form === 'Percentage' ? line.percentage : 0),
+      0,
+    )
+    if (percentages > 1 + percentageTolerance) {
+      return (
+        `${subject} fordeler ${danishPercent(percentages)} af indbetalingen. ` +
+        `Procenterne måler det, der bliver betalt ind, og de kan ikke tilsammen ` +
+        `bede om mere end det hele.`
+      )
     }
   }
   return undefined
+}
+
+/** Den plads, en sum af andele har til at ligge over det hele uden at være en
+    anden fordeling. Den er sat, så den kun rummer regnefejl og ingen mening:
+    en tusindedel af en procent er tusind gange større. */
+const percentageTolerance = 1e-9
+
+/** En andel skrevet som procent på dansk: 1,2 bliver til "120 %" frem for til
+    sytten cifre. Afrundingen er feltets egen i skuffen — sagde beskeden et
+    andet tal end det, brugeren netop har tastet, ville hun lede efter en
+    linje, der ikke står der. */
+function danishPercent(share: number): string {
+  return `${String(Math.round(share * 1_000_000) / 10_000).replace('.', ',')} %`
 }
 
 /** Et bidrag målt i nutidskroner mod sin lønpost: procenten af postens eget

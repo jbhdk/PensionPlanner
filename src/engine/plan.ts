@@ -232,11 +232,31 @@ type EntryBase = {
     unionen bærer reglerne frem for en validering ved siden af dem: en form
     uden et tal kan ikke få et, og en med kan ikke undvære det.
 
-    Denne skive kender kun `Remainder` — den linje, der beder om det, der er
-    tilbage. Præcis én linje i hver `Allocation` er den, og det er dét, der
-    får fordelingen til at gå op i hvert eneste simuleringsår i kraft af sin
-    form frem for i kraft af, at brugeren har regnet efter. */
-export type AllocationShare = { form: 'Remainder' }
+    Præcis én linje i hver `Allocation` er `Remainder` — den, der beder om
+    det, der er tilbage — og det er dét, der får fordelingen til at gå op i
+    hvert eneste simuleringsår i kraft af sin form frem for i kraft af, at
+    brugeren har regnet efter. */
+export type AllocationShare =
+  | {
+      form: 'Percentage'
+      /** Andel af det placerede beløb, ikke procent: 0,25 er 25 %. Den måler
+          indbetalingen efter AM-bidrag, gebyr og præmie og aldrig lønnen —
+          det er dét, der gør, at procenterne kan summe til 100 % og ramme
+          præcis det, der er at fordele. Summer de til mere end det hele,
+          afvises planen ved indgangen, jf. ADR-0020. */
+      percentage: number
+    }
+  | {
+      form: 'Amount'
+      /** Kronebeløbet i nutidskroner. Det fremskrives med lønpostens egen
+          `regulationRate` som alt andet i aftalen — ikke med planens
+          inflation, og ikke med den § 20-regulering, ordningens loft følger.
+          Rækker det placerede beløb ikke til det i ét bestemt år, er det et
+          årsresultat og ingen indgangsfejl: samme aftale går op på fuld tid
+          og ikke på deltid, jf. `PensionAgreementYear`. */
+      amountInRealKroner: Real
+    }
+  | { form: 'Remainder' }
 
 /** Én linje i fordelingen: en destination og en andel. Destinationen skal
     være `EmployerAdministered` og tilhøre lønpostens ejer — begge dele

@@ -539,6 +539,23 @@ body {
   align-items: center;
 }
 
+/* Én linje i pensionsaftalens fordeling: destinationen, formen og andelens
+   ene tal. Linjerne er flere gange de samme tre felter i træk, og stregen
+   imellem dem er det, der viser, hvor den ene ordnings andel holder op og den
+   næstes begynder. Knappen står for sig til højre under linjens felter frem
+   for oven i dem: den fjerner hele linjen og ikke det felt, den ellers ville
+   stå nærmest. */
+.fordelingslinje {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--linje);
+}
+
+.fordelingslinje-handling {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .afsnit-tilfoej {
   padding: 0;
   background: none;

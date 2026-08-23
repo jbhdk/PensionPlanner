@@ -70,11 +70,16 @@ function aRichPlan(): Plan {
         amountInRealKroner: 800_000,
         // Firmaordningen på lønnen. Den tegner både Pension-afsnittet i
         // skuffen og aftalens regnestykke i forklar-året — uden den prøver
-        // dækningen mindre, end den ser ud til.
+        // dækningen mindre, end den ser ud til. Fordelingen har to linjer, så
+        // andelens egne felter står ved siden af restlinjens: en fordeling
+        // med resten alene ville lade dem være utegnede.
         pensionAgreement: {
           employerContribution: { percentageOfEntry: 0.12 },
           employeeContribution: { percentageOfEntry: 0.05 },
-          allocation: [{ to: 'ratepension', form: 'Remainder' }],
+          allocation: [
+            { to: 'livrente', form: 'Percentage', percentage: 0.25 },
+            { to: 'ratepension', form: 'Remainder' },
+          ],
         },
       }),
       anExpense({ amountInRealKroner: 300_000 }),

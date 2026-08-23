@@ -14,6 +14,7 @@ import { payoutYear } from '../engine/payoutAge'
 import { minimumPayoutYears } from '../engine/validatePlan'
 import type {
   AgeBound,
+  AllocationLine,
   Contribution,
   Direction,
   Entry,
@@ -744,18 +745,92 @@ export function addPensionAgreement(plan: Plan, entryId: string): Plan {
   )
 }
 
-/** Den ordning, en ny aftale peger på — og dermed også svaret på, om
-    sektionen overhovedet kan slås til. Ejerens egen og
-    arbejdsgiveradministreret: en firmaordning står i lønmodtagerens eget
-    navn, jf. ADR-0028, og aktiesparekontoen og de frie midler kan ingen
-    arbejdsgiver administrere. */
+/** Den ordning, en ny fordelingslinje peger på — og dermed også svaret på,
+    om sektionen overhovedet kan slås til, og om der er en ordning mere at
+    lægge i fordelingen. Ejerens egen og arbejdsgiveradministreret: en
+    firmaordning står i lønmodtagerens eget navn, jf. ADR-0028, og
+    aktiesparekontoen og de frie midler kan ingen arbejdsgiver administrere.
+
+    Ordninger, fordelingen allerede peger på, springes over. Samme destination
+    på to linjer er ét beløb skrevet to steder, og indgangskontrollen afviser
+    det — ét klik må ikke skrive en plan, motoren nægter at regne, jf.
+    ADR-0020. */
 export function agreementDestination(plan: Plan, entryId: string): string | undefined {
   const entry = findEntry(plan, entryId)
   if (!entry || entry.direction !== 'Income') return undefined
+
+  const allocation = entry.pensionAgreement?.allocation ?? []
+  const used = new Set(allocation.map((line) => line.to))
   const owner = findPerson(plan, entry.owner)
   return owner?.holdings.find(
-    (holding) => !isFreeAssets(holding) && isEmployerAdministered(holding),
+    (holding) =>
+      !isFreeAssets(holding) && isEmployerAdministered(holding) && !used.has(holding.id),
   )?.id
+}
+
+/** Lægger en ordning mere i fordelingen.
+
+    Linjen skrives som en procent på nul: det er den ene af de to former, der
+    ikke kan komme til at bede om et beløb, aftalen ikke har, og et nul deler
+    ingenting ud, før planlæggeren har taget stilling.
+
+    Den lægges over restlinjen og aldrig under. Resten er det, de øvrige ikke
+    tog, og en liste, hvor den stod i midten, ville læses som et regnestykke,
+    der ikke er dét, den er.
+
+    Har ejeren ingen ordning tilbage at pege på, står fordelingen urørt —
+    fladen tilbyder da ikke knappen. */
+export function addAllocationLine(plan: Plan, entryId: string): Plan {
+  const to = agreementDestination(plan, entryId)
+  if (!to) return plan
+
+  return withPensionAgreement(plan, entryId, (agreement) => {
+    const line: AllocationLine = { to, form: 'Percentage', percentage: 0 }
+    const remainder = agreement.allocation.findIndex((other) => other.form === 'Remainder')
+    return {
+      ...agreement,
+      allocation:
+        remainder === -1
+          ? [...agreement.allocation, line]
+          : [
+              ...agreement.allocation.slice(0, remainder),
+              line,
+              ...agreement.allocation.slice(remainder),
+            ],
+    }
+  })
+}
+
+/** Tager en linje ud af fordelingen igen. Restlinjen kan ikke fjernes ad
+    denne vej — uden den ville fordelingen ikke gå op, og fladen tilbyder
+    derfor ingen knap på den. Skal hele aftalen væk, er det sektionen, der
+    slås fra. */
+export function removeAllocationLine(plan: Plan, entryId: string, index: number): Plan {
+  return withPensionAgreement(plan, entryId, (agreement) =>
+    agreement.allocation[index]?.form === 'Remainder'
+      ? agreement
+      : {
+          ...agreement,
+          allocation: agreement.allocation.filter((_line, other) => other !== index),
+        },
+  )
+}
+
+/** Retter én linje i fordelingen. Pladsen og ikke destinationen er nøglen:
+    destinationen er selv et felt, brugeren kan skifte, og en linje, der blev
+    slået op på den, ville miste sig selv i samme greb. */
+export function withAllocationLine(
+  plan: Plan,
+  entryId: string,
+  index: number,
+  change: (line: AllocationLine) => AllocationLine,
+): Plan {
+  return withPensionAgreement(plan, entryId, (agreement) => ({
+    ...agreement,
+    allocation: agreement.allocation.map((line, other) =>
+      other === index ? change(line) : line,
+    ),
+  }))
 }
 
 /** Slår sektionen fra igen. Aftalen er væk med sine tal: der er ingen
