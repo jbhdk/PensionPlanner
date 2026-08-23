@@ -18,8 +18,10 @@ import type {
   ContributionAmount,
   Entry,
   EntryId,
+  ExpenseEntry,
   Holding,
   HoldingId,
+  IncomeEntry,
   PayoutScheduleHolding,
   PensionSchemeHolding,
   Period,
@@ -41,7 +43,6 @@ import {
   anchors,
   danish,
   danishTiming,
-  directions,
   payoutPrinciples,
   recurrences,
   timingForOnce,
@@ -92,10 +93,10 @@ import {
   transferEndOptions,
   withAllocationLine,
   withContribution,
-  withDirection,
   withEntry,
   withHolding,
   withHoldingOwner,
+  withIncomeEntry,
   withLifeAnnuity,
   withPayoutSchedule,
   withPensionAgreement,
@@ -757,6 +758,13 @@ function variantOptions(plan: Plan, owner: Person, holding: Holding): string[] {
   })
 }
 
+/** Postens rude, som deler sig i to. Retningen er ikke et felt: en indtægt
+    og en udgift oprettes hver sit sted i navigatoren, og de er to slags
+    poster og ikke to tilstande af én. Delingen sker derfor én gang her, og
+    ingen af de to ruder spørger om retningen igen længere nede.
+
+    Opslaget og vagten mod et id, der ikke rammer noget, står også kun her —
+    de er ens for de to. */
 function EntryFields({
   plan,
   years,
@@ -768,114 +776,194 @@ function EntryFields({
   const owner = findPerson(plan, entry?.owner ?? '')
   if (!entry || !owner) return null
 
+  return entry.direction === 'Income' ? (
+    <IncomeFields
+      plan={plan}
+      years={years}
+      entry={entry}
+      owner={owner}
+      onChange={onChange}
+      onClose={onClose}
+    />
+  ) : (
+    <ExpenseFields
+      plan={plan}
+      years={years}
+      entry={entry}
+      owner={owner}
+      onChange={onChange}
+      onClose={onClose}
+    />
+  )
+}
+
+type EntryFieldsProps<T extends Entry> = {
+  plan: Plan
+  years: YearResult[]
+  entry: T
+  /** Personen, posten tilhører, og den et aldersendepunkt måles fra. Slået
+      op af `EntryFields`, så de to ruder ikke gør det hver for sig. */
+  owner: Person
+  onChange: (plan: Plan) => void
+  onClose: () => void
+}
+
+/** Afsnittet **Posten**: navnet, beløbet og ejeren, som de to slags har med
+    den samme betydning. `children` er de felter, kun den ene har — samme
+    greb og samme grund som `PeriodSection`s.
+
+    Redigeringerne går gennem `withEntry` og ikke `withIncomeEntry`: de tre
+    felter står på grundformen, og afsnittet har derfor ingen grund til at
+    vide, hvilken slags post det tegner. */
+function EntrySection({
+  plan,
+  entry,
+  owner,
+  onChange,
+  children,
+}: {
+  plan: Plan
+  entry: Entry
+  owner: Person
+  onChange: (plan: Plan) => void
+  children?: ReactNode
+}) {
   const persons = plan.household.persons
   const ownerByName: Record<string, string> = Object.fromEntries(
     persons.map((person) => [person.name, person.id]),
   )
 
-  const income = entry.direction === 'Income'
+  return (
+    <Section title="Posten">
+      <TextField
+        label="Navn"
+        help="Entry.name"
+        value={entry.name}
+        onChange={(name) => onChange(withEntry(plan, entry.id, (e) => ({ ...e, name })))}
+      />
+      <NumberField
+        /* Ét navn på feltet uanset skattebehandling: beløbet er postens
+           eget, og en lønpost er ikke længere en undtagelse, jf.
+           ADR-0040. Hvad det betyder for en løn, står i noten nedenfor. */
+        label="Beløb (nutidskroner)"
+        help="Entry.amountInRealKroner"
+        unit="kr."
+        value={entry.amountInRealKroner}
+        onChange={(amountInRealKroner) =>
+          onChange(withEntry(plan, entry.id, (e) => ({ ...e, amountInRealKroner })))
+        }
+      />
+      <SelectField
+        label="Ejer"
+        help="Entry.owner"
+        value={owner.name}
+        options={persons.map((person) => person.name)}
+        onChange={(name) =>
+          onChange(withEntry(plan, entry.id, (e) => ({ ...e, owner: ownerByName[name]! })))
+        }
+      />
+      {children}
+    </Section>
+  )
+}
 
+/** Indtægtsposten. Den bærer en skattebehandling, en reguleringssats og
+    firmaordningen på lønnen — de tre, udgiftsposten ikke har. */
+function IncomeFields({
+  plan,
+  years,
+  entry,
+  owner,
+  onChange,
+  onClose,
+}: EntryFieldsProps<IncomeEntry>) {
   return (
     <>
       <Head
         title={entry.name}
-        subtitle={`Post · ${income ? 'indtægt' : 'udgift'}`}
+        subtitle="Indtægtspost"
         onDelete={() => {
-          onChange(removeEntry(plan, id))
+          onChange(removeEntry(plan, entry.id))
           onClose()
         }}
-        deleteLabel={`Fjern ${income ? 'indtægt' : 'udgift'}`}
+        deleteLabel="Fjern indtægt"
       />
-      <Section title="Posten">
-        <TextField
-          label="Navn"
-          help="Entry.name"
-          value={entry.name}
-          onChange={(name) =>
-            onChange(withEntry(plan, id, (e) => ({ ...e, name })))
-          }
-        />
-        <NumberField
-          /* Ét navn på feltet uanset skattebehandling: beløbet er postens
-             eget, og en lønpost er ikke længere en undtagelse, jf.
-             ADR-0040. Hvad det betyder for en løn, står i noten nedenfor. */
-          label="Beløb (nutidskroner)"
-          help="Entry.amountInRealKroner"
-          unit="kr."
-          value={entry.amountInRealKroner}
-          onChange={(amountInRealKroner) =>
-            onChange(withEntry(plan, id, (e) => ({ ...e, amountInRealKroner })))
-          }
-        />
+      <EntrySection plan={plan} entry={entry} owner={owner} onChange={onChange}>
         <SelectField
-          label="Retning"
-          help="Entry.direction"
-          value={danish(directions, entry.direction)}
-          options={Object.keys(directions)}
+          label="Skattebehandling"
+          help="Entry.taxTreatment"
+          value={danish(treatments, entry.taxTreatment)}
+          options={Object.keys(treatments)}
           onChange={(choice) =>
             onChange(
-              withEntry(plan, id, (e) => withDirection(e, directions[choice]!)),
+              withIncomeEntry(plan, entry.id, (e) => ({
+                ...e,
+                taxTreatment: treatments[choice]!,
+              })),
             )
           }
         />
-        <SelectField
-          label="Ejer"
-          help="Entry.owner"
-          value={owner.name}
-          options={persons.map((person) => person.name)}
-          onChange={(name) =>
-            onChange(withEntry(plan, id, (e) => ({ ...e, owner: ownerByName[name]! })))
-          }
-        />
-        {entry.direction === 'Income' && (
-          <SelectField
-            label="Skattebehandling"
-            help="Entry.taxTreatment"
-            value={danish(treatments, entry.taxTreatment)}
-            options={Object.keys(treatments)}
-            onChange={(choice) =>
-              onChange(
-                withEntry(plan, id, (e) =>
-                  e.direction === 'Income'
-                    ? { ...e, taxTreatment: treatments[choice]! }
-                    : e,
-                ),
-              )
-            }
-          />
-        )}
-        {entry.direction === 'Income' && entry.taxTreatment === 'EarnedIncome' && (
+        {entry.taxTreatment === 'EarnedIncome' && (
           <Hint>
             Beløbet er det, lønsedlen kalder løn. Arbejdsgiverens
             pensionsbidrag hører til i afsnittet Pension og lægges til
             derfra — det skal ikke tastes med her.
           </Hint>
         )}
-      </Section>
-      {entry.direction === 'Income' && (
-        <PensionAgreementSection plan={plan} entry={entry} onChange={onChange} />
-      )}
+      </EntrySection>
+      <PensionAgreementSection plan={plan} entry={entry} onChange={onChange} />
       <PeriodSection
         value={entry}
         owner={owner}
         startYear={plan.startYear}
-        onChange={(next) => onChange(withEntry(plan, id, (e) => ({ ...e, ...next })))}
+        onChange={(next) => onChange(withEntry(plan, entry.id, (e) => ({ ...e, ...next })))}
       >
-        {entry.direction === 'Income' && (
-          <NumberField
-            label="Reguleringssats"
-            help="Entry.regulationRate"
-            unit="% p.a."
-            value={asPercent(entry.regulationRate)}
-            onChange={(percent) =>
-              onChange(
-                withEntry(plan, id, (e) =>
-                  e.direction === 'Income' ? { ...e, regulationRate: percent / 100 } : e,
-                ),
-              )
-            }
-          />
-        )}
+        <NumberField
+          label="Reguleringssats"
+          help="Entry.regulationRate"
+          unit="% p.a."
+          value={asPercent(entry.regulationRate)}
+          onChange={(percent) =>
+            onChange(
+              withIncomeEntry(plan, entry.id, (e) => ({ ...e, regulationRate: percent / 100 })),
+            )
+          }
+        />
+        <Hint>{entryNote(years, entry)}</Hint>
+      </PeriodSection>
+    </>
+  )
+}
+
+/** Udgiftsposten. Grundformen og perioden og intet andet: der er hverken en
+    skattebehandling at vælge — udgiften har ingen — eller et eget tempo at
+    sætte, for den følger planens inflationsantagelse. */
+function ExpenseFields({
+  plan,
+  years,
+  entry,
+  owner,
+  onChange,
+  onClose,
+}: EntryFieldsProps<ExpenseEntry>) {
+  return (
+    <>
+      <Head
+        title={entry.name}
+        subtitle="Udgiftspost"
+        onDelete={() => {
+          onChange(removeEntry(plan, entry.id))
+          onClose()
+        }}
+        deleteLabel="Fjern udgift"
+      />
+      <EntrySection plan={plan} entry={entry} owner={owner} onChange={onChange} />
+      <PeriodSection
+        value={entry}
+        owner={owner}
+        startYear={plan.startYear}
+        onChange={(next) => onChange(withEntry(plan, entry.id, (e) => ({ ...e, ...next })))}
+      >
         <Hint>{entryNote(years, entry)}</Hint>
       </PeriodSection>
     </>
@@ -903,7 +991,7 @@ function PensionAgreementSection({
   onChange,
 }: {
   plan: Plan
-  entry: Entry & { direction: 'Income' }
+  entry: IncomeEntry
   onChange: (plan: Plan) => void
 }) {
   const agreement = entry.pensionAgreement
@@ -1728,9 +1816,9 @@ function withSource(
 
 /** Skifter beløbsangivelsens form på et lønkildet bidrag. De to former er
     hvert sit felt og ikke to værdier i ét, så skiftet bygger et nyt bidrag
-    frem for at sætte et felt — som `withDirection` gør for posten. Det gamle
-    tal huskes ikke: det findes ikke at huske på, og en procent og et
-    kronebeløb er alligevel ikke hinandens omregning. */
+    frem for at sætte et felt — som `withForm` gør for en fordelingslinje.
+    Det gamle tal huskes ikke: det findes ikke at huske på, og en procent og
+    et kronebeløb er alligevel ikke hinandens omregning. */
 function withAmountForm(
   contribution: Contribution,
   field: 'percentageOfEntry' | 'amountInRealKroner',

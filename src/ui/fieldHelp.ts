@@ -162,9 +162,6 @@ export const fieldHelp = {
   'Entry.amountInRealKroner':
     'Hvor stort beløbet er, målt i nutidskroner. For en løn er det tallet, lønsedlen kalder løn — arbejdsgiverens pensionsbidrag hører til i afsnittet Pension og lægges til derfra. Beløbet skrives én gang og vokser selv gennem forløbet.',
 
-  'Entry.direction':
-    'Om beløbet kommer ind i husstanden eller går ud af den. Tallet skrives positivt begge veje; det er valget her, der afgør fortegnet.',
-
   'Entry.owner':
     'Hvem af husstandens personer beløbet tilhører. For en indtægt afgør det, hvis skat den indgår i, og hvis aldre perioden kan måles fra.',
 

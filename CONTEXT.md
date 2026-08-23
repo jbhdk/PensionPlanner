@@ -212,7 +212,7 @@ En navngiven ind- eller udbetaling med beløb i nutidskroner, ejer, periode og g
 _Avoid_: Linje, række, cashflow, transaktion
 
 **Retning** · `Direction`:
-Om en post lægger til eller trækker fra husstandens pengestrøm: `Income` eller `Expense`. Beløbet er positivt i begge retninger — fortegnet er retningens arbejde, ikke beløbets. Kun `Income` bærer en skattebehandling.
+Hvilken vej en bevægelse går på husstandens pengestrøm: `Income` eller `Expense`. Beløbet er positivt i begge retninger — fortegnet er retningens arbejde, ikke beløbets. På en `Entry` er den det, der afgør, hvad posten er, og ikke en egenskab ved den: en indtægtspost bærer en skattebehandling og en reguleringssats, en udgiftspost har ingen af delene, og der er derfor to slags poster og ikke to tilstande af én.
 _Avoid_: Fortegn, type, ind/ud
 
 **Skattebehandling** · `TaxTreatment`:

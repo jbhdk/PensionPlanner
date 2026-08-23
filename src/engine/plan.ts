@@ -318,30 +318,46 @@ export type PensionAgreement = {
   allocation: Allocation
 }
 
-/** Kun indtægtsposter bærer en skattebehandling og en egen reguleringssats.
-    Retningen er diskriminanten frem for felter ved siden af den: en
-    udgiftspost med en skattebehandling er ikke noget, motoren skal validere
+/** En post, der lægger til husstandens pengestrøm. Den bærer en
+    skattebehandling og en egen reguleringssats, og udgiftsposten gør ikke:
+    retningen er diskriminanten frem for felter ved siden af den, så en
+    udgiftspost med en skattebehandling ikke er noget, motoren skal validere
     sig ud af — den kan ikke skrives.
 
     Reguleringssatsen hører samme sted hen af samme grund. En løn stiger
     hurtigere end priserne, og den forskel afgør, hvor meget der er lagt til
     side ved erhvervsophør; en udgift har ikke den slags eget tempo og følger
     `Plan.inflationAssumption`, som en overførsel allerede gør. */
-export type Entry =
-  | (EntryBase & {
-      direction: 'Income'
-      taxTreatment: TaxTreatment
-      /** Andel pr. år, ikke procent. Indtægtens egen fremskrivning —
-          uafhængig af `Plan.inflationAssumption`. */
-      regulationRate: number
-      /** Firmaordningen, lønnen hører til. Valgfri, og fraværet er hele
-          svaret: en lønpost uden aftale har ingen firmapension. Feltet
-          hænger på indtægtsgrenen, fordi en udgiftspost ingen løn har at
-          måle af. Højst én pr. post — der er ét sted, der svarer på, hvad
-          den løn indbetaler. */
-      pensionAgreement?: PensionAgreement
-    })
-  | (EntryBase & { direction: 'Expense' })
+export type IncomeEntry = EntryBase & {
+  direction: 'Income'
+  taxTreatment: TaxTreatment
+  /** Andel pr. år, ikke procent. Indtægtens egen fremskrivning —
+      uafhængig af `Plan.inflationAssumption`. */
+  regulationRate: number
+  /** Firmaordningen, lønnen hører til. Valgfri, og fraværet er hele
+      svaret: en lønpost uden aftale har ingen firmapension. Feltet
+      hænger på indtægtsgrenen, fordi en udgiftspost ingen løn har at
+      måle af. Højst én pr. post — der er ét sted, der svarer på, hvad
+      den løn indbetaler. */
+  pensionAgreement?: PensionAgreement
+}
+
+/** En post, der trækker fra husstandens pengestrøm. Grundformen og intet
+    andet: de tre felter, indtægtsposten har oven i, findes ikke at skrive
+    her. */
+export type ExpenseEntry = EntryBase & { direction: 'Expense' }
+
+/** De to slags poster, og ikke to tilstande af én. Grenene er skrevet ud
+    frem for hentet ud af unionen med `Extract`, som `Holding`s tre er det:
+    dér udvælges der blandt syv medlemmer efter en egenskab, de deler, og
+    listen kunne komme ud af trit med unionen. Her er de to medlemmer hele
+    delingen, og der er ingen ottende gren at fange — så navnene står, hvor
+    felterne står.
+
+    Retningen vælges, når posten skabes, og skifter ikke bagefter: fladen har
+    en knap for hver slags, og der er ingen redigering, der flytter en post
+    over skellet. */
+export type Entry = IncomeEntry | ExpenseEntry
 
 /** En dateret flytning af penge fra én af husstandens beholdninger til dens
     frie midler. Hverken en indtægt eller en udgift, og uden skattevirkning —

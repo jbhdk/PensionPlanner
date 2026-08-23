@@ -18,8 +18,6 @@ import {
   removeHolding,
   removePensionAgreement,
   removePerson,
-  withDirection,
-  withEntry,
   withPensionAgreement,
   withVariant,
 } from './planEdits'
@@ -600,16 +598,6 @@ describe('pensionsaftalen på lønposten', () => {
     const entry = plan.entries[0]!
     expect(entry.amountInRealKroner).toBe(600_000)
     expect(entry.name).toBe('Løn')
-  })
-
-  it('tager aftalen med, når posten bliver til en udgift', () => {
-    // En udgiftspost har ingen løn at måle bidragene af, og feltet hænger
-    // derfor på indtægtsgrenen alene. Blev aftalen stående, ville den være
-    // et tal i det gemte skema, ingen invariant måler på.
-    const til = addPensionAgreement(aPlanWithSalary(), 'salary')
-    const udgift = withEntry(til, 'salary', (entry) => withDirection(entry, 'Expense'))
-
-    expect(JSON.stringify(udgift.entries)).not.toContain('pensionAgreement')
   })
 
   it('lader posten stå urørt, når ejeren ingen ordning har, en arbejdsgiver kan administrere', () => {

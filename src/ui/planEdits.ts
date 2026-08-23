@@ -20,6 +20,7 @@ import type {
   Entry,
   Holding,
   HoldingVariant,
+  IncomeEntry,
   PayoutSchedule,
   PensionAgreement,
   PensionSchemeHolding,
@@ -600,38 +601,24 @@ export function formatNumber(value: number): string {
   return String(value).replace('.', ',')
 }
 
-/** Skifter en posts retning. En indtægtspost bærer en skattebehandling og en
-    egen reguleringssats, en udgiftspost har ingen af felterne — så
-    retningsskiftet bygger en ny post frem for at sætte et felt. Hverken
-    behandlingen eller satsen huskes hen over en tur forbi udgift: de findes
-    ikke at huske på, og udgiften følger imens planens inflationsantagelse. */
-export function withDirection(entry: Entry, direction: Direction): Entry {
-  const { id, name, amountInRealKroner, owner, timing, period, recurrence } = entry
+/** Redigerer en post, der er en indtægt, og lader den stå, hvis den er en
+    udgift. Formen findes, fordi `withEntry` giver hele unionen ind:
+    skattebehandlingen, reguleringssatsen og pensionsaftalen hænger på
+    indtægtsgrenen alene, og en redigering skrevet dér ville skulle spørge om
+    retningen for at komme til dem. Samme form og samme grund som
+    `withPensionScheme` og `withLifeAnnuity`.
 
-  if (direction === 'Expense') {
-    return {
-      id,
-      name,
-      amountInRealKroner,
-      owner,
-      timing,
-      period,
-      recurrence,
-      direction: 'Expense',
-    }
-  }
-  return {
-    id,
-    name,
-    amountInRealKroner,
-    owner,
-    timing,
-    period,
-    recurrence,
-    direction: 'Income',
-    taxTreatment: entry.direction === 'Income' ? entry.taxTreatment : 'EarnedIncome',
-    regulationRate: entry.direction === 'Income' ? entry.regulationRate : 0,
-  }
+    Der er ingen modstykke, der skifter en posts retning. En indtægt og en
+    udgift oprettes hver sit sted, og retningen afgør, hvad posten er — ikke
+    hvad den står på. */
+export function withIncomeEntry(
+  plan: Plan,
+  id: string,
+  change: (entry: IncomeEntry) => IncomeEntry,
+): Plan {
+  return withEntry(plan, id, (entry) =>
+    entry.direction === 'Income' ? change(entry) : entry,
+  )
 }
 
 /** Den tyndeste indbetaling, der kan tilføjes: nul kroner eller nul procent,
@@ -729,20 +716,16 @@ export function addPensionAgreement(plan: Plan, entryId: string): Plan {
   const to = agreementDestination(plan, entryId)
   if (!to) return plan
 
-  return withEntry(plan, entryId, (entry) =>
-    entry.direction === 'Income'
-      ? {
-          ...entry,
-          pensionAgreement: {
-            employerContribution: { percentageOfEntry: 0 },
-            employeeContribution: { percentageOfEntry: 0 },
-            fee: 0,
-            insurancePremium: 0,
-            allocation: [{ to, form: 'Remainder' }],
-          },
-        }
-      : entry,
-  )
+  return withIncomeEntry(plan, entryId, (entry) => ({
+    ...entry,
+    pensionAgreement: {
+      employerContribution: { percentageOfEntry: 0 },
+      employeeContribution: { percentageOfEntry: 0 },
+      fee: 0,
+      insurancePremium: 0,
+      allocation: [{ to, form: 'Remainder' }],
+    },
+  }))
 }
 
 /** Den ordning, en ny fordelingslinje peger på — og dermed også svaret på,
@@ -837,11 +820,7 @@ export function withAllocationLine(
     afbryder, der lader dem stå, mens året regner uden dem — det ville være
     to scenarier i én plan, og scenarier er uafhængige planer, jf. `Plan`. */
 export function removePensionAgreement(plan: Plan, entryId: string): Plan {
-  return withEntry(plan, entryId, (entry) => {
-    if (entry.direction !== 'Income') return entry
-    const { pensionAgreement: _pensionAgreement, ...rest } = entry
-    return rest
-  })
+  return withIncomeEntry(plan, entryId, ({ pensionAgreement: _pensionAgreement, ...rest }) => rest)
 }
 
 export function withPensionAgreement(
@@ -849,8 +828,8 @@ export function withPensionAgreement(
   entryId: string,
   change: (agreement: PensionAgreement) => PensionAgreement,
 ): Plan {
-  return withEntry(plan, entryId, (entry) =>
-    entry.direction === 'Income' && entry.pensionAgreement
+  return withIncomeEntry(plan, entryId, (entry) =>
+    entry.pensionAgreement
       ? { ...entry, pensionAgreement: change(entry.pensionAgreement) }
       : entry,
   )

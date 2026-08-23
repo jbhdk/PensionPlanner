@@ -593,9 +593,13 @@ describe('fladen', () => {
 
     await user.click(navigatorButton(/Faste udgifter/))
     expect(screen.queryByLabelText(/Skattebehandling/)).toBeNull()
+    // Retningen vælges af den knap, posten blev skabt med, og kan ikke
+    // skiftes bagefter: de to er to slags poster og ikke to tilstande af én.
+    expect(screen.queryByLabelText(/Retning/)).toBeNull()
 
     await user.click(navigatorButton(/Løn/))
     expect(screen.getByLabelText(/Skattebehandling/)).toBeTruthy()
+    expect(screen.queryByLabelText(/Retning/)).toBeNull()
 
     // Beløbet er lønsedlens løn, jf. ADR-0040. Feltet hedder det samme som
     // enhver anden posts — det er ikke længere en undtagelse — og noten
@@ -606,19 +610,6 @@ describe('fladen', () => {
     // En udgiftspost har ingen firmaordning at nævne, og noten står ikke.
     await user.click(navigatorButton(/Faste udgifter/))
     expect(screen.queryByText(/lønsedlen kalder løn/i)).toBeNull()
-  })
-
-  it('gør en udgiftspost til en indtægtspost, og skattebehandlingen følger med', async () => {
-    const user = userEvent.setup()
-    render(
-      <App initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })} />,
-    )
-
-    await user.click(navigatorButton(/Faste udgifter/))
-    await user.selectOptions(screen.getByLabelText(/Retning/), 'Indtægt')
-
-    const behandling = screen.getByLabelText(/Skattebehandling/) as HTMLSelectElement
-    expect(behandling.value).toBe('Arbejdsindkomst')
   })
 
   it('lader en indtægtspost skifte til pensionsindkomst, og brutto-etiketten falder væk', async () => {

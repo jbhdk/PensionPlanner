@@ -1,6 +1,5 @@
 import type {
   Anchor,
-  Direction,
   Holding,
   HoldingVariant,
   PayoutPrinciple,
@@ -15,10 +14,10 @@ import { cappedVariant } from '../engine/holdingVariant'
     veje. Ingen anden fil må have sit eget kort — så ville et begreb kunne
     hedde to ting på skærmen. */
 
-export const directions: Record<string, Direction> = {
-  Indtægt: 'Income',
-  Udgift: 'Expense',
-}
+/** Der er intet kort for `Direction`. Retningen vælges ikke i et felt — den
+    følger af, hvilken slags post der blev skabt — og de to ruder skriver
+    deres eget ord på overskriftslinjen, som overskudsbåndene gør det. Et
+    kort oversætter en værdi, brugeren kan vælge imellem; her er der ingen. */
 
 /** Ordningerne først, de frie midler til sidst — samme rækkefølge som
     varianttabellen i motoren. Aktiesparekontoen står blandt ordningerne og
