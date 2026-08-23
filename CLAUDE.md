@@ -2,7 +2,7 @@
 
 Pensionsplanneren er et personligt værktøj til at fremskrive én husstands økonomi år for år gennem hele pensionen, med danske skatte- og pensionsregler indregnet. Læs [CONTEXT.md](./CONTEXT.md) før du gør noget som helst — den er glossaret, og den er bindende.
 
-**Status:** Etape 1 er i gang, beskrevet i [issue #2](https://github.com/jbhdk/PensionPlanner/issues/2). Motoren ligger i `src/engine/`, fladen i `src/ui/`. Brugerfladen til det færdige system er tegnet i [`docs/mockup/`](./docs/mockup/). Node ligger i `C:\Program Files\nodejs` (v24, npm 11) — men ikke altid på `PATH` i en frisk terminal.
+**Status:** Etape 1 er i gang, beskrevet i [issue #2](https://github.com/jbhdk/PensionPlanner/issues/2). Motoren ligger i `src/engine/`, fladen i `src/ui/` — kør appen, når du skal se, hvad fladen gør; mock-uppen i [`docs/mockup/`](./docs/mockup/) er forældet. Node ligger i `C:\Program Files\nodejs` (v24, npm 11) — men ikke altid på `PATH` i en frisk terminal.
 
 ## Sproget
 
@@ -28,7 +28,7 @@ En forklaring er statisk og gælder feltet. Skal fladen sige noget om den plan, 
 | Feltforklaringer | `src/ui/fieldHelp.ts` |
 | Beslutninger | `docs/adr/` |
 | Struktur og rækkefølge | `docs/diagrams/` |
-| Brugerfladen til det færdige system | `docs/mockup/` |
+| Brugerfladen | `src/ui/` — kør appen og se. `docs/mockup/` er forældet |
 | Officielle satser pr. år | `docs/satser/` |
 | Bevidst fravalgt til senere | `docs/udskudt.md` |
 | PRD'er, issues, planer | **GitHub — aldrig i repoet** |
@@ -47,13 +47,13 @@ Mermaid skrevet direkte i markdown, så de kan diffes i git og renderes af GitHu
 
 En klasse mærket `<<skitse>>` er tegnet efter PRD'en og ikke efter glossaret. Behandl den ikke som afgjort.
 
-## Fladekortet
+## Fladekortet — forældet, brug appen
 
-`docs/mockup/` er mock-uppen af brugerfladen til **det færdige system**, ikke til en enkelt etape. Den er referencen, når en skive skal bygge sin del af fladen, og den ligger i repoet frem for på GitHub, fordi den skal kunne diffes ved siden af koden. Rå HTML, CSS og JavaScript uden værktøjskæde — åbnes direkte i en browser.
+`docs/mockup/` er mock-uppen af brugerfladen, tegnet før koden. **Den er ikke ajour og er ikke længere referencen.** Fladen har fundet sin egen form i `src/ui/`, og mock-uppen er ikke fulgt med. Skal en skive bygge sin del af fladen, så start i den byggede app: kør `npx vite` og se på skærmen. En forældet tegning ligner en beslutning og er værre end ingen — læs den som et historisk udkast og ikke som et forlæg.
 
-Den er ikke bundet af glossaret på samme måde som resten: hvor den bruger et ord, der endnu ikke står i CONTEXT.md, er ordet mærket **skitse** med stiplet ramme. Et skitsemærket ord skal gennem glossaret, før det bliver til kode. `plan.js` er en grov fremskrivning, der findes for at give fladen realistiske tal — den er ikke motoren og må aldrig blive forlæg for en ADR.
+Den skal heller ikke rettes ind efter koden. Divergensen er accepteret frem for at holde to beskrivelser af den samme skærm i takt.
 
-Ændrer fladekortet en beslutning, så skriv den ned, hvor den hører hjemme, og fjern punktet fra README'ens **Åbne punkter** samme dag.
+`plan.js` er en grov fremskrivning, der findes for at give mock-uppen realistiske tal — den er ikke motoren og må aldrig blive forlæg for en ADR. Et ord mærket **skitse** med stiplet ramme er ikke gået gennem glossaret og skal det, før det bliver til kode.
 
 ## Satser
 

@@ -1,5 +1,12 @@
 # Fladekortet
 
+> **Forældet. Brug appen.** Mock-uppen er tegnet før koden og er ikke fulgt med, efterhånden
+> som fladen har fundet sin egen form i `src/ui/`. Den er ikke længere referencen, når en
+> skive skal bygge sin del af fladen — kør appen og se på skærmen i stedet. Alt herunder
+> beskriver, hvad mock-uppen viser, og ikke hvad fladen gør. Den rettes heller ikke ind
+> efter koden: divergensen er accepteret frem for at holde to beskrivelser af den samme
+> skærm i takt.
+
 En mock-up af brugerfladen til **det færdige system** — ikke til etape 1. Den findes for
 at afgøre to ting, før der skrives kode: om skelettet i
 [issue #17](https://github.com/jbhdk/PensionPlanner/issues/17) bærer alle fem etaper, og
