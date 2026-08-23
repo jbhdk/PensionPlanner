@@ -232,6 +232,12 @@ export function Timeline({
   function startDrag(item: TimelineItem, edge: TimelineDragEdge) {
     return (event: ReactMouseEvent) => {
       event.stopPropagation()
+      // Browserens standardhandling for `mousedown` er at begynde en
+      // tekstmarkering, som trækket ellers slæber med sig hen over fladen —
+      // også uden for tidslinjen, når musen løber ud af dens boks. Det koster
+      // knappens fokusflytning ved klik, men ikke `onClick` og dermed ikke
+      // valget af posten.
+      event.preventDefault()
       lastDelta.current = 0
       setDrag({ kind: 'item', item, edge, startX: event.clientX, startPlan: plan })
     }
@@ -240,6 +246,8 @@ export function Timeline({
   function startPersonDrag(personId: string) {
     return (event: ReactMouseEvent) => {
       event.stopPropagation()
+      // Samme grund som i `startDrag`.
+      event.preventDefault()
       lastDelta.current = 0
       setDrag({ kind: 'person', personId, startX: event.clientX, startPlan: plan })
     }
