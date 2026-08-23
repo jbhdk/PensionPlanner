@@ -18,7 +18,7 @@ Hver etiket i skuffen og hver kolonneoverskrift i en tabel har en forklaring, br
 
 Teksterne er ikke glossarets. CONTEXT.md skriver til den, der bygger, og må gerne nævne et feltnavn; forklaringerne skriver til den, der planlægger sin pension, og må ikke. **De seks stilregler står i `src/ui/fieldHelp.ts`s dokumentationskommentar** — læs dem, før du skriver en ny, og skriv en syvende dér frem for at finde på den i forbifarten. Begrundelsen for hele delingen står i [ADR-0021](./docs/adr/0021-hjaelpeteksten-skriver-til-brugeren-glossaret-til-den-der-bygger.md).
 
-En forklaring er statisk og gælder feltet. Skal fladen sige noget om den plan, der ligger på skærmen lige nu — et spærret valg, et skøn, en post uden år — er det en `Hint` ved siden af feltet og ikke en forklaring på det.
+En forklaring er statisk og gælder feltet. Skal fladen sige noget om den plan, der ligger på skærmen lige nu — et spærret valg, et skøn, en post uden år — er det en `Hint` ved siden af feltet og ikke en forklaring på det. Og skal den sige noget om den redigering, der lige blev rettet af en grænse, er det en `Clamp`, som hverken er statisk eller kan udledes af planen — den huskes i `App` og forsvinder igen, jf. [ADR-0045](./docs/adr/0045-fladen-klemmer-og-siger-hvorfor-indgangskontrollen-er-bagstopperen.md). Skrives en klemningsbesked som en `Hint`, bliver den stående for evigt.
 
 ## Hvor tingene hører hjemme
 
