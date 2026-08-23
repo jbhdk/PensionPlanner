@@ -59,8 +59,9 @@ function Field({
   label: string
   help: FieldHelpKey
   /** Udeladt giver en tom enhedskolonne — bredden holdes alligevel, så alle
-      felters kontroller flugter ned gennem sektionen. */
-  unit?: string
+      felters kontroller flugter ned gennem sektionen. En `UnitToggle` er
+      også en enhed: den vælger imellem dem og hører derfor til her. */
+  unit?: ReactNode
   children: (id: string) => ReactNode
 }) {
   const id = useId()
@@ -184,7 +185,7 @@ export function NumberField({
 }: {
   label: string
   help: FieldHelpKey
-  unit?: string
+  unit?: ReactNode
   value: number
   /** Udeladt betyder et frit tal. Se `Bounds`. */
   bounds?: Bounds
@@ -214,7 +215,7 @@ export function OptionalNumberField({
 }: {
   label: string
   help: FieldHelpKey
-  unit?: string
+  unit?: ReactNode
   value: number | undefined
   onChange: (value: number | undefined) => void
 }) {
@@ -382,6 +383,47 @@ export function ToggleField({
   )
 }
 
+/** Enhedskolonnen som et valg: den samme segmenterede kontakt som
+    `ToggleField`s, men uden et felt om sig — den rækkes ind som et felts
+    `unit`.
+
+    Den findes, hvor de former, et beløb kan angives på, netop *er* enheder.
+    "12 %" og "12.000 kr." er to former af det samme felt og ikke to felter,
+    og et spørgsmål for sig ovenover ("Arbejdsgiverbidrag angives som") koster
+    da både en linje i skuffen og en etiket, der er dobbelt så lang som den,
+    der står lige under den. Er blot ét af valgene ikke en enhed, hører
+    kontakten ikke hjemme her — se `allocationForms`.
+
+    Forklaringen hænger på kontakten selv og ikke på en etiket: den er det,
+    man peger på, når der ingen etiket er. `fieldHelp.test.tsx` prøver
+    dækningen her på samme måde som på etiketterne. */
+export function UnitToggle({
+  help,
+  value,
+  options,
+  onChange,
+}: {
+  help: FieldHelpKey
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+}) {
+  return (
+    <span className="kontakt" title={fieldHelp[help]}>
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          aria-pressed={option === value}
+          onClick={() => onChange(option)}
+        >
+          {option}
+        </button>
+      ))}
+    </span>
+  )
+}
+
 export function CheckboxField({
   label,
   help,
@@ -463,7 +505,7 @@ export function LockedField({
   label: string
   help: FieldHelpKey
   value: string
-  unit?: string
+  unit?: ReactNode
 }) {
   return (
     <div className="felt">

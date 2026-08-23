@@ -605,7 +605,7 @@ describe('fladen', () => {
     // enhver anden posts — det er ikke længere en undtagelse — og noten
     // siger, hvor arbejdsgiverbidraget så hører hjemme.
     expect(screen.getByText(/lønsedlen kalder løn/i)).toBeTruthy()
-    expect(screen.getByLabelText('Beløb (nutidskroner)')).toBeTruthy()
+    expect(screen.getByLabelText('Beløb')).toBeTruthy()
 
     // En udgiftspost har ingen firmaordning at nævne, og noten står ikke.
     await user.click(navigatorButton(/Faste udgifter/))
@@ -632,7 +632,7 @@ describe('fladen', () => {
 
     // Løftet om arbejdsgiverbidrag hører til arbejdsindkomsten alene — en
     // pensionsudbetaling har intet i sig.
-    expect(screen.getByLabelText('Beløb (nutidskroner)')).toBeTruthy()
+    expect(screen.getByLabelText('Beløb')).toBeTruthy()
     expect(screen.queryByText(/brutto inklusive arbejdsgiverbidrag/i)).toBeNull()
 
     // Og skatten følger med: 400.000 uden AM-bidrag og uden arbejdsfradrag
@@ -1138,7 +1138,7 @@ describe('fladen', () => {
       'Navn',
       'Type',
       'Ejer',
-      'Saldo (nutidskroner)',
+      'Saldo',
       'Buffer',
     ])
   })
@@ -1763,12 +1763,14 @@ describe('fladen', () => {
     await user.click(navigatorButton(/Indbetalingen/))
 
     expect(sectionLabels('Indbetalingen')).toEqual(['Navn', 'Kilde', 'Destination'])
-    expect(sectionLabels('Beløb')).toEqual(['Angives som', 'Procent'])
+    // Ét beløbsfelt og ikke to: formen er feltets enhed og ikke et spørgsmål
+    // ved siden af det, så kontakten står, hvor enheden ellers stod.
+    expect(sectionLabels('Beløb')).toEqual(['Beløb'])
 
     // Begge former er synlige uden at åbne noget, jf. fladekortet — en vælger
     // ville skjule den ene bag et klik.
-    expect(screen.getByRole('button', { name: 'Procent af posten', pressed: true })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Fast beløb', pressed: false })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '%', pressed: true })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'kr.', pressed: false })).toBeTruthy()
 
     // Periode, forankring, gentagelse og forfald hører til lønposten. Bidraget
     // har dem ikke — hverken som felter eller som grå felter — og ruden siger
@@ -1805,8 +1807,10 @@ describe('fladen', () => {
 
     expect(sectionLabels('Indbetalingen')).toEqual(['Navn', 'Kilde', 'Destination'])
     // Kun den ene beløbsform: en procent skal have en post at måle af, og
-    // kontakten "Angives som" ville være et valg, der aldrig kan træffes.
-    expect(sectionLabels('Beløb')).toEqual(['Fast beløb (nutidskroner)'])
+    // enheden står derfor som ren tekst frem for som en kontakt, der ville
+    // være et valg, der aldrig kan træffes.
+    expect(sectionLabels('Beløb')).toEqual(['Beløb'])
+    expect(screen.queryByRole('button', { name: '%' })).toBeNull()
     expect(sectionLabels('Perioden')).toEqual([
       'Gentagelse',
       'Forankring',
@@ -1879,7 +1883,7 @@ describe('fladen', () => {
     await user.selectOptions(kilde, 'Frie midler · Jesper')
 
     expect(screen.queryByRole('heading', { name: /^Følger/ })).toBeNull()
-    expect(sectionLabels('Beløb')).toEqual(['Fast beløb (nutidskroner)'])
+    expect(sectionLabels('Beløb')).toEqual(['Beløb'])
     expect(sectionLabels('Perioden')).toEqual([
       'Gentagelse',
       'Forankring',
@@ -1970,7 +1974,7 @@ describe('fladen', () => {
     await user.click(screen.getByRole('button', { name: '+ Indbetaling' }))
 
     await user.click(navigatorButton(/Indbetaling 1/))
-    expect(sectionLabels('Beløb')).toEqual(['Fast beløb (nutidskroner)'])
+    expect(sectionLabels('Beløb')).toEqual(['Beløb'])
   })
 
   it('tilføjer en indbetaling fra de frie midler, når husstandens eneste ordning er en aktiesparekonto', async () => {
@@ -2048,14 +2052,17 @@ describe('fladen', () => {
       />,
     )
     await user.click(navigatorButton(/Indbetalingen/))
+    expect((screen.getByLabelText('Beløb') as HTMLInputElement).value).toBe('8')
 
-    await user.click(screen.getByRole('button', { name: 'Fast beløb' }))
+    await user.click(screen.getByRole('button', { name: 'kr.' }))
 
-    // De to former er hvert sit felt, ikke to værdier i ét: procenten er væk,
-    // og der spørges nu om kroner.
-    expect(sectionLabels('Beløb')).toEqual(['Angives som', 'Fast beløb (nutidskroner)'])
-    expect(screen.getByLabelText('Fast beløb (nutidskroner)')).toBeTruthy()
-    expect(screen.queryByLabelText('Procent')).toBeNull()
+    // Formen er feltets enhed, så etiketten bliver stående — men de to former
+    // er hver sin værdi og ikke ét tal med to enheder: procenten er væk, og
+    // der spørges nu om kroner fra nul.
+    expect(sectionLabels('Beløb')).toEqual(['Beløb'])
+    expect(screen.getByRole('button', { name: 'kr.', pressed: true })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '%', pressed: false })).toBeTruthy()
+    expect((screen.getByLabelText('Beløb') as HTMLInputElement).value).toBe('0')
   })
 
   it('redigerer en overførsels fra-beholdning, beløb og forfald i skuffen', async () => {
@@ -2921,13 +2928,13 @@ describe('fladen', () => {
       // depotets og ligger i beholdningens omkostningssats, hvor den sænker
       // afkastet. Skrives handelsomkostninger begge steder, betales de to
       // gange, og forskellen vokser med saldoen, mens gebyret står stille.
+      // Bidragene er ét felt hver og ikke to: formen er feltets enhed, så
+      // kontakten står, hvor "%" ellers stod, og ikke som et spørgsmål ovenover.
       expect(sectionLabels('Pension')).toEqual([
-        'Arbejdsgiverbidrag angives som',
         'Arbejdsgiverbidrag',
-        'Arbejdstagerbidrag angives som',
         'Arbejdstagerbidrag',
-        'Gebyr (nutidskroner)',
-        'Forsikringspræmie (nutidskroner)',
+        'Gebyr',
+        'Forsikringspræmie',
         'Ordning',
         'Andel',
       ])
@@ -2953,9 +2960,9 @@ describe('fladen', () => {
 
       // Den nye linje står over resten og er en procent, indtil andet
       // vælges — den ene form, der ikke kan skrive et beløb, aftalen ikke har.
-      expect(sectionLabels('Pension').slice(6)).toEqual([
+      expect(sectionLabels('Pension').slice(4)).toEqual([
         'Ordning',
-        'Andel angives som',
+        'Andelen er',
         'Andel',
         'Ordning',
         'Andel',
@@ -2966,7 +2973,7 @@ describe('fladen', () => {
 
       await user.click(screen.getByRole('button', { name: 'Fjern Aldersopsparing' }))
 
-      expect(sectionLabels('Pension').slice(6)).toEqual(['Ordning', 'Andel'])
+      expect(sectionLabels('Pension').slice(4)).toEqual(['Ordning', 'Andel'])
     })
 
     it('skriver en fordelingslinje som en procent af det, der er at fordele', async () => {
@@ -3014,9 +3021,9 @@ describe('fladen', () => {
 
       await user.click(screen.getByRole('button', { name: 'Op til loftet' }))
 
-      expect(sectionLabels('Pension').slice(6)).toEqual([
+      expect(sectionLabels('Pension').slice(4)).toEqual([
         'Ordning',
-        'Andel angives som',
+        'Andelen er',
         'Andel',
         'Ordning',
         'Andel',

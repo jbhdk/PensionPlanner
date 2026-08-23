@@ -101,23 +101,29 @@ export function timingForOnce(timing: Timing): Timing {
   return timing === 'Even' ? 1 : timing
 }
 
-/** De to måder et lønkildet bidrags beløb kan angives på. Kortet peger på
-    selve feltet frem for på et navn ved siden af det: formen *er* felterne,
-    og et tredje ord for dem kunne komme til at sige noget andet end de to. */
+/** De to måder et lønkildet bidrags beløb kan angives på. Navnene er de to
+    enheder og ikke to sætninger om dem: formen *er* feltets enhed, og
+    kontakten står derfor, hvor enheden ellers stod, jf. `UnitToggle`. Et
+    tredje ord for dem kunne komme til at sige noget andet end de to. */
 export const contributionAmounts: Record<string, 'percentageOfEntry' | 'amountInRealKroner'> = {
-  'Procent af posten': 'percentageOfEntry',
-  'Fast beløb': 'amountInRealKroner',
+  '%': 'percentageOfEntry',
+  'kr.': 'amountInRealKroner',
 }
 
 /** De former, en fordelingslinje kan vælges imellem. Resten er ikke iblandt
     dem: præcis én linje er den, og den vælges ikke til og fra — den er
     fordelingens form og ikke en mulighed på lige fod med de øvrige.
 
+    De to første er enheder som bidragets, men den tredje er det ikke, og
+    fordelingens formvalg bliver derfor stående som sit eget felt frem for at
+    flytte ind i enhedskolonnen: en kontakt, der kun er enheden på to af tre
+    knapper, er ikke en enhed.
+
     `UpToCap` står her, men tilbydes kun, hvor destinationen har et loft at
     fylde ud, jf. `allocationFormsFor`. */
 export const allocationForms: Record<string, 'Percentage' | 'Amount' | 'UpToCap'> = {
-  Procent: 'Percentage',
-  Kronebeløb: 'Amount',
+  '%': 'Percentage',
+  'kr.': 'Amount',
   'Op til loftet': 'UpToCap',
 }
 

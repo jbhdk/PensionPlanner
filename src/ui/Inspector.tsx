@@ -65,6 +65,7 @@ import {
   SelectField,
   TextField,
   ToggleField,
+  UnitToggle,
 } from './fields'
 import type { FieldHelpKey } from './fieldHelp'
 import { kroner, procent } from './format'
@@ -412,7 +413,7 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
           }
         />
         <NumberField
-          label="Saldo (nutidskroner)"
+          label="Saldo"
           help="Holding.balance"
           unit="kr."
           value={holding.balance}
@@ -845,7 +846,7 @@ function EntrySection({
         /* Ét navn på feltet uanset skattebehandling: beløbet er postens
            eget, og en lønpost er ikke længere en undtagelse, jf.
            ADR-0040. Hvad det betyder for en løn, står i noten nedenfor. */
-        label="Beløb (nutidskroner)"
+        label="Beløb"
         help="Entry.amountInRealKroner"
         unit="kr."
         value={entry.amountInRealKroner}
@@ -1040,7 +1041,7 @@ function PensionAgreementSection({
         </button>
       }
     >
-      <ContributionAmountFields
+      <ContributionAmountField
         label="Arbejdsgiverbidrag"
         formHelp="PensionAgreement.employerContributionForm"
         percentageHelp="PensionAgreement.employerPercentage"
@@ -1052,7 +1053,7 @@ function PensionAgreementSection({
           )
         }
       />
-      <ContributionAmountFields
+      <ContributionAmountField
         label="Arbejdstagerbidrag"
         formHelp="PensionAgreement.employeeContributionForm"
         percentageHelp="PensionAgreement.employeePercentage"
@@ -1070,7 +1071,7 @@ function PensionAgreementSection({
           handelsomkostningerne er depotets og ligger i beholdningens
           omkostningssats, hvor de sænker afkastet. */}
       <NumberField
-        label="Gebyr (nutidskroner)"
+        label="Gebyr"
         help="PensionAgreement.fee"
         unit="kr."
         value={agreement.fee}
@@ -1079,7 +1080,7 @@ function PensionAgreementSection({
         }
       />
       <NumberField
-        label="Forsikringspræmie (nutidskroner)"
+        label="Forsikringspræmie"
         help="PensionAgreement.insurancePremium"
         unit="kr."
         value={agreement.insurancePremium}
@@ -1165,8 +1166,12 @@ function AllocationLineFields({
         <LockedField label="Andel" help="AllocationShare.remainder" value="Resten" unit="" />
       ) : (
         <>
+          {/* Kontakten bliver stående som sit eget felt, hvor bidragets er
+              flyttet ind i enhedskolonnen: "Op til loftet" er en form og ikke
+              en enhed, jf. `allocationForms`. Etiketten er skåret ind til det,
+              der er plads til ved siden af tre knapper. */}
           <ToggleField
-            label="Andel angives som"
+            label="Andelen er"
             help="AllocationShare.form"
             value={danish(allocationForms, line.form)}
             options={allocationFormsFor(destination)}
@@ -1191,7 +1196,7 @@ function AllocationLineFields({
             />
           ) : (
             <NumberField
-              label="Andel (nutidskroner)"
+              label="Andel"
               help="AllocationShare.amountInRealKroner"
               unit="kr."
               value={line.amountInRealKroner}
@@ -1257,12 +1262,16 @@ function retainedOn(line: AllocationLine, destination: Holding): AllocationLine 
     : line
 }
 
-/** Et bidrag på pensionsaftalen: formen og det ene tal, formen har.
+/** Et bidrag på pensionsaftalen: ét felt med sit tal, hvor enheden er valget
+    mellem de to former. Begge former står synlige — en vælger ville skjule
+    den ene bag et klik, og der er kun to — men de er ikke et spørgsmål for
+    sig: formen *er* enheden, og kontakten står derfor, hvor "%" ellers stod,
+    jf. `UnitToggle`. Samme kontakt som indbetalingens.
 
     De to bidrag stiller det samme spørgsmål og ville drive fra hinanden,
     hvis de blev skrevet to gange — men de er hver sit felt på skærmen og
     bærer derfor hver sine forklaringer, som kalderen rækker ind. */
-function ContributionAmountFields({
+function ContributionAmountField({
   label,
   formHelp,
   percentageHelp,
@@ -1278,42 +1287,37 @@ function ContributionAmountFields({
   onChange: (value: ContributionAmount) => void
 }) {
   const isPercentage = 'percentageOfEntry' in value
+  const unit = (
+    <UnitToggle
+      help={formHelp}
+      value={danish(contributionAmounts, isPercentage ? 'percentageOfEntry' : 'amountInRealKroner')}
+      options={Object.keys(contributionAmounts)}
+      onChange={(choice) =>
+        onChange(
+          contributionAmounts[choice] === 'percentageOfEntry'
+            ? { percentageOfEntry: 0 }
+            : { amountInRealKroner: 0 },
+        )
+      }
+    />
+  )
 
-  return (
-    <>
-      {/* Begge former står synlige: en vælger ville skjule den ene bag et
-          klik, og der er kun to. Samme kontakt som indbetalingens. */}
-      <ToggleField
-        label={`${label} angives som`}
-        help={formHelp}
-        value={danish(contributionAmounts, isPercentage ? 'percentageOfEntry' : 'amountInRealKroner')}
-        options={Object.keys(contributionAmounts)}
-        onChange={(choice) =>
-          onChange(
-            contributionAmounts[choice] === 'percentageOfEntry'
-              ? { percentageOfEntry: 0 }
-              : { amountInRealKroner: 0 },
-          )
-        }
-      />
-      {isPercentage ? (
-        <NumberField
-          label={label}
-          help={percentageHelp}
-          unit="%"
-          value={asPercent(value.percentageOfEntry)}
-          onChange={(percent) => onChange({ percentageOfEntry: percent / 100 })}
-        />
-      ) : (
-        <NumberField
-          label={`${label} (nutidskroner)`}
-          help={amountHelp}
-          unit="kr."
-          value={value.amountInRealKroner}
-          onChange={(amountInRealKroner) => onChange({ amountInRealKroner })}
-        />
-      )}
-    </>
+  return isPercentage ? (
+    <NumberField
+      label={label}
+      help={percentageHelp}
+      unit={unit}
+      value={asPercent(value.percentageOfEntry)}
+      onChange={(percent) => onChange({ percentageOfEntry: percent / 100 })}
+    />
+  ) : (
+    <NumberField
+      label={label}
+      help={amountHelp}
+      unit={unit}
+      value={value.amountInRealKroner}
+      onChange={(amountInRealKroner) => onChange({ amountInRealKroner })}
+    />
   )
 }
 
@@ -1572,6 +1576,22 @@ function ContributionFields({
     destination && !destinations.some((holding) => holding.name === destination.name)
       ? [destination, ...destinations]
       : destinations
+  // Beløbsformen er feltets enhed og ikke et spørgsmål ved siden af det, jf.
+  // `UnitToggle`. Den bygges her, fordi begge grene af beløbsfeltet rækker
+  // den samme kontakt ind — kun tallet og dets forklaring skifter med formen.
+  const amountForm = (
+    <UnitToggle
+      help="Contribution.amountForm"
+      value={danish(
+        contributionAmounts,
+        'percentageOfEntry' in contribution ? 'percentageOfEntry' : 'amountInRealKroner',
+      )}
+      options={Object.keys(contributionAmounts)}
+      onChange={(choice) =>
+        onChange(withContribution(plan, id, (c) => withAmountForm(c, contributionAmounts[choice]!)))
+      }
+    />
+  )
   return (
     <>
       <Head
@@ -1652,26 +1672,13 @@ function ContributionFields({
         {contribution.kind === 'EntrySourced' ? (
           <>
             {/* Begge former står synlige: en vælger ville skjule den ene bag
-                et klik, og der er kun to. */}
-            <ToggleField
-              label="Angives som"
-              help="Contribution.amountForm"
-              value={danish(
-                contributionAmounts,
-                'percentageOfEntry' in contribution ? 'percentageOfEntry' : 'amountInRealKroner',
-              )}
-              options={Object.keys(contributionAmounts)}
-              onChange={(choice) =>
-                onChange(
-                  withContribution(plan, id, (c) => withAmountForm(c, contributionAmounts[choice]!)),
-                )
-              }
-            />
+                et klik, og der er kun to. De er ikke et spørgsmål for sig —
+                formen *er* feltets enhed, jf. `UnitToggle`. */}
             {'percentageOfEntry' in contribution ? (
               <NumberField
-                label="Procent"
+                label="Beløb"
                 help="Contribution.percentageOfEntry"
-                unit="%"
+                unit={amountForm}
                 value={asPercent(contribution.percentageOfEntry)}
                 onChange={(percent) =>
                   onChange(
@@ -1683,9 +1690,9 @@ function ContributionFields({
               />
             ) : (
               <NumberField
-                label="Fast beløb (nutidskroner)"
+                label="Beløb"
                 help="Contribution.amountInRealKroner"
-                unit="kr."
+                unit={amountForm}
                 value={contribution.amountInRealKroner}
                 onChange={(amountInRealKroner) =>
                   onChange(
@@ -1708,7 +1715,7 @@ function ContributionFields({
         ) : (
           <>
             <NumberField
-              label="Fast beløb (nutidskroner)"
+              label="Beløb"
               help="Contribution.amountInRealKroner"
               unit="kr."
               value={contribution.amountInRealKroner}
@@ -1720,9 +1727,9 @@ function ContributionFields({
                 )
               }
             />
-            {/* Kontakten "Angives som" står slet ikke: en procent skal have en
-                post at måle af, og et valg, der aldrig kan træffes, er værre
-                end intet valg. */}
+            {/* Enheden står som ren tekst og ikke som en kontakt: en procent
+                skal have en post at måle af, og et valg, der aldrig kan
+                træffes, er værre end intet valg. */}
             <Hint>
               En procent skal have en post at måle af, og kilden er en beholdning — derfor
               kun kronebeløbet. Det er tastet i nutidskroner og følger planens
@@ -1906,7 +1913,7 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
           onChange={(name) => onChange(withTransferEnd(plan, id, 'to', holdingByName[name]!))}
         />
         <NumberField
-          label="Beløb (nutidskroner)"
+          label="Beløb"
           help="Transfer.amountInRealKroner"
           unit="kr."
           value={transfer.amountInRealKroner}

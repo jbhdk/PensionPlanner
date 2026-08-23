@@ -144,12 +144,16 @@ async function openEverySurplusBand(user: ReturnType<typeof userEvent.setup>) {
   }
 }
 
-/** Alle etiketter i skuffen, som den står lige nu — både `<label>` og de
-    `span.etiket`, som en låst værdi og en segmenteret kontakt bruger, hvor
-    der ikke er én kontrol at pege på. */
+/** Alt i skuffen, der kan peges på, som den står lige nu: `<label>`, de
+    `span.etiket`, som en låst værdi og en fritstående segmenteret kontakt
+    bruger, hvor der ikke er én kontrol at pege på, og de kontakter, der står
+    i enhedskolonnen. Den sidste slags har ingen etiket — formen *er* enheden,
+    jf. `UnitToggle` — og forklaringen hænger på kontakten selv. */
 function drawerLabels(): HTMLElement[] {
   const drawer = document.querySelector('.skuffe') ?? document.body
-  return [...drawer.querySelectorAll<HTMLElement>('.felt label, .felt .etiket')]
+  return [
+    ...drawer.querySelectorAll<HTMLElement>('.felt label, .felt .etiket, .felt .enhed .kontakt'),
+  ]
 }
 
 /** Går navigatoren igennem og åbner hvert objekt i planen efter tur. En ny
