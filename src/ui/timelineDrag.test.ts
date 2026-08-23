@@ -167,6 +167,82 @@ describe('applyTimelineDrag', () => {
     expect(holding).toMatchObject({ payout: { start: 67, duration: 18 } })
   })
 
+  it('klemmer ratepensionens fra-håndtag til pensionsudbetalingsalderen, ikke længere ned', () => {
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 1_000_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+          payout: { start: 67, duration: 15, principle: 'SerialPrinciple' },
+        },
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'HoldingPayouts')!.items[0]!
+
+    // Samme lovregel som livrentens, PBL § 11 A, stk. 1 — og derfor samme
+    // klemning: fem år tilbage ville lande på 62, og trækket standser på 67.
+    const next = applyTimelineDrag(plan, item, 'from', -5)
+
+    const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
+    expect(holding).toMatchObject({ payout: { start: 67, duration: 15 } })
+  })
+
+  it('klemmer ratepensionens til-håndtag til ti års varighed, ikke kortere', () => {
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 1_000_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+          payout: { start: 67, duration: 15, principle: 'SerialPrinciple' },
+        },
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'HoldingPayouts')!.items[0]!
+
+    // Ti år tilbage ville give en varighed på fem, og en ratepension skal
+    // udbetales over mindst ti — den nedre grænse er feltets egen.
+    const next = applyTimelineDrag(plan, item, 'to', -10)
+
+    const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
+    expect(holding).toMatchObject({ payout: { start: 67, duration: 10 } })
+  })
+
+  it('klemmer ratepensionens til-håndtag, så sidste rate ikke falder efter trediveårsgrænsen', () => {
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 1_000_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+          payout: { start: 67, duration: 15, principle: 'SerialPrinciple' },
+        },
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'HoldingPayouts')!.items[0]!
+
+    // Jesper når 67 i 2040 (jf. aPlan), og sidste rate skal falde senest i
+    // 2070. Starten står i 2040, så der er plads til 31 år — halvtreds år frem
+    // klemmes derned og ikke til de 65, trækket bad om.
+    const next = applyTimelineDrag(plan, item, 'to', 50)
+
+    const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
+    expect(holding).toMatchObject({ payout: { start: 67, duration: 31 } })
+  })
+
   it('rykker en livrentes omsætningstidspunkt, når boksens fra-håndtag trækkes', () => {
     const plan = aPlan({
       holdings: [
