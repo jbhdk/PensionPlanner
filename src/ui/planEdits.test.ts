@@ -573,6 +573,8 @@ describe('pensionsaftalen på lønposten', () => {
     expect(agreementOf(plan)).toEqual({
       employerContribution: { percentageOfEntry: 0 },
       employeeContribution: { percentageOfEntry: 0 },
+      fee: 0,
+      insurancePremium: 0,
       allocation: [{ to: 'ratepension', form: 'Remainder' }],
     })
   })

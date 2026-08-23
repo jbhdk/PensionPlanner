@@ -12,6 +12,7 @@ import { payoutStartYear, payoutYear, transferAllowedFrom } from './payoutAge'
 import { periodBounds } from './age'
 import type {
   AgeBound,
+  ContributionAmount,
   Entry,
   EntryId,
   Holding,
@@ -90,6 +91,29 @@ function pensionAgreements(plan: Plan): string | undefined {
     if (agreement === undefined) continue
 
     const subject = `Pensionsaftalen på posten ${entry.name}`
+
+    // En aftale, der trak mere ud, end der blev betalt ind, findes ikke:
+    // selskabet ville sætte præmien ned eller kræve mere ind. Spørgsmålet
+    // har intet årstal — bidragenes procenter måler lønposten, og alle
+    // aftalens kronebeløb løftes med lønpostens egen reguleringssats, så
+    // forholdet er det samme i hvert eneste simuleringsår.
+    //
+    // Målt mod indbetalingen selv og ikke mod indbetalingen efter
+    // AM-bidrag: indgangen kender ikke et satsår og dermed ikke satsen, og
+    // en sats skrevet af her ville være en dublet af satsåret. Det smalle
+    // bånd, bidraget alene tipper, lander derfor på nul i motoren i stedet,
+    // jf. `pensionAgreementsInYear`.
+    const costs = agreement.fee + agreement.insurancePremium
+    const contributions =
+      measuredAgainstEntry(agreement.employerContribution, entry) +
+      measuredAgainstEntry(agreement.employeeContribution, entry)
+    if (costs >= contributions && costs > 0) {
+      return (
+        `${subject} trækker mere i gebyret og forsikringspræmien, end der betales ind. ` +
+        `Der skal blive noget tilbage at fordele.`
+      )
+    }
+
     const remainders = agreement.allocation.filter((line) => line.form === 'Remainder')
     if (remainders.length !== 1) {
       return (
@@ -123,6 +147,19 @@ function pensionAgreements(plan: Plan): string | undefined {
     }
   }
   return undefined
+}
+
+/** Et bidrag målt i nutidskroner mod sin lønpost: procenten af postens eget
+    beløb, jf. ADR-0040, eller kronebeløbet som det står.
+
+    Fremskrivningen er udeladt med vilje. Alle aftalens tal løftes med
+    lønpostens egen reguleringssats — den samme faktor — og forholdet mellem
+    dem er derfor det samme i hvert eneste simuleringsår. Det er dét, der gør
+    spørgsmålet til et indgangsspørgsmål frem for et årsresultat. */
+function measuredAgainstEntry(amount: ContributionAmount, entry: Entry): number {
+  return 'percentageOfEntry' in amount
+    ? entry.amountInRealKroner * amount.percentageOfEntry
+    : amount.amountInRealKroner
 }
 
 /** Udbetalingsplanens lovregler, jf. [PBL § 11 A, stk.

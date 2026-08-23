@@ -125,6 +125,11 @@ type ActiveAgreement = {
   employerContribution: Nominal
   employeeContribution: Nominal
   labourMarketContribution: Nominal
+  /** Gebyret og præmien, som året fremskrev dem. De forlader husstanden uden
+      at blive til formue og er derfor udgifter, jf. ADR-0042 — men de er
+      aftalens udgifter og ingen `Entry`, og de står derfor her. */
+  fee: Nominal
+  insurancePremium: Nominal
   timing: Timing
   placements: ActivePlacement[]
 }
@@ -280,12 +285,22 @@ function simulateYear(
   // forlader bufferen, hvor hele bruttolønnen — arbejdsgiverbidraget med —
   // netop er vejet ind med posten. Forfaldet er lønpostens, som aftalen
   // arver alt andet fra.
+  //
+  // Gebyret og præmien vejes ud af bufferen i samme greb. De forlader den
+  // sammen med resten af indbetalingen og har lønpostens forfald, og en
+  // dateret bevægelse på bufferen forrenter sig kun for den del af året, den
+  // var der, jf. `Buffer` og ADR-0006. De vejes kun i den ene ende: der er
+  // ingen anden — pengene forlader husstanden, jf. ADR-0042.
   const afterAgreements = placedAgreements.reduce(
-    (years, { placements, timing }) =>
-      placements.reduce(
-        (years, { to, landed }) =>
-          withWeightedFlow(years, plan.buffer, to, landed, landed, timing, plan.buffer),
-        years,
+    (years, { placements, timing, fee, insurancePremium }) =>
+      withFlow(
+        placements.reduce(
+          (years, { to, landed }) =>
+            withWeightedFlow(years, plan.buffer, to, landed, landed, timing, plan.buffer),
+          years,
+        ),
+        plan.buffer,
+        -(fee + insurancePremium) * weightAt(plan.buffer, timing, plan.buffer),
       ),
     afterContributions,
   )
@@ -397,7 +412,11 @@ function simulateYear(
   // kan ikke vejes noget sted alligevel.
   const statePensions = statePensionsInYear(plan.household, year)
 
-  const expenses = sumOf(entries, 'Expense')
+  // Aftalens gebyr og præmie er udgifter og ingen poster: pengene forlader
+  // husstanden uden at blive til formue, og balanceinvarianten har kun det
+  // ene led tilbage til dem, jf. ADR-0042. De står derfor i `expenses` uden
+  // at have en `Entry` bag sig — årstabellens kolonne siger det selv.
+  const expenses = sumOf(entries, 'Expense') + agreementCosts(placedAgreements)
 
   // Bufferen kan være et aktiedepot eller en opsparingskonto, og dens afkast
   // er da personens egen aktie- eller kapitalindkomst: læste opgørelsen her
@@ -419,7 +438,7 @@ function simulateYear(
       persons: plan.household.persons.map((person) => ({
         tax: taxInput(entries, person, rates, year, {
           capitalIncome: capitalIncomeByPerson.get(person.id)!,
-          withDeductibility: byPerson.get(person.id)!.withDeductibility,
+          ...deductibleOf(byPerson.get(person.id)!, placedAgreements, person, plan),
           payouts: payoutOf(swept.payouts, person),
           benefits: sumOfBenefits(annuitiesOf(annuities, person)),
         }),
@@ -477,11 +496,21 @@ function simulateYear(
       intoHolding,
     })),
     pensionAgreements: placedAgreements.map(
-      ({ entry, employerContribution, employeeContribution, labourMarketContribution, placements }) => ({
+      ({
         entry,
         employerContribution,
         employeeContribution,
         labourMarketContribution,
+        fee,
+        insurancePremium,
+        placements,
+      }) => ({
+        entry,
+        employerContribution,
+        employeeContribution,
+        labourMarketContribution,
+        fee,
+        insurancePremium,
         destinations: placements.map(({ to, landed }) => ({ holding: to, landed })),
       }),
     ),
@@ -1025,6 +1054,7 @@ function taxInput(
   ofPerson: {
     capitalIncome: Nominal
     withDeductibility: Nominal
+    extraPensionAllowanceBase: Nominal
     payouts: Nominal
     benefits: Nominal
   },
@@ -1053,6 +1083,7 @@ function taxInput(
       ? {
           contribution: {
             withDeductibility: ofPerson.withDeductibility,
+            extraPensionAllowanceBase: ofPerson.extraPensionAllowanceBase,
             yearsToStatePensionAge: statePensionYear(person) - year,
           },
         }
@@ -1375,6 +1406,68 @@ function payoutOf(payouts: ActivePayout[], person: Person): Nominal {
     .reduce((sum, payout) => sum + payout.amount, 0)
 }
 
+/** De to tal om årets indbetalinger, som krydser skattesømmet for én person.
+
+    De var ét tal, indtil pensionsaftalen fik et gebyr og en
+    forsikringspræmie, jf. ADR-0043. De to har bortseelsesret som resten af
+    § 19-indbetalingen og nedsætter derfor den personlige indkomst, uanset
+    hvor pengene lander — men de skaber intet grundlag for det ekstra
+    pensionsfradrag på egen hånd. Går aftalens penge ind i en aldersopsparing,
+    er hverken de eller resten omfattet af § 18 eller § 19, og grundlaget er
+    nul, hvor indkomsten alligevel er nedsat. Ét tal kunne ikke sige begge
+    dele.
+
+    Loftets eget bidrag er det samme i begge: en indbetaling, der har
+    fradragsret, er også den, § 9 L måler. Gebyret og præmien måles derimod
+    ikke mod noget loft — de er trukket, før fordelingen mødte det, jf.
+    ADR-0042. */
+function deductibleOf(
+  caps: PersonCaps,
+  agreements: ActiveAgreement[],
+  person: Person,
+  plan: Plan,
+): { withDeductibility: Nominal; extraPensionAllowanceBase: Nominal } {
+  return agreements
+    .filter((agreement) => agreement.owner === person.id)
+    .reduce(
+      (sums, agreement) => {
+        const costs = agreement.fee + agreement.insurancePremium
+        return {
+          withDeductibility: sums.withDeductibility + costs,
+          extraPensionAllowanceBase:
+            sums.extraPensionAllowanceBase + (placesWithDeductibility(agreement, plan) ? costs : 0),
+        }
+      },
+      {
+        withDeductibility: caps.withDeductibility,
+        extraPensionAllowanceBase: caps.withDeductibility,
+      },
+    )
+}
+
+/** Om aftalens penge går ind i en ordning, hvis indbetaling er omfattet af
+    PBL § 18 eller § 19.
+
+    Fordelingen har præcis én linje: `Remainder` er den eneste form,
+    `AllocationShare` kender, og `validatePlan` kræver præcis én af dem.
+    Svaret er dermed destinationens eget. Får fordelingen en dag flere linjer
+    med hver sin variant, skal delingen af gebyret og præmien afgøres frem
+    for at falde ud af den `every`, der står her. */
+function placesWithDeductibility(agreement: ActiveAgreement, plan: Plan): boolean {
+  return agreement.placements.every(({ to }) => hasDeductibility(holdingById(plan, to)))
+}
+
+/** Det, årets pensionsaftaler trak af indbetalingerne uden at det blev til
+    formue: gebyrerne og præmierne under ét. De to opfører sig ens hele vejen
+    igennem og lægges derfor sammen her — det er som udgifter, de er ens, og
+    hvert af dem står for sig på aftalens egen linje, jf. ADR-0042. */
+function agreementCosts(agreements: ActiveAgreement[]): Nominal {
+  return agreements.reduce(
+    (sum, { fee, insurancePremium }) => sum + fee + insurancePremium,
+    0,
+  )
+}
+
 function sumOf(entries: ActiveEntry[], direction: Entry['direction']): Nominal {
   return entries
     .filter(({ entry }) => entry.direction === direction)
@@ -1484,6 +1577,27 @@ function pensionAgreementsInYear(
     const labourMarketContribution =
       (employerContribution + employeeContribution) * labourMarketRateOf(entry, rates)
 
+    // Gebyret og præmien følger lønpostens egen reguleringssats som alt
+    // andet i aftalen, og de trækkes efter AM-bidraget og før fordelingen.
+    // De måles ikke mod noget loft: det er alene det placerede beløb, der
+    // møder ordningens `Cap`, jf. ADR-0042.
+    //
+    // Ingen af dem kan tage mere, end der er. En aftale, hvis to beløb er
+    // større end indbetalingen, er afvist ved indgangen, jf. `validatePlan`
+    // — men indgangen kender ikke et satsår og dermed ikke AM-satsen, og
+    // der er derfor et smalt bånd tilbage, hvor bidraget alene tipper den.
+    // Gebyret tages først, præmien af resten: selskabets eget træk går forud
+    // for den dækning, det administrerer. Så placeres der nul frem for et
+    // negativt beløb, og linjen går op af sig selv, jf. ADR-0041.
+    const projection = entryProjection(entry, plan, year)
+    const afterLabourMarketContribution =
+      employerContribution + employeeContribution - labourMarketContribution
+    const fee = Math.min(agreement.fee * projection, afterLabourMarketContribution)
+    const insurancePremium = Math.min(
+      agreement.insurancePremium * projection,
+      afterLabourMarketContribution - fee,
+    )
+
     return [
       {
         entry: entry.id,
@@ -1491,10 +1605,12 @@ function pensionAgreementsInYear(
         employerContribution,
         employeeContribution,
         labourMarketContribution,
+        fee,
+        insurancePremium,
         timing: entry.timing,
         placements: allocate(
           agreement.allocation,
-          employerContribution + employeeContribution - labourMarketContribution,
+          afterLabourMarketContribution - fee - insurancePremium,
         ),
       },
     ]

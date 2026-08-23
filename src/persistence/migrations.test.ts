@@ -678,3 +678,49 @@ describe('v13 → v14: lønposten er lønsedlens løn', () => {
     expect(runMigrations(v13, 13, 14, migrations)).toEqual(v13)
   })
 })
+
+describe('v14 → v15: pensionsaftalen får et gebyr og en forsikringspræmie', () => {
+  it('giver en gemt aftale nul i begge — en aftale uden tal trak ingenting', () => {
+    // De to er kronebeløb og ikke valgfri felter: en aftale uden dem ville
+    // regne med `NaN` fra første år. Nul er det rigtige gæt og ikke et
+    // skøn — den gemte plan regnede uden dem, og nul er præcis det, den
+    // regnede med.
+    const v14 = {
+      name: 'Gammel plan',
+      entries: [
+        {
+          id: 'salary',
+          direction: 'Income',
+          pensionAgreement: {
+            employerContribution: { percentageOfEntry: 0.12 },
+            employeeContribution: { percentageOfEntry: 0.05 },
+            allocation: [{ to: 'ratepension', form: 'Remainder' }],
+          },
+        },
+      ],
+    }
+
+    const migrated = runMigrations(v14, 14, 15, migrations) as {
+      entries: Array<{ pensionAgreement: Record<string, unknown> }>
+    }
+
+    expect(migrated.entries[0]!.pensionAgreement).toEqual({
+      employerContribution: { percentageOfEntry: 0.12 },
+      employeeContribution: { percentageOfEntry: 0.05 },
+      fee: 0,
+      insurancePremium: 0,
+      allocation: [{ to: 'ratepension', form: 'Remainder' }],
+    })
+  })
+
+  it('lader en post uden aftale stå urørt', () => {
+    // Fraværet er hele svaret: en lønpost uden aftale har ingen firmapension,
+    // og leddet må ikke skrive en tom aftale på den.
+    const v14 = {
+      name: 'Gammel plan',
+      entries: [{ id: 'salary', direction: 'Income', amountInRealKroner: 600_000 }],
+    }
+
+    expect(runMigrations(v14, 14, 15, migrations)).toEqual(v14)
+  })
+})

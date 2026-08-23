@@ -432,6 +432,38 @@ export const migrations: Migration[] = [
     from: 13,
     migrate: (data) => data,
   },
+  {
+    // v14 → v15, jf. ADR-0042: pensionsaftalen bærer et gebyr og en
+    // forsikringspræmie, som trækkes efter AM-bidraget og før fordelingen.
+    //
+    // De to er kronebeløb og ikke valgfri felter — en aftale, hvor de
+    // manglede, ville regne med `NaN` fra første år. Nul er ikke et skøn her,
+    // sådan som v13 → v14's lønbeløb var det: den gemte plan regnede uden de
+    // to, og nul er præcis det, den regnede med. Leddet kan derfor gøre
+    // arbejdet færdigt, og der er ingen besked til planlæggeren.
+    from: 14,
+    migrate: (data) => {
+      const plan = data as {
+        entries?: Array<Record<string, unknown>>
+        [key: string]: unknown
+      }
+      if (!plan.entries) return plan
+
+      return {
+        ...plan,
+        entries: plan.entries.map((entry) => {
+          // Fraværet er hele svaret: en lønpost uden aftale har ingen
+          // firmapension, og leddet må ikke skrive en tom aftale på den.
+          if (!entry.pensionAgreement) return entry
+          const agreement = entry.pensionAgreement as Record<string, unknown>
+          return {
+            ...entry,
+            pensionAgreement: { fee: 0, insurancePremium: 0, ...agreement },
+          }
+        }),
+      }
+    },
+  },
 ]
 
 /** Den skemaversion, hvor lønpostens beløb skiftede betydning, jf. ADR-0040.

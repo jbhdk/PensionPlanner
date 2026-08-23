@@ -347,7 +347,7 @@ describe('skatteopgørelsen', () => {
     //   Personlig indkomst  644.000 − 96.600  = 547.400
     const assessment = assess({
       earnedIncome: 700_000,
-      contribution: { withDeductibility: 96_600, yearsToStatePensionAge: 12 },
+      contribution: { withDeductibility: 96_600, extraPensionAllowanceBase: 96_600, yearsToStatePensionAge: 12 },
     })
 
     expect(assessment.layers.labourMarketContribution.base).toBeCloseTo(700_000, 2)
@@ -364,7 +364,7 @@ describe('skatteopgørelsen', () => {
     const without = assess({ earnedIncome: 3_000_000 })
     const withContribution = assess({
       earnedIncome: 3_000_000,
-      contribution: { withDeductibility: 100_000, yearsToStatePensionAge: 20 },
+      contribution: { withDeductibility: 100_000, extraPensionAllowanceBase: 100_000, yearsToStatePensionAge: 20 },
     })
 
     const above = [
@@ -397,7 +397,7 @@ describe('skatteopgørelsen', () => {
     const without = assess({ earnedIncome: 300_000 })
     const withContribution = assess({
       earnedIncome: 300_000,
-      contribution: { withDeductibility: 50_000, yearsToStatePensionAge: 20 },
+      contribution: { withDeductibility: 50_000, extraPensionAllowanceBase: 50_000, yearsToStatePensionAge: 20 },
     })
 
     expect(withContribution.allowances.employmentAllowance).toBeCloseTo(
@@ -418,7 +418,7 @@ describe('skatteopgørelsen', () => {
     // folkepensionsalderen. 12 % af 50.000 = 6.000.
     const assessment = assess({
       earnedIncome: 500_000,
-      contribution: { withDeductibility: 50_000, yearsToStatePensionAge: 20 },
+      contribution: { withDeductibility: 50_000, extraPensionAllowanceBase: 50_000, yearsToStatePensionAge: 20 },
     })
 
     expect(assessment.allowances.extraPensionAllowance).toBeCloseTo(6_000, 2)
@@ -431,7 +431,7 @@ describe('skatteopgørelsen', () => {
     const pension = (yearsToStatePensionAge: number) =>
       assess({
         earnedIncome: 500_000,
-        contribution: { withDeductibility: 50_000, yearsToStatePensionAge },
+        contribution: { withDeductibility: 50_000, extraPensionAllowanceBase: 50_000, yearsToStatePensionAge },
       }).allowances.extraPensionAllowance
 
     expect(pension(16)).toBeCloseTo(6_000, 2)
@@ -447,7 +447,7 @@ describe('skatteopgørelsen', () => {
     const pension = (yearsToStatePensionAge: number) =>
       assess({
         earnedIncome: 900_000,
-        contribution: { withDeductibility: 120_000, yearsToStatePensionAge },
+        contribution: { withDeductibility: 120_000, extraPensionAllowanceBase: 120_000, yearsToStatePensionAge },
       }).allowances.extraPensionAllowance
 
     expect(pension(20)).toBeCloseTo(10_536, 2)

@@ -180,6 +180,15 @@ export function anExpense(options: {
   }
 }
 
+/** En pensionsaftale, som en test skriver den: gebyret og præmien står som
+    nul, med mindre testen beder om andet. De to er nul i langt de fleste
+    aftaler, en test skriver, og en test, der handler om dem, siger selv hvad
+    selskabet trak — samme greb som livrentens oplyste tal i `aHolding`. */
+type AgreementOptions = Omit<PensionAgreement, 'fee' | 'insurancePremium'> & {
+  fee?: number
+  insurancePremium?: number
+}
+
 /** En lønpost. Beløbet er lønsedlens løn — arbejdsgiverbidraget står i
     pensionsaftalen og lægges til af den, jf. ADR-0040. */
 export function aSalary(options: {
@@ -189,7 +198,7 @@ export function aSalary(options: {
   period?: Period
   recurrence?: Recurrence
   regulationRate?: number
-  pensionAgreement?: PensionAgreement
+  pensionAgreement?: AgreementOptions
 }): Entry {
   return {
     id: 'salary',
@@ -202,7 +211,15 @@ export function aSalary(options: {
     period: options.period ?? wholeHorizon,
     recurrence: options.recurrence ?? annually,
     regulationRate: options.regulationRate ?? 0,
-    ...(options.pensionAgreement ? { pensionAgreement: options.pensionAgreement } : {}),
+    ...(options.pensionAgreement
+      ? {
+          pensionAgreement: {
+            fee: 0,
+            insurancePremium: 0,
+            ...options.pensionAgreement,
+          },
+        }
+      : {}),
   }
 }
 

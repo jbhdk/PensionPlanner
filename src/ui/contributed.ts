@@ -5,10 +5,29 @@ import type { YearResult } from '../engine/yearResult'
 
     AM-delen tælles ikke med: den forlod aldrig kilden som opsparing, og den
     står allerede i personens eget skattelag — aftalen opkræver ingenting, den
-    trækker alene fra på vejen ind, jf. ADR-0041. */
+    trækker alene fra på vejen ind, jf. ADR-0041. Gebyret og præmien tælles
+    heller ikke med: de blev aldrig til formue, jf. ADR-0042. Det er dem, der
+    skiller dette tal fra `leftBufferForAgreements`. */
 export function placedByAgreements(year: YearResult): Nominal {
   return sum(year.pensionAgreements, (agreement) =>
     sum(agreement.destinations, (destination) => destination.landed),
+  )
+}
+
+/** Det, årets pensionsaftaler tilsammen tog af bufferen: det placerede plus
+    gebyret og præmien.
+
+    De to forlader bufferen sammen med resten af indbetalingen — det er
+    derfor, de hører i indbetalingernes bånd og ikke i udgiftsposternes, jf.
+    ADR-0042. Båndet navngives efter, hvad der bevæger sig på bufferen, og
+    ikke efter hvad pengene siden blev til.
+
+    AM-delen står stadig udenfor: den forlod bufferen som en del af årets
+    skat og ligger allerede i skattebåndet. */
+export function leftBufferForAgreements(year: YearResult): Nominal {
+  return (
+    placedByAgreements(year) +
+    sum(year.pensionAgreements, (agreement) => agreement.fee + agreement.insurancePremium)
   )
 }
 

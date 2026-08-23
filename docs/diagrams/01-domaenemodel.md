@@ -66,6 +66,8 @@ classDiagram
     class PensionAgreement {
         +employerContribution
         +employeeContribution
+        +fee
+        +insurancePremium
     }
 
     class AllocationLine {
@@ -135,7 +137,7 @@ classDiagram
     note for Holding "Syv varianter: InstalmentPension, LifeAnnuity, OldAgeSavings, CapitalPension, ShareSavingsAccount, ShareDepot og SavingsAccount. De adskiller sig ved beskatning på vejen ind, på afkastet og på vejen ud, og ved loft. payoutAge bæres kun af de fire, der er en PensionScheme: en ShareSavingsAccount, en ShareDepot og en SavingsAccount har ingen udbetalingsalder og dermed heller ikke feltet."
     note for Property "Skitse: tegnet efter PRD'en, ikke efter glossaret. Afgøres i etape 4."
     note for Contribution "To former efter kilden, og felterne er tegnet som fællesmængden af dem. Lønkildet peger på en Entry og arver dens periode, anchor, recurrence og timing; det bærer kun percentageOfEntry eller amountInRealKroner. Beholdningskildet peger på en Holding og bærer selv det hele."
-    note for PensionAgreement "Firmaordningen på en lønpost. Højst én pr. Entry, og kun på indtægtsgrenen. Den bærer hverken periode, anchor, recurrence eller timing — den arver lønpostens og ophører derfor af sig selv ved workEndAge. De to bidrag måler lønpostens eget beløb, aldrig brutto: employerContribution lægges til lønnen af aftalen selv, jf. ADR-0040. Regnestykket står i PensionAgreementYear, ikke som en Contribution, jf. ADR-0041."
+    note for PensionAgreement "Firmaordningen på en lønpost. Højst én pr. Entry, og kun på indtægtsgrenen. Den bærer hverken periode, anchor, recurrence eller timing — den arver lønpostens og ophører derfor af sig selv ved workEndAge. De to bidrag måler lønpostens eget beløb, aldrig brutto: employerContribution lægges til lønnen af aftalen selv, jf. ADR-0040. fee og insurancePremium er kronebeløb i nutidskroner, der trækkes efter AM-bidraget og før fordelingen; de måles ikke mod noget loft og bliver aldrig til formue, jf. ADR-0042. Regnestykket står i PensionAgreementYear, ikke som en Contribution, jf. ADR-0041."
     note for AllocationLine "Fordelingen. Præcis én linje er Remainder, og det er dét, der får fordelingen til at gå op i hvert simuleringsår i kraft af sin form. Destinationen skal være EmployerAdministered og tilhøre lønpostens ejer — begge afvises ved indgangen. Formerne Percentage, Amount og UpToCap er endnu ikke bygget."
     note for Transfer "Flytning fra en holding til FreeAssets. Afgiverens payoutTaxation må ikke være PersonalIncome — det er den, der tømmer OldAgeSavings, ShareSavingsAccount og CapitalPension. En TaxFree afgiver koster intet; en Chargeable koster en afgift af det, der forlader beholdningen. Destinationen er altid FreeAssets: en flytning ind i en ordning er en indbetaling, ikke en Transfer. Beløbet måles hos afgiveren og afkortes til dennes saldo."
     note for LifeAnnuity "Den sjette variant, ikke en underklasse: pilen er mermaids eneste måde at tegne et unionsmedlem, der bærer egne felter. En Holding indtil udbetalingsstart, derefter en garanteret livsvarig ydelse. Dens PayoutSchedule bærer kun start — der er hverken duration eller principle at bære. quotedReserve og quotedAnnualBenefit er enhedsløse: kun deres kvotient bruges."

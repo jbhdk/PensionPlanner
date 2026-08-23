@@ -971,6 +971,31 @@ function PensionAgreementSection({
           )
         }
       />
+      {/* De to trækkes efter arbejdsmarkedsbidraget og før fordelingen, og
+          de står derfor mellem bidragene og ordningen — rækkefølgen på
+          skærmen er årets gennemløb. Der er intet felt for kurtage:
+          handelsomkostningerne er depotets og ligger i beholdningens
+          omkostningssats, hvor de sænker afkastet. */}
+      <NumberField
+        label="Gebyr (nutidskroner)"
+        help="PensionAgreement.fee"
+        unit="kr."
+        value={agreement.fee}
+        onChange={(fee) =>
+          onChange(withPensionAgreement(plan, entry.id, (a) => ({ ...a, fee })))
+        }
+      />
+      <NumberField
+        label="Forsikringspræmie (nutidskroner)"
+        help="PensionAgreement.insurancePremium"
+        unit="kr."
+        value={agreement.insurancePremium}
+        onChange={(insurancePremium) =>
+          onChange(
+            withPensionAgreement(plan, entry.id, (a) => ({ ...a, insurancePremium })),
+          )
+        }
+      />
       <SelectField
         label="Ordning"
         help="Allocation.to"

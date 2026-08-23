@@ -716,8 +716,8 @@ function freshContributionId(plan: Plan): string {
 
 /** Slår Pension-sektionen til på en lønpost.
 
-    Aftalen skrives med to bidrag på nul og én fordelingslinje, der er
-    resten. Ét klik må ikke skrive en plan, indgangskontrollen afviser, jf.
+    Aftalen skrives med to bidrag på nul, et gebyr og en præmie på nul og én
+    fordelingslinje, der er resten. Ét klik må ikke skrive en plan, indgangskontrollen afviser, jf.
     ADR-0020: linjen peger derfor på ejerens første
     arbejdsgiveradministrerede ordning, og præcis den ene er resten.
 
@@ -735,6 +735,8 @@ export function addPensionAgreement(plan: Plan, entryId: string): Plan {
           pensionAgreement: {
             employerContribution: { percentageOfEntry: 0 },
             employeeContribution: { percentageOfEntry: 0 },
+            fee: 0,
+            insurancePremium: 0,
             allocation: [{ to, form: 'Remainder' }],
           },
         }

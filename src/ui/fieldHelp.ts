@@ -240,6 +240,12 @@ export const fieldHelp = {
   'PensionAgreement.employeeAmount':
     'Hvor meget der selv betales til pension, målt i nutidskroner. Beløbet følger lønnens egen stigning gennem forløbet, ligesom arbejdsgiverens del gør.',
 
+  'PensionAgreement.fee':
+    'Det, selskabet tager til sin egen administration af hver indbetaling, målt i nutidskroner. Det trækkes fra, før pengene går ind i ordningen, og bliver aldrig til opsparing — men det nedsætter skatten som resten af indbetalingen. Handelsomkostningerne hører ikke her; de sidder i ordningens årlige omkostning.',
+
+  'PensionAgreement.insurancePremium':
+    'Det, der hvert år går til en forsikring — typisk ved tab af erhvervsevne eller ved død — målt i nutidskroner. Pengene forlader husstanden og bliver aldrig til opsparing, men de nedsætter skatten som resten af indbetalingen.',
+
   'Allocation.to':
     'Den ordning, hele indbetalingen lander i. Kun ordninger, en arbejdsgiver kan administrere og som står i lønmodtagerens eget navn, kan vælges — valget afgør, om pengene nedsætter skatten, og hvilket loft de måles mod.',
 
@@ -298,7 +304,7 @@ export const fieldHelp = {
     'Al skat, året kostede: husstandens personskatter og den skat, ordningerne selv betaler af deres afkast.',
 
   'YearResult.expenses':
-    'Alt, hvad husstanden brugte i året, lagt sammen fra planens udgiftsposter.',
+    'Alt, hvad husstanden brugte i året, lagt sammen fra planens udgiftsposter. Har en løn en firmaordning, tæller gebyret og forsikringen med her: de penge forlader husstanden uden at blive til opsparing, selv om de ikke står som en post nogen steder. Hvad de var, står i forklaringen af året.',
 
   Surplus:
     'Hvad der blev til overs af det, året lagde ind på bufferbeholdningen og tog fra den. Afkastet tæller ikke med — det bliver stående, hvor det er tjent — mens skatten af det gør, for den skal betales. Et minus er det beløb, der mangler at blive flyttet fra en anden beholdning, og ikke et tegn på, at pengene ikke findes.',
@@ -421,11 +427,17 @@ export const fieldHelp = {
   'PensionAgreementYear.labourMarketContribution':
     'De otte procent af hele indbetalingen, der gik fra på vejen ind i ordningen. De er ikke en ekstra regning: beløbet er en del af årets samlede arbejdsmarkedsbidrag, som står i skatten ovenfor, og det er pensionsselskabet der holder det tilbage.',
 
+  'PensionAgreementYear.fee':
+    'Det, selskabet tog til sin egen administration i året. Beløbet forlader husstanden og bliver aldrig til opsparing, og det står derfor blandt årets udgifter — men det nedsætter skatten sammen med resten af indbetalingen.',
+
+  'PensionAgreementYear.insurancePremium':
+    'Det, forsikringen kostede i året. Pengene er brugt og står ikke i nogen ordning bagefter, men de nedsætter skatten som resten af indbetalingen — det er den ene udgift i planen, der gør begge dele.',
+
   'PensionAgreementDestination.holding':
     'Den ordning, pengene landede i. Valget afgør resten: om indbetalingen nedsætter skatten, hvilket loft den måles mod, og hvordan pengene beskattes, mens de står der.',
 
   'PensionAgreementDestination.landed':
-    'Det, der nåede frem til ordningen: de to bidrag lagt sammen og arbejdsmarkedsbidraget trukket fra. Det er dét beløb, loftet måles mod, og det beløb, der nedsætter årets skat, hvis ordningen giver fradrag.',
+    'Det, der nåede frem til ordningen: de to bidrag lagt sammen, og arbejdsmarkedsbidraget, gebyret og forsikringen trukket fra. Det er dét beløb, loftet måles mod — de tre fradrag måles ikke mod noget loft, for de er trukket, før pengene nåede ordningen.',
 
   'CapYear.variant':
     'Hvilken slags ordning loftet gælder, og hvem af husstanden det er gjort op for. Loftet er personens og deles af alle vedkommendes ordninger af den slags — to ratepensioner har ét loft mellem sig.',

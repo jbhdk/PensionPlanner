@@ -34,6 +34,21 @@ export type TaxAssessmentInput = {
         Grundlaget nedsættes efter § 9 L, stk. 2, med årets skattepligtige
         pensionsudbetalinger. Det led er ikke bygget, jf. docs/udskudt.md. */
     withDeductibility: Nominal
+    /** Grundlaget for det ekstra pensionsfradrag, LL § 9 L, stk. 1 — målt på
+        samme form som `withDeductibility`, altså efter AM-bidrag.
+
+        De to var ét tal, indtil pensionsaftalen fik et gebyr og en
+        forsikringspræmie, jf. ADR-0043. De to beløb har bortseelsesret som
+        resten af § 19-indbetalingen og står derfor i `withDeductibility`,
+        men de skaber intet grundlag på egen hånd: går aftalens penge ind i
+        en aldersopsparing, er hverken de eller resten omfattet af § 18 eller
+        § 19, og grundlaget er nul, hvor den personlige indkomst alligevel er
+        nedsat.
+
+        Hvilke indbetalinger der er hvad, er kalderens viden og ikke
+        opgørelsens: her ses aldrig en `HoldingVariant`, ganske som ved
+        `withDeductibility` selv. */
+    extraPensionAllowanceBase: Nominal
     /** Antal indkomstår frem til det indkomstår, hvor personen når
         folkepensionsalderen — nul i selve det år, negativt bagefter. Det er
         den differens, LL § 9 L, stk. 3, tæller på. */
@@ -263,7 +278,7 @@ function extraPensionAllowance(
       : rates.allowanceRates.extraPensionAllowanceEarly
 
   const base = Math.min(
-    input.contribution.withDeductibility,
+    input.contribution.extraPensionAllowanceBase,
     rates.thresholds.extraPensionAllowanceBaseMax,
   )
 

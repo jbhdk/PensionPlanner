@@ -110,6 +110,47 @@ describe('overskuddets bånd', () => {
     expect(net(year, plan)).toBeCloseTo(surplus(year, plan.buffer), 6)
   })
 
+  it('lægger aftalens gebyr og præmie i indbetalingsbåndet og ikke i udgiftsposternes', () => {
+    // De to forlader bufferen sammen med resten af indbetalingen, og båndet
+    // navngives efter bevægelsen, jf. ADR-0042. Udgiftsposternes bånd regnes
+    // af posterne selv og rammes derfor ikke, selv om årets `expenses`
+    // rummer de to.
+    //
+    // Båndet er de samme 66.240 som uden dem: det, der forlader bufferen, er
+    // det samme, hvad enten pengene bindes i ordningen eller går til
+    // selskabet. Kun de 60.240, der landede, er blevet til formue.
+    const plan = aPlan({
+      balance: 1_000_000,
+      holdings: [
+        aHolding({
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 0,
+        }),
+      ],
+      entries: [
+        aSalary({
+          amountInRealKroner: 600_000,
+          pensionAgreement: {
+            employerContribution: { percentageOfEntry: 0.12 },
+            employeeContribution: { amountInRealKroner: 0 },
+            fee: 1_200,
+            insurancePremium: 4_800,
+            allocation: [{ to: 'ratepension', form: 'Remainder' }],
+          },
+        }),
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(band(year, plan, 'Contributions')).toBeCloseTo(66_240, 6)
+    expect(band(year, plan, 'ExpenseEntries')).toBe(0)
+    // Og båndene går stadig op: de otte er kun en opdeling af det ene tal.
+    expect(net(year, plan)).toBeCloseTo(surplus(year, plan.buffer), 6)
+  })
+
   it('lader en overførsel uden bufferen i nogen ende tælle hverken op eller ned', () => {
     // Pengene flytter sig fra aldersopsparingen til aktiedepotet. Bufferen er
     // hverken afgiver eller modtager, og året skal se ud, som var overførslen

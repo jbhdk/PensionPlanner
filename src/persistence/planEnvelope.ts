@@ -5,7 +5,7 @@ import { SALARY_MEANING_CHANGED_IN, migrations, runMigrations } from './migratio
 /** Skemaversionen data gemmes under, både i localStorage og i en eksporteret
     fil — kæden i migrations.ts løfter en gemt plan fra sin egen version og
     frem til denne, jf. issue #15. */
-export const CURRENT_SCHEMA_VERSION = 14
+export const CURRENT_SCHEMA_VERSION = 15
 
 export type ParseResult =
   | {

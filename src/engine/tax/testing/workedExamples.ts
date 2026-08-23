@@ -393,7 +393,7 @@ export const workedExamples: readonly WorkedExample[] = [
       earnedIncome: 700_000,
       municipalTaxRate: 0.254,
       churchTaxRate: 0.0074,
-      contribution: { withDeductibility: 96_600, yearsToStatePensionAge: 12 },
+      contribution: { withDeductibility: 96_600, extraPensionAllowanceBase: 96_600, yearsToStatePensionAge: 12 },
     }),
     expected: [
       {
@@ -468,7 +468,7 @@ export const workedExamples: readonly WorkedExample[] = [
       earnedIncome: 700_000,
       municipalTaxRate: 0.254,
       churchTaxRate: 0.0074,
-      contribution: { withDeductibility: 68_700, yearsToStatePensionAge: 12 },
+      contribution: { withDeductibility: 68_700, extraPensionAllowanceBase: 68_700, yearsToStatePensionAge: 12 },
     }),
     expected: [
       {
@@ -532,7 +532,7 @@ export const workedExamples: readonly WorkedExample[] = [
       earnedIncome: 700_000,
       municipalTaxRate: 0.234,
       churchTaxRate: 0,
-      contribution: { withDeductibility: 60_000, yearsToStatePensionAge: 16 },
+      contribution: { withDeductibility: 60_000, extraPensionAllowanceBase: 60_000, yearsToStatePensionAge: 16 },
     }),
     expected: [
       {
@@ -594,7 +594,7 @@ export const workedExamples: readonly WorkedExample[] = [
       earnedIncome: 700_000,
       municipalTaxRate: 0.234,
       churchTaxRate: 0,
-      contribution: { withDeductibility: 60_000, yearsToStatePensionAge: 15 },
+      contribution: { withDeductibility: 60_000, extraPensionAllowanceBase: 60_000, yearsToStatePensionAge: 15 },
     }),
     expected: [
       {

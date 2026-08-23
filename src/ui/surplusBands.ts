@@ -1,6 +1,6 @@
 import type { Direction, Nominal, Plan } from '../engine/plan'
 import type { YearResult } from '../engine/yearResult'
-import { placedByAgreements } from './contributed'
+import { leftBufferForAgreements } from './contributed'
 
 /** De otte bånd, årets overskud består af. Faste og navngivne, aldrig ét pr.
     post: et antal, der fulgte planen, ville give hver plan sin egen graf, og
@@ -144,8 +144,13 @@ function transferTotal(
     Pensionsaftalens penge tælles med af samme grund som den lønkildede
     indbetalings: lønnen landede på bufferen med hele sit bruttobeløb —
     arbejdsgiverbidraget lagt til af aftalen, jf. ADR-0040 — og det, aftalen
-    placerede, forlader den igen. Båndet læser derfor begge steder, jf.
-    ADR-0041. */
+    tog, forlader den igen. Båndet læser derfor begge steder, jf. ADR-0041.
+
+    Aftalens gebyr og præmie tælles med her og ikke i udgiftsposternes bånd.
+    De er udgifter i balanceinvarianten, men de forlader bufferen sammen med
+    resten af indbetalingen, og båndene navngives efter bevægelsen, jf.
+    ADR-0042. Udgiftsposternes bånd regnes af `year.entries` og rammes derfor
+    ikke af, at `year.expenses` er vokset. */
 function contributionTotal(year: YearResult, plan: Plan): Nominal {
   const sources = new Map(
     plan.contributions.map((contribution) => [contribution.id, contribution]),
@@ -155,7 +160,7 @@ function contributionTotal(year: YearResult, plan: Plan): Nominal {
       const source = sources.get(contribution.contribution)!
       const fromBuffer = source.kind === 'EntrySourced' || source.source === plan.buffer
       return fromBuffer ? contribution.intoHolding : 0
-    }) + placedByAgreements(year)
+    }) + leftBufferForAgreements(year)
   )
 }
 

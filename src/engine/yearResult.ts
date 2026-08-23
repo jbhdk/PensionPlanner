@@ -118,6 +118,14 @@ export type PensionAgreementYear = {
       opkrævet af aftalen. Det står allerede i personens eget skattelag, og
       tallet her er den del af laget, aftalens penge bar, jf. ADR-0041. */
   labourMarketContribution: Nominal
+  /** Det, selskabet tog til sin egen administration — trukket efter
+      AM-bidraget og før fordelingen. Det bliver aldrig til formue og står i
+      årets udgifter uden at have en `Entry` bag sig, jf. ADR-0042. */
+  fee: Nominal
+  /** Det, der købte en risikodækning. Samme vej og samme led i invarianten
+      som gebyret; de to står hver for sig, fordi de er hver sin aftale med
+      selskabet og ikke hinandens afrunding. */
+  insurancePremium: Nominal
   destinations: PensionAgreementDestination[]
 }
 

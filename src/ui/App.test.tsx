@@ -2897,6 +2897,8 @@ describe('fladen', () => {
             pensionAgreement: {
               employerContribution: { percentageOfEntry: 0.12 },
               employeeContribution: { percentageOfEntry: 0.05 },
+              fee: 1_200,
+              insurancePremium: 4_800,
               allocation: [{ to: 'ratepension', form: 'Remainder' as const }],
             },
           },
@@ -2913,11 +2915,17 @@ describe('fladen', () => {
 
       await user.click(screen.getByRole('button', { name: '+ Tilføj' }))
 
+      // Listen er udtømmende, og det er dét, der holder kurtagen ude: den er
+      // depotets og ligger i beholdningens omkostningssats, hvor den sænker
+      // afkastet. Skrives handelsomkostninger begge steder, betales de to
+      // gange, og forskellen vokser med saldoen, mens gebyret står stille.
       expect(sectionLabels('Pension')).toEqual([
         'Arbejdsgiverbidrag angives som',
         'Arbejdsgiverbidrag',
         'Arbejdstagerbidrag angives som',
         'Arbejdstagerbidrag',
+        'Gebyr (nutidskroner)',
+        'Forsikringspræmie (nutidskroner)',
         'Ordning',
       ])
 
@@ -2930,26 +2938,43 @@ describe('fladen', () => {
 
     it('lægger arbejdsgiverbidraget til indtægten og aftalens penge i indbetalingerne', async () => {
       // De 12 %, der står på lønsedlen, måler lønnen selv: 72.000 kr. Med de
-      // 5 % fra lønnen er indbetalingen 102.000 kr., og der lander 93.840 i
-      // ordningen — men kun arbejdsgiverens del løfter indtægten.
+      // 5 % fra lønnen er indbetalingen 102.000 kr., og efter AM-bidraget,
+      // gebyret og præmien lander der 87.840 i ordningen — men kun
+      // arbejdsgiverens del løfter indtægten.
       const user = userEvent.setup()
       render(<App initialPlan={aPlanWithAgreement()} />)
 
       await showYearTable(user)
 
       expect(yearCell(1, 'Indtægter')).toBe('672.000')
-      // Cellen bærer også årets loftmarkering: de 93.840 ligger over
+      // Cellen bærer også årets loftmarkering: de 87.840 ligger over
       // ratepensionens loft, og aftalens penge tælles med i den opgørelse
       // som enhver anden indbetalings.
-      expect(yearCell(1, 'Indbetalinger')).toBe('93.840Fradrag tabt')
+      expect(yearCell(1, 'Indbetalinger')).toBe('87.840Fradrag tabt')
+    })
+
+    it('lægger aftalens gebyr og præmie i årstabellens udgifter', async () => {
+      // Planen har ingen udgiftspost, og kolonnen står alligevel med 6.000:
+      // de to forlader husstanden uden at blive til formue, og
+      // balanceinvarianten har kun det ene led tilbage til dem. Kolonnens
+      // forklaring gør rede for det — ellers er der et tal på skærmen,
+      // planen ikke kan gøre rede for.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithAgreement()} />)
+
+      await showYearTable(user)
+
+      expect(yearCell(1, 'Udgifter')).toBe('-6.000')
     })
 
     it('viser aftalens hele regnestykke i forklar-året', async () => {
       // Linjen skal kunne efterregnes af sig selv, jf. ADR-0041: 72.000 +
-      // 30.000 − 8.160 = 93.840. Og arbejdsgiverbidraget står som sin egen
-      // linje under indtægtsposterne, så folden går op med det bånd, den
-      // ligger under — det er dér, forskellen mellem lønnen og indtægten
-      // kommer fra, jf. ADR-0040.
+      // 30.000 − 8.160 − 1.200 − 4.800 = 87.840. Gebyret og præmien står
+      // her og ingen andre steder — de er ingen udgiftspost, jf. ADR-0042.
+      // Og arbejdsgiverbidraget står som sin egen linje under
+      // indtægtsposterne, så folden går op med det bånd, den ligger under —
+      // det er dér, forskellen mellem lønnen og indtægten kommer fra, jf.
+      // ADR-0040.
       const user = userEvent.setup()
       render(<App initialPlan={aPlanWithAgreement()} />)
 
@@ -2959,7 +2984,16 @@ describe('fladen', () => {
       const indbetalinger = await openBand(user, 'Indbetalinger')
       const aftale = indbetalinger.querySelector('.aftaletabel') as HTMLElement
       const celler = [...aftale.querySelectorAll('tbody td')].map((td) => td.textContent)
-      expect(celler).toEqual(['Løn', '72.000', '30.000', '-8.160', 'Ratepension', '93.840'])
+      expect(celler).toEqual([
+        'Løn',
+        '72.000',
+        '30.000',
+        '-8.160',
+        '-1.200',
+        '-4.800',
+        'Ratepension',
+        '87.840',
+      ])
 
       const indtaegter = await openBand(user, 'Indtægtsposter')
       expect(indtaegter.textContent).toContain('Løn · arbejdsgiverbidrag')

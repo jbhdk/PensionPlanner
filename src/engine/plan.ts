@@ -269,6 +269,17 @@ export type PensionAgreement = {
       angives på de samme to former, men løfter ikke husstandens indtægt:
       pengene er der i forvejen. */
   employeeContribution: ContributionAmount
+  /** Det, aftalen trækker af indbetalingen til selskabets egen
+      administration, i nutidskroner. Beholdningens egne omkostninger er ikke
+      gebyret: de er `annualCostRate`, som sænker afkastet og opkræves af
+      depotet. Skrives handelsomkostninger begge steder, betales de to gange,
+      og forskellen vokser med saldoen, mens gebyret står stille. */
+  fee: Real
+  /** Det, aftalen trækker af indbetalingen til en risikodækning, i
+      nutidskroner. Pengene forlader husstanden og bliver aldrig til formue,
+      og de er derfor en udgift — men de nedsætter den personlige indkomst
+      som resten af indbetalingen, jf. ADR-0042. */
+  insurancePremium: Real
   allocation: Allocation
 }
 

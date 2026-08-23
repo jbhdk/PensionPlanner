@@ -505,11 +505,16 @@ function ContributionsTable({
 }
 
 /** Årets pensionsaftaler med hele deres regnestykke: de to bidrag,
-    AM-bidraget og det, der landede hvor.
+    AM-bidraget, gebyret, præmien og det, der landede hvor.
 
     Hele regnestykket står og ikke kun facit, jf. ADR-0041. Lånte aftalen
     indbetalingstabellen ovenfor, ville dens to beløb påstå, at forskellen
     var AM-bidraget alene — og linjen kunne ikke efterregnes af sig selv.
+
+    Gebyret og præmien står her og ingen andre steder. De er årets udgifter
+    og ingen `Entry`, jf. ADR-0042, og årstabellens Udgifter-kolonne rummer
+    dem derfor uden at have en post at pege på — det er denne tabel, dens
+    forklaring henviser til.
 
     Tabellen udebliver i de år, ingen aftales lønpost falder. */
 function PensionAgreementsTable({
@@ -540,6 +545,8 @@ function PensionAgreementsTable({
           <th title={fieldHelp['PensionAgreementYear.employerContribution']}>Arbejdsgiver</th>
           <th title={fieldHelp['PensionAgreementYear.employeeContribution']}>Arbejdstager</th>
           <th title={fieldHelp['PensionAgreementYear.labourMarketContribution']}>AM-bidrag</th>
+          <th title={fieldHelp['PensionAgreementYear.fee']}>Gebyr</th>
+          <th title={fieldHelp['PensionAgreementYear.insurancePremium']}>Forsikring</th>
           <th title={fieldHelp['PensionAgreementDestination.holding']}>Destination</th>
           <th title={fieldHelp['PensionAgreementDestination.landed']}>Landede</th>
         </tr>
@@ -552,6 +559,8 @@ function PensionAgreementsTable({
               <td>{kroner(display(agreement.employerContribution))}</td>
               <td>{kroner(display(agreement.employeeContribution))}</td>
               <td>{kroner(display(-agreement.labourMarketContribution))}</td>
+              <td>{kroner(display(-agreement.fee))}</td>
+              <td>{kroner(display(-agreement.insurancePremium))}</td>
               <td>{holdingName(destination.holding)}</td>
               <td>{kroner(display(destination.landed))}</td>
             </tr>
