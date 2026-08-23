@@ -1,5 +1,6 @@
 import {
   bearsPayoutSchedule,
+  cappedVariant,
   isEmployerAdministered,
   isFreeAssets,
   isOpenToContributions,
@@ -146,6 +147,18 @@ function pensionAgreements(plan: Plan): string | undefined {
           `${subject}, som tilhører ${sourceOwner.name}, fordeler til beholdningen ` +
           `${to.name}, som tilhører ${destinationOwner.name}. En ordning, en ` +
           `arbejdsgiver administrerer, står i lønmodtagerens eget navn.`
+        )
+      }
+
+      // En linje op til loftet skal have et loft at måle sig mod. Livrenten
+      // står ikke i PBL § 16, stk. 2, og har intet — og en linje, der bad om
+      // resten af ingenting, ville bede om nul hvert eneste år uden at sige
+      // hvorfor. Svaret er det samme i alle simuleringsår, og reglen hører
+      // derfor her, jf. ADR-0020.
+      if (line.form === 'UpToCap' && cappedVariant(to) === undefined) {
+        return (
+          `${subject} fordeler op til loftet på beholdningen ${to.name}, som har ` +
+          `intet loft. Kun en ratepension og en aldersopsparing har et at fylde ud.`
         )
       }
 

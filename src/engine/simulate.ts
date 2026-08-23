@@ -218,7 +218,12 @@ function simulateYear(
 
   // Aftalens to bidrag måler lønposten og ikke den brutto, `entriesInYear`
   // netop har lagt sammen af de to, jf. ADR-0040.
-  const agreements = pensionAgreementsInYear(plan, year, entries, rates)
+  //
+  // Aftalerne regnes efter de selvstændige indbetalinger, jf. ADR-0041: en
+  // `UpToCap`-linje skal vide, hvad de øvrige indbetalinger til ordningen
+  // tog, og de øvrige skal aldrig vide, hvad aftalen tog. Afhængigheden står
+  // som et argument frem for som en rækkefølge, der skal huskes.
+  const agreements = pensionAgreementsInYear(plan, year, entries, rates, requested)
 
   // Primosaldiene står fast hele året igennem: de er forrige års ultimo og
   // ændrer sig ikke af noget, der sker herefter. `OnBalance`-loftets
@@ -1587,7 +1592,10 @@ function pensionAgreementsInYear(
   year: SimulationYear,
   entries: ActiveEntry[],
   rates: RateYear,
+  contributions: ActiveContribution[],
 ): ActiveAgreement[] {
+  const headroom = capHeadroom(plan, rates, year, contributions)
+
   return entries.flatMap(({ entry, own }) => {
     const agreement = pensionAgreementOf(entry)
     if (agreement === undefined) return []
@@ -1634,24 +1642,106 @@ function pensionAgreementsInYear(
           agreement.allocation,
           afterLabourMarketContribution - fee - insurancePremium,
           projection,
+          headroom,
         ),
       },
     ]
   })
 }
 
+/** Årets råderum under de lofter, en fordeling kan måle sig mod — ført med,
+    mens linjerne tager af det.
+
+    Regnskabet findes alene for `UpToCap`, som er den ene form, der ikke kan
+    sige, hvad den beder om, uden at vide hvad året ellers har lagt i
+    ordningen. Det er ikke loftopgørelsen: den måler bagefter og afgør årets
+    skat og forklar-årets linje. Her sizes kun et ønske, og de to kan ikke
+    komme til at sige hver sit om, hvad loftet **er** — begge slår det op
+    gennem `cap` med det årstal, `statePensionYear` giver, og ingen af dem
+    kender et andet tal.
+
+    Rummet er personens og gælder personens ordninger af slagsen under ét, jf.
+    ADR-0018: to ratepensioner deler ét loft, og en `UpToCap`-linje til den
+    ene ser derfor også, hvad den anden fik. Kun `PerYear` er med —
+    `OnBalance` kan ingen fordeling nå, fordi aktiesparekontoen ikke er
+    `EmployerAdministered`, jf. ADR-0019.
+
+    Årets selvstændige indbetalinger tager først af rummet. Det er dét, der
+    gør koblingen til lovens og ikke til værktøjets: lægger planlæggeren en
+    privat indbetaling ind i sin ratepension, falder aftalens linje af sig
+    selv, jf. ADR-0041. */
+type CapHeadroom = {
+  /** Det, der er tilbage under destinationens loft. Aldrig negativt: er
+      rummet brugt op af de øvrige linjer, beder `UpToCap` om nul frem for at
+      tage fra dem. Nul også for en destination uden loft — den kan ikke bære
+      formen, jf. `validatePlan`. */
+  room: (to: HoldingId) => Nominal
+  /** Noterer et beløb på vej ind i destinationens ordning. Kaldt for hver
+      eneste fordelingslinje og ikke kun for `UpToCap`s: en procentlinje, der
+      fylder loftet, skal sænke den næste linjes rum, ellers ville formen
+      bygge et loftbrud ind i sig selv. */
+  take: (to: HoldingId, amount: Nominal) => void
+}
+
+function capHeadroom(
+  plan: Plan,
+  rates: RateYear,
+  year: SimulationYear,
+  contributions: ActiveContribution[],
+): CapHeadroom {
+  // Beholdningens plads i regnskabet er personen og varianten under ét —
+  // aldrig beholdningen selv, jf. ADR-0018.
+  const group = new Map<HoldingId, string>()
+  const left = new Map<string, Nominal>()
+
+  for (const person of plan.household.persons) {
+    // Årstællingen går gennem `statePensionYear` af samme grund som i
+    // loftopgørelsen: aldersopsparingens trappe skal ramme det samme år
+    // begge steder, og alderen er en brøk for de fleste årgange.
+    const yearsToStatePensionAge = statePensionYear(person) - year
+    for (const holding of person.holdings) {
+      const limit = cap(holding, rates, yearsToStatePensionAge)
+      if (limit === undefined || limit.form !== 'PerYear') continue
+      const key = `${person.id} ${holding.variant}`
+      group.set(holding.id, key)
+      left.set(key, limit.amount)
+    }
+  }
+
+  const take = (to: HoldingId, amount: Nominal) => {
+    const key = group.get(to)
+    if (key === undefined) return
+    // Rummet føres ufortrødent negativt. En procentlinje må gerne bryde
+    // loftet med vilje — en firmaordning er, som den er, jf. ADR-0018 — og
+    // et rum, der stoppede ved nul, ville lade en `UpToCap`-linje bagefter
+    // fylde plads op, der for længst er brugt.
+    left.set(key, left.get(key)! - amount)
+  }
+  for (const { contribution, intoHolding } of contributions) take(contribution.to, intoHolding)
+
+  return {
+    room: (to) => {
+      const key = group.get(to)
+      return key === undefined ? 0 : Math.max(left.get(key)!, 0)
+    },
+    take,
+  }
+}
+
 /** Det placerede beløb delt ud på fordelingens destinationer.
 
     Procenterne måler det placerede beløb — indbetalingen efter AM-bidrag,
     gebyr og præmie — og aldrig lønnen. Kronelinjerne fremskrives med
-    lønpostens egen reguleringssats som alt andet i aftalen. Og præcis én
-    linje er `Remainder` og får det, de øvrige ikke tog: det er formen og
-    ikke et regnestykke, der får fordelingen til at gå op i hvert eneste
+    lønpostens egen reguleringssats som alt andet i aftalen. `UpToCap` beder
+    om det, der er tilbage under ordningens loft. Og præcis én linje er
+    `Remainder` og får det, de øvrige ikke tog: det er formen og ikke et
+    regnestykke, der får fordelingen til at gå op i hvert eneste
     simuleringsår. */
 function allocate(
   allocation: Allocation,
   placed: Nominal,
   projection: number,
+  headroom: CapHeadroom,
 ): ActivePlacement[] {
   // Hver linje tager af det, der er tilbage, og aldrig mere end det. Det er
   // dén skranke, der får de landede beløb til at summe til præcis det
@@ -1661,6 +1751,7 @@ function allocate(
   const claim = (index: number, to: HoldingId, requested: Nominal) => {
     const landed = Math.min(requested, left)
     left -= landed
+    headroom.take(to, landed)
     claimed.set(index, { to, requested, landed })
   }
 
@@ -1681,11 +1772,24 @@ function allocate(
     if (line.form === 'Amount') claim(index, line.to, line.amountInRealKroner * projection)
   })
 
+  // `UpToCap` derefter, og altså efter begge de former, planlæggeren har
+  // skrevet et tal på. Formen måler pr. definition det, der er tilbage, når
+  // årets øvrige indbetalinger til ordningen er talt med — også de øvrige i
+  // aftalens egen fordeling — og en linje, der målte før dem, ville kunne
+  // bygge et loftbrud ind i sig selv.
+  allocation.forEach((line, index) => {
+    if (line.form === 'UpToCap') claim(index, line.to, headroom.room(line.to))
+  })
+
   // Restlinjen til sidst, uanset hvor den står: den beder pr. definition om
   // det, de øvrige ikke tog, og et magert år efterlader den på nul.
-  return allocation.map(
-    (line, index) => claimed.get(index) ?? { to: line.to, requested: left, landed: left },
-  )
+  allocation.forEach((line, index) => {
+    if (line.form === 'Remainder') claim(index, line.to, left)
+  })
+
+  // Hver linje er talt præcis én gang: de fire former er udtømmende, og
+  // præcis én af dem er resten, jf. `validatePlan`.
+  return allocation.map((_line, index) => claimed.get(index)!)
 }
 
 /** Årets indbetalinger med deres to beløb, deres forfald og den beholdning,

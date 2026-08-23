@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import {
   bearsPayoutSchedule,
+  cappedVariant,
   isEmployerAdministered,
   isFreeAssets,
   isFreeAssetsVariant,
@@ -36,6 +37,7 @@ import { deriveStatePensionAge } from '../engine/statePensionAge'
 import type { YearResult } from '../engine/yearResult'
 import {
   allocationForms,
+  allocationFormsFor,
   anchors,
   danish,
   danishTiming,
@@ -1068,7 +1070,7 @@ function AllocationLineFields({
         options={destinations.map((holding) => holding.name)}
         onChange={(name) => {
           const to = destinations.find((holding) => holding.name === name)!
-          onChange({ ...line, to: to.id })
+          onChange(retainedOn({ ...line, to: to.id }, to))
         }}
       />
       {line.form === 'Remainder' ? (
@@ -1079,16 +1081,17 @@ function AllocationLineFields({
             label="Andel angives som"
             help="AllocationShare.form"
             value={danish(allocationForms, line.form)}
-            options={Object.keys(allocationForms)}
-            onChange={(choice) =>
-              onChange(
-                allocationForms[choice] === 'Percentage'
-                  ? { to: line.to, form: 'Percentage', percentage: 0 }
-                  : { to: line.to, form: 'Amount', amountInRealKroner: 0 },
-              )
-            }
+            options={allocationFormsFor(destination)}
+            onChange={(choice) => onChange(withForm(line.to, allocationForms[choice]!))}
           />
-          {line.form === 'Percentage' ? (
+          {line.form === 'UpToCap' ? (
+            <LockedField
+              label="Andel"
+              help="AllocationShare.upToCap"
+              value="Det, der er plads til"
+              unit=""
+            />
+          ) : line.form === 'Percentage' ? (
             <NumberField
               label="Andel"
               help="AllocationShare.percentage"
@@ -1134,6 +1137,36 @@ function AllocationLineFields({
       )}
     </div>
   )
+}
+
+/** En fordelingslinje på den valgte form, med det tal formen har — og uden et,
+    når den ingen har. Skiftet nulstiller tallet med vilje: de to former måler
+    hver sit grundlag, og et tal, der fulgte med over, ville sige noget helt
+    andet, end det gjorde før. */
+function withForm(
+  to: HoldingId,
+  form: 'Percentage' | 'Amount' | 'UpToCap',
+): AllocationLine {
+  switch (form) {
+    case 'Percentage':
+      return { to, form: 'Percentage', percentage: 0 }
+    case 'Amount':
+      return { to, form: 'Amount', amountInRealKroner: 0 }
+    case 'UpToCap':
+      return { to, form: 'UpToCap' }
+  }
+}
+
+/** Linjen, som den kan stå på sin nye destination. En linje op til loftet
+    falder tilbage til en procent på nul, når destinationen skiftes til en
+    ordning uden loft: formen kræver et loft at måle sig mod, og ét klik må
+    ikke skrive en plan, indgangskontrollen afviser, jf. ADR-0020. Procenten
+    er den ene form, der ikke kan komme til at bede om et beløb, aftalen ikke
+    har — samme valg som en ny linjes. */
+function retainedOn(line: AllocationLine, destination: Holding): AllocationLine {
+  return line.form === 'UpToCap' && cappedVariant(destination) === undefined
+    ? withForm(line.to, 'Percentage')
+    : line
 }
 
 /** Et bidrag på pensionsaftalen: formen og det ene tal, formen har.

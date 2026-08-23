@@ -4394,6 +4394,227 @@ describe('pensionsaftalen', () => {
       expect(holding(year, 'ratepension').closingBalance).toBeCloseTo(75_072, 6)
       expect(year.capBreach).toBe('LostDeductibility')
     })
+
+    describe('op til loftet', () => {
+      it('beder om hele ordningens loft, når året ikke har rørt det', () => {
+        // Aldersopsparingens loft er 9.900, indtil der er syv år til
+        // folkepensionsalderen, og linjen beder om det hele: 102.000 i bidrag
+        // minus AM-bidraget er 93.840 at fordele, aldersopsparingen tager de
+        // 9.900, og ratepensionen får resten.
+        const plan = aPlanWithSchemes({
+          entries: [
+            aSalary({
+              amountInRealKroner: 600_000,
+              pensionAgreement: {
+                employerContribution: { percentageOfEntry: 0.12 },
+                employeeContribution: { percentageOfEntry: 0.05 },
+                allocation: [
+                  { to: 'aldersopsparing', form: 'UpToCap' },
+                  { to: 'ratepension', form: 'Remainder' },
+                ],
+              },
+            }),
+          ],
+        })
+
+        const year = simulateChecked(plan)[0]!
+
+        expect(landedIn(year, 'aldersopsparing')).toBeCloseTo(9_900, 6)
+        expect(landedIn(year, 'ratepension')).toBeCloseTo(93_840 - 9_900, 6)
+      })
+
+      it('lader en selvstændig indbetaling til samme ordning sænke linjen', () => {
+        // Loven kender kun ét loft pr. person pr. slags, og linjen måler mod
+        // hele loftet og ikke mod aftalens egen andel af det: en privat
+        // indbetaling på 20.000 lader 48.700 tilbage under ratepensionens
+        // 68.700, og det er dét, linjen beder om.
+        //
+        // Koblingen vil overraske — tilføjes den private indbetaling, falder
+        // aftalens linje af sig selv — men det er lovens kobling og ikke
+        // værktøjets.
+        const plan = aPlanWithSchemes({
+          contributions: [
+            aHoldingContribution({
+              source: 'free-assets',
+              to: 'ratepension',
+              amountInRealKroner: 20_000,
+            }),
+          ],
+          entries: [
+            aSalary({
+              amountInRealKroner: 600_000,
+              pensionAgreement: {
+                employerContribution: { percentageOfEntry: 0.12 },
+                employeeContribution: { percentageOfEntry: 0.05 },
+                allocation: [
+                  { to: 'ratepension', form: 'UpToCap' },
+                  { to: 'livrente', form: 'Remainder' },
+                ],
+              },
+            }),
+          ],
+        })
+
+        const year = simulateChecked(plan)[0]!
+
+        expect(landedIn(year, 'ratepension')).toBeCloseTo(48_700, 6)
+        expect(landedIn(year, 'livrente')).toBeCloseTo(93_840 - 48_700, 6)
+      })
+
+      it('lader den lønpost, der står først, fylde loftet, når to linjer møder det samme', () => {
+        // Rækkefølgen falder ud af lønposternes og ikke af noget andet. Hver
+        // aftale har 9.200 at fordele; den første beder om hele
+        // aldersopsparingens loft på 9.900 og får det, den har — og den
+        // anden ser kun de 700, der er tilbage.
+        const salary = aSalary({
+          amountInRealKroner: 100_000,
+          pensionAgreement: {
+            employerContribution: { percentageOfEntry: 0.1 },
+            employeeContribution: { amountInRealKroner: 0 },
+            allocation: [
+              { to: 'aldersopsparing', form: 'UpToCap' },
+              { to: 'livrente', form: 'Remainder' },
+            ],
+          },
+        })
+        const plan = aPlanWithSchemes({
+          entries: [salary, { ...salary, id: 'anden-loen', name: 'Anden løn' }],
+        })
+
+        const [first, second] = simulateChecked(plan)[0]!.pensionAgreements
+
+        expect(first!.destinations[0]!.requested).toBeCloseTo(9_900, 6)
+        expect(first!.destinations[0]!.landed).toBeCloseTo(9_200, 6)
+        expect(second!.destinations[0]!.requested).toBeCloseTo(700, 6)
+        expect(second!.destinations[0]!.landed).toBeCloseTo(700, 6)
+        expect(second!.destinations[1]!.landed).toBeCloseTo(8_500, 6)
+      })
+
+      it('beder om nul frem for et negativt beløb, når der ingen plads er tilbage', () => {
+        // Den private indbetaling på 12.000 har for længst brudt
+        // aldersopsparingens loft på 9.900. Linjen tager ikke fra de øvrige
+        // og gør ikke bruddet værre — den beder om nul, og hele det
+        // placerede beløb går til resten.
+        const plan = aPlanWithSchemes({
+          contributions: [
+            aHoldingContribution({
+              source: 'free-assets',
+              to: 'aldersopsparing',
+              amountInRealKroner: 12_000,
+            }),
+          ],
+          entries: [
+            aSalary({
+              amountInRealKroner: 600_000,
+              pensionAgreement: {
+                employerContribution: { percentageOfEntry: 0.12 },
+                employeeContribution: { percentageOfEntry: 0.05 },
+                allocation: [
+                  { to: 'aldersopsparing', form: 'UpToCap' },
+                  { to: 'livrente', form: 'Remainder' },
+                ],
+              },
+            }),
+          ],
+        })
+
+        const year = simulateChecked(plan)[0]!
+
+        expect(year.pensionAgreements[0]!.destinations[0]).toEqual({
+          holding: 'aldersopsparing',
+          requested: 0,
+          landed: 0,
+        })
+        expect(landedIn(year, 'livrente')).toBeCloseTo(93_840, 6)
+      })
+
+      it('rammer aldersopsparingens høje loft i de syv år før folkepensionsalderen', () => {
+        // Jesper når folkepensionsalderen i 2043, og det høje loft gælder fra
+        // og med det syvende indkomstår før — altså fra 2036. Det er dét
+        // spring, formen findes for: et kronebeløb ville stå stille og lade
+        // godt 54.000 kr. begunstiget plads ligge ubrugt hen om året.
+        const plan = aPlanWithSchemes({
+          entries: [
+            aSalary({
+              amountInRealKroner: 600_000,
+              pensionAgreement: {
+                employerContribution: { percentageOfEntry: 0.12 },
+                employeeContribution: { percentageOfEntry: 0.05 },
+                allocation: [
+                  { to: 'aldersopsparing', form: 'UpToCap' },
+                  { to: 'livrente', form: 'Remainder' },
+                ],
+              },
+            }),
+          ],
+        })
+
+        const years = simulateChecked(plan)
+        const inYear = (year: number) =>
+          landedIn(years.find((line) => line.year === year)!, 'aldersopsparing')
+
+        expect(inYear(2035)).toBeCloseTo(9_900, 6)
+        expect(inYear(2036)).toBeCloseTo(64_200, 6)
+      })
+
+      it('følger loftets egen fremskrivning og ikke lønpostens reguleringssats', () => {
+        // Loftet reguleres efter personskattelovens § 20 og lønnen efter sin
+        // egen sats. Året efter startåret er loftet 9.900 × 1,02 = 10.098,
+        // hvor et kronebeløb på 9.900 ville være løftet til 10.197 — og
+        // forskellen vokser hvert eneste år derefter.
+        const plan = aPlanWithSchemes({
+          section20ProjectionAssumption: 0.02,
+          entries: [
+            aSalary({
+              amountInRealKroner: 600_000,
+              regulationRate: 0.03,
+              pensionAgreement: {
+                employerContribution: { percentageOfEntry: 0.12 },
+                employeeContribution: { percentageOfEntry: 0.05 },
+                allocation: [
+                  { to: 'aldersopsparing', form: 'UpToCap' },
+                  { to: 'livrente', form: 'Remainder' },
+                ],
+              },
+            }),
+          ],
+        })
+
+        const [first, second] = simulateChecked(plan)
+
+        expect(landedIn(first!, 'aldersopsparing')).toBeCloseTo(9_900, 6)
+        expect(landedIn(second!, 'aldersopsparing')).toBeCloseTo(10_098, 6)
+      })
+
+      it('udløser aldrig et loftbrud på ordningen af sig selv', () => {
+        // Linjen beder om det, der er tilbage, og aldrig om mere. Lønnen
+        // stiger 3 % om året og loftet 2 %, og de to driver derfor fra
+        // hinanden hele horisonten igennem — uden at et eneste år markeres.
+        const plan = aPlanWithSchemes({
+          section20ProjectionAssumption: 0.02,
+          entries: [
+            aSalary({
+              amountInRealKroner: 600_000,
+              regulationRate: 0.03,
+              pensionAgreement: {
+                employerContribution: { percentageOfEntry: 0.12 },
+                employeeContribution: { percentageOfEntry: 0.05 },
+                allocation: [
+                  { to: 'ratepension', form: 'UpToCap' },
+                  { to: 'livrente', form: 'Remainder' },
+                ],
+              },
+            }),
+          ],
+        })
+
+        const breached = simulateChecked(plan).filter(
+          (year) => year.capBreach !== undefined,
+        )
+
+        expect(breached).toEqual([])
+      })
+    })
   })
 
   describe('indgangskontrollen', () => {
@@ -4580,6 +4801,49 @@ describe('pensionsaftalen', () => {
       })
 
       expect(validatePlan(plan)).toMatch(/120 %/)
+    })
+
+    it('afviser en linje op til loftet på en ordning, der intet loft har', () => {
+      // Livrenten står ikke i PBL § 16, stk. 2, og har derfor intet loft at
+      // fylde ud. Svaret er det samme i alle simuleringsår, og reglen hører
+      // derfor ved indgangen som den femte strukturelle, jf. ADR-0020.
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 600_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.12 },
+              employeeContribution: { amountInRealKroner: 0 },
+              allocation: [
+                { to: 'livrente', form: 'UpToCap' },
+                { to: 'ratepension', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      expect(validatePlan(plan)).toMatch(/Livrente.*intet loft|intet loft.*Livrente/is)
+    })
+
+    it('lader en linje op til loftet på en loftbelagt ordning slippe igennem', () => {
+      const plan = aPlanWithSchemes({
+        entries: [
+          aSalary({
+            amountInRealKroner: 600_000,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.12 },
+              employeeContribution: { amountInRealKroner: 0 },
+              allocation: [
+                { to: 'aldersopsparing', form: 'UpToCap' },
+                { to: 'ratepension', form: 'Remainder' },
+              ],
+            },
+          }),
+        ],
+      })
+
+      expect(validatePlan(plan)).toBeUndefined()
     })
 
     it('afviser en fordeling, der har samme destination på to linjer', () => {

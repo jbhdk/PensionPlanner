@@ -1,12 +1,14 @@
 import type {
   Anchor,
   Direction,
+  Holding,
   HoldingVariant,
   PayoutPrinciple,
   Recurrence,
   TaxTreatment,
   Timing,
 } from '../engine/plan'
+import { cappedVariant } from '../engine/holdingVariant'
 
 /** Det ene sted de to sprog møder hinanden. Koden bruger glossarets engelske
     identifiers, skærmen viser dansk, og kortene herunder oversætter begge
@@ -108,10 +110,25 @@ export const contributionAmounts: Record<string, 'percentageOfEntry' | 'amountIn
   'Fast beløb': 'amountInRealKroner',
 }
 
-/** De to former, en fordelingslinje kan vælges imellem. Resten er ikke
-    iblandt dem: præcis én linje er den, og den vælges ikke til og fra — den
-    er fordelingens form og ikke en tredje mulighed på lige fod med de to. */
-export const allocationForms: Record<string, 'Percentage' | 'Amount'> = {
+/** De former, en fordelingslinje kan vælges imellem. Resten er ikke iblandt
+    dem: præcis én linje er den, og den vælges ikke til og fra — den er
+    fordelingens form og ikke en mulighed på lige fod med de øvrige.
+
+    `UpToCap` står her, men tilbydes kun, hvor destinationen har et loft at
+    fylde ud, jf. `allocationFormsFor`. */
+export const allocationForms: Record<string, 'Percentage' | 'Amount' | 'UpToCap'> = {
   Procent: 'Percentage',
   Kronebeløb: 'Amount',
+  'Op til loftet': 'UpToCap',
+}
+
+/** De former, netop denne destination kan bære. Livrenten har intet loft, og
+    "op til loftet" er derfor ikke et valg dér — ét klik må ikke skrive en
+    plan, indgangskontrollen afviser, jf. ADR-0020. */
+export function allocationFormsFor(destination: Holding | undefined): string[] {
+  return Object.keys(allocationForms).filter(
+    (label) =>
+      allocationForms[label] !== 'UpToCap' ||
+      (destination !== undefined && cappedVariant(destination) !== undefined),
+  )
 }

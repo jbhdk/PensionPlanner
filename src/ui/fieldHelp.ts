@@ -250,13 +250,16 @@ export const fieldHelp = {
     'Den ordning, denne del af indbetalingen lander i. Kun ordninger, en arbejdsgiver kan administrere og som står i lønmodtagerens eget navn, kan vælges — valget afgør, om pengene nedsætter skatten, og hvilket loft de måles mod. Hver ordning står på én linje.',
 
   'AllocationShare.form':
-    'Om ordningen får en andel af indbetalingen eller et aftalt kronebeløb. En andel følger indbetalingen op og ned af sig selv; et kronebeløb bliver det samme, uanset hvad lønnen gør, indtil det rettes.',
+    'Om ordningen får en andel af indbetalingen, et aftalt kronebeløb, eller så meget som loven giver plads til. En andel følger indbetalingen op og ned af sig selv; et kronebeløb bliver det samme, uanset hvad lønnen gør, indtil det rettes. Det sidste valg findes kun på de ordninger, der har en øvre grænse.',
 
   'AllocationShare.percentage':
     'Hvor stor en del af indbetalingen der går til denne ordning. Den måler det, der er tilbage efter arbejdsmarkedsbidraget, gebyret og forsikringen — altså de penge, der rent faktisk skal fordeles, og ikke lønnen.',
 
   'AllocationShare.amountInRealKroner':
     'Hvor meget der går til denne ordning, målt i nutidskroner. Beløbet følger lønnens egen stigning gennem forløbet, og rækker indbetalingen ikke til alle de aftalte beløb i et år, tages de oppefra og ned, indtil pengene er brugt.',
+
+  'AllocationShare.upToCap':
+    'Ordningen får den plads, der er tilbage under dens øvre grænse det år — grænsen minus det, årets øvrige indbetalinger til samme slags ordning allerede har lagt ind, hvor de så end står i planen. Beløbet følger derfor grænsen af sig selv, også når aldersopsparingens springer op syv år før folkepensionsalderen.',
 
   'AllocationShare.remainder':
     'Denne ordning får det, de øvrige linjer ikke tog. Præcis én ordning gør det, og det er dét, der får fordelingen til at gå op krone for krone i hvert eneste år — også de år, hvor lønnen er en anden end forventet.',

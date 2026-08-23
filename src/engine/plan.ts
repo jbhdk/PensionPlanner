@@ -256,6 +256,21 @@ export type AllocationShare =
           og ikke på deltid, jf. `PensionAgreementYear`. */
       amountInRealKroner: Real
     }
+  | {
+      /** Det, der er tilbage under ordningens `Cap`, når årets øvrige
+          indbetalinger til den er talt med — hos samme person og på tværs af
+          figurer, for loven kender kun ét loft pr. person pr. slags.
+          Formen findes, fordi et kronebeløb ikke kan holde: loftet følger
+          `Plan.section20ProjectionAssumption`, hvor beløbet ville følge
+          lønpostens `regulationRate`, og aldersopsparingens loft springer
+          desuden syv år før folkepensionsalderen.
+
+          Uden et tal, fordi den ikke kan have et: hvad linjen beder om, er
+          årets svar og ikke planlæggerens. Kun på de varianter, der har et
+          loft — `UpToCap` på en livrente afvises ved indgangen, jf.
+          ADR-0020. */
+      form: 'UpToCap'
+    }
   | { form: 'Remainder' }
 
 /** Én linje i fordelingen: en destination og en andel. Destinationen skal

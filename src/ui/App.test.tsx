@@ -3008,6 +3008,105 @@ describe('fladen', () => {
       ])
     })
 
+    it('skriver en fordelingslinje op til ordningens loft', async () => {
+      // Formen beder om det, der faktisk er tilbage under loftet i netop det
+      // år — aldersopsparingens 9.900 — og resten går til den ordning,
+      // restlinjen peger på: 87.840 − 9.900 = 77.940.
+      //
+      // Der er intet tal at taste. Hvad linjen beder om, er årets svar og
+      // ikke planlæggerens, og andelen står derfor som et udledt felt,
+      // ligesom restlinjens.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithAgreement()} />)
+      await user.click(navigatorButton(/Løn/))
+      await user.click(screen.getByRole('button', { name: '+ Tilføj ordning' }))
+
+      await user.click(screen.getByRole('button', { name: 'Op til loftet' }))
+
+      expect(sectionLabels('Pension').slice(6)).toEqual([
+        'Ordning',
+        'Andel angives som',
+        'Andel',
+        'Ordning',
+        'Andel',
+      ])
+
+      await showYearTable(user)
+      await explainYear(user, 2026)
+
+      const indbetalinger = await openBand(user, 'Indbetalinger')
+      const aftale = indbetalinger.querySelector('.aftaletabel') as HTMLElement
+      const celler = [...aftale.querySelectorAll('tbody td')].map((td) => td.textContent)
+      expect(celler.slice(6)).toEqual([
+        'Aldersopsparing',
+        '9.900',
+        '9.900',
+        'Ratepension',
+        '77.940',
+        '77.940',
+      ])
+    })
+
+    it('lader en linje op til loftet falde tilbage, når ordningen skiftes til en uden loft', async () => {
+      // Livrenten har intet loft at fylde ud, og formen tilbydes derfor ikke
+      // på den. Skiftes ordningen under en linje, der allerede står på
+      // formen, falder den tilbage til en procent på nul — ét klik må ikke
+      // skrive en plan, indgangskontrollen afviser.
+      const base = aPlanWithAgreement()
+      const salary = base.entries[0]!
+      const plan = {
+        ...base,
+        household: {
+          persons: [
+            {
+              ...base.household.persons[0]!,
+              holdings: [
+                ...base.household.persons[0]!.holdings,
+                {
+                  id: 'livrente',
+                  name: 'Livrente',
+                  variant: 'LifeAnnuity' as const,
+                  payoutAge: 53,
+                  balance: 0,
+                  grossReturn: 0,
+                  annualCostRate: 0,
+                  quotedReserve: 0,
+                  quotedAnnualBenefit: 0,
+                  bonusRate: 0,
+                },
+              ],
+            },
+          ],
+        },
+        entries: [
+          {
+            ...salary,
+            direction: 'Income' as const,
+            taxTreatment: 'EarnedIncome' as const,
+            regulationRate: 0,
+            pensionAgreement: {
+              ...salary.pensionAgreement!,
+              allocation: [
+                { to: 'aldersopsparing', form: 'UpToCap' as const },
+                { to: 'ratepension', form: 'Remainder' as const },
+              ],
+            },
+          },
+        ],
+      }
+
+      const user = userEvent.setup()
+      render(<App initialPlan={plan} />)
+      await user.click(navigatorButton(/Løn/))
+
+      expect(screen.getByRole('button', { name: 'Op til loftet' })).toBeTruthy()
+
+      await user.selectOptions(screen.getAllByLabelText('Ordning')[0]!, 'Livrente')
+
+      expect(screen.queryByRole('button', { name: 'Op til loftet' })).toBeNull()
+      expect((screen.getByLabelText('Andel') as HTMLInputElement).value).toBe('0')
+    })
+
     it('lægger arbejdsgiverbidraget til indtægten og aftalens penge i indbetalingerne', async () => {
       // De 12 %, der står på lønsedlen, måler lønnen selv: 72.000 kr. Med de
       // 5 % fra lønnen er indbetalingen 102.000 kr., og efter AM-bidraget,
