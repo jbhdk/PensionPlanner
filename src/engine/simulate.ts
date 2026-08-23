@@ -13,12 +13,16 @@ import {
 import type { CreditedHoldingYears, HoldingYears } from './holdingYears'
 import type {
   Contribution,
+  ContributionAmount,
   Entry,
   Holding,
   HoldingVariant,
   Nominal,
   HoldingId,
+  EntryId,
   PayoutPrinciple,
+  PensionAgreement,
+  Allocation,
   PayoutSchedule,
   Person,
   PersonId,
@@ -61,9 +65,16 @@ import type {
   YearResult,
 } from './yearResult'
 
-/** En post sammen med dens beløb i årets fremtidskroner, for de poster der
-    rent faktisk falder i det pågældende år. */
-type ActiveEntry = { entry: Entry; amount: Nominal }
+/** En post sammen med dens to beløb i årets fremtidskroner, for de poster der
+    rent faktisk falder i det pågældende år.
+
+    De to er kun forskellige på en lønpost med en `PensionAgreement`, jf.
+    ADR-0040. `own` er postens eget beløb — det, lønsedlen kalder løn, og det
+    grundlag enhver procent måler af. `amount` er brutto: `own` plus aftalens
+    arbejdsgiverbidrag. Det er brutto, der lander på bufferen, krydser
+    skattesømmet og vejes ind i afkastgrundlaget, ganske som før — ændringen
+    er i, hvem der lægger de to tal sammen. */
+type ActiveEntry = { entry: Entry; own: Nominal; amount: Nominal }
 
 /** En overførsel sammen med dens beløb i årets fremtidskroner, for de
     overførsler der rent faktisk falder i det pågældende år: hvad planen bad
@@ -93,6 +104,29 @@ type ActiveContribution = {
   fromSource: Nominal
   intoHolding: Nominal
   timing: Timing
+}
+
+/** Ét beløb, en pensionsaftale placerede på én destination i ét
+    simuleringsår. Kilden er altid bufferen: lønnen landede der først, brutto
+    — arbejdsgiverbidraget lagt til af aftalen selv, jf. ADR-0040. */
+type ActivePlacement = { to: HoldingId; landed: Nominal }
+
+/** Én pensionsaftales regnestykke i ét simuleringsår — de to bidrag,
+    AM-bidraget og det, der landede hvor.
+
+    Hele regnestykket står og ikke kun facit, jf. ADR-0041: aftalen kan ikke
+    låne `ContributionYear`, hvis ene difference er AM-bidraget, for her er
+    kilen bredere. Ejeren står på linjen af samme grund som på `ActivePayout`
+    — fradragsretten er lønmodtagerens, og pengene lander i hendes egen
+    ordning — mens forfaldet er lønpostens, som aftalen arver alt andet fra. */
+type ActiveAgreement = {
+  entry: EntryId
+  owner: PersonId
+  employerContribution: Nominal
+  employeeContribution: Nominal
+  labourMarketContribution: Nominal
+  timing: Timing
+  placements: ActivePlacement[]
 }
 
 /** Én beholdnings udbetaling i ét simuleringsår: hvad en `PayoutSchedule`
@@ -173,6 +207,10 @@ function simulateYear(
   const entries = entriesInYear(plan, year)
   const requested = contributionsInYear(plan, year, entries, rates)
 
+  // Aftalens to bidrag måler lønposten og ikke den brutto, `entriesInYear`
+  // netop har lagt sammen af de to, jf. ADR-0040.
+  const agreements = pensionAgreementsInYear(plan, year, entries, rates)
+
   // Primosaldiene står fast hele året igennem: de er forrige års ultimo og
   // ændrer sig ikke af noget, der sker herefter. `OnBalance`-loftets
   // råderum, overførslernes afkortning og årets rater måles alle mod netop
@@ -187,14 +225,18 @@ function simulateYear(
   // Lofterne opgøres, før noget vejes ind. En loftform, der afkorter selve
   // indbetalingen, skal være afgjort først — ellers forrenter penge sig et
   // sted, de aldrig kom hen, jf. ADR-0019.
-  const contributionsByPersonId = contributionsByPerson(
-    plan,
-    requested,
-    rates,
-    year,
-    opening,
+  //
+  // Opgørelsen måler betalinger og ikke indbetalinger: loftet er personens og
+  // gælder personens ordninger af slagsen under ét, uanset hvilken figur
+  // pengene kom af, jf. ADR-0018 og ADR-0041. Planens egne indbetalinger står
+  // først og aftalernes fordelinger derefter — det er dén rækkefølge,
+  // råderummet uddeles i.
+  const payments = paymentsOf(requested, agreements)
+  const { byPerson, shortened } = paymentsThroughCaps(plan, payments, rates, year, opening)
+  const contributions = requested.map((active, index) =>
+    shortenedTo(active, shortened.get(index)),
   )
-  const contributions = inPlanOrder(requested, contributionsByPersonId)
+  const placedAgreements = withShortenedPlacements(agreements, shortened, requested.length)
 
   // Raten regnes af primosaldoen, jf. diagram 02 og PBL § 11 A: saldoen ved
   // årets begyndelse divideret med resterende udbetalingsår, eller
@@ -234,6 +276,19 @@ function simulateYear(
       withWeightedFlow(years, from, contribution.to, intoHolding, intoHolding, timing, plan.buffer),
     afterTransfers,
   )
+  // Aftalens penge vejer ind som en indbetalings og af samme grund: de
+  // forlader bufferen, hvor hele bruttolønnen — arbejdsgiverbidraget med —
+  // netop er vejet ind med posten. Forfaldet er lønpostens, som aftalen
+  // arver alt andet fra.
+  const afterAgreements = placedAgreements.reduce(
+    (years, { placements, timing }) =>
+      placements.reduce(
+        (years, { to, landed }) =>
+          withWeightedFlow(years, plan.buffer, to, landed, landed, timing, plan.buffer),
+        years,
+      ),
+    afterContributions,
+  )
   // Raten vejer kun ind i afgiverens ende. Forfaldet er ikke et felt på
   // udbetalingsplanen: en rate udbetales månedsvis, og `'Even'` er det
   // matematisk rigtige for en jævn strøm, jf. ADR-0006. Pengene forlader
@@ -243,7 +298,7 @@ function simulateYear(
   const flowed = payouts.reduce(
     (years, { holding, amount }) =>
       withFlow(years, holding, -amount * weightAt(holding, 'Even', plan.buffer)),
-    afterContributions,
+    afterAgreements,
   )
 
   // Folkepensionen vejer ingen steder. Den udbetales månedsvis og lander på
@@ -299,13 +354,26 @@ function simulateYear(
     moved,
   )
 
+  // Aftalens penge er en intern bevægelse som en indbetalings: bufferen
+  // belastes det landede beløb, og AM-delen er allerede trukket som en del
+  // af årets skat af hele bruttolønnen.
+  const placed = placedAgreements.reduce(
+    (years, { placements }) =>
+      placements.reduce(
+        (years, { to, landed }) =>
+          withMovement(withMovement(years, plan.buffer, -landed), to, landed),
+        years,
+      ),
+    contributed,
+  )
+
   // Raten er heller ikke et led i invarianten: den flytter penge fra
   // beholdningen til bufferen og lader formuen uændret, præcis som en
   // overførsel. Kun dens skat sætter aftryk.
   const paid = payouts.reduce(
     (years, { holding, amount }) =>
       withMovement(withPayout(years, holding, amount), plan.buffer, amount),
-    contributed,
+    placed,
   )
 
   // Den sidste rate fejer resten med. Fejningen kommer efter afkastet, som
@@ -351,7 +419,7 @@ function simulateYear(
       persons: plan.household.persons.map((person) => ({
         tax: taxInput(entries, person, rates, year, {
           capitalIncome: capitalIncomeByPerson.get(person.id)!,
-          withDeductibility: contributionsByPersonId.get(person.id)!.withDeductibility,
+          withDeductibility: byPerson.get(person.id)!.withDeductibility,
           payouts: payoutOf(swept.payouts, person),
           benefits: sumOfBenefits(annuitiesOf(annuities, person)),
         }),
@@ -399,12 +467,24 @@ function simulateYear(
     expenses,
     conversion: converted.conversion,
     holdings,
-    entries: entries.map(({ entry, amount }) => ({ entry: entry.id, amount })),
+    // Postens eget årstal er lønnen alene. Arbejdsgiverbidraget står i
+    // aftalens regnestykke, hvor planlæggeren vil lede efter det — og hvor
+    // det også står i virkeligheden, jf. ADR-0040.
+    entries: entries.map(({ entry, own }) => ({ entry: entry.id, amount: own })),
     contributions: contributions.map(({ contribution, fromSource, intoHolding }) => ({
       contribution: contribution.id,
       fromSource,
       intoHolding,
     })),
+    pensionAgreements: placedAgreements.map(
+      ({ entry, employerContribution, employeeContribution, labourMarketContribution, placements }) => ({
+        entry,
+        employerContribution,
+        employeeContribution,
+        labourMarketContribution,
+        destinations: placements.map(({ to, landed }) => ({ holding: to, landed })),
+      }),
+    ),
     transfers: transfers.map(({ transfer, from, requested, amount, landed }) =>
       payoutTaxation(from) === 'Chargeable'
         ? {
@@ -424,11 +504,11 @@ function simulateYear(
       marginal: household.persons[index]!.marginal,
       lifeAnnuityBenefits: benefitsOf(annuities, person),
       ...statePensionOf(household.persons[index]!),
-      caps: contributionsByPersonId.get(person.id)!.caps,
+      caps: byPerson.get(person.id)!.caps,
     })),
     shareIncomeTax: household.shareIncomeTax,
     bufferState: bufferState(plan, holdings, year, rates),
-    capBreach: capBreach([...contributionsByPersonId.values()]),
+    capBreach: capBreach([...byPerson.values()]),
   }
 }
 
@@ -581,7 +661,7 @@ function returnWeight(timing: Timing): number {
     årets skat; aldersopsparingen har ingen at miste og betaler i stedet en
     afgift, som ikke er modelleret. Brydes begge samme år, står den, der
     flyttede skatten. */
-function capBreach(persons: PersonContributions[]): CapBreach | undefined {
+function capBreach(persons: PersonCaps[]): CapBreach | undefined {
   const breached = persons
     .flatMap(({ caps }) => caps)
     // Formen først, tallene bagefter. En `OnBalance`-linje har ikke et
@@ -600,171 +680,166 @@ function capBreach(persons: PersonContributions[]): CapBreach | undefined {
     : 'Chargeable'
 }
 
-/** Årets indbetalinger for én person, ført gennem lofterne: loftlinjerne,
-    der står i årsresultatet, det ene tal, der krydser skattesømmet, og de
-    indbetalinger, opgørelsen har målt.
+/** Ét beløb på vej ind i én beholdning i ét simuleringsår, uden hensyn til
+    hvilken figur det kom af. Både en `Contribution` og en
+    `PensionAgreement`s fordelingslinje bliver til en af disse, før lofterne
+    måler.
 
-    Det tredje svar er der, fordi et loft kan afkorte selve indbetalingen, og
-    de afkortede er dem, der skal vejes ind og bogføres. Kom de fra en anden
-    opgørelse end loftlinjen, kunne forklar-årets linje komme til at vise en
-    saldo, den ikke selv kan efterregne, jf. ADR-0019. */
-type PersonContributions = {
-  caps: CapYear[]
-  withDeductibility: Nominal
-  contributions: ActiveContribution[]
-}
+    Kildeuafhængigheden er ikke en bekvemmelighed, den er selve reglen:
+    loftet måles pr. person og pr. slags ordning og aldrig pr. indbetaling,
+    jf. ADR-0018, og en opgørelse, der kunne se forskel på de to kilder,
+    ville kunne komme til at måle dem hver for sig. Loftet var i forvejen en
+    sum over flere kilder — der er alene kommet én slags mere, jf. ADR-0041.
 
-/** Summen af det, der landede i hver persons ordninger med `Deductibility`,
-    begrænset af lofterne — de loftlinjer, begrænsningen kom af, og de
-    indbetalinger, lofterne har målt.
+    Beløbet er det, der **landede** i beholdningen, altså efter AM-bidrag:
+    både fradragsretten, det ekstra pensionsfradrags grundlag og lofterne
+    måler dér, jf. PBL § 16, stk. 3, LL § 9 L, stk. 1, og
+    docs/satser/2026.md. */
+type Payment = { to: HoldingId; intoHolding: Nominal }
 
-    De tre svar kommer fra samme opgørelse med vilje. Regnede forklar-årets
+/** Det, én person fik ud af årets lofter: linjerne, årsresultatet skal vise,
+    og det ene tal, der krydser skattesømmet.
+
+    Det er denne gruppering — og aldrig en `HoldingVariant` — der krydser
+    sømmet: skattereglen hedder ikke "ratepension giver fradragsret", men
+    "indbetalinger til ordninger, hvis udbetaling er personlig indkomst,
+    giver fradragsret", og hvilke varianter det så er, er varianttabellens
+    viden og ikke skattens, jf. ADR-0016 og ADR-0014. */
+type PersonCaps = { caps: CapYear[]; withDeductibility: Nominal }
+
+/** Årets betalinger ført gennem lofterne: hvad hver person fik ud af dem, og
+    de betalinger, et loft afkortede.
+
+    De to svar kommer fra samme opgørelse med vilje. Regnede forklar-årets
     linje, årets skat og de penge, der faktisk blev flyttet, hver sit sted,
     kunne de komme til at sige hver sit, og brugeren ville se en linje, der
     ikke kan efterregne hverken den skat eller den saldo, den står ved siden
     af, jf. ADR-0018 og ADR-0019.
 
+    Afkortningen svares som pladserne i den liste, opgørelsen fik, frem for
+    som betalingerne selv: en betaling ved ikke, hvilken figur den kom af, og
+    det er figuren, der skal have sit beløb rettet. Kortet er tomt i ethvert
+    år, hvor intet loft afkortede noget — og det er de fleste, for kun
+    `OnBalance` afkorter, jf. ADR-0019.
+
     Opgørelsen står før årets strømme. En loftform, der afkorter selve
-    indbetalingen, skal være afgjort, før noget vejes ind i
-    afkastgrundlaget — og den saldo, `OnBalance` måler mod, er årets primo
-    og ikke en saldo undervejs, jf. ASKL § 9, stk. 1.
+    indbetalingen, skal være afgjort, før noget vejes ind i afkastgrundlaget
+    — og den saldo, `OnBalance` måler mod, er årets primo og ikke en saldo
+    undervejs, jf. ASKL § 9, stk. 1.
 
-    Det er denne gruppering — og aldrig en `HoldingVariant` — der krydser
-    skattesømmet: skattereglen hedder ikke "ratepension giver fradragsret",
-    men "indbetalinger til ordninger, hvis udbetaling er personlig indkomst,
-    giver fradragsret", og hvilke varianter det så er, er varianttabellens
-    viden og ikke skattens, jf. ADR-0016 og ADR-0014. Det er det samme greb
-    som `capitalIncome`, der også krydser som et tal. Loftet anvendes her,
-    bag sømmet, på præcis den gruppering.
-
-    Det er beløbet, der **landede**, og ikke det, der forlod kilden: både
-    fradragsretten, det ekstra pensionsfradrags grundlag og lofterne måler
-    efter AM-bidrag, jf. PBL § 16, stk. 3, LL § 9 L, stk. 1, og
-    docs/satser/2026.md.
-
-    `PerYear` begrænser kun tallet. Hele indbetalingen er allerede landet i
+    `PerYear` afkorter ingenting. Hele indbetalingen er allerede landet i
     beholdningen, og det overskydende bliver liggende dér — motoren flytter
     ikke pengene tilbage på bufferen, jf. ADR-0018 og ADR-0002. */
-function contributionsByPerson(
+type MeasuredPayments = {
+  byPerson: Map<PersonId, PersonCaps>
+  shortened: Map<number, Nominal>
+}
+
+function paymentsThroughCaps(
   plan: Plan,
-  contributions: ActiveContribution[],
+  payments: Payment[],
   rates: RateYear,
   year: SimulationYear,
   opening: ReadonlyMap<HoldingId, Nominal>,
-): Map<PersonId, PersonContributions> {
-  return new Map(
-    plan.household.persons.map((person) => [
-      person.id,
-      // Årstællingen går gennem `statePensionYear`, motorens eneste vej til
-      // det årstal: aldersopsparingens vindue og det ekstra pensionsfradrags
-      // 15-årsgrænse skal ramme det samme år, og alderen er en brøk for de
-      // fleste årgange.
-      throughCaps(person, contributions, rates, statePensionYear(person) - year, opening),
-    ]),
-  )
+): MeasuredPayments {
+  const byPerson = new Map<PersonId, PersonCaps>()
+  const shortened = new Map<number, Nominal>()
+
+  for (const person of plan.household.persons) {
+    // Årstællingen går gennem `statePensionYear`, motorens eneste vej til
+    // det årstal: aldersopsparingens vindue og det ekstra pensionsfradrags
+    // 15-årsgrænse skal ramme det samme år, og alderen er en brøk for de
+    // fleste årgange.
+    const own = throughCaps(person, payments, rates, statePensionYear(person) - year, opening)
+    byPerson.set(person.id, { caps: own.caps, withDeductibility: own.withDeductibility })
+    for (const [index, amount] of own.shortened) shortened.set(index, amount)
+  }
+
+  return { byPerson, shortened }
 }
 
-/** De målte indbetalinger tilbage i planens rækkefølge. Opgørelsen svarer
-    pr. person, og en flad sammenlægning af de svar ville sortere årets
-    indbetalinger efter husstanden frem for efter planen.
-
-    Rækkefølgen i `plan.contributions` er betydningsbærende, jf. ADR-0019:
-    den afgør, hvem der først får råderummet, når flere indbetalinger til
-    samme ordning tilsammen beder om mere, end der er plads til. Hver
-    indbetaling går til præcis én persons beholdning, jf. `validatePlan`, så
-    hver af dem er målt nøjagtig én gang. */
-function inPlanOrder(
-  requested: ActiveContribution[],
-  byPerson: Map<PersonId, PersonContributions>,
-): ActiveContribution[] {
-  const measured = new Map(
-    [...byPerson.values()].flatMap(({ contributions }) =>
-      contributions.map((active) => [active.contribution.id, active] as const),
-    ),
-  )
-  return requested.map(({ contribution }) => measured.get(contribution.id)!)
-}
-
-/** Årets indbetalinger til én person ført gennem personens lofter, én
+/** Årets betalinger til én person ført gennem personens lofter, én
     variantgruppe ad gangen. Loftet er personens og gælder personens
     ordninger af den slags under ét: to ratepensioner med 40.000 kr. hver er
     ét brud og ikke to lovlige indbetalinger, jf. PBL § 16.
 
-    Selve reglen ligger i `throughCap`. Her lægges gruppernes svar sammen —
-    de tre svar kommer af samme opgørelse og kan derfor ikke komme til at
-    sige hver sit, jf. ADR-0018 og ADR-0019.
+    Selve reglen ligger i `throughCap`. Her lægges gruppernes svar sammen.
 
-    Grupper uden indbetaling får ingen linje, og en variant uden loft heller
+    Grupper uden betaling får ingen linje, og en variant uden loft heller
     ikke. En linje på nul ville sige, at året indbetalte til en ordning, det
     ikke rørte, og et loft, der ikke blev målt mod noget, er ikke et svar.
     Men det, der tælles, er hvad året **bad om** og ikke hvad der landede:
     ellers forsvandt netop det år, hvor råderummet var nul, og hele
-    indskuddet blev afvist. */
+    indskuddet blev afvist.
+
+    Hver betaling går til præcis én persons beholdning, jf. `validatePlan`,
+    så hver af dem er målt nøjagtig én gang. */
 function throughCaps(
   person: Person,
-  contributions: ActiveContribution[],
+  payments: Payment[],
   rates: RateYear,
   yearsToStatePensionAge: number,
   opening: ReadonlyMap<HoldingId, Nominal>,
-): PersonContributions {
+): PersonCaps & { shortened: Map<number, Nominal> } {
   const caps: CapYear[] = []
-  const measured: ActiveContribution[] = []
+  const shortened = new Map<number, Nominal>()
   let withDeductibility = 0
 
   for (const holdings of byVariant(person).values()) {
-    const group = throughCap(holdings, contributions, rates, yearsToStatePensionAge, opening)
-    measured.push(...group.contributions)
+    const group = throughCap(holdings, payments, rates, yearsToStatePensionAge, opening)
     withDeductibility += group.withDeductibility
+    for (const [index, amount] of group.shortened) shortened.set(index, amount)
     if (group.line !== undefined) caps.push(group.line)
   }
 
-  return { caps, withDeductibility, contributions: measured }
+  return { caps, withDeductibility, shortened }
 }
 
 /** Én gruppes vej gennem sit loft: det tal, der krydser skattesømmet, de
-    indbetalinger opgørelsen svarer med, og linjen året skal vise. */
+    afkortninger opgørelsen svarer med, og linjen året skal vise. */
 type CappedGroup = {
   /** Det, der landede i gruppen med `Deductibility` i behold — nul for en
       variant, der ingen har. De tre veje igennem giver hver sit grundlag at
       måle af, men fradragsretten selv følger destinationens variant og
       spørges derfor ét sted, jf. ADR-0016. */
   withDeductibility: Nominal
-  /** Gruppens indbetalinger, som opgørelsen har målt dem. De samme, den fik,
-      med mindre et loft har afkortet dem. */
-  contributions: ActiveContribution[]
+  /** De betalinger, loftet afkortede, slået op på deres plads i årets liste.
+      Tomt for de to veje igennem, der ikke afkorter noget. */
+  shortened: Map<number, Nominal>
   /** Fraværende, når varianten ingen loft har, eller når året ikke bad om
       noget. */
   line?: CapYear
 }
 
-/** Årets indbetalinger til én persons beholdninger af én variant, ført
-    gennem den varianttabellen giver dem — de tre veje, `Cap` kan gå.
+/** Årets betalinger til én persons beholdninger af én variant, ført gennem
+    den varianttabellen giver dem — de tre veje, `Cap` kan gå.
 
     Uden loft går pengene urørt igennem. `PerYear` lader dem lande og
     begrænser kun det tal, skatten regnes af: det overskydende bliver
     liggende i ordningen, jf. ADR-0018. `OnBalance` afkorter selve
-    indbetalingen til råderummet, og det uindskudte forlader aldrig kilden,
-    jf. ADR-0019. Det er hele grunden til, at funktionen svarer med
-    indbetalinger og ikke kun med et tal og en linje.
+    betalingen til råderummet, og det uindskudte forlader aldrig kilden, jf.
+    ADR-0019. Det er hele grunden til, at funktionen svarer med afkortninger
+    og ikke kun med et tal og en linje.
 
-    Bad året ikke om noget, måles der ikke. Indbetalingerne går stadig med
-    videre — en indbetaling på nul falder også i året, og en, opgørelsen
-    tabte, ville forsvinde ud af årsresultatet. */
+    Bad året ikke om noget, måles der ikke. */
 function throughCap(
   holdings: Holding[],
-  contributions: ActiveContribution[],
+  payments: Payment[],
   rates: RateYear,
   yearsToStatePensionAge: number,
   opening: ReadonlyMap<HoldingId, Nominal>,
 ): CappedGroup {
-  // Gruppens indbetalinger læses ud af årets liste, som allerede står i
-  // planens rækkefølge, frem for at blive samlet op beholdning for
-  // beholdning: den rækkefølge afgør, hvem der først får råderummet, jf.
-  // ADR-0019.
+  // Gruppens betalinger læses ud af årets liste, som allerede står i den
+  // rækkefølge, råderummet uddeles i — planens egne indbetalinger først,
+  // aftalernes fordelinger derefter, jf. ADR-0019 og ADR-0041. Pladsen
+  // følger med, for det er den, en afkortning svares på.
   const ids = new Set(holdings.map((holding) => holding.id))
-  const into = contributions.filter(({ contribution }) => ids.has(contribution.to))
-  const requested = into.reduce((sum, { intoHolding }) => sum + intoHolding, 0)
-  if (requested === 0) return { withDeductibility: 0, contributions: into }
+  const into = payments.flatMap((payment, index) =>
+    ids.has(payment.to) ? [{ index, payment }] : [],
+  )
+  const requested = into.reduce((sum, { payment }) => sum + payment.intoHolding, 0)
+  const untouched = { withDeductibility: 0, shortened: new Map<number, Nominal>() }
+  if (requested === 0) return untouched
 
   // Beholdningerne i gruppen deler variant, og loftet gælder dem under ét —
   // den første kan derfor svare på tabellens vegne for dem alle.
@@ -774,7 +849,7 @@ function throughCap(
   const deductible = (amount: Nominal) => (hasDeductibility(holding) ? amount : 0)
 
   if (limit === undefined || variant === undefined) {
-    return { withDeductibility: deductible(requested), contributions: into }
+    return { ...untouched, withDeductibility: deductible(requested) }
   }
 
   if (limit.form === 'PerYear') {
@@ -784,7 +859,7 @@ function throughCap(
     const withDeductibility = deductible(Math.min(requested, limit.amount))
     return {
       withDeductibility,
-      contributions: into,
+      shortened: new Map(),
       line: {
         form: 'PerYear',
         variant,
@@ -800,11 +875,11 @@ function throughCap(
   // ikke plads til mere, jf. ADR-0019.
   const openingBalance = holdings.reduce((sum, held) => sum + opening.get(held.id)!, 0)
   const shortened = shortenToHeadroom(into, Math.max(limit.amount - openingBalance, 0))
-  const deposited = shortened.reduce((sum, { intoHolding }) => sum + intoHolding, 0)
+  const deposited = [...shortened.values()].reduce((sum, amount) => sum + amount, 0)
 
   return {
     withDeductibility: deductible(deposited),
-    contributions: shortened,
+    shortened,
     line: {
       form: 'OnBalance',
       variant,
@@ -814,6 +889,64 @@ function throughCap(
       deposited,
     },
   }
+}
+
+/** Årets betalinger i den rækkefølge, lofterne måler dem: planens egne
+    indbetalinger først, aftalernes fordelinger derefter.
+
+    Rækkefølgen falder ud af afhængigheden og ikke af en listeposition, jf.
+    ADR-0041: en fordelingslinje skal kunne vide, hvad de øvrige
+    indbetalinger til ordningen tog, og de øvrige skal aldrig vide, hvad
+    aftalen tog. Rækkefølgen i `plan.contributions` er urørt — den afgør
+    stadig, hvem der først får råderummet under et `OnBalance`-loft, jf.
+    ADR-0019. */
+function paymentsOf(
+  contributions: ActiveContribution[],
+  agreements: ActiveAgreement[],
+): Payment[] {
+  return [
+    ...contributions.map(({ contribution, intoHolding }) => ({
+      to: contribution.to,
+      intoHolding,
+    })),
+    ...agreements.flatMap(({ placements }) =>
+      placements.map(({ to, landed }) => ({ to, intoHolding: landed })),
+    ),
+  ]
+}
+
+/** En indbetaling, som et loft afkortede den — eller den samme igen, når
+    intet loft rørte den.
+
+    Begge tal afkortes til det samme. Kun et beholdningskildet bidrag kan nå
+    et `OnBalance`-loft — der findes ingen arbejdsgiveradministreret
+    aktiesparekonto, og `validatePlan` afviser den anden form — og dér har
+    pengene aldrig båret AM-bidrag, så det, der forlod kilden, er det, der
+    kom ind. Resten forlader aldrig kilden, jf. ADR-0019. */
+function shortenedTo(
+  active: ActiveContribution,
+  intoHolding: Nominal | undefined,
+): ActiveContribution {
+  return intoHolding === undefined ? active : { ...active, fromSource: intoHolding, intoHolding }
+}
+
+/** Aftalerne med et lofts afkortning skrevet ind i deres fordelinger.
+
+    Betalingerne blev målt i den rækkefølge, `paymentsOf` lagde dem, og
+    `offset` er dermed pladsen, hvor den første af aftalernes står. */
+function withShortenedPlacements(
+  agreements: ActiveAgreement[],
+  shortened: ReadonlyMap<number, Nominal>,
+  offset: number,
+): ActiveAgreement[] {
+  let index = offset
+  return agreements.map((agreement) => ({
+    ...agreement,
+    placements: agreement.placements.map((placement) => {
+      const landed = shortened.get(index++)
+      return landed === undefined ? placement : { ...placement, landed }
+    }),
+  }))
 }
 
 /** Personens beholdninger grupperet efter variant, i den rækkefølge de står
@@ -827,26 +960,27 @@ function byVariant(person: Person): Map<HoldingVariant, Holding[]> {
   return groups
 }
 
-/** Årets indskud afkortet til råderummet, i planens rækkefølge: den første
+/** Årets indskud afkortet til råderummet, i listens rækkefølge: den første
     tager sit fulde beløb, og den næste får resten. Skranken honorerer det
     første indskud og afviser det næste — pro rata ville afkorte dem begge,
     og den fordeling sker ikke nogen steder, jf. ADR-0019.
 
-    Begge tal afkortes til det samme. Kun et beholdningskildet bidrag kan nå
-    et `OnBalance`-loft — der findes ingen arbejdsgiveradministreret
-    aktiesparekonto, og `validatePlan` afviser den anden form — og dér har
-    pengene aldrig båret AM-bidrag, så det, der forlod kilden, er det, der
-    kom ind. Resten forlader aldrig kilden. */
+    Svaret er hvert indskuds plads og dets afkortede beløb. Også de
+    uafkortede står der: kaldet kender ikke ét råderum fra et andet, og et
+    kort med huller i ville lade en betaling stå med et beløb, opgørelsen
+    ikke har set. */
 function shortenToHeadroom(
-  deposits: ActiveContribution[],
+  deposits: { index: number; payment: Payment }[],
   headroom: Nominal,
-): ActiveContribution[] {
+): Map<number, Nominal> {
   let left = headroom
-  return deposits.map((deposit) => {
-    const amount = Math.min(deposit.intoHolding, left)
-    left -= amount
-    return { ...deposit, fromSource: amount, intoHolding: amount }
-  })
+  return new Map(
+    deposits.map(({ index, payment }) => {
+      const amount = Math.min(payment.intoHolding, left)
+      left -= amount
+      return [index, amount]
+    }),
+  )
 }
 
 /** Det, en persons skat skal regnes af — selve opgørelsen sker bag
@@ -1247,13 +1381,50 @@ function sumOf(entries: ActiveEntry[], direction: Entry['direction']): Nominal {
     .reduce((sum, { amount }) => sum + amount, 0)
 }
 
+/** Årets poster med deres to beløb. Arbejdsgiverbidraget lægges til her og
+    ingen andre steder: motorens aktive post er brutto, jf. ADR-0040, og
+    resten af gennemløbet kender derfor kun ét indtægtstal, præcis som før.
+    Postens eget årstal er lønnen alene og står i `EntryYear`. */
 function entriesInYear(plan: Plan, year: SimulationYear): ActiveEntry[] {
   return plan.entries
     .filter((entry) => appliesInYear(entry, year, ownerOf(plan, entry), plan.startYear))
-    .map((entry) => ({
-      entry,
-      amount: entry.amountInRealKroner * entryProjection(entry, plan, year),
-    }))
+    .map((entry) => {
+      const own = entry.amountInRealKroner * entryProjection(entry, plan, year)
+      const agreement = pensionAgreementOf(entry)
+      const employerContribution =
+        agreement === undefined
+          ? 0
+          : measuredAgainstEntry(agreement.employerContribution, entry, own, plan, year)
+      return { entry, own, amount: own + employerContribution }
+    })
+}
+
+/** Postens pensionsaftale, eller `undefined` når den ingen har. Feltet
+    hænger på indtægtsgrenen alene, og opslaget står ét sted, så ingen af
+    kalderne skal indsnævre unionen selv. */
+function pensionAgreementOf(entry: Entry): PensionAgreement | undefined {
+  return entry.direction === 'Income' ? entry.pensionAgreement : undefined
+}
+
+/** Et bidrag målt mod sin lønpost: procenten af postens eget beløb, eller
+    kronebeløbet løftet med postens egen reguleringssats.
+
+    Procenten måler `own` og aldrig brutto. Målte den brutto, skulle de 12 %,
+    der står på lønsedlen, tastes som 10,714 % for at ramme de 72.000 kr., de
+    i virkeligheden er — og den, der tastede de 12, ville ramme 8.640 kr. for
+    højt hvert år uden at noget nogensinde spurgte, om tallet var ment, jf.
+    ADR-0040. Reglen er den samme for aftalens to bidrag og for det
+    selvstændige lønkildede bidrag: begge måler den post, de hænger på. */
+function measuredAgainstEntry(
+  amount: ContributionAmount,
+  entry: Entry,
+  own: Nominal,
+  plan: Plan,
+  year: SimulationYear,
+): Nominal {
+  return 'percentageOfEntry' in amount
+    ? own * amount.percentageOfEntry
+    : amount.amountInRealKroner * entryProjection(entry, plan, year)
 }
 
 function ownerOf(plan: Plan, entry: Entry): Person {
@@ -1284,6 +1455,60 @@ function appliesInYear(entry: Entry, year: SimulationYear, owner: Person, startY
   if (entry.direction === 'Income' && year > personLastYear(owner)) return false
   const { from, to } = periodBounds(entry.period, owner)
   return withinPeriod(from, to, year) && matchesRecurrence(entry.recurrence, year, from, to, startYear)
+}
+
+/** Årets pensionsaftaler, én linje pr. lønpost der bærer en og falder i
+    året. Aftalen har ingen periode at prøve: den arver lønpostens og ophører
+    derfor af sig selv ved erhvervsophør, ganske som det lønkildede bidrag,
+    jf. ADR-0016 og ADR-0040. Den findes dermed præcis i de år, posten står i
+    `entries`.
+
+    Rækkefølgen i årets gennemløb: de to bidrag lægges sammen, AM-bidraget
+    trækkes fra, og resten fordeles. Aftalen opkræver ikke AM — hele
+    indbetalingen er en del af `EarnedIncome`, og bidraget står allerede i
+    personens eget skattelag, jf. ADR-0041. */
+function pensionAgreementsInYear(
+  plan: Plan,
+  year: SimulationYear,
+  entries: ActiveEntry[],
+  rates: RateYear,
+): ActiveAgreement[] {
+  return entries.flatMap(({ entry, own }) => {
+    const agreement = pensionAgreementOf(entry)
+    if (agreement === undefined) return []
+
+    const measured = (amount: ContributionAmount) =>
+      measuredAgainstEntry(amount, entry, own, plan, year)
+    const employerContribution = measured(agreement.employerContribution)
+    const employeeContribution = measured(agreement.employeeContribution)
+    const labourMarketContribution =
+      (employerContribution + employeeContribution) * labourMarketRateOf(entry, rates)
+
+    return [
+      {
+        entry: entry.id,
+        owner: entry.owner,
+        employerContribution,
+        employeeContribution,
+        labourMarketContribution,
+        timing: entry.timing,
+        placements: allocate(
+          agreement.allocation,
+          employerContribution + employeeContribution - labourMarketContribution,
+        ),
+      },
+    ]
+  })
+}
+
+/** Det placerede beløb delt ud på fordelingens destinationer.
+
+    Præcis én linje er `Remainder` og får det, de øvrige ikke tog — og der er
+    endnu ingen øvrige former, så resten er hele beløbet. Det er formen og
+    ikke et regnestykke, der får fordelingen til at gå op i hvert eneste
+    simuleringsår. */
+function allocate(allocation: Allocation, placed: Nominal): ActivePlacement[] {
+  return allocation.map((line) => ({ to: line.to, landed: placed }))
 }
 
 /** Årets indbetalinger med deres to beløb, deres forfald og den beholdning,
@@ -1326,19 +1551,9 @@ function entrySourcedInYear(
   const source = entries.find(({ entry }) => entry.id === contribution.source)
   if (source === undefined) return []
 
-  const fromSource =
-    'percentageOfEntry' in contribution
-      ? source.amount * contribution.percentageOfEntry
-      : contribution.amountInRealKroner * entryProjection(source.entry, plan, year)
+  const fromSource = measuredAgainstEntry(contribution, source.entry, source.own, plan, year)
 
-  // AM-behandlingen følger kilden. En AM-pligtig lønpost har allerede
-  // betalt bidraget af hele sit bruttobeløb i personens eget skattelag, og
-  // der lander derfor 92 %; en skattefri indtægt har aldrig båret AM, og
-  // hele beløbet går ind.
-  const labourMarketContribution =
-    source.entry.direction === 'Income' && source.entry.taxTreatment === 'EarnedIncome'
-      ? rates.taxRates.labourMarketContribution
-      : 0
+  const labourMarketContribution = labourMarketRateOf(source.entry, rates)
 
   return [
     {
@@ -1351,6 +1566,21 @@ function entrySourcedInYear(
       timing: source.entry.timing,
     },
   ]
+}
+
+/** AM-satsen på vejen ind fra en post. Den følger kilden og aldrig
+    destinationen, jf. ADR-0016: en AM-pligtig lønpost har allerede betalt
+    bidraget af hele sit bruttobeløb i personens eget skattelag, og der
+    lander derfor 92 %; en skattefri indtægt har aldrig båret AM, og hele
+    beløbet går ind.
+
+    Delt af det lønkildede bidrag og af pensionsaftalen. Ingen af de to
+    **opkræver** noget — begge trækker alene fra på vejen ind. Bygges det som
+    en opkrævning, betales AM to gange, jf. ADR-0041. */
+function labourMarketRateOf(entry: Entry, rates: RateYear): number {
+  return entry.direction === 'Income' && entry.taxTreatment === 'EarnedIncome'
+    ? rates.taxRates.labourMarketContribution
+    : 0
 }
 
 /** Et beholdningskildet bidrag bærer sin egen periode, gentagelse og forfald

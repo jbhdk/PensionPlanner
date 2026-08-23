@@ -47,8 +47,14 @@ type ResultView = 'Planner' | 'YearTable' | 'YearExplanation'
 export function App({
   initialPlan,
   loadError: initialLoadError,
+  loadNotice: initialLoadNotice,
 }: {
   initialPlan: Plan
+  /** Sat, når en gemt plan blev læst, men et menneske skal se på den — en
+      migration kan ikke altid gøre arbejdet færdigt, jf. ADR-0040. Planen
+      regner, og fladen viser derfor en besked ved siden af den frem for at
+      spærre skærmen, som `loadError` gør. */
+  loadNotice?: string
   /** Sat når en gemt plan fandtes, men ikke kunne indlæses. Fladen viser da
       en forklarende besked i stedet for en tom navigator og resultatspalte,
       jf. issue #15 — og `initialPlan` er den plan, brugeren starter forfra
@@ -76,6 +82,9 @@ export function App({
   // Fejlen er en tilstand og ikke en egenskab ved fladen: brugeren skal kunne
   // komme ud af den uden at genindlæse siden.
   const [loadError, setLoadError] = useState(initialLoadError)
+  // Beskeden er en tilstand og ikke en egenskab ved fladen: den er læst, når
+  // planlæggeren siger, den er, og en ny import kan sætte en ny.
+  const [loadNotice, setLoadNotice] = useState(initialLoadNotice)
   // Bekræftelsen er en tilstand og ikke en dialog: fladen har ingen modaler,
   // og spørgsmålet stilles i den samme figur som fejlskærmens — med
   // navigatoren stående ved siden af, så man ser, hvad der forsvinder.
@@ -121,6 +130,8 @@ export function App({
     setImportError(null)
     setConfirmingDelete(false)
     setLoadError(undefined)
+    // Den kasserede plan er væk, og med den det, beskeden handlede om.
+    setLoadNotice(undefined)
   }
 
   function handleExport() {
@@ -136,6 +147,7 @@ export function App({
     if (result.kind === 'Loaded') {
       setPlan(result.plan)
       setImportError(null)
+      setLoadNotice(result.notice)
       // En accepteret fil er også vejen ud af fejlskærmen. Planen er tolket og
       // valideret her, så den må gerne gemmes ovenpå det, der ikke kunne
       // læses.
@@ -241,6 +253,20 @@ export function App({
           {importAction}
         </span>
       </header>
+
+      {/* Beskeden står under bjælken og over spalterne, hvor den ses uden at
+          spærre noget: planen regner, og der er ikke noget galt at rette,
+          kun noget et menneske skal se på. Den lukkes af planlæggeren og
+          ikke af et klik et andet sted — en besked, der forsvandt af sig
+          selv, ville være ulæst hos den, der kiggede væk. */}
+      {loadNotice && (
+        <div className="planbesked" role="status">
+          <p>{loadNotice}</p>
+          <button type="button" className="knap" onClick={() => setLoadNotice(undefined)}>
+            Forstået
+          </button>
+        </div>
+      )}
 
       <div className="spalter">
         <div className="spalte navigatorspalte">

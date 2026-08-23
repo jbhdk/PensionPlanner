@@ -597,17 +597,15 @@ describe('fladen', () => {
     await user.click(navigatorButton(/Løn/))
     expect(screen.getByLabelText(/Skattebehandling/)).toBeTruthy()
 
-    // Bruttolønnen er ikke det tal, folk kalder deres løn — feltet må sige
-    // det selv, jf. ADR-0007. Ordet står på selve etiketten og ikke kun i
-    // noten: taster brugeren nettolønnen og lægger et bidrag oveni, går alle
-    // tal op og er alligevel forkerte, og ingen invariant fanger det.
-    expect(screen.getByText(/brutto inklusive arbejdsgiverbidrag/i)).toBeTruthy()
-    expect(screen.getByLabelText('Beløb, brutto (nutidskroner)')).toBeTruthy()
-
-    // En skattefri indtægt har intet arbejdsgiverbidrag i sig, og etiketten
-    // lover det ikke.
-    await user.click(navigatorButton(/Faste udgifter/))
+    // Beløbet er lønsedlens løn, jf. ADR-0040. Feltet hedder det samme som
+    // enhver anden posts — det er ikke længere en undtagelse — og noten
+    // siger, hvor arbejdsgiverbidraget så hører hjemme.
+    expect(screen.getByText(/lønsedlen kalder løn/i)).toBeTruthy()
     expect(screen.getByLabelText('Beløb (nutidskroner)')).toBeTruthy()
+
+    // En udgiftspost har ingen firmaordning at nævne, og noten står ikke.
+    await user.click(navigatorButton(/Faste udgifter/))
+    expect(screen.queryByText(/lønsedlen kalder løn/i)).toBeNull()
   })
 
   it('gør en udgiftspost til en indtægtspost, og skattebehandlingen følger med', async () => {
@@ -2860,6 +2858,147 @@ describe('fladen', () => {
     expect((screen.getByLabelText(/Beløb/) as HTMLInputElement).value).toBe('40000')
   })
 
+  describe('pensionen på lønposten', () => {
+    /** En ratepension at fordele til, og en løn at hænge aftalen på. */
+    function aPlanWithSalaryAndPension() {
+      return aPlan({
+        startYear: 2026,
+        birthYear: 1973,
+        horizon: 55,
+        balance: 500_000,
+        holdings: [
+          {
+            id: 'ratepension',
+            name: 'Ratepension',
+            variant: 'InstalmentPension',
+            payoutAge: 53,
+            balance: 0,
+            grossReturn: 0,
+            annualCostRate: 0,
+          },
+        ],
+        entries: [aSalary({ amountInRealKroner: 600_000 })],
+      })
+    }
+
+    /** Den samme plan med firmaordningen skrevet på lønnen: 12 % fra
+        arbejdsgiveren og 5 % af egen løn, det hele til ratepensionen. */
+    function aPlanWithAgreement() {
+      const plan = aPlanWithSalaryAndPension()
+      const salary = plan.entries[0]!
+      return {
+        ...plan,
+        entries: [
+          {
+            ...salary,
+            direction: 'Income' as const,
+            taxTreatment: 'EarnedIncome' as const,
+            regulationRate: 0,
+            pensionAgreement: {
+              employerContribution: { percentageOfEntry: 0.12 },
+              employeeContribution: { percentageOfEntry: 0.05 },
+              allocation: [{ to: 'ratepension', form: 'Remainder' as const }],
+            },
+          },
+        ],
+      }
+    }
+
+    it('slår sektionen til på en lønpost og fra igen, og aftalens tal er væk', async () => {
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithSalaryAndPension()} />)
+      await user.click(navigatorButton(/Løn/))
+
+      expect(sectionLabels('Pension')).toEqual([])
+
+      await user.click(screen.getByRole('button', { name: '+ Tilføj' }))
+
+      expect(sectionLabels('Pension')).toEqual([
+        'Arbejdsgiverbidrag angives som',
+        'Arbejdsgiverbidrag',
+        'Arbejdstagerbidrag angives som',
+        'Arbejdstagerbidrag',
+        'Ordning',
+      ])
+
+      // Slås sektionen fra, er aftalen væk med sine tal — der er ingen
+      // afbryder, der lader dem stå.
+      await user.click(screen.getByRole('button', { name: 'Fjern pension' }))
+
+      expect(sectionLabels('Pension')).toEqual([])
+    })
+
+    it('lægger arbejdsgiverbidraget til indtægten og aftalens penge i indbetalingerne', async () => {
+      // De 12 %, der står på lønsedlen, måler lønnen selv: 72.000 kr. Med de
+      // 5 % fra lønnen er indbetalingen 102.000 kr., og der lander 93.840 i
+      // ordningen — men kun arbejdsgiverens del løfter indtægten.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithAgreement()} />)
+
+      await showYearTable(user)
+
+      expect(yearCell(1, 'Indtægter')).toBe('672.000')
+      // Cellen bærer også årets loftmarkering: de 93.840 ligger over
+      // ratepensionens loft, og aftalens penge tælles med i den opgørelse
+      // som enhver anden indbetalings.
+      expect(yearCell(1, 'Indbetalinger')).toBe('93.840Fradrag tabt')
+    })
+
+    it('viser aftalens hele regnestykke i forklar-året', async () => {
+      // Linjen skal kunne efterregnes af sig selv, jf. ADR-0041: 72.000 +
+      // 30.000 − 8.160 = 93.840. Og arbejdsgiverbidraget står som sin egen
+      // linje under indtægtsposterne, så folden går op med det bånd, den
+      // ligger under — det er dér, forskellen mellem lønnen og indtægten
+      // kommer fra, jf. ADR-0040.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithAgreement()} />)
+
+      await showYearTable(user)
+      await explainYear(user, 2026)
+
+      const indbetalinger = await openBand(user, 'Indbetalinger')
+      const aftale = indbetalinger.querySelector('.aftaletabel') as HTMLElement
+      const celler = [...aftale.querySelectorAll('tbody td')].map((td) => td.textContent)
+      expect(celler).toEqual(['Løn', '72.000', '30.000', '-8.160', 'Ratepension', '93.840'])
+
+      const indtaegter = await openBand(user, 'Indtægtsposter')
+      expect(indtaegter.textContent).toContain('Løn · arbejdsgiverbidrag')
+    })
+
+    it('giver aftalen hverken en kasse på tidslinjen eller en række i navigatoren', async () => {
+      // Aftalen redigeres i lønpostens skuffe og tegner præcis samme
+      // udstrækning som posten. En kasse og en række ville sige, at der var
+      // to figurer at flytte rundt på.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithSalaryAndPension()} />)
+
+      const rowsBefore = document.querySelectorAll('.nav-rk').length
+      const boxesBefore = document.querySelectorAll('.tl-boks').length
+
+      await user.click(navigatorButton(/Løn/))
+      await user.click(screen.getByRole('button', { name: '+ Tilføj' }))
+
+      expect(document.querySelectorAll('.nav-rk').length).toBe(rowsBefore)
+      expect(document.querySelectorAll('.tl-boks').length).toBe(boxesBefore)
+    })
+
+    it('tilbyder ikke sektionen, når ejeren ingen ordning har at fordele til', async () => {
+      // Ét klik må ikke skrive en plan, motoren afviser: har ejeren ingen
+      // arbejdsgiveradministreret ordning, er der ingen destination at pege
+      // på, og knappen står ikke.
+      const user = userEvent.setup()
+      render(
+        <App
+          initialPlan={aPlan({ entries: [aSalary({ amountInRealKroner: 600_000 })] })}
+        />,
+      )
+      await user.click(navigatorButton(/Løn/))
+
+      expect(sectionLabels('Pension')).toEqual([])
+      expect(screen.queryByRole('button', { name: '+ Tilføj' })).toBeNull()
+    })
+  })
+
   describe('udbetalingsplanen i skuffen', () => {
     it('lægger en plan på en ratepension, der ingen har, og fjerner den igen', async () => {
       // Planen slås ikke til og fra: er den der, gælder den, og skal den væk,
@@ -4131,6 +4270,28 @@ describe('fladen', () => {
       await user.upload(screen.getByLabelText(/Importer/), file)
 
       expect(await screen.findByText(/nyere version/i)).toBeTruthy()
+    })
+
+    it('beder om at få lønposterne efterset, når en plan fra før lønskiftet importeres', async () => {
+      // Migrationsleddet lader tallet stå — motoren kan ikke vide, hvor meget
+      // af det gemte beløb der var arbejdsgiverens. Uden beskeden står lønnen
+      // 12 % for højt, uden at hverken en invariant eller en test fanger det.
+      const user = userEvent.setup()
+      render(<App initialPlan={aThreeYearPlan()} />)
+
+      const file = new File(
+        [JSON.stringify({ schemaVersion: 13, plan: aPlan() })],
+        'plan.json',
+        { type: 'application/json' },
+      )
+      await user.upload(screen.getByLabelText(/Importer/), file)
+
+      const besked = await screen.findByText(/lønposterne skal efterses/i)
+      expect(besked).toBeTruthy()
+
+      // Beskeden kan lukkes: den er læst, når planlæggeren siger, den er.
+      await user.click(screen.getByRole('button', { name: 'Forstået' }))
+      expect(screen.queryByText(/lønposterne skal efterses/i)).toBeNull()
     })
   })
 

@@ -431,6 +431,26 @@ function EntriesTable({
               </tr>
             )
           })}
+          {/* Arbejdsgiverbidraget står ikke i nogen post: postens eget
+              årstal er lønsedlens løn, jf. ADR-0040. Men det lander på
+              bufferen som enhver anden krone, og uden linjen her ville
+              folden vise et mindre tal end det bånd, den ligger under —
+              netop den forskel, forklar-året skal kunne gøre rede for.
+              Forfaldet og vægten er lønpostens, som aftalen arver alt
+              andet fra. */}
+          {direction === 'Income' &&
+            year.pensionAgreements.map((agreement) => {
+              const entry = plan.entries.find((e) => e.id === agreement.entry)
+              if (!entry) return null
+              return (
+                <tr key={`${agreement.entry}-arbejdsgiverbidrag`}>
+                  <td>{entry.name} · arbejdsgiverbidrag</td>
+                  <td>{kroner(display(agreement.employerContribution))}</td>
+                  <td>{danishTiming(entry.timing)}</td>
+                  <td>{procent(weightAt(plan.buffer, entry.timing, plan.buffer))}</td>
+                </tr>
+              )
+            })}
         </tbody>
       </table>
   )
@@ -479,7 +499,66 @@ function ContributionsTable({
           ))}
         </tbody>
       </table>
+      <PensionAgreementsTable plan={plan} year={year} display={display} />
     </>
+  )
+}
+
+/** Årets pensionsaftaler med hele deres regnestykke: de to bidrag,
+    AM-bidraget og det, der landede hvor.
+
+    Hele regnestykket står og ikke kun facit, jf. ADR-0041. Lånte aftalen
+    indbetalingstabellen ovenfor, ville dens to beløb påstå, at forskellen
+    var AM-bidraget alene — og linjen kunne ikke efterregnes af sig selv.
+
+    Tabellen udebliver i de år, ingen aftales lønpost falder. */
+function PensionAgreementsTable({
+  plan,
+  year,
+  display,
+}: {
+  plan: Plan
+  year: YearResult
+  display: (amount: number) => number
+}) {
+  if (year.pensionAgreements.length === 0) return null
+
+  // Samme navne som i navigatoren: aftalen kendes på sin lønpost, og
+  // destinationen på den beholdning, pengene landede i.
+  const entryName = (entryId: string) =>
+    plan.entries.find((entry) => entry.id === entryId)?.name ?? entryId
+  const holdingName = (holdingId: string) =>
+    plan.household.persons
+      .flatMap((person) => person.holdings)
+      .find((holding) => holding.id === holdingId)?.name ?? holdingId
+
+  return (
+    <table className="aftaletabel">
+      <thead>
+        <tr>
+          <th title={fieldHelp['PensionAgreementYear.entry']}>Pension på</th>
+          <th title={fieldHelp['PensionAgreementYear.employerContribution']}>Arbejdsgiver</th>
+          <th title={fieldHelp['PensionAgreementYear.employeeContribution']}>Arbejdstager</th>
+          <th title={fieldHelp['PensionAgreementYear.labourMarketContribution']}>AM-bidrag</th>
+          <th title={fieldHelp['PensionAgreementDestination.holding']}>Destination</th>
+          <th title={fieldHelp['PensionAgreementDestination.landed']}>Landede</th>
+        </tr>
+      </thead>
+      <tbody>
+        {year.pensionAgreements.flatMap((agreement) =>
+          agreement.destinations.map((destination) => (
+            <tr key={`${agreement.entry}-${destination.holding}`}>
+              <td>{entryName(agreement.entry)}</td>
+              <td>{kroner(display(agreement.employerContribution))}</td>
+              <td>{kroner(display(agreement.employeeContribution))}</td>
+              <td>{kroner(display(-agreement.labourMarketContribution))}</td>
+              <td>{holdingName(destination.holding)}</td>
+              <td>{kroner(display(destination.landed))}</td>
+            </tr>
+          )),
+        )}
+      </tbody>
+    </table>
   )
 }
 

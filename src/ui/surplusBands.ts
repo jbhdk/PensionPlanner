@@ -1,5 +1,6 @@
 import type { Direction, Nominal, Plan } from '../engine/plan'
 import type { YearResult } from '../engine/yearResult'
+import { placedByAgreements } from './contributed'
 
 /** De otte bånd, årets overskud består af. Faste og navngivne, aldrig ét pr.
     post: et antal, der fulgte planen, ville give hver plan sin egen graf, og
@@ -68,7 +69,7 @@ export const surplusBandOrder: { name: SurplusBandName; label: string; direction
     Udledt af årsresultatet frem for gemt, ganske som `surplus` selv. */
 export function surplusBands(year: YearResult, plan: Plan): SurplusBand[] {
   const amounts: Record<SurplusBandName, Nominal> = {
-    IncomeEntries: entryTotal(year, plan, 'Income'),
+    IncomeEntries: entryTotal(year, plan, 'Income') + employerContributions(year),
     Benefits: benefitTotal(year),
     Payouts: sum(year.holdings, (holding) => holding.payout),
     TransfersIn: transferTotal(year, plan, ({ to }) => to === plan.buffer, 'landed'),
@@ -79,6 +80,18 @@ export function surplusBands(year: YearResult, plan: Plan): SurplusBand[] {
   }
 
   return surplusBandOrder.map((band) => ({ ...band, amount: amounts[band.name] }))
+}
+
+/** Det, årets pensionsaftaler lagde oven i lønnen. Det står ikke i nogen
+    `EntryYear` — postens eget årstal er lønnen alene, jf. ADR-0040 — men det
+    lander på bufferen som enhver anden krone, og båndet ville ellers være
+    mindre end den bevægelse, det er en opdeling af.
+
+    Det hører i indtægtsposternes bånd og ikke i ydelsernes: båndene
+    navngives efter, hvad der bevæger sig på bufferen, og bidraget er penge
+    udefra på lige fod med lønnen selv, jf. ADR-0023. */
+function employerContributions(year: YearResult): Nominal {
+  return sum(year.pensionAgreements, (agreement) => agreement.employerContribution)
 }
 
 function entryTotal(year: YearResult, plan: Plan, direction: Direction): Nominal {
@@ -126,16 +139,24 @@ function transferTotal(
 /** En `EntrySourced` indbetaling har altid bufferen som kilde: lønnen landede
     der først. En `HoldingSourced` har det kun, hvis kilden er bufferen selv
     — flytter den penge fra en anden beholdning, forlader de aldrig den, og
-    årets overskud mærker det ikke. */
+    årets overskud mærker det ikke.
+
+    Pensionsaftalens penge tælles med af samme grund som den lønkildede
+    indbetalings: lønnen landede på bufferen med hele sit bruttobeløb —
+    arbejdsgiverbidraget lagt til af aftalen, jf. ADR-0040 — og det, aftalen
+    placerede, forlader den igen. Båndet læser derfor begge steder, jf.
+    ADR-0041. */
 function contributionTotal(year: YearResult, plan: Plan): Nominal {
   const sources = new Map(
     plan.contributions.map((contribution) => [contribution.id, contribution]),
   )
-  return sum(year.contributions, (contribution) => {
-    const source = sources.get(contribution.contribution)!
-    const fromBuffer = source.kind === 'EntrySourced' || source.source === plan.buffer
-    return fromBuffer ? contribution.intoHolding : 0
-  })
+  return (
+    sum(year.contributions, (contribution) => {
+      const source = sources.get(contribution.contribution)!
+      const fromBuffer = source.kind === 'EntrySourced' || source.source === plan.buffer
+      return fromBuffer ? contribution.intoHolding : 0
+    }) + placedByAgreements(year)
+  )
 }
 
 function sum<T>(items: T[], of: (item: T) => Nominal): Nominal {

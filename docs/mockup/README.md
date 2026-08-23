@@ -188,12 +188,13 @@ uden at åbne noget. Er kilden en beholdning, er der ingen post at måle en proc
 står linjen der slet ikke: feltet hedder *Fast beløb* og er det eneste, der spørges om. Et
 slukket segment ville vise et valg, der aldrig kan træffes.
 
-**Lønnen tastes brutto, og etiketten bærer det.** Feltet hedder *Beløb, brutto*, og under
-det står, hvad det betyder — tallet på lønsedlen og ikke det, der går ind på kontoen. Det
-er ADR-0007's egen forpligtelse, og den er indfriet med en etiket og en fast forklaring
-frem for en advarselsblok eller et flueben: fladen har ingen advarselsblokke, og et
-afkrydsningsfelt uden et felt bag sig i modellen ville være en løgn i formen. Lønpostens
-rude viser desuden, hvilke bidrag der trækker på den.
+**Lønnen tastes, som lønsedlen skriver den.** Feltet hedder *Beløb*, og under det står, at
+tallet er lønnen uden arbejdsgiverens pensionsbidrag. Bidraget hører til i postens
+Pension-afsnit og lægges til derfra, jf. ADR-0040 — det er dét, der gør, at de procenter,
+der står på sedlen, er dem, der tastes. Forklaringen står som en fast hint frem for en
+advarselsblok eller et flueben: fladen har ingen advarselsblokke, og et afkrydsningsfelt
+uden et felt bag sig i modellen ville være en løgn i formen. Lønpostens rude viser desuden,
+hvilke bidrag der trækker på den.
 
 **Loftet står ikke i skuffen.** Om et loft bandt afhænger af årets fremskrevne beløb målt
 mod årets satsår, og det er et resultat. Skuffen siger kun, at destinationen har et loft og

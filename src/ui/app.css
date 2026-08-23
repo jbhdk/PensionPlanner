@@ -118,6 +118,26 @@ body {
   font-size: 12px;
 }
 
+/* Beskeden om en indlæst plan, et menneske skal se på. Den er ikke en fejl
+   og bærer derfor ikke fejlfarven — planen regner, og skærmen er hel. Den
+   står som en stribe mellem topbjælken og spalterne, hvor den ses uden at
+   tage plads fra nogen af dem. */
+.planbesked {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--linje);
+  background: var(--advarsel-svag);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.planbesked p {
+  margin: 0;
+  flex: 1;
+}
+
 .skjult-filvaelger {
   position: absolute;
   width: 1px;

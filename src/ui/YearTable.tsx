@@ -2,6 +2,7 @@ import type { Plan } from '../engine/plan'
 import type { YearResult } from '../engine/yearResult'
 import { bufferStateClasses, bufferStateLabels } from './bufferState'
 import { capBreachClasses, capBreachLabels } from './capBreach'
+import { contributedInYear } from './contributed'
 import { fieldHelp } from './fieldHelp'
 import { kroner } from './format'
 import type { AmountUnit } from './real'
@@ -123,14 +124,7 @@ export function YearTable({
                 ))}
                 <td>{kroner(display(year.income))}</td>
                 <td className="indbetaling">
-                  {kroner(
-                    display(
-                      year.contributions.reduce(
-                        (sum, contribution) => sum + contribution.intoHolding,
-                        0,
-                      ),
-                    ),
-                  )}
+                  {kroner(display(contributedInYear(year)))}
                   {/* Markeringen læses af motorens ene felt. Fladen
                       sammenligner ikke selv indbetalt med loft — hvilket
                       loft der bandt, og med hvor meget, står i

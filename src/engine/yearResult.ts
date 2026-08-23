@@ -79,6 +79,48 @@ export type ContributionYear = {
   intoHolding: Nominal
 }
 
+/** Det, én pensionsaftale placerede på én destination i ét simuleringsår, i
+    årets egne fremtidskroner. Beholdningens navn står i planen og gentages
+    ikke her, ligesom i `HoldingYear`. */
+export type PensionAgreementDestination = {
+  holding: HoldingId
+  landed: Nominal
+}
+
+/** Én pensionsaftales regnestykke for ét simuleringsår, i årets egne
+    fremtidskroner — kun for de aftaler, hvis lønpost faktisk falder i året.
+
+    Hele regnestykket står og ikke kun facit, jf. ADR-0041: de to bidrag,
+    AM-bidraget og det, der landede på hver destination. Samme form som
+    `Taper`-rækken i `PersonYear` og af samme grund — en linje, der ikke kan
+    efterregnes af sig selv, kan ikke forklare et år.
+
+    Aftalen kan ikke låne `ContributionYear`. Dér er differencen mellem de to
+    beløb altid AM-bidraget alene, og for en aftales penge er kilen bredere:
+    de 8.160 kr. mellem 102.000 og 93.840 ville have en adresse, men gebyret
+    og præmien har ingen anden, jf. ADR-0041 og ADR-0042.
+
+    Aftalen bærer intet id: der er højst én pr. lønpost, og posten er dermed
+    den, linjen kendes på. Forfaldet, perioden og gentagelsen står heller
+    ikke her — de er lønpostens, som aftalen arver dem alle fra. */
+export type PensionAgreementYear = {
+  entry: EntryId
+  /** Det, arbejdsgiveren lagde oven i lønnen. Det står her og ikke i
+      `EntryYear`, hvor postens eget årstal er lønnen alene — og det er ikke
+      bogholderi for bogholderiets skyld: AM-bidraget af en
+      pensionsindbetaling indeholdes i virkeligheden af pensionsselskabet og
+      ikke af arbejdsgiveren, jf. ADR-0040. */
+  employerContribution: Nominal
+  /** Det, der blev taget af lønnen. Løfter ikke husstandens indtægt: pengene
+      var der i forvejen. */
+  employeeContribution: Nominal
+  /** AM-bidraget af de to under ét — trukket fra på vejen ind og aldrig
+      opkrævet af aftalen. Det står allerede i personens eget skattelag, og
+      tallet her er den del af laget, aftalens penge bar, jf. ADR-0041. */
+  labourMarketContribution: Nominal
+  destinations: PensionAgreementDestination[]
+}
+
 /** Én overførsels beløb i ét simuleringsår, i årets egne fremtidskroner —
     kun for de overførsler der faktisk falder i året. To af felterne står
     altid: `requested` er, hvad planen bad om, og `moved` er, hvad der
@@ -280,6 +322,9 @@ export type YearResult = {
   shareIncomeTax: Partial<Record<ShareIncomeLayer, LayerAmount>>
   entries: EntryYear[]
   contributions: ContributionYear[]
+  /** Årets pensionsaftaler, én linje pr. aftale hvis lønpost falder i året.
+      Tom, når ingen gør. */
+  pensionAgreements: PensionAgreementYear[]
   /** Årets overførsler, én linje pr. overførsel der falder i året. Tom, når
       ingen gør. Linjen bærer både det ønskede og det flyttede, så en
       afkortning kan ses frem for at forsvinde. */

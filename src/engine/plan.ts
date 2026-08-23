@@ -228,6 +228,50 @@ type EntryBase = {
   recurrence: Recurrence
 }
 
+/** Andelen på en fordelingslinje. En diskrimineret union på `form`, så
+    unionen bærer reglerne frem for en validering ved siden af dem: en form
+    uden et tal kan ikke få et, og en med kan ikke undvære det.
+
+    Denne skive kender kun `Remainder` — den linje, der beder om det, der er
+    tilbage. Præcis én linje i hver `Allocation` er den, og det er dét, der
+    får fordelingen til at gå op i hvert eneste simuleringsår i kraft af sin
+    form frem for i kraft af, at brugeren har regnet efter. */
+export type AllocationShare = { form: 'Remainder' }
+
+/** Én linje i fordelingen: en destination og en andel. Destinationen skal
+    være `EmployerAdministered` og tilhøre lønpostens ejer — begge dele
+    afvises ved indgangen, jf. ADR-0020. */
+export type AllocationLine = { to: HoldingId } & AllocationShare
+
+/** Hvordan en pensionsaftales placerede beløb deles ud på destinationer. */
+export type Allocation = AllocationLine[]
+
+/** Aftalen på en lønpost om, hvad der indbetales til pension, og hvorhen det
+    går, jf. ADR-0040 og ADR-0041.
+
+    Den bærer ingen periode, gentagelse eller forfald. Den arver lønpostens,
+    som det lønkildede `Contribution` allerede gør, og ophører derfor af sig
+    selv ved erhvervsophør — de to kan ikke komme ud af trit.
+
+    Der er ingen `enabled`. Aftalen findes kun, hvor den er skrevet: et felt,
+    ingen invariant måler på, driver fra virkeligheden i tavshed, og
+    scenarier er uafhængige planer, jf. `Plan`.
+
+    De to bidrag måler samme grundlag — lønposten selv, og aldrig den brutto,
+    motoren lægger sammen af de to. Det er hele pointen i ADR-0040: de 12 %,
+    der står på lønsedlen, er de 12 %, brugeren taster. */
+export type PensionAgreement = {
+  /** Det, arbejdsgiveren lægger oven i lønnen. Aldrig en del af lønpostens
+      beløb, men husstandens indtægt: den passerer pengestrømmen som enhver
+      anden krone, ellers ville formuen vokse uden modpost, jf. ADR-0007. */
+  employerContribution: ContributionAmount
+  /** Det, der tages af lønnen. Måler samme grundlag som arbejdsgiverens og
+      angives på de samme to former, men løfter ikke husstandens indtægt:
+      pengene er der i forvejen. */
+  employeeContribution: ContributionAmount
+  allocation: Allocation
+}
+
 /** Kun indtægtsposter bærer en skattebehandling og en egen reguleringssats.
     Retningen er diskriminanten frem for felter ved siden af den: en
     udgiftspost med en skattebehandling er ikke noget, motoren skal validere
@@ -244,6 +288,12 @@ export type Entry =
       /** Andel pr. år, ikke procent. Indtægtens egen fremskrivning —
           uafhængig af `Plan.inflationAssumption`. */
       regulationRate: number
+      /** Firmaordningen, lønnen hører til. Valgfri, og fraværet er hele
+          svaret: en lønpost uden aftale har ingen firmapension. Feltet
+          hænger på indtægtsgrenen, fordi en udgiftspost ingen løn har at
+          måle af. Højst én pr. post — der er ét sted, der svarer på, hvad
+          den løn indbetaler. */
+      pensionAgreement?: PensionAgreement
     })
   | (EntryBase & { direction: 'Expense' })
 
@@ -283,11 +333,18 @@ export type Transfer = {
   recurrence: Recurrence
 }
 
-/** Beløbsangivelsen på et lønkildet bidrag: enten en procent af lønposten,
-    eller et fast kronebeløb i nutidskroner. Formen er felterne selv — der er
-    ikke et tredje felt ved siden af dem, der siger hvilken af de to der
-    gælder, og et bidrag kan derfor ikke bære begge tal på én gang. */
-type ContributionAmount = { percentageOfEntry: number } | { amountInRealKroner: Real }
+/** Beløbsangivelsen på et bidrag, der måles af en lønpost: enten en procent
+    af posten, eller et fast kronebeløb i nutidskroner. Formen er felterne
+    selv — der er ikke et tredje felt ved siden af dem, der siger hvilken af
+    de to der gælder, og et bidrag kan derfor ikke bære begge tal på én gang.
+
+    Delt af det lønkildede `Contribution` og af pensionsaftalens to bidrag.
+    Procenten måler begge steder lønpostens eget beløb — lønsedlens løn — og
+    aldrig den brutto, motoren lægger sammen af lønnen og
+    arbejdsgiverbidraget, jf. ADR-0040. */
+export type ContributionAmount =
+  | { percentageOfEntry: number }
+  | { amountInRealKroner: Real }
 
 type ContributionBase = {
   id: ContributionId

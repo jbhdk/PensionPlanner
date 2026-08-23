@@ -4,6 +4,7 @@ import type {
   Holding,
   HoldingVariant,
   Municipality,
+  PensionAgreement,
   Period,
   Plan,
   Recurrence,
@@ -179,7 +180,8 @@ export function anExpense(options: {
   }
 }
 
-/** En lønpost. Beløbet er brutto inklusive arbejdsgiverbidrag, jf. ADR-0007. */
+/** En lønpost. Beløbet er lønsedlens løn — arbejdsgiverbidraget står i
+    pensionsaftalen og lægges til af den, jf. ADR-0040. */
 export function aSalary(options: {
   amountInRealKroner: number
   owner?: string
@@ -187,6 +189,7 @@ export function aSalary(options: {
   period?: Period
   recurrence?: Recurrence
   regulationRate?: number
+  pensionAgreement?: PensionAgreement
 }): Entry {
   return {
     id: 'salary',
@@ -199,6 +202,7 @@ export function aSalary(options: {
     period: options.period ?? wholeHorizon,
     recurrence: options.recurrence ?? annually,
     regulationRate: options.regulationRate ?? 0,
+    ...(options.pensionAgreement ? { pensionAgreement: options.pensionAgreement } : {}),
   }
 }
 

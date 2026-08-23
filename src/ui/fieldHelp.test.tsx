@@ -66,7 +66,17 @@ function aRichPlan(): Plan {
       },
     ],
     entries: [
-      aSalary({ amountInRealKroner: 800_000 }),
+      aSalary({
+        amountInRealKroner: 800_000,
+        // Firmaordningen på lønnen. Den tegner både Pension-afsnittet i
+        // skuffen og aftalens regnestykke i forklar-året — uden den prøver
+        // dækningen mindre, end den ser ud til.
+        pensionAgreement: {
+          employerContribution: { percentageOfEntry: 0.12 },
+          employeeContribution: { percentageOfEntry: 0.05 },
+          allocation: [{ to: 'ratepension', form: 'Remainder' }],
+        },
+      }),
       anExpense({ amountInRealKroner: 300_000 }),
     ],
     contributions: [

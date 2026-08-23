@@ -376,26 +376,27 @@ function indFelterN(ind) {
 }
 
 /* ---------- postens rude ----------
-   ADR-0007 forpligter fladen til at sige udtrykkeligt, at lønnen tastes
-   brutto. Det er ikke kosmetik: taster man nettolønnen og lægger et bidrag
-   oveni, går alle tal op og er alligevel over 100.000 kr. forkerte om året,
-   og ingen invariant fanger det.                                          */
+   ADR-0040 ruller ADR-0007's indtastningsregel tilbage: lønnen er lønsedlens
+   løn, og arbejdsgiverbidraget lægges til af pensionsaftalen på posten. Det
+   er ikke kosmetik: målte de 12 %, der står på sedlen, en brutto brugeren
+   selv havde lagt sammen, skulle de tastes som 10,714 % for at ramme det
+   rigtige beløb — og den, der tastede de 12, ramte 8.640 kr. for højt hvert
+   år, uden at nogen invariant fangede det.                                */
 
 function postFelterN(i) {
   var post = POSTER[i], erIndtaegt = post.retning === 'ind';
-  var brutto = post.skat === 'Arbejdsindkomst';
+  var loen = post.skat === 'Arbejdsindkomst';
   var h = [];
 
   h.push(afsnitN('Posten',
     felt('Navn', inp(post.navn, 'tekst')) +
     felt('Ejer', vlg([post.ejer ? persN(post.ejer).navn : 'Husstanden'])) +
     felt('Retning', vlg([erIndtaegt ? 'Indtægt' : 'Udgift'])) +
-    felt(brutto ? 'Beløb, brutto' : 'Beløb', inp(KN(post.beloeb), 'tal'), 'kr.') +
+    felt('Beløb', inp(KN(post.beloeb), 'tal'), 'kr.') +
     (erIndtaegt ? felt('Skattebehandling', vlg([post.skat, 'Arbejdsindkomst', 'Skattefri'])) : '') +
-    (brutto ? '<div class="hint">Brutto, inklusive arbejdsgiverens pensionsbidrag — tallet på ' +
-      'lønsedlen og ikke det, der går ind på kontoen. Bidraget flyttes til ordningen som en ' +
-      'indbetaling for sig; taster du nettolønnen og lægger et bidrag oveni, går alle tal op ' +
-      'og er alligevel forkerte.</div>' : '')));
+    (loen ? '<div class="hint">Det, lønsedlen kalder løn — uden arbejdsgiverens ' +
+      'pensionsbidrag. Bidraget hører til i afsnittet Pension nedenfor og lægges til ' +
+      'derfra, så de procenter, der står på sedlen, er dem, der tastes.</div>' : '')));
 
   h.push(afsnitN('Perioden',
     felt('Forankring', vlg([post.forankring === 'alder' ? 'Alder' : 'Kalenderår'])) +

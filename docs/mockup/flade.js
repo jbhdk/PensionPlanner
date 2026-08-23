@@ -90,10 +90,9 @@ function tegnPlanspalte() {
       (post.egenRegulering !== undefined ? ' · reguleres ' + P(post.egenRegulering) : '') +
       '</span></div>';
   }).join('') +
-    '<div class="hint">Lønposter tastes <b>brutto, inklusive arbejdsgiverens pensionsbidrag</b> ' +
-    '— tallet på lønsedlen og ikke det, der går ind på kontoen. Bidraget flyttes til ordningen ' +
-    'som en indbetaling for sig; taster du nettolønnen og lægger et bidrag oveni, går alle tal ' +
-    'op og er alligevel forkerte.</div>' +
+    '<div class="hint">Lønposter tastes som <b>det, lønsedlen kalder løn</b> — uden ' +
+    'arbejdsgiverens pensionsbidrag. Bidraget hører til i postens Pension-afsnit og lægges ' +
+    'til derfra, så de procenter, der står på sedlen, er dem, der tastes.</div>' +
     '<button class="knap tilfoej">+ Post</button>'));
 
   h.push(afsnit('Indbetalinger', INDBETALINGER.length, INDBETALINGER.map(function (ind) {

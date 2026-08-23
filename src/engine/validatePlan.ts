@@ -61,8 +61,68 @@ export function validatePlan(plan: Plan): string | undefined {
     entryOwners(plan) ??
     oneOfEachUniqueVariant(plan) ??
     entrySourcedDestination(plan) ??
+    pensionAgreements(plan) ??
     payoutSchedules(plan)
   )
+}
+
+/** Pensionsaftalens strukturelle regler. Alle tre er de samme i alle
+    simuleringsår og hører derfor ved indgangen og ikke i årsresultatet, jf.
+    ADR-0020: en fordeling, der ikke går op, findes ikke i virkeligheden i
+    noget år.
+
+    Grænsen mod `PensionAgreementYear`s to tal går netop dér. Et magert år,
+    hvor et kronebeløb ikke kan være der, er ikke en indgangsfejl — det er et
+    årsresultat, fordi samme plan kan gå op i ét år og ikke i det næste.
+
+    Destinationsreglen er den lønkildede indbetalings, stillet gennem samme
+    opslag: pengene kommer fra en løn begge steder, og en ordning, ingen
+    arbejdsgiver kan administrere, kan ikke tage imod dem, jf. ADR-0016.
+    Ejerskellet er ligeledes det samme — en arbejdsgiveradministreret ordning
+    står i lønmodtagerens eget navn. */
+function pensionAgreements(plan: Plan): string | undefined {
+  const byId = holdingsById(plan)
+  const ownerOf = ownersByHolding(plan)
+
+  for (const entry of plan.entries) {
+    if (entry.direction !== 'Income') continue
+    const agreement = entry.pensionAgreement
+    if (agreement === undefined) continue
+
+    const subject = `Pensionsaftalen på posten ${entry.name}`
+    const remainders = agreement.allocation.filter((line) => line.form === 'Remainder')
+    if (remainders.length !== 1) {
+      return (
+        `${subject} har ${remainders.length} linjer med resten. Præcis én linje skal ` +
+        `være resten, så fordelingen går op i hvert eneste år.`
+      )
+    }
+
+    for (const line of agreement.allocation) {
+      const to = byId.get(line.to)
+      if (!to) {
+        return `${subject} fordeler til en beholdning, der ikke findes.`
+      }
+      if (!isEmployerAdministered(to)) {
+        return (
+          `${subject} fordeler til beholdningen ${to.name}, som ikke er ` +
+          `arbejdsgiveradministreret.`
+        )
+      }
+      // Postens ejer findes: `entryOwners` er kørt før denne regel og har
+      // afvist en post uden en, og det er dén fejl, brugeren skal se først.
+      const sourceOwner = plan.household.persons.find((person) => person.id === entry.owner)!
+      const destinationOwner = ownerOf.get(line.to)!
+      if (sourceOwner.id !== destinationOwner.id) {
+        return (
+          `${subject}, som tilhører ${sourceOwner.name}, fordeler til beholdningen ` +
+          `${to.name}, som tilhører ${destinationOwner.name}. En ordning, en ` +
+          `arbejdsgiver administrerer, står i lønmodtagerens eget navn.`
+        )
+      }
+    }
+  }
+  return undefined
 }
 
 /** Udbetalingsplanens lovregler, jf. [PBL § 11 A, stk.

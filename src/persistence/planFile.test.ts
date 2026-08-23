@@ -4,6 +4,7 @@ import {
   aContribution,
   aHoldingContribution,
   aPlan,
+  aSalary,
 } from '../engine/testing/planFixture'
 import { exportPlan, importPlan } from './planFile'
 
@@ -28,6 +29,22 @@ describe('planFile', () => {
     const result = importPlan('ikke json{')
 
     expect(result.kind).toBe('Failed')
+  })
+
+  it('beder planlæggeren efterse lønposterne, når en plan fra før skiftet åbnes', () => {
+    // Migrationsleddet kan ikke gøre arbejdet færdigt: det lader tallet stå,
+    // og uden en besked står lønnen 12 % for højt, uden at hverken en
+    // invariant eller en test fanger det.
+    const result = importPlan(JSON.stringify({ schemaVersion: 13, plan: aPlan() }))
+
+    expect(result.kind).toBe('Loaded')
+    expect((result as { notice?: string }).notice).toMatch(/lønposter/i)
+  })
+
+  it('lader en plan fra den nuværende version stå uden besked', () => {
+    const result = importPlan(exportPlan(aPlan()))
+
+    expect((result as { notice?: string }).notice).toBeUndefined()
   })
 
   it('bærer en plan med de fire pensionsvarianter hele vejen rundt', () => {
@@ -94,8 +111,44 @@ describe('planFile', () => {
     // fik sine omsætningsfelter, v11 → v12, hvor overførslen og
     // indbetalingen fik hver sit navn, og v12 → v13, hvor
     // oprettelsestidspunktet blev til en tastet pensionsudbetalingsalder,
-    // jf. ADR-0032.
-    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(13)
+    // jf. ADR-0032, og v13 → v14, hvor lønpostens beløb holdt op med at være
+    // brutto, jf. ADR-0040.
+    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(14)
+  })
+
+  it('bærer en lønpost med sin pensionsaftale hele vejen rundt', () => {
+    // Aftalen ligger i det gemte skema og skal krydse en maskine som alt
+    // andet i planen: en fordeling, der tabte sin form undervejs, ville
+    // flytte pengene uden at nogen kunne se hvorfor.
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0.04,
+          annualCostRate: 0.005,
+        },
+      ],
+      entries: [
+        aSalary({
+          amountInRealKroner: 600_000,
+          regulationRate: 0.03,
+          pensionAgreement: {
+            employerContribution: { percentageOfEntry: 0.12 },
+            employeeContribution: { amountInRealKroner: 30_000 },
+            allocation: [{ to: 'ratepension', form: 'Remainder' }],
+          },
+        }),
+      ],
+    })
+
+    const result = importPlan(exportPlan(plan))
+
+    expect(result).toEqual({ kind: 'Loaded', plan })
+    expect(simulate((result as { plan: typeof plan }).plan)).toEqual(simulate(plan))
   })
 
   it('bærer en plan med indbetalinger hele vejen rundt', () => {

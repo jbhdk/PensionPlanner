@@ -63,6 +63,16 @@ classDiagram
         +taxTreatment
     }
 
+    class PensionAgreement {
+        +employerContribution
+        +employeeContribution
+    }
+
+    class AllocationLine {
+        +to
+        +form
+    }
+
     class Contribution {
         +name
         +source
@@ -111,6 +121,9 @@ classDiagram
     Holding <|-- LifeAnnuity
     Holding *-- "0..1" PayoutSchedule
     Entry --> "1" Person : owner
+    Entry *-- "0..1" PensionAgreement
+    PensionAgreement *-- "1..*" AllocationLine
+    AllocationLine --> "1" Holding : to
     Loan --> "0..1" Property : secured on
     Plan --> "1" Holding : buffer
     Contribution --> "1" Holding : to
@@ -121,7 +134,9 @@ classDiagram
 
     note for Holding "Syv varianter: InstalmentPension, LifeAnnuity, OldAgeSavings, CapitalPension, ShareSavingsAccount, ShareDepot og SavingsAccount. De adskiller sig ved beskatning på vejen ind, på afkastet og på vejen ud, og ved loft. payoutAge bæres kun af de fire, der er en PensionScheme: en ShareSavingsAccount, en ShareDepot og en SavingsAccount har ingen udbetalingsalder og dermed heller ikke feltet."
     note for Property "Skitse: tegnet efter PRD'en, ikke efter glossaret. Afgøres i etape 4."
-    note for Contribution "To former efter kilden, og felterne er tegnet som fællesmængden af dem. Lønkildet peger på en Entry og arver dens periode, anchor, recurrence og timing; det bærer kun percentageOfEntry eller amountInRealKroner. Beholdningskildet peger på en Holding og bærer selv det hele. Lønposter angives brutto inkl. arbejdsgiverbidrag."
+    note for Contribution "To former efter kilden, og felterne er tegnet som fællesmængden af dem. Lønkildet peger på en Entry og arver dens periode, anchor, recurrence og timing; det bærer kun percentageOfEntry eller amountInRealKroner. Beholdningskildet peger på en Holding og bærer selv det hele."
+    note for PensionAgreement "Firmaordningen på en lønpost. Højst én pr. Entry, og kun på indtægtsgrenen. Den bærer hverken periode, anchor, recurrence eller timing — den arver lønpostens og ophører derfor af sig selv ved workEndAge. De to bidrag måler lønpostens eget beløb, aldrig brutto: employerContribution lægges til lønnen af aftalen selv, jf. ADR-0040. Regnestykket står i PensionAgreementYear, ikke som en Contribution, jf. ADR-0041."
+    note for AllocationLine "Fordelingen. Præcis én linje er Remainder, og det er dét, der får fordelingen til at gå op i hvert simuleringsår i kraft af sin form. Destinationen skal være EmployerAdministered og tilhøre lønpostens ejer — begge afvises ved indgangen. Formerne Percentage, Amount og UpToCap er endnu ikke bygget."
     note for Transfer "Flytning fra en holding til FreeAssets. Afgiverens payoutTaxation må ikke være PersonalIncome — det er den, der tømmer OldAgeSavings, ShareSavingsAccount og CapitalPension. En TaxFree afgiver koster intet; en Chargeable koster en afgift af det, der forlader beholdningen. Destinationen er altid FreeAssets: en flytning ind i en ordning er en indbetaling, ikke en Transfer. Beløbet måles hos afgiveren og afkortes til dennes saldo."
     note for LifeAnnuity "Den sjette variant, ikke en underklasse: pilen er mermaids eneste måde at tegne et unionsmedlem, der bærer egne felter. En Holding indtil udbetalingsstart, derefter en garanteret livsvarig ydelse. Dens PayoutSchedule bærer kun start — der er hverken duration eller principle at bære. quotedReserve og quotedAnnualBenefit er enhedsløse: kun deres kvotient bruges."
 ```
@@ -151,7 +166,11 @@ classDiagram
 - **`Person.statePensionAge()` er afledt, og tabellen er eneste kilde.** Den udledes af `birthYear` og `birthMonth` efter den lovfastsatte fødselsdatotabel i docs/satser/folkepensionsalder.md, også for de fødselsår hvor trinnet kun er fremskrevet — det tal er det bedste, der findes, og der er intet håndtag ved siden af det. Tabellen er ikke et `RateYear` — den ændrer sig ikke fra satsår til satsår, kun når Folketinget vedtager et nyt trin, og så rettes datagrundlaget. Fordi alderen er en brøk for de fleste årgange, er året, den nås, `birthYear + floor(alder + (birthMonth − 1) / 12)` og ikke `birthYear + alder`.
 - **`Entry` er én figur for både indtægt og udgift — og også for ATP.** Kun indtægtsposter bærer en `taxTreatment` og en `regulationRate`. Der findes ingen `Benefit`-klasse: ATP er en post med `taxTreatment` `PensionIncome`, og folkepensionen udledes af satsåret og folkepensionsalderen og står slet ikke i planen, jf. [ADR-0023](../adr/0023-atp-er-en-post-folkepensionen-en-udledning-og-benefit-ingen-type.md). En udgift har intet eget tempo og følger planens `inflationAssumption`, som en `Transfer` gør.
 - **`LifeAnnuity` er en `Holding`, indtil den omsættes.** Den modtager indbetalinger og forrentes som alle andre beholdninger; ved udbetalingsstart ganges det fremskrevne depot med `conversionFactor()` og bliver til en fast livsvarig ydelse. Se [ADR-0009](../adr/0009-livrenten-omsaettes-en-gang-ved-udbetalingsstart.md).
-- **`Contribution` er en bevægelse, ikke en udgift, og lønnen er brutto.** Alt andet knækker balanceinvarianten. Lofterne hænger på bidraget, ikke på lønnen, og derfor er det en selvstændig figur. Se [ADR-0007](../adr/0007-indbetalinger-er-bevaegelser-og-loennen-er-brutto.md).
+- **`Contribution` er en bevægelse, ikke en udgift.** Alt andet knækker balanceinvarianten. Lofterne hænger på bidraget, ikke på lønnen, og derfor er det en selvstændig figur. Se [ADR-0007](../adr/0007-indbetalinger-er-bevaegelser-og-loennen-er-brutto.md).
+
+- **Lønposten er lønsedlens løn, og `PensionAgreement` lægger arbejdsgiverbidraget til.** ADR-0007's regnestykke er urørt — bidraget passerer stadig pengestrømmen, ellers vokser formuen uden modpost — men det er aftalen og ikke brugeren, der lægger de to tal sammen, jf. [ADR-0040](../adr/0040-loenposten-er-loensedlens-loen-og-arbejdsgiverbidraget-laegges-til-af-pensionsaftalen.md). Derfor måler begge aftalens procenter lønposten selv: de 12 %, der står på lønsedlen, er de 12 %, der tastes.
+
+- **Aftalen bærer sit eget regnestykke og forklæder sig ikke som indbetalinger.** `ContributionYear`s ene difference er AM-bidraget, og for en aftales penge er kilen bredere — gebyret og præmien har ingen anden adresse. Se [ADR-0041](../adr/0041-pensionsaftalen-baerer-sit-eget-regnestykke-i-aarsresultatet.md) og [ADR-0042](../adr/0042-forsikringspraemien-er-en-udgift-med-en-skattevirkning.md). Lofterne måler derimod begge kilder under ét: loftet er personens og pr. slags ordning, aldrig pr. indbetaling.
 - **`Contribution` er to former, delt af kilden.** Et lønkildet bidrag peger på sin `Entry` og arver dens periode, så det ophører af sig selv ved `workEndAge` og ikke kan komme ud af trit med lønnen; det bærer kun en procent eller et fast beløb. Et beholdningskildet bidrag har ingen lønpost at arve fra og bærer selv beløb, periode, gentagelse og forfald, som en `Transfer`. Det er den form, aldersopsparingens vindue efter erhvervsophør skrives i.
 - **Ejerskellet binder kun den lønkildede form.** Et lønkildet bidrag skal ende i lønmodtagerens egen ordning — en `Holding`, en arbejdsgiver administrerer, står i ejerens eget navn. Et beholdningskildet bidrag må gå fra én `Person`s `FreeAssets` til en andens ordning, ganske som en `Transfer` allerede må: loftet og fradragsretten følger destinationens ejer. Se [ADR-0028](../adr/0028-det-beholdningskildede-bidrag-maa-krydse-ejerskellet.md).
 - **Skellet mellem `Contribution` og `Transfer` måles på destinationen.** En indbetaling går ind i en beholdning, der ikke er `FreeAssets`; en overførsel flytter mellem frie midler. Hverken skattevirkningen eller loftet kan bære skellet: aldersopsparingen har et `Cap` og ingen `Deductibility`.

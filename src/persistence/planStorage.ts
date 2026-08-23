@@ -4,7 +4,7 @@ import { envelope, parsePlanEnvelope } from './planEnvelope'
 export const STORAGE_KEY = 'pensionplanner.plan'
 
 export type LoadResult =
-  | { kind: 'Loaded'; plan: Plan }
+  | { kind: 'Loaded'; plan: Plan; notice?: string }
   | { kind: 'Empty' }
   | { kind: 'Failed'; reason: string }
 

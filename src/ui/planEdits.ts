@@ -20,6 +20,7 @@ import type {
   Holding,
   HoldingVariant,
   PayoutSchedule,
+  PensionAgreement,
   PensionSchemeHolding,
   Person,
   Plan,
@@ -711,6 +712,71 @@ function freshContributionId(plan: Plan): string {
   let n = 1
   while (existing.has(`contribution-${n}`)) n++
   return `contribution-${n}`
+}
+
+/** Slår Pension-sektionen til på en lønpost.
+
+    Aftalen skrives med to bidrag på nul og én fordelingslinje, der er
+    resten. Ét klik må ikke skrive en plan, indgangskontrollen afviser, jf.
+    ADR-0020: linjen peger derfor på ejerens første
+    arbejdsgiveradministrerede ordning, og præcis den ene er resten.
+
+    Har ejeren ingen sådan ordning, er der intet at pege på, og posten står
+    urørt — fladen tilbyder da ikke sektionen, og reglen bag står i et `Hint`
+    ved siden af, som en spærret vælger gør det andre steder. */
+export function addPensionAgreement(plan: Plan, entryId: string): Plan {
+  const to = agreementDestination(plan, entryId)
+  if (!to) return plan
+
+  return withEntry(plan, entryId, (entry) =>
+    entry.direction === 'Income'
+      ? {
+          ...entry,
+          pensionAgreement: {
+            employerContribution: { percentageOfEntry: 0 },
+            employeeContribution: { percentageOfEntry: 0 },
+            allocation: [{ to, form: 'Remainder' }],
+          },
+        }
+      : entry,
+  )
+}
+
+/** Den ordning, en ny aftale peger på — og dermed også svaret på, om
+    sektionen overhovedet kan slås til. Ejerens egen og
+    arbejdsgiveradministreret: en firmaordning står i lønmodtagerens eget
+    navn, jf. ADR-0028, og aktiesparekontoen og de frie midler kan ingen
+    arbejdsgiver administrere. */
+export function agreementDestination(plan: Plan, entryId: string): string | undefined {
+  const entry = findEntry(plan, entryId)
+  if (!entry || entry.direction !== 'Income') return undefined
+  const owner = findPerson(plan, entry.owner)
+  return owner?.holdings.find(
+    (holding) => !isFreeAssets(holding) && isEmployerAdministered(holding),
+  )?.id
+}
+
+/** Slår sektionen fra igen. Aftalen er væk med sine tal: der er ingen
+    afbryder, der lader dem stå, mens året regner uden dem — det ville være
+    to scenarier i én plan, og scenarier er uafhængige planer, jf. `Plan`. */
+export function removePensionAgreement(plan: Plan, entryId: string): Plan {
+  return withEntry(plan, entryId, (entry) => {
+    if (entry.direction !== 'Income') return entry
+    const { pensionAgreement: _pensionAgreement, ...rest } = entry
+    return rest
+  })
+}
+
+export function withPensionAgreement(
+  plan: Plan,
+  entryId: string,
+  change: (agreement: PensionAgreement) => PensionAgreement,
+): Plan {
+  return withEntry(plan, entryId, (entry) =>
+    entry.direction === 'Income' && entry.pensionAgreement
+      ? { ...entry, pensionAgreement: change(entry.pensionAgreement) }
+      : entry,
+  )
 }
 
 export function findContribution(plan: Plan, id: string): Contribution | undefined {

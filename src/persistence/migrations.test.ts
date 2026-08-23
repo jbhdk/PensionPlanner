@@ -654,3 +654,27 @@ describe('v12 → v13: pensionsudbetalingsalderen tastes, den udledes ikke læng
     expect(migrated).toEqual({ name: 'Plan', household: { persons: [] } })
   })
 })
+
+describe('v13 → v14: lønposten er lønsedlens løn', () => {
+  it('lader lønpostens beløb stå — motoren kan ikke vide, hvor meget der var arbejdsgiverens', () => {
+    // Beløbet skifter betydning uden at skifte form. En gemt lønpost på
+    // 672.000 kr. kan være 600.000 kr. i løn og 12 % fra arbejdsgiveren, men
+    // den kan også være 672.000 kr. i løn uden nogen ordning — og intet i
+    // planen siger hvilken. Leddet lader tallet stå og overlader rettelsen
+    // til planlæggeren, som får besked ved indlæsningen.
+    const v13 = {
+      name: 'Gammel plan',
+      entries: [
+        {
+          id: 'salary',
+          name: 'Løn',
+          direction: 'Income',
+          taxTreatment: 'EarnedIncome',
+          amountInRealKroner: 672_000,
+        },
+      ],
+    }
+
+    expect(runMigrations(v13, 13, 14, migrations)).toEqual(v13)
+  })
+})

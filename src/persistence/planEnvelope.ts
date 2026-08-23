@@ -1,15 +1,33 @@
 import type { Plan } from '../engine/plan'
 import { validatePlan } from '../engine/validatePlan'
-import { migrations, runMigrations } from './migrations'
+import { SALARY_MEANING_CHANGED_IN, migrations, runMigrations } from './migrations'
 
 /** Skemaversionen data gemmes under, både i localStorage og i en eksporteret
     fil — kæden i migrations.ts løfter en gemt plan fra sin egen version og
     frem til denne, jf. issue #15. */
-export const CURRENT_SCHEMA_VERSION = 13
+export const CURRENT_SCHEMA_VERSION = 14
 
 export type ParseResult =
-  | { kind: 'Loaded'; plan: Plan }
+  | {
+      kind: 'Loaded'
+      plan: Plan
+      /** Sat, når planen blev læst, men et menneske skal se på den. Det er
+          ikke en fejl — planen regner — men en migration kan ikke altid gøre
+          arbejdet færdigt, og en tavshed ville lade et forkert tal blive
+          stående, jf. ADR-0040. Fraværende i det almindelige tilfælde. */
+      notice?: string
+    }
   | { kind: 'Failed'; reason: string }
+
+/** Beskeden til planlæggeren, når en plan fra før ADR-0040 åbnes. Den siger,
+    hvad tallet betyder nu, og hvad der skal gøres — motoren kan ikke selv
+    vide, hvor meget af en gemt lønpost der var arbejdsgiverens. */
+const salaryMeaningNotice =
+  'Lønposterne skal efterses. Beløbet på en lønpost er nu det, lønsedlen ' +
+  'kalder løn — før skulle arbejdsgiverens pensionsbidrag være lagt til. ' +
+  'Værktøjet kan ikke selv vide, hvor meget af det gemte tal der var ' +
+  'arbejdsgiverens, så tallet står, som det stod. Ret lønnen, og skriv ' +
+  'firmaordningen i afsnittet Pension på posten.'
 
 /** Konvolutten, både localStorage og en eksporteret fil gemmer planen i. */
 export function envelope(plan: Plan): { schemaVersion: number; plan: Plan } {
@@ -54,7 +72,13 @@ export function parsePlanEnvelope(raw: string): ParseResult {
     if (planError) {
       return { kind: 'Failed', reason: planError }
     }
-    return { kind: 'Loaded', plan }
+    return {
+      kind: 'Loaded',
+      plan,
+      ...(stored.schemaVersion < SALARY_MEANING_CHANGED_IN
+        ? { notice: salaryMeaningNotice }
+        : {}),
+    }
   } catch (error) {
     return {
       kind: 'Failed',

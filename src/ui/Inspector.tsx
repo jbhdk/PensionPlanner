@@ -13,6 +13,7 @@ import {
 import type {
   Anchor,
   Contribution,
+  ContributionAmount,
   Entry,
   EntryId,
   Holding,
@@ -60,10 +61,12 @@ import {
   TextField,
   ToggleField,
 } from './fields'
+import type { FieldHelpKey } from './fieldHelp'
 import { kroner, procent } from './format'
 import {
   addPayoutSchedule,
   addPayoutStart,
+  addPensionAgreement,
   findContribution,
   findEntry,
   findHolding,
@@ -76,6 +79,7 @@ import {
   removeHolding,
   removePayoutSchedule,
   removePayoutStart,
+  removePensionAgreement,
   removePerson,
   removeTransfer,
   transferEndOptions,
@@ -86,6 +90,7 @@ import {
   withHoldingOwner,
   withLifeAnnuity,
   withPayoutSchedule,
+  withPensionAgreement,
   withPerson,
   withPensionScheme,
   withTransfer,
@@ -783,15 +788,10 @@ function EntryFields({
           }
         />
         <NumberField
-          /* Ordet står på etiketten og ikke kun i noten nedenfor: taster
-             brugeren nettolønnen og lægger et bidrag oveni, går alle tal op
-             og er alligevel over 100.000 kr. forkerte om året, og ingen
-             invariant fanger det, jf. ADR-0007. */
-          label={
-            income && entry.taxTreatment === 'EarnedIncome'
-              ? 'Beløb, brutto (nutidskroner)'
-              : 'Beløb (nutidskroner)'
-          }
+          /* Ét navn på feltet uanset skattebehandling: beløbet er postens
+             eget, og en lønpost er ikke længere en undtagelse, jf.
+             ADR-0040. Hvad det betyder for en løn, står i noten nedenfor. */
+          label="Beløb (nutidskroner)"
           help="Entry.amountInRealKroner"
           unit="kr."
           value={entry.amountInRealKroner}
@@ -838,12 +838,15 @@ function EntryFields({
         )}
         {entry.direction === 'Income' && entry.taxTreatment === 'EarnedIncome' && (
           <Hint>
-            Beløbet er brutto inklusive arbejdsgiverbidrag — ikke det, der
-            udbetales. Arbejdsgiverens pensionsbidrag flyttes til ordningen for
-            sig.
+            Beløbet er det, lønsedlen kalder løn. Arbejdsgiverens
+            pensionsbidrag hører til i afsnittet Pension og lægges til
+            derfra — det skal ikke tastes med her.
           </Hint>
         )}
       </Section>
+      {entry.direction === 'Income' && (
+        <PensionAgreementSection plan={plan} entry={entry} onChange={onChange} />
+      )}
       <PeriodSection
         value={entry}
         owner={owner}
@@ -867,6 +870,187 @@ function EntryFields({
         )}
         <Hint>{entryNote(years, entry)}</Hint>
       </PeriodSection>
+    </>
+  )
+}
+
+/** Firmaordningen på lønposten. Afsnittet hedder **Pension** på skærmen —
+    det er en etiket og ikke et begreb.
+
+    Aftalen findes kun, hvor den er skrevet: slås afsnittet fra, er den væk
+    med sine tal. Der er ingen afbryder, der lader dem stå, mens året regner
+    uden dem — det ville være to scenarier i én plan, og scenarier er
+    uafhængige planer.
+
+    Afsnittet bærer hverken periode, gentagelse eller forfald. Aftalen arver
+    lønpostens og ophører derfor af sig selv ved erhvervsophør, som det
+    lønkildede bidrag allerede gør, jf. ADR-0016.
+
+    Har ejeren ingen ordning, en arbejdsgiver kan administrere, er der ingen
+    destination at pege på. Afsnittet står da med sin begrundelse frem for med
+    en knap, der ville skrive en plan, motoren afviser, jf. ADR-0020. */
+function PensionAgreementSection({
+  plan,
+  entry,
+  onChange,
+}: {
+  plan: Plan
+  entry: Entry & { direction: 'Income' }
+  onChange: (plan: Plan) => void
+}) {
+  const agreement = entry.pensionAgreement
+  const destinations = (findPerson(plan, entry.owner)?.holdings ?? []).filter(
+    (holding) => !isFreeAssets(holding) && isEmployerAdministered(holding),
+  )
+
+  if (agreement === undefined) {
+    return (
+      <Section
+        title="Pension"
+        action={
+          destinations.length > 0 ? (
+            <button
+              type="button"
+              className="afsnit-tilfoej"
+              title="Beskriv firmaordningen, lønnen hører til"
+              onClick={() => onChange(addPensionAgreement(plan, entry.id))}
+            >
+              + Tilføj
+            </button>
+          ) : undefined
+        }
+      >
+        <Hint>
+          {destinations.length > 0
+            ? 'Uden en firmaordning er lønnen bare en løn. Med den lægges arbejdsgiverens bidrag oven i, og det, der er tilbage efter arbejdsmarkedsbidraget, går ind i ordningen.'
+            : 'En firmaordning kræver en ordning, en arbejdsgiver kan administrere — en ratepension, en livrente eller en aldersopsparing i lønmodtagerens eget navn. Der er ingen af dem hos ejeren af denne løn endnu.'}
+        </Hint>
+      </Section>
+    )
+  }
+
+  const line = agreement.allocation[0]
+  const destination = destinations.find((holding) => holding.id === line?.to)
+
+  return (
+    <Section
+      title="Pension"
+      action={
+        <button
+          type="button"
+          className="slet"
+          aria-label="Fjern pension"
+          title="Fjern pension — lønnen bliver stående, og aftalens tal forsvinder"
+          onClick={() => onChange(removePensionAgreement(plan, entry.id))}
+        >
+          <TrashIcon />
+        </button>
+      }
+    >
+      <ContributionAmountFields
+        label="Arbejdsgiverbidrag"
+        formHelp="PensionAgreement.employerContributionForm"
+        percentageHelp="PensionAgreement.employerPercentage"
+        amountHelp="PensionAgreement.employerAmount"
+        value={agreement.employerContribution}
+        onChange={(employerContribution) =>
+          onChange(
+            withPensionAgreement(plan, entry.id, (a) => ({ ...a, employerContribution })),
+          )
+        }
+      />
+      <ContributionAmountFields
+        label="Arbejdstagerbidrag"
+        formHelp="PensionAgreement.employeeContributionForm"
+        percentageHelp="PensionAgreement.employeePercentage"
+        amountHelp="PensionAgreement.employeeAmount"
+        value={agreement.employeeContribution}
+        onChange={(employeeContribution) =>
+          onChange(
+            withPensionAgreement(plan, entry.id, (a) => ({ ...a, employeeContribution })),
+          )
+        }
+      />
+      <SelectField
+        label="Ordning"
+        help="Allocation.to"
+        value={destination?.name ?? ''}
+        options={destinations.map((holding) => holding.name)}
+        onChange={(name) => {
+          const to = destinations.find((holding) => holding.name === name)!
+          onChange(
+            withPensionAgreement(plan, entry.id, (a) => ({
+              ...a,
+              allocation: [{ to: to.id, form: 'Remainder' }],
+            })),
+          )
+        }}
+      />
+      <Hint>
+        Begge procenter måles af {entry.name} selv, ligesom de gør på
+        lønsedlen. Arbejdsmarkedsbidraget trækkes af de to under ét på vejen
+        ind — det opkræves ikke igen, det står allerede i årets skat.
+      </Hint>
+    </Section>
+  )
+}
+
+/** Et bidrag på pensionsaftalen: formen og det ene tal, formen har.
+
+    De to bidrag stiller det samme spørgsmål og ville drive fra hinanden,
+    hvis de blev skrevet to gange — men de er hver sit felt på skærmen og
+    bærer derfor hver sine forklaringer, som kalderen rækker ind. */
+function ContributionAmountFields({
+  label,
+  formHelp,
+  percentageHelp,
+  amountHelp,
+  value,
+  onChange,
+}: {
+  label: string
+  formHelp: FieldHelpKey
+  percentageHelp: FieldHelpKey
+  amountHelp: FieldHelpKey
+  value: ContributionAmount
+  onChange: (value: ContributionAmount) => void
+}) {
+  const isPercentage = 'percentageOfEntry' in value
+
+  return (
+    <>
+      {/* Begge former står synlige: en vælger ville skjule den ene bag et
+          klik, og der er kun to. Samme kontakt som indbetalingens. */}
+      <ToggleField
+        label={`${label} angives som`}
+        help={formHelp}
+        value={danish(contributionAmounts, isPercentage ? 'percentageOfEntry' : 'amountInRealKroner')}
+        options={Object.keys(contributionAmounts)}
+        onChange={(choice) =>
+          onChange(
+            contributionAmounts[choice] === 'percentageOfEntry'
+              ? { percentageOfEntry: 0 }
+              : { amountInRealKroner: 0 },
+          )
+        }
+      />
+      {isPercentage ? (
+        <NumberField
+          label={label}
+          help={percentageHelp}
+          unit="%"
+          value={asPercent(value.percentageOfEntry)}
+          onChange={(percent) => onChange({ percentageOfEntry: percent / 100 })}
+        />
+      ) : (
+        <NumberField
+          label={`${label} (nutidskroner)`}
+          help={amountHelp}
+          unit="kr."
+          value={value.amountInRealKroner}
+          onChange={(amountInRealKroner) => onChange({ amountInRealKroner })}
+        />
+      )}
     </>
   )
 }

@@ -77,6 +77,39 @@ describe('overskuddets bånd', () => {
     )
   })
 
+  it('tæller pensionsaftalens penge med i indbetalingsbåndet', () => {
+    // Aftalens penge gør på bufferen præcis det, en indbetalings gør: de
+    // forlader den og bliver bundet i en ordning. Båndet navngives efter
+    // bevægelsen og ikke efter figuren, jf. ADR-0023 og ADR-0041.
+    const plan = aPlan({
+      balance: 1_000_000,
+      holdings: [
+        aHolding({
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          balance: 0,
+        }),
+      ],
+      entries: [
+        aSalary({
+          amountInRealKroner: 600_000,
+          pensionAgreement: {
+            employerContribution: { percentageOfEntry: 0.12 },
+            employeeContribution: { amountInRealKroner: 0 },
+            allocation: [{ to: 'ratepension', form: 'Remainder' }],
+          },
+        }),
+      ],
+    })
+
+    const year = simulateChecked(plan)[0]!
+
+    expect(band(year, plan, 'Contributions')).toBeCloseTo(66_240, 6)
+    // Og båndene går stadig op: de otte er kun en opdeling af det ene tal.
+    expect(net(year, plan)).toBeCloseTo(surplus(year, plan.buffer), 6)
+  })
+
   it('lader en overførsel uden bufferen i nogen ende tælle hverken op eller ned', () => {
     // Pengene flytter sig fra aldersopsparingen til aktiedepotet. Bufferen er
     // hverken afgiver eller modtager, og året skal se ud, som var overførslen

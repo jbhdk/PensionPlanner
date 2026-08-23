@@ -416,7 +416,28 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    // v13 → v14, jf. ADR-0040: lønposten er lønsedlens løn, og
+    // arbejdsgiverbidraget lægges til af en `PensionAgreement` på posten.
+    //
+    // Leddet kan ikke gøre arbejdet færdigt, og det er ikke en forglemmelse.
+    // Et gemt beløb skifter betydning uden at skifte form: 672.000 kr. kan
+    // være 600.000 kr. i løn med 12 % fra arbejdsgiveren eller 672.000 kr. i
+    // løn helt uden en ordning, og intet i planen siger hvilken. Et gæt ville
+    // være en tavs rettelse af brugerens eget tal.
+    //
+    // Leddet lader derfor tallet stå. Beskeden til planlæggeren hører ikke
+    // her — kæden svarer med data og ikke med ord — men i konvolutten, som
+    // kender den version, filen kom fra, jf. `parsePlanEnvelope`.
+    from: 13,
+    migrate: (data) => data,
+  },
 ]
+
+/** Den skemaversion, hvor lønpostens beløb skiftede betydning, jf. ADR-0040.
+    En plan gemt før den skal efterses af et menneske, og konvolutten siger
+    det ved indlæsningen. */
+export const SALARY_MEANING_CHANGED_IN = 14
 
 /** Kører kæden fra `fromVersion` til `toVersion`, ét led ad gangen. Rent og
     uafhængigt af den rigtige kæde ovenfor, så mekanikken kan bevises med et

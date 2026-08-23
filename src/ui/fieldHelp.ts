@@ -160,7 +160,7 @@ export const fieldHelp = {
     'Det, posten kaldes i listen og i forklaringen af et år. Det indgår ikke i nogen beregning.',
 
   'Entry.amountInRealKroner':
-    'Hvor stort beløbet er, målt i nutidskroner. Det skrives én gang og vokser selv gennem forløbet — en indtægt med sin egen reguleringssats, en udgift med planens inflation.',
+    'Hvor stort beløbet er, målt i nutidskroner. For en løn er det tallet, lønsedlen kalder løn — arbejdsgiverens pensionsbidrag hører til i afsnittet Pension og lægges til derfra. Beløbet skrives én gang og vokser selv gennem forløbet.',
 
   'Entry.direction':
     'Om beløbet kommer ind i husstanden eller går ud af den. Tallet skrives positivt begge veje; det er valget her, der afgør fortegnet.',
@@ -219,6 +219,29 @@ export const fieldHelp = {
 
   'Contribution.amountInRealKroner':
     'Hvor meget der indbetales, målt i nutidskroner. Beløbet følger planens inflation gennem forløbet og ikke lønnens eget tempo.',
+
+  // ---------- Pensionen på lønposten ----------
+
+  'PensionAgreement.employerContributionForm':
+    'Om arbejdsgiverens del er en andel af lønnen eller et aftalt kronebeløb. En andel følger lønnen op af sig selv; et kronebeløb står stille, indtil det rettes.',
+
+  'PensionAgreement.employerPercentage':
+    'Hvor stor en del af lønnen arbejdsgiveren lægger oven i den til pension. Tallet er det, der står på lønsedlen — det måles af lønnen selv og ikke af lønnen plus bidraget.',
+
+  'PensionAgreement.employerAmount':
+    'Hvor meget arbejdsgiveren lægger oven i lønnen til pension, målt i nutidskroner. Beløbet følger lønnens egen stigning gennem forløbet og ikke prisudviklingen.',
+
+  'PensionAgreement.employeeContributionForm':
+    'Om egen del er en andel af lønnen eller et aftalt kronebeløb. Valget er uafhængigt af, hvordan arbejdsgiverens del er skrevet — de to kan sagtens stå på hver sin form.',
+
+  'PensionAgreement.employeePercentage':
+    'Hvor stor en del af lønnen der selv betales til pension. Den måler samme løn som arbejdsgiverens del, ligesom de to gør på lønsedlen, og til forskel fra den løfter den ikke indtægten — de penge er der i forvejen.',
+
+  'PensionAgreement.employeeAmount':
+    'Hvor meget der selv betales til pension, målt i nutidskroner. Beløbet følger lønnens egen stigning gennem forløbet, ligesom arbejdsgiverens del gør.',
+
+  'Allocation.to':
+    'Den ordning, hele indbetalingen lander i. Kun ordninger, en arbejdsgiver kan administrere og som står i lønmodtagerens eget navn, kan vælges — valget afgør, om pengene nedsætter skatten, og hvilket loft de måles mod.',
 
   // ---------- Overførslen ----------
 
@@ -281,7 +304,7 @@ export const fieldHelp = {
     'Hvad der blev til overs af det, året lagde ind på bufferbeholdningen og tog fra den. Afkastet tæller ikke med — det bliver stående, hvor det er tjent — mens skatten af det gør, for den skal betales. Et minus er det beløb, der mangler at blive flyttet fra en anden beholdning, og ikke et tegn på, at pengene ikke findes.',
 
   'SurplusBand.IncomeEntries':
-    'Det, husstanden fik ind udefra i året — løn, ATP og hvad planen ellers navngiver på den side. Kun det, der landede på bufferbeholdningen, tæller med; penge hentet op fra en ordning er noget husstanden havde i forvejen og står for sig.',
+    'Det, husstanden fik ind udefra i året — løn, ATP og hvad planen ellers navngiver på den side, plus det arbejdsgiveren lagde oven i lønnen til pension. Penge hentet op fra en ordning er noget husstanden havde i forvejen og står for sig.',
 
   'SurplusBand.Benefits':
     'De faste beløb, der kommer ind uden en saldo bag sig: folkepensionens grundbeløb og pensionstillæg, og hvad en omsat livrente betaler hvert år. De er hverken tastet som en post eller hævet fra en beholdning, men de lander på bufferbeholdningen som alt andet.',
@@ -383,6 +406,26 @@ export const fieldHelp = {
 
   'ContributionYear.intoHolding':
     'Hvad der rent faktisk kom ind i ordningen. Er der forskel på de to tal, er forskellen AM-bidraget, som blev betalt på vejen ind.',
+
+  // ---------- Forklar-årets pensionsaftale ----------
+
+  'PensionAgreementYear.entry':
+    'Hvilken løn firmaordningen hører til. Der er højst én ordning pr. løn, så lønnens navn er også aftalens — og perioden er lønnens, så ordningen ophører af sig selv, når arbejdet gør.',
+
+  'PensionAgreementYear.employerContribution':
+    'Det, arbejdsgiveren lagde oven i lønnen i året. Det står ikke i lønnens eget beløb, men det er husstandens indtægt på lige fod med resten — ellers ville pengene dukke op i ordningen uden at være kommet nogen steder fra.',
+
+  'PensionAgreementYear.employeeContribution':
+    'Det, der blev taget af lønnen selv i året. Til forskel fra arbejdsgiverens del løfter den ikke indtægten: de penge var der i forvejen, og de går blot et andet sted hen end ud på kontoen.',
+
+  'PensionAgreementYear.labourMarketContribution':
+    'De otte procent af hele indbetalingen, der gik fra på vejen ind i ordningen. De er ikke en ekstra regning: beløbet er en del af årets samlede arbejdsmarkedsbidrag, som står i skatten ovenfor, og det er pensionsselskabet der holder det tilbage.',
+
+  'PensionAgreementDestination.holding':
+    'Den ordning, pengene landede i. Valget afgør resten: om indbetalingen nedsætter skatten, hvilket loft den måles mod, og hvordan pengene beskattes, mens de står der.',
+
+  'PensionAgreementDestination.landed':
+    'Det, der nåede frem til ordningen: de to bidrag lagt sammen og arbejdsmarkedsbidraget trukket fra. Det er dét beløb, loftet måles mod, og det beløb, der nedsætter årets skat, hvis ordningen giver fradrag.',
 
   'CapYear.variant':
     'Hvilken slags ordning loftet gælder, og hvem af husstanden det er gjort op for. Loftet er personens og deles af alle vedkommendes ordninger af den slags — to ratepensioner har ét loft mellem sig.',

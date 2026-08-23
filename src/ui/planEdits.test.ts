@@ -6,6 +6,7 @@ import { defaultPlan } from './defaultPlan'
 import {
   addContribution,
   addEntry,
+  addPensionAgreement,
   addPerson,
   addTransfer,
   moveContribution,
@@ -15,7 +16,11 @@ import {
   moveTransfer,
   removeEntry,
   removeHolding,
+  removePensionAgreement,
   removePerson,
+  withDirection,
+  withEntry,
+  withPensionAgreement,
   withVariant,
 } from './planEdits'
 
@@ -530,5 +535,99 @@ describe('rækkefølgen i planen', () => {
       'maria',
       'jesper',
     ])
+  })
+})
+
+describe('pensionsaftalen på lønposten', () => {
+  /** Fixturens buffer plus en ratepension, aftalen kan fordele til, og en
+      lønpost at hænge den på. */
+  function aPlanWithSalary(): Plan {
+    return aPlan({
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+    })
+  }
+
+  function agreementOf(plan: Plan) {
+    const entry = plan.entries.find((candidate) => candidate.id === 'salary')!
+    return entry.direction === 'Income' ? entry.pensionAgreement : undefined
+  }
+
+  it('slår sektionen til med en fordeling, motoren tager imod', () => {
+    const plan = addPensionAgreement(aPlanWithSalary(), 'salary')
+
+    // Ét klik må ikke skrive en plan, indgangskontrollen afviser, jf.
+    // ADR-0020: linjen peger på ejerens egen arbejdsgiveradministrerede
+    // ordning, og den er den ene, der er resten.
+    expect(validatePlan(plan)).toBeUndefined()
+    expect(agreementOf(plan)).toEqual({
+      employerContribution: { percentageOfEntry: 0 },
+      employeeContribution: { percentageOfEntry: 0 },
+      allocation: [{ to: 'ratepension', form: 'Remainder' }],
+    })
+  })
+
+  it('lader sektionen slå fra, og aftalens tal er væk', () => {
+    const til = addPensionAgreement(aPlanWithSalary(), 'salary')
+    const fra = removePensionAgreement(til, 'salary')
+
+    // Der er ingen afbryder, der lader tallene stå: et felt, ingen invariant
+    // måler på, driver fra virkeligheden i tavshed.
+    expect(agreementOf(fra)).toBeUndefined()
+    expect(JSON.stringify(fra.entries)).not.toContain('pensionAgreement')
+  })
+
+  it('lader aftalen redigeres uden at røre resten af posten', () => {
+    const plan = withPensionAgreement(
+      addPensionAgreement(aPlanWithSalary(), 'salary'),
+      'salary',
+      (agreement) => ({ ...agreement, employerContribution: { percentageOfEntry: 0.12 } }),
+    )
+
+    expect(agreementOf(plan)?.employerContribution).toEqual({ percentageOfEntry: 0.12 })
+    const entry = plan.entries[0]!
+    expect(entry.amountInRealKroner).toBe(600_000)
+    expect(entry.name).toBe('Løn')
+  })
+
+  it('tager aftalen med, når posten bliver til en udgift', () => {
+    // En udgiftspost har ingen løn at måle bidragene af, og feltet hænger
+    // derfor på indtægtsgrenen alene. Blev aftalen stående, ville den være
+    // et tal i det gemte skema, ingen invariant måler på.
+    const til = addPensionAgreement(aPlanWithSalary(), 'salary')
+    const udgift = withEntry(til, 'salary', (entry) => withDirection(entry, 'Expense'))
+
+    expect(JSON.stringify(udgift.entries)).not.toContain('pensionAgreement')
+  })
+
+  it('lader posten stå urørt, når ejeren ingen ordning har, en arbejdsgiver kan administrere', () => {
+    // Aktiesparekontoen er ikke arbejdsgiveradministreret, og der er derfor
+    // ingen destination at pege på. Sektionen kan ikke slås til, frem for at
+    // blive slået til med en linje, motoren afviser.
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'aktiesparekonto',
+          name: 'Aktiesparekonto',
+          variant: 'ShareSavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+    })
+
+    expect(addPensionAgreement(plan, 'salary')).toBe(plan)
   })
 })
