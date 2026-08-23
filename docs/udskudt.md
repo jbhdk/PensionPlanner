@@ -2,6 +2,16 @@
 
 Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog af idéer — en liste over beslutninger, så de ikke skal tages forfra.
 
+## `UpToCap` på en selvstændig indbetaling
+
+**Status:** Udskudt. Formen findes i en `PensionAgreement`s `Allocation`, jf. [ADR-0041](./adr/0041-pensionsaftalen-baerer-sit-eget-regnestykke-i-aarsresultatet.md), og ikke på en `Contribution`.
+
+**Hvorfor det betyder noget:** Den er lige så nyttig dér. Et fast kronebeløb til en aldersopsparing følger lønnens `RegulationRate`, hvor loftet følger `Section20ProjectionAssumption` — de to driver fra hinanden, og loftet springer desuden fra 9.900 til 64.200 kr. syv år før folkepensionsalderen. En privat indbetaling, der skal fylde loftet ud, rammer det derfor kun i det år, den blev skrevet.
+
+**Prisen ved at lade den ligge:** Brugeren skal rette kronebeløbet i hånden, når loftet flytter sig, og en plan, der ikke bliver rettet, driver stille. Markeringen findes dog: `CapBreach` viser året, når beløbet er blevet for stort, og `CapYear` viser den uudnyttede plads, når det er blevet for lille.
+
+**Hvad der skal bygges, når det tages op:** En form mere på `Contribution`s beløbsangivelse, spærret ved indgangen for destinationer uden `Cap`. Rækkefølgen er den eneste reelle komplikation: `UpToCap` måler mod det, årets øvrige indbetalinger til ordningen tog, og to sådanne linjer i hver sin liste skal have en afgjort rangorden — i dag falder den ud af, at aftalerne regnes efter de selvstændige indbetalinger, og den udvej forsvinder, når begge lister kan bære formen.
+
 ## Det ekstra pensionsfradrags modregning af udbetalinger
 
 **Status:** Udskudt, undersøgt og belagt i [satsår 2026](./satser/2026.md). Fradragets grundlag er bygget som årets indbetalinger med `Deductibility` alene.
