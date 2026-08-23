@@ -199,7 +199,7 @@ _Avoid_: Afkastskat, kapitalskat, `HoldingTax` brugt om den
 
 **Afgiftspligtig** · `Chargeable`:
 At en bevægelse udløser en afgift efter pensionsbeskatningsloven frem for at indgå i en indkomstopgørelse. Afgiften er en fast procent af beløbet og ufølsom over for husstandens øvrige indkomst: den passerer hverken den personlige indkomst, `TaperBase` eller noget `TaxLayer`, og den flytter sig derfor ikke, når et andet valg i planen flytter sig. Ordet bruges to steder om det samme — som `PayoutTaxation` på kapitalpensionen, hvis udbetaling koster en afgift, og som `CapBreach`, når en indbetaling over aldersopsparingens loft i stedet er afgiftspligtig. Procenten står i `RateYear` og aldrig i værdien: loven kender flere, og hvilken der gælder, følger af bevægelsen og ikke af ordet.
-_Avoid_: Skat brugt om afgiften — den er hverken personens, husstandens eller beholdningens. Straf, gebyr, bøde
+_Avoid_: Skat brugt om afgiften — den er hverken personens, husstandens eller beholdningens. Straf, bøde. Gebyr, som er `Fee` og trækkes af en indbetaling, hvor afgiften følger en bevægelse
 
 **Facitcase** · `WorkedExample`:
 Et gennemregnet eksempel med kilde og verifikationsdato, som skatteopgørelsen prøves imod. Tallene står som data frem for som assertions spredt ud i en test, så det kan ses, hvor de kommer fra, og hvornår de sidst er efterset. Bygger casen på et satstal, der endnu ikke er officielt bekræftet, siger den det selv.
@@ -208,7 +208,7 @@ _Avoid_: Testcase, eksempel, referenceberegning
 ### Pengestrømme
 
 **Post** · `Entry`:
-En navngiven ind- eller udbetaling med beløb i nutidskroner, ejer, periode og gentagelse. Indtægtsposter bærer desuden en skattebehandling og en egen reguleringssats; udgiftsposter har ingen af delene og følger planens inflationsantagelse.
+En navngiven ind- eller udbetaling med beløb i nutidskroner, ejer, periode og gentagelse. Indtægtsposter bærer desuden en skattebehandling og en egen reguleringssats; udgiftsposter har ingen af delene og følger planens inflationsantagelse. En lønpost er lønnen uden arbejdsgiverens pensionsbidrag — det tal, lønsedlen kalder løn. Bidraget hører til `PensionAgreement` og lægges til dér.
 _Avoid_: Linje, række, cashflow, transaktion
 
 **Retning** · `Direction`:
@@ -233,7 +233,31 @@ _Avoid_: Aldersgrænse, tidspunkt
 
 **Indbetaling** · `Contribution`:
 En bevægelse af penge ind i en beholdning, der ikke er frie midler — altså ind i en ordning med et loft på vejen ind og regler på vejen ud. Kilden er enten en indtægtspost eller en anden beholdning. Hverken skattevirkningen eller loftet er noget, indbetalingen selv bærer: skattevirkningen følger destinationens variant, og AM-behandlingen følger kilden. Den bærer et navn som posten, skrevet ved oprettelsen og rettet af brugeren.
-_Avoid_: Bidrag, indskud, præmie, opsparing
+_Avoid_: Bidrag, indskud, præmie og opsparing brugt om figuren. `EmployerContribution`, `EmployeeContribution` og `InsurancePremium` er egne termer, som navngiver dele af en `PensionAgreement` — ingen af dem er en indbetaling
+
+**Pensionsaftale** · `PensionAgreement`:
+Aftalen på en lønpost om, hvad der indbetales til pension, hvad der trækkes fra undervejs, og hvorhen resten går. Bærer et arbejdsgiverbidrag, et arbejdstagerbidrag, et gebyr, en forsikringspræmie og en fordeling. Én pr. lønpost, og den findes kun, hvor den er skrevet: en lønpost uden aftale har ingen firmapension, og der er ingen afbryder, der lader tallene stå, mens året regner uden dem — vil man se, hvad aftalen er værd, er det to planer og ikke ét felt, jf. `Plan`. Perioden, gentagelsen og forfaldet er lønpostens, ganske som et lønkildet `Contribution`s, og aftalen ophører derfor af sig selv ved erhvervsophør. Den er ikke selv en indbetaling: pengene forlader lønnen ad flere veje på én gang, og to af dem — gebyret og præmien — lander aldrig i en beholdning.
+_Avoid_: Firmaordning, arbejdsgiverordning, pensionsordning, pensionssektion
+
+**Arbejdsgiverbidrag** · `EmployerContribution`:
+Den del af en pensionsaftales indbetaling, arbejdsgiveren lægger oven i lønnen. Aldrig en del af lønpostens beløb, men den er husstandens indtægt og passerer pengestrømmen som enhver anden krone — ellers ville formuen vokse uden modpost. Angives som en procent af lønposten eller som et kronebeløb.
+_Avoid_: Pensionsbidrag, arbejdsgiverens pension, firmabidrag
+
+**Arbejdstagerbidrag** · `EmployeeContribution`:
+Den del af en pensionsaftales indbetaling, der tages af lønnen. Måler samme grundlag som arbejdsgiverbidraget — lønposten — og angives på de samme to former. Til forskel fra arbejdsgiverbidraget løfter den ikke husstandens indtægt: pengene er der i forvejen.
+_Avoid_: Egetbidrag, medarbejderbidrag, lønmodtagerbidrag
+
+**Gebyr** · `Fee`:
+Det kronebeløb, en pensionsaftale trækker af indbetalingen, før den fordeles. Beholdningens egne omkostninger er ikke gebyret: de er `AnnualCostRate`, som sænker afkastet og opkræves af depotet. Skrives handelsomkostninger begge steder, betales de to gange, og forskellen vokser med saldoen, mens gebyret står stille.
+_Avoid_: Omkostning, ÅOP, kurtage, administrationsomkostning
+
+**Forsikringspræmie** · `InsurancePremium`:
+Den del af en pensionsaftales indbetaling, der køber en risikodækning og aldrig bliver til formue. Den forlader husstanden og indgår derfor i balanceinvariantens udgifter, men den nedsætter den personlige indkomst som resten af indbetalingen. Det er den ene udgift i modellen med en skattevirkning, og den er netop derfor ikke en `Entry`, hvis udgiftsretning ingen skattebehandling bærer. Trækkes før fordelingen og måles ikke mod noget loft.
+_Avoid_: Præmie brugt om en indbetaling, forsikring, risikodækning, udgiftspost
+
+**Fordeling** · `Allocation`:
+Hvordan en pensionsaftales placerede beløb deles ud på destinationer. Hver linje peger på en beholdning, hvis variant er `EmployerAdministered`, og bærer sin andel som en procent, et kronebeløb, op til loftet eller resten. Præcis én linje er resten, og det er dét, der får fordelingen til at gå op i hvert eneste simuleringsår i kraft af sin form frem for i kraft af, at brugeren har regnet efter. Formen `UpToCap` beder om det, der er tilbage under ordningens `Cap`, når årets øvrige indbetalinger til den er talt med, og den findes kun på de varianter, der har et loft — den siger dét, et kronebeløb kun kan ramme ved et tilfælde, fordi loftet følger `Section20ProjectionAssumption`, hvor kronebeløbet følger lønnens `RegulationRate`, og fordi aldersopsparingens loft desuden springer syv år før folkepensionsalderen. Procenterne måler det placerede beløb — indbetalingen efter AM-bidrag, gebyr og præmie — og aldrig lønnen. Summer de til mere end det hele, findes planen ikke i virkeligheden og afvises ved indgangen, jf. ADR-0020; rækker beløbet ikke til kronelinjerne i ét bestemt år, er det derimod et årsresultat og står på `PensionAgreementYear`.
+_Avoid_: Fordelingsnøgle, split, allokering, aktivallokering
 
 **Loft** · `Cap`:
 Den øvre grænse for, hvad der må skydes ind i en ordning. Formen afgør, hvad loftet måler, og om pengene overhovedet kommer ind — men ikke hvad et brud koster; det følger destinationens variant. `PerYear` måler årets samlede indbetaling til ordningen og gælder ratepensionen og aldersopsparingen: pengene kommer ind, og året er markeret. Hvad markeringen dækker over, er ikke det samme de to steder. `InstalmentPension` har en fradragsret, og det overskydende mister den; `OldAgeSavings` har ingen at miste og betaler i stedet en afgift af det overskydende. De to er én form og to regler, ikke samme regel skrevet to gange. `OnBalance` måler beholdningens saldo ved årets begyndelse og gælder aktiesparekontoen: indbetalingen afkortes til råderummet, det uindskudte beløb bliver liggende i kilden, og året er ikke markeret. Ikke fordi indskuddet ville have været lovligt — det overskydende skal udloddes igen og koster en afgift — men fordi pengeinstituttet ikke tager imod det. Loftet forhindrer indskuddet frem for at straffe det, og der er derfor intet brud at markere, jf. [ADR-0019](./docs/adr/0019-aktiesparekontoens-loft-forhindrer-indskuddet-frem-for-at-straffe-det.md). Råderummet under et `OnBalance`-loft er loftet minus saldoen og ånder derfor med afkastet; vokser en saldo over sit loft af afkast alene, er intet loft brudt.
@@ -244,7 +268,7 @@ Om en person kan have mere end én beholdning af varianten. Aktiesparekontoen er
 _Avoid_: Enekonto, dubletregel, kun én konto
 
 **Arbejdsgiveradministreret** · `EmployerAdministered`:
-Om ordningen kan oprettes og administreres af en arbejdsgiver, så en indbetaling kan komme fra lønnen. Ratepensionen, livrenten og aldersopsparingen kan; aktiesparekontoen kan ikke — dens penge er ejerens egne, fuldt beskattede midler, og der findes ingen arbejdsgiveradministreret af slagsen. Kapitalpensionen kan heller ikke, men af en anden grund: formen fandtes, og den er ikke det, cellen måler — den kan slet ikke modtage en indbetaling, jf. `OpenToContributions`. Egenskaben afgør alene, om en lønkildet indbetaling kan skrives, og aldrig hvad den koster: AM-behandlingen følger kilden, jf. [ADR-0016](./docs/adr/0016-indbetalingen-kendes-paa-sin-destination.md). En strukturel umulighed som `UniquePerPerson` og ikke et årsafhængigt brud.
+Om ordningen kan oprettes og administreres af en arbejdsgiver, så en indbetaling kan komme fra lønnen. Ratepensionen, livrenten og aldersopsparingen kan; aktiesparekontoen kan ikke — dens penge er ejerens egne, fuldt beskattede midler, og der findes ingen arbejdsgiveradministreret af slagsen. Kapitalpensionen kan heller ikke, men af en anden grund: formen fandtes, og den er ikke det, cellen måler — den kan slet ikke modtage en indbetaling, jf. `OpenToContributions`. Egenskaben afgør alene, om en lønkildet indbetaling kan skrives, og aldrig hvad den koster: AM-behandlingen følger kilden, jf. [ADR-0016](./docs/adr/0016-indbetalingen-kendes-paa-sin-destination.md). Den er også den, der afgør, om en beholdning kan stå i en `PensionAgreement`s fordeling. En strukturel umulighed som `UniquePerPerson` og ikke et årsafhængigt brud.
 _Avoid_: Firmaordning, arbejdsgiverordning, bortseelsesret
 
 **Åben for indbetaling** · `OpenToContributions`:
@@ -296,6 +320,10 @@ _Avoid_: Postresultat, årspost, betaling
 **Indbetalingsår** · `ContributionYear`:
 Én indbetalings to beløb i ét simuleringsår, i årets egne fremtidskroner — kun for de indbetalinger der faktisk falder i året. Det ene er, hvad der forlod kilden; det andet, hvad der landede i beholdningen. Forskellen er AM-bidraget, som allerede står i personens eget skattelag og derfor ikke gentages her.
 _Avoid_: Bidragsår, indbetalingsresultat, indskud
+
+**Pensionsaftaleår** · `PensionAgreementYear`:
+Én pensionsaftales regnestykke for ét simuleringsår, i årets egne fremtidskroner: de to bidrag, AM-bidraget, gebyret, præmien og det, der landede på hver destination. Hele regnestykket står og ikke kun facit, samme form som `Taper`-rækken i `PersonYear` og af samme grund — en linje, der ikke kan efterregnes af sig selv, kan ikke forklare et år. Hver destination bærer to tal, hvad andelen bad om og hvad der landede. De er ens i næsten alle år, og de to findes for de år, hvor et kronebeløb ikke kunne være der, ganske som `TransferYear`s to.
+_Avoid_: Aftaleår, pensionsår, indbetalingsår
 
 **Overførselsår** · `TransferYear`:
 Én overførsels beløb i ét simuleringsår, i årets egne fremtidskroner — kun for de overførsler der faktisk falder i året. To af dem står der altid: hvad planen bad om, og hvad der faktisk forlod afgiveren, når saldoen ikke rakte. De to er ens i næsten alle år, og linjen findes for de år, hvor de ikke er: en tavs afkortning er den slags fejl, der aldrig viser sig. Er afgiverens `PayoutTaxation` `Chargeable`, bærer linjen desuden det, der landede i de frie midler; afgiften er kilen mellem de to og gentages ikke selv. Formen følger afgiveren, ligesom `CapYear`s følger loftets: en `TaxFree`-afgiver har ingen kile, og et felt, hvor de to altid var ens, ville påstå, at der var noget at se. Forfaldet står ikke her; det er en egenskab ved overførslen selv.
