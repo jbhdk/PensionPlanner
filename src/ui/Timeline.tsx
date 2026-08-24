@@ -7,6 +7,7 @@ import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
 import { applyTimelineDrag } from './timelineDrag'
 import type { TimelineDragEdge } from './timelineDrag'
+import type { Clamp } from './fields'
 import { withPerson } from './planEdits'
 
 /** Gruppernes danske titler, samme opdeling som Navigatorens, jf. ADR-0036
@@ -157,11 +158,17 @@ export function Timeline({
   plan,
   selected,
   onSelect,
+  onClamp,
   onChange,
 }: {
   plan: Plan
   selected: Selection
   onSelect: (selection: Selection) => void
+  /** Meldes ved hvert træk: klemningen, hvis en grænse greb ind undervejs,
+      ellers intet. Et træk har intet felt at stå rødt i, og beskeden vises
+      derfor i skuffen ved det felt, den peger på — hvilket virker, fordi et
+      greb i en figur også vælger den. */
+  onClamp: (clamp: Clamp | null) => void
   onChange: (plan: Plan) => void
 }) {
   const groups = timelineLayout(plan)
@@ -206,7 +213,9 @@ export function Timeline({
       if (drag.kind === 'item') {
         if (rawDelta === lastDelta.current) return
         lastDelta.current = rawDelta
-        onChange(applyTimelineDrag(drag.startPlan, drag.item, drag.edge, rawDelta))
+        const dragged = applyTimelineDrag(drag.startPlan, drag.item, drag.edge, rawDelta)
+        onChange(dragged.plan)
+        onClamp(dragged.clamp)
         return
       }
       const person = drag.startPlan.household.persons.find((p) => p.id === drag.personId)!
@@ -227,7 +236,7 @@ export function Timeline({
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
     }
-  }, [drag, onChange])
+  }, [drag, onChange, onClamp])
 
   function startDrag(item: TimelineItem, edge: TimelineDragEdge) {
     return (event: ReactMouseEvent) => {
@@ -238,6 +247,11 @@ export function Timeline({
       // knappens fokusflytning ved klik, men ikke `onClick` og dermed ikke
       // valget af posten.
       event.preventDefault()
+      // Grebet vælger figuren, ganske som et klik på boksen gør. Håndtagene
+      // er boksens søskende og ikke dens børn, så et træk i et af dem ville
+      // ellers ikke udløse boksens `onClick` — og en klemning, trækket melder,
+      // ville stå i en skuffe, der viser noget andet.
+      onSelect(item.target)
       lastDelta.current = 0
       setDrag({ kind: 'item', item, edge, startX: event.clientX, startPlan: plan })
     }

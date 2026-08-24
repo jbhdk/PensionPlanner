@@ -14,6 +14,8 @@ import { ResultGraphs } from './ResultGraphs'
 import { Timeline } from './Timeline'
 import { YearExplanation } from './YearExplanation'
 import { YearTable } from './YearTable'
+import type { Clamp } from './fields'
+import { sameSelection } from './selection'
 import type { Selection } from './selection'
 import './app.css'
 
@@ -35,6 +37,19 @@ function download(contents: string, filename: string): void {
     ikke en tredje fane, men en visning der overtager resultatspalten helt,
     jf. issue #13 — den har sin egen vej tilbage til Årstabellen. */
 type ResultView = 'Planner' | 'YearTable' | 'YearExplanation'
+
+/** Hvor længe en klemningsbesked står, efter den redigering, den forklarer.
+    Uret stilles om ved hver ny klemning, så et træk, der bliver ved med at
+    støde mod væggen, ikke taber beskeden undervejs — de fem sekunder løber
+    fra det sidste stød og altså fra det øjeblik, boksen slippes.
+
+    En besked, der forsvinder af sig selv, er ellers netop det, `loadNotice`
+    ikke må være. Forskellen er, hvor øjnene er: den gemte plans besked møder
+    en, der lige har åbnet appen og kan kigge et andet sted hen, hvor
+    klemningen står i det felt, brugeren netop har rørt, og siger noget om det
+    tastetryk, hun lige har lavet. Har hun ikke set den dér og da, siger den
+    hende alligevel ikke noget bagefter. */
+const CLAMP_LIFETIME_MS = 5_000
 
 /** Fladen: topbjælken, navigatoren til venstre, resultatspalten i midten og
     inspektørskuffen til højre — en fast tredje spalte, der viser planens
@@ -64,6 +79,13 @@ export function App({
 }) {
   const [plan, setPlan] = useState(initialPlan)
   const [selected, setSelected] = useState<Selection>(null)
+  // Den seneste redigering, en grænse greb ind i, jf. ADR-0045. Den er
+  // hverken plandata eller en udledning af planen: efter snappet er planen
+  // gyldig, og der findes ikke længere spor af, hvad brugeren prøvede. Den
+  // bor her frem for i felterne, fordi et *træk* ellers ville være tavst —
+  // feltet ser kun en ny værdi komme ind fra planen og kan ikke skelne et
+  // klemt træk fra et skift af valgt figur.
+  const [lastClamp, setLastClamp] = useState<Clamp | null>(null)
   const [resultView, setResultView] = useState<ResultView>('Planner')
   // Hvilken af de tre grafer der står som hovedgraf, jf. ADR-0033. Løftet
   // herop af samme grund som `resultView`: en kasseret plan skal nulstille
@@ -100,6 +122,30 @@ export function App({
     savePlan(plan)
   }, [plan, loadError])
 
+  // Klemningen dør også af sig selv, jf. `CLAMP_LIFETIME_MS`. Uret hænger på
+  // beskeden selv og ikke på feltet: en ny klemning er et nyt objekt, og
+  // oprydningen stiller derfor uret om frem for at lade den første besked
+  // rive den anden med sig.
+  useEffect(() => {
+    if (lastClamp === null) return
+    const timer = setTimeout(() => setLastClamp(null), CLAMP_LIFETIME_MS)
+    return () => clearTimeout(timer)
+  }, [lastClamp])
+
+  /** Vælger en figur, og lader klemningen dø med det forrige valg. Beskeden
+      hører til den redigering, der lige blev rettet, og en ny figur i skuffen
+      er ikke den.
+
+      Kun et *skift* slår den ihjel. Den samme figur valgt igen er ikke et nyt
+      emne — og et træk i en boks ender med, at browseren fyrer et klik på
+      den, fordi trækket både begyndte og endte dér. Ryddede det klikket
+      klemningen, ville trækkets besked være væk i samme øjeblik, musen
+      slap. */
+  function select(next: Selection) {
+    setSelected(next)
+    if (!sameSelection(selected, next)) setLastClamp(null)
+  }
+
   function explainYear(year: number) {
     if (resultView !== 'YearExplanation') setReturnView(resultView)
     setExplainedYear(year)
@@ -122,7 +168,7 @@ export function App({
       øjeblik. Derfor stilles spørgsmålet før dette kald og ikke her. */
   function handleDelete() {
     setPlan(defaultPlan())
-    setSelected(null)
+    select(null)
     setExplainedYear(null)
     setResultView('Planner')
     setReturnView('Planner')
@@ -274,7 +320,7 @@ export function App({
             plan={plan}
             period={period}
             selected={selected}
-            onSelect={setSelected}
+            onSelect={select}
             onChange={setPlan}
           />
         </div>
@@ -367,7 +413,13 @@ export function App({
                     mainGraph={mainGraph}
                     onMainGraphChange={setMainGraph}
                   />
-                  <Timeline plan={plan} selected={selected} onSelect={setSelected} onChange={setPlan} />
+                  <Timeline
+                    plan={plan}
+                    selected={selected}
+                    onSelect={select}
+                    onClamp={setLastClamp}
+                    onChange={setPlan}
+                  />
                 </>
               ) : (
                 <YearTable years={years} plan={plan} unit={unit} onSelectYear={explainYear} />
@@ -381,8 +433,10 @@ export function App({
             plan={plan}
             years={years}
             selected={selected}
+            clamp={lastClamp}
+            onClamp={setLastClamp}
             onChange={setPlan}
-            onClose={() => setSelected(null)}
+            onClose={() => select(null)}
           />
         </aside>
       </div>

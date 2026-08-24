@@ -2,7 +2,10 @@ import { withContribution, withEntry, withLifeAnnuity, withPayoutSchedule, withT
 import { yearAtAge, personLastYear } from '../engine/age'
 import { payoutYear } from '../engine/payoutAge'
 import { bearsPayoutSchedule } from '../engine/holdingVariant'
-import { payoutDurationBounds } from '../engine/validatePlan'
+import { boundValue, payoutDurationBounds, periodEndpointBounds } from '../engine/validatePlan'
+import type { Bounds } from '../engine/validatePlan'
+import { clampBy } from './fields'
+import type { Clamp } from './fields'
 import { isLifeAnnuity } from '../engine/lifeAnnuity'
 import type { LifeAnnuityHolding } from '../engine/lifeAnnuity'
 import type { AgeBound, PayoutScheduleHolding, Period, Person, Plan } from '../engine/plan'
@@ -11,6 +14,15 @@ import type { TimelineItem } from './timelineLayout'
 /** Hvilken del af en tidslinjeboks der trækkes: et af de to endepunkter, hele
     kroppen, eller et punkt uden udstrækning. */
 export type TimelineDragEdge = 'from' | 'to' | 'body' | 'point'
+
+/** Det, et træk efterlod: planen som den blev, og beskeden om den grænse, der
+    greb ind undervejs — hvis en gjorde.
+
+    Beskeden kan ikke udledes bagefter. Efter klemningen er planen gyldig, og
+    der findes ikke længere spor af, hvad trækket bad om; den må derfor følge
+    med ud herfra og huskes af `App`, jf. ADR-0045. Et træk har intet felt at
+    stå rødt i, og det er netop derfor, klemningen skal kunne tale. */
+export type TimelineDrag = { plan: Plan; clamp: Clamp | null }
 
 /** Anvender et træk på tidslinjen: forskyder det trukne endepunkt med
     `deltaYears` og skriver det tilbage gennem den `with*`-funktion, der
@@ -21,26 +33,49 @@ export function applyTimelineDrag(
   item: TimelineItem,
   edge: TimelineDragEdge,
   deltaYears: number,
-): Plan {
-  if (deltaYears === 0) return plan
+): TimelineDrag {
+  if (deltaYears === 0) return { plan, clamp: null }
 
   switch (item.target.kind) {
     case 'entry':
-      return withEntry(plan, item.target.id, (entry) => ({
-        ...entry,
-        period: shiftPeriod(entry.period, edge, deltaYears),
-      }))
-    case 'transfer':
-      return withTransfer(plan, item.target.id, (transfer) => ({
-        ...transfer,
-        period: shiftPeriod(transfer.period, edge, deltaYears),
-      }))
-    case 'contribution':
-      return withContribution(plan, item.target.id, (contribution) =>
-        contribution.kind === 'HoldingSourced'
-          ? { ...contribution, period: shiftPeriod(contribution.period, edge, deltaYears) }
-          : contribution,
+      return {
+        plan: withEntry(plan, item.target.id, (entry) => ({
+          ...entry,
+          period: shiftPeriod(entry.period, edge, deltaYears),
+        })),
+        clamp: null,
+      }
+    case 'transfer': {
+      // Overførslens ene grænse: den må ikke hente fra en ordning før dens
+      // pensionsudbetalingsalder. Grænsen regnes af `periodEndpointBounds` og
+      // ikke her — det er hele grunden til, at den funktion findes, jf.
+      // `clampPayoutDuration`.
+      const targetId = item.target.id
+      const transfer = plan.transfers.find((t) => t.id === targetId)
+      if (!transfer) return { plan, clamp: null }
+      const allowed = allowedShift(
+        transfer.period,
+        edge,
+        deltaYears,
+        periodEndpointBounds(plan, transfer, 'from'),
       )
+      return {
+        plan: withTransfer(plan, transfer.id, (t) => ({
+          ...t,
+          period: shiftPeriod(t.period, edge, allowed.deltaYears),
+        })),
+        clamp: allowed.clamp,
+      }
+    }
+    case 'contribution':
+      return {
+        plan: withContribution(plan, item.target.id, (contribution) =>
+          contribution.kind === 'HoldingSourced'
+            ? { ...contribution, period: shiftPeriod(contribution.period, edge, deltaYears) }
+            : contribution,
+        ),
+        clamp: null,
+      }
     case 'holding': {
       // En livrentes eneste håndtag er boksens venstre kant, klemt til de
       // grænser `validatePlan` alligevel ville afvise uden for, jf. ADR-0037;
@@ -54,29 +89,35 @@ export function applyTimelineDrag(
       const owner = plan.household.persons.find((person) => person.id === item.owner)!
       const holding = owner.holdings.find((h) => h.id === targetId)
       if (holding && isLifeAnnuity(holding)) {
-        return withLifeAnnuity(plan, targetId, (h) =>
-          h.payout
-            ? { ...h, payout: { start: clampLifeAnnuityStart(h.payout.start, deltaYears, h, owner) } }
-            : h,
-        )
+        return {
+          plan: withLifeAnnuity(plan, targetId, (h) =>
+            h.payout
+              ? { ...h, payout: { start: clampLifeAnnuityStart(h.payout.start, deltaYears, h, owner) } }
+              : h,
+          ),
+          clamp: null,
+        }
       }
       // Varianten skal være kendt, før grænserne kan slås op på den —
       // `withPayoutSchedule` beskytter sig selv mod resten, men
       // `payoutDurationBounds` har brug for ordningens egen
       // pensionsudbetalingsalder at måle med.
-      if (!holding || !bearsPayoutSchedule(holding)) return plan
+      if (!holding || !bearsPayoutSchedule(holding)) return { plan, clamp: null }
       const scheme = holding
-      return withPayoutSchedule(plan, targetId, (payout) =>
-        edge === 'to'
-          ? {
-              ...payout,
-              duration: clampPayoutDuration(payout.duration + deltaYears, scheme, owner, payout.start),
-            }
-          : { ...payout, start: clampPayoutStart(payout.start, deltaYears, scheme, owner) },
-      )
+      return {
+        plan: withPayoutSchedule(plan, targetId, (payout) =>
+          edge === 'to'
+            ? {
+                ...payout,
+                duration: clampPayoutDuration(payout.duration + deltaYears, scheme, owner, payout.start),
+              }
+            : { ...payout, start: clampPayoutStart(payout.start, deltaYears, scheme, owner) },
+        ),
+        clamp: null,
+      }
     }
     default:
-      return plan
+      return { plan, clamp: null }
   }
 }
 
@@ -158,6 +199,37 @@ function clampPayoutDuration(
 ): number {
   const { min, max } = payoutDurationBounds(holding, owner, start)
   return Math.min(Math.max(duration, min), max)
+}
+
+/** Det træk, grænserne tillader — og beskeden om den grænse, der greb ind.
+
+    Klemningen rammer *bevægelsen* og ikke endepunktet. Et træk i kroppen
+    flytter posten og ændrer den ikke: klemtes kun `from`, ville boksen skrumpe
+    af en bevægelse, og trækkes der langt nok, ville den vende om og beskrive
+    en periode, der slutter, før den begynder. Standses bevægelsen i stedet,
+    står boksen stille ved væggen med sin egen længde i behold. For et håndtag
+    er de to det samme: dér flytter trækket kun det ene endepunkt, og det er
+    netop det, brugeren tog fat i, jf. ADR-0045.
+
+    Målt på `from` efter trækket. Er det endepunkt ikke et tal — åbent eller
+    sat til erhvervsophør — er der intet at måle, og der er heller intet
+    håndtag at have trukket i. Trækkes `to`, står `from` stille, og grænsen kan
+    ikke være brudt af trækket.
+
+    Feltnøglen er `from`s egen, den samme som skuffen tegner feltet med, så
+    beskeden kan finde vej hen til det felt, væggen står ved. */
+function allowedShift(
+  period: Period,
+  edge: TimelineDragEdge,
+  deltaYears: number,
+  bounds: Bounds,
+): { deltaYears: number; clamp: Clamp | null } {
+  const shifted = shiftPeriod(period, edge, deltaYears).from
+  if (typeof shifted !== 'number' || bounds.min === undefined) return { deltaYears, clamp: null }
+
+  const floor = boundValue(bounds.min)
+  if (shifted >= floor) return { deltaYears, clamp: null }
+  return { deltaYears: deltaYears + (floor - shifted), clamp: clampBy('Period.from', bounds.min) }
 }
 
 function shiftPeriod(period: Period, edge: TimelineDragEdge, deltaYears: number): Period {

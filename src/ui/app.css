@@ -715,6 +715,19 @@ table.aar th,
   line-height: 1.5;
 }
 
+/* Klemningen står som en Hint, men i advarslens farve: den siger noget om
+   den redigering, der lige blev rettet, og ikke noget om planen — og den
+   forsvinder igen, hvor en Hint bliver stående, jf. ADR-0045. */
+.klemning {
+  color: var(--advarsel);
+  background: var(--advarsel-svag);
+  border-radius: 4px;
+  font-size: 11px;
+  margin: 4px 0 0;
+  padding: 4px 6px;
+  line-height: 1.5;
+}
+
 /* ---------- besked (planen kan ikke simuleres) ---------- */
 
 .besked {

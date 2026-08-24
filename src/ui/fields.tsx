@@ -1,6 +1,8 @@
 import type { ChangeEvent, ReactNode } from 'react'
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import type { AgeBound } from '../engine/plan'
+import { boundReason, boundValue } from '../engine/validatePlan'
+import type { Bound, Bounds } from '../engine/validatePlan'
 import { fieldHelp, type FieldHelpKey } from './fieldHelp'
 import { formatNumber, parseNumber } from './planEdits'
 
@@ -43,6 +45,41 @@ export function Hint({ children }: { children: ReactNode }) {
   return <p className="hint">{children}</p>
 }
 
+/** Beskeden om, at den redigering, der lige blev foretaget, blev rettet af en
+    grænse — og hvilken.
+
+    Den er hverken en feltforklaring eller en `Hint`, jf. ADR-0045. En
+    forklaring er statisk og gælder feltet; en `Hint` er en ren funktion af
+    den plan, der ligger på skærmen. Denne er ingen af delene: efter snappet
+    er planen gyldig, og der findes ikke længere spor af, hvad brugeren
+    prøvede. Den huskes derfor af `App` og dør, når valget skifter, eller når
+    næste redigering går igennem uklemt — skrevet som en `Hint` ville den
+    blive stående for evigt.
+
+    `field` er feltets egen forklaringsnøgle. Skuffen viser hver nøgle højst
+    én gang, og et *træk* på tidslinjen kan dermed pege på det felt, det ramte,
+    uden at kende den komponent, der tegner det. */
+export type Clamp = { field: FieldHelpKey; message: string }
+
+/** Klemningen, en grænse melder, når den greb ind i et bestemt felt — eller
+    intet, hvis grænsen ingen begrundelse bærer.
+
+    Ét sted, fordi tre spørger: feltet, der klemte det tastede, håndtaget, der
+    klemte et træk, og løftet, et skift af overførslens afgiver medfører. De
+    møder den samme væg og skal sige det samme om den. */
+export function clampBy(field: FieldHelpKey, bound: Bound | undefined): Clamp | null {
+  const message = boundReason(bound)
+  return message === undefined ? null : { field, message }
+}
+
+function ClampNote({ children }: { children: ReactNode }) {
+  return (
+    <p className="klemning" role="status">
+      {children}
+    </p>
+  )
+}
+
 /** Rammen om ét felt i skuffen: etiketten til venstre, kontrollen og enheden
     til højre. Rammen ejer id'et og rækker det videre til kontrollen — etiket
     og værdikolonne er søskende i en flexrække og kan ikke bygges om til en
@@ -54,6 +91,7 @@ function Field({
   label,
   help,
   unit,
+  clamp,
   children,
 }: {
   label: string
@@ -62,19 +100,29 @@ function Field({
       felters kontroller flugter ned gennem sektionen. En `UnitToggle` er
       også en enhed: den vælger imellem dem og hører derfor til her. */
   unit?: ReactNode
+  /** Fladens seneste klemning, hvor den end kom fra. Noten vises kun, når
+      den peger på netop dette felt — rammen kender feltets nøgle og skal
+      derfor ikke have besked to gange om, hvem den er. */
+  clamp?: Clamp | null
   children: (id: string) => ReactNode
 }) {
   const id = useId()
+  // Noten står uden for `.felt`, som er en flexrække: inde i den ville
+  // beskeden lægge sig ved siden af kontrollen i stedet for under den, som
+  // `AgeBoundField`s tilvalg allerede har vist.
   return (
-    <div className="felt">
-      <label htmlFor={id} title={fieldHelp[help]}>
-        {label}
-      </label>
-      <span className="vaerdi">
-        {children(id)}
-        <span className="enhed">{unit ?? ''}</span>
-      </span>
-    </div>
+    <>
+      <div className="felt">
+        <label htmlFor={id} title={fieldHelp[help]}>
+          {label}
+        </label>
+        <span className="vaerdi">
+          {children(id)}
+          <span className="enhed">{unit ?? ''}</span>
+        </span>
+      </div>
+      {clamp?.field === help && <ClampNote>{clamp.message}</ClampNote>}
+    </>
   )
 }
 
@@ -116,6 +164,14 @@ export function TextField({
     siger 7. Kommer værdien udefra — en anden beholdning valgt i navigatoren,
     en import, en fortrydelse — viger teksten på samme måde.
 
+    Skellet mellem de to slags ændring er den værdi, feltet selv sidst sendte
+    af sted, og ikke om teksten stadig parser til planens tal. De to er kun
+    det samme, så længe `parse` er en oversættelse; klemmer den, oversætter
+    den ikke længere entydigt, og mange forskellige tekster giver den samme
+    værdi. Et felt, der blev løftet udefra fra 2028 til 2033, ville da blive
+    stående med "2028", fordi netop dén tekst også klemmes til 2033 — og
+    teksten ville lyve om planen.
+
     Krogen hviler på, at `parse(format(v))` er `v`; se `formatNumber`. Den
     modsatte vej gælder ikke og skal ikke gælde: `format(parse("7,"))` er
     netop den omskrivning, feltet ikke må lave, mens der tastes. */
@@ -123,7 +179,10 @@ function useNumberText<T>(
   value: T,
   format: (value: T) => string,
   parse: (text: string) => T,
-  onChange: (value: T) => void,
+  /** Teksten følger med værdien ud, så et felt med grænser kan se, hvad der
+      blev tastet, og ikke kun hvad planen fik. Forskellen mellem de to *er*
+      klemningen. */
+  onChange: (value: T, text: string) => void,
 ): {
   value: string
   onChange: (event: ChangeEvent<HTMLInputElement>) => void
@@ -131,37 +190,60 @@ function useNumberText<T>(
 } {
   const [text, setText] = useState(() => format(value))
   const [lastValue, setLastValue] = useState(value)
+  // Det, feltet selv sidst sendte af sted. Et ref og ikke tilstand: det er
+  // ikke noget, der skal tegnes, kun noget den næste tegning skal kunne
+  // spørge om.
+  const sent = useRef<{ value: T } | null>(null)
 
   if (!Object.is(value, lastValue)) {
     setLastValue(value)
-    if (parse(text) !== value) setText(format(value))
+    if (sent.current === null || !Object.is(sent.current.value, value)) setText(format(value))
   }
 
   return {
     value: text,
     onChange: (event) => {
+      const parsed = parse(event.target.value)
+      sent.current = { value: parsed }
       setText(event.target.value)
-      onChange(parse(event.target.value))
+      onChange(parsed, event.target.value)
     },
     onBlur: () => setText(format(value)),
   }
 }
 
-/** Et talfelts nedre og øvre grænse. Værdien, feltet giver videre, klemmes
-    ind i dem, så almindelig indtastning ikke kan skrive en plan, motoren
-    afviser — reglen selv står i `validatePlan`, fordi en importeret fil ikke
-    er gået gennem et felt, og grænsen her er dens venlige udgave.
-
-    Det er værdien, der klemmes, og ikke teksten: den bliver stående, mens der
-    tastes, så et felt med en nedre grænse på ti stadig kan tastes ét ciffer
-    ad gangen. Først når feltet forlades, retter teksten sig ind efter den
-    værdi, planen faktisk fik. */
-export type Bounds = { min?: number; max?: number }
-
+/** Grænserne selv står i `validatePlan` ved siden af den regel, de er den
+    venlige udgave af — se `Bounds` dér. Her klemmes værdien og ikke teksten:
+    teksten bliver stående, mens der tastes, så et felt med en nedre grænse på
+    ti stadig kan tastes ét ciffer ad gangen. Først når feltet forlades,
+    retter teksten sig ind efter den værdi, planen faktisk fik. */
 function clampTo(value: number, bounds: Bounds | undefined): number {
   if (bounds === undefined) return value
-  const atLeast = bounds.min === undefined ? value : Math.max(value, bounds.min)
-  return bounds.max === undefined ? atLeast : Math.min(atLeast, bounds.max)
+  const atLeast = bounds.min === undefined ? value : Math.max(value, boundValue(bounds.min))
+  return bounds.max === undefined ? atLeast : Math.min(atLeast, boundValue(bounds.max))
+}
+
+/** Det, et tømt felt falder tilbage på: den nedre grænse, hvor der er en.
+    Er endepunktet påkrævet — en udbetalingsplan skal begynde et sted — er
+    tomt ikke et svar, og grænsen er det nærmeste gyldige. */
+function emptyFallsBackTo(bounds: Bounds | undefined): number | undefined {
+  return bounds?.min === undefined ? undefined : boundValue(bounds.min)
+}
+
+/** Klemningen, en redigering udløste — eller intet, hvis det tastede gik
+    igennem, som det blev tastet.
+
+    Grænsen uden en begrundelse melder intet. Den slags vægge kan ses i
+    forvejen, og en besked om noget synligt er støj, jf. `Bound`. */
+function clampedBy(
+  typed: number | undefined,
+  bounds: Bounds | undefined,
+  field: FieldHelpKey,
+): Clamp | null {
+  if (typed === undefined) return null
+  const clamped = clampTo(typed, bounds)
+  if (clamped === typed) return null
+  return clampBy(field, clamped > typed ? bounds?.min : bounds?.max)
 }
 
 /** Tomt betyder "ikke sat" — et åbent periodeendepunkt, altså fra planens
@@ -211,18 +293,38 @@ export function OptionalNumberField({
   help,
   unit,
   value,
+  bounds,
+  clamp,
+  onClamp,
   onChange,
 }: {
   label: string
   help: FieldHelpKey
   unit?: ReactNode
   value: number | undefined
+  /** Udeladt betyder et frit tal, og feltet kan da stå tomt — sådan skrives
+      et åbent periodeendepunkt. Er en nedre grænse sat, falder et tømt felt
+      tilbage på den, ganske som i `AgeBoundField`. Se `Bounds`. */
+  bounds?: Bounds
+  clamp?: Clamp | null
+  onClamp?: (clamp: Clamp | null) => void
   onChange: (value: number | undefined) => void
 }) {
-  const tal = useNumberText(value, formatOptional, parseOptional, onChange)
+  const tal = useNumberText(
+    value,
+    formatOptional,
+    (text) => {
+      const parsed = parseOptional(text)
+      return parsed === undefined ? emptyFallsBackTo(bounds) : clampTo(parsed, bounds)
+    },
+    (next, text) => {
+      onClamp?.(clampedBy(parseOptional(text), bounds, help))
+      onChange(next)
+    },
+  )
 
   return (
-    <Field label={label} help={help} unit={unit}>
+    <Field label={label} help={help} unit={unit} clamp={clamp}>
       {(id) => <input id={id} type="text" inputMode="decimal" className="tal" {...tal} />}
     </Field>
   )
@@ -262,7 +364,7 @@ export function AgeBoundField({
     (bound) => (bound === 'WorkEndAge' ? formatNumber(workEndAge) : formatOptional(bound)),
     (text) => {
       const parsed = parseOptional(text)
-      return parsed === undefined ? bounds?.min : clampTo(parsed, bounds)
+      return parsed === undefined ? emptyFallsBackTo(bounds) : clampTo(parsed, bounds)
     },
     onChange,
   )

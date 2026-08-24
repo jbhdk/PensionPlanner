@@ -10,7 +10,7 @@ import {
   payoutTaxation,
 } from './holdingVariant'
 import { payoutStartYear, payoutYear, transferAllowedFrom } from './payoutAge'
-import { periodBounds } from './age'
+import { periodBounds, yearAtAge } from './age'
 import type {
   AgeBound,
   ContributionAmount,
@@ -19,8 +19,11 @@ import type {
   Holding,
   HoldingId,
   PensionSchemeHolding,
+  Period,
   Person,
   Plan,
+  SimulationYear,
+  Transfer,
 } from './plan'
 
 /** Planen skal beskrive noget, der kan eksistere, før motoren kan regne på
@@ -331,6 +334,81 @@ export function payoutDurationBounds(
   const latest = payoutYear(holding, owner) + latestPayoutYearsAfterPayoutAge
   const room = latest - payoutStartYear(start, owner) + 1
   return { min: minimumPayoutYears, max: Math.max(minimumPayoutYears, room) }
+}
+
+/** En grænse: tallet alene, eller tallet og den besked, fladen siger, når den
+    greb ind.
+
+    Beskeden følger med grænsen frem for at blive skrevet dér, hvor den vises.
+    Håndtaget og feltet møder den samme væg, og de skal ikke kunne komme til
+    at sige hver sit om den, jf. ADR-0045. Den udelades, hvor væggen kan ses i
+    forvejen — postens egen anden kant, eller tidslinjens — for en besked om
+    noget synligt er støj. */
+export type Bound = number | { value: number; reason: string }
+
+/** Et felts nedre og øvre grænse. Værdien, feltet giver videre, klemmes ind i
+    dem, så almindelig indtastning ikke kan skrive en plan, motoren afviser —
+    reglen selv står her i indgangskontrollen, fordi en importeret fil ikke er
+    gået gennem et felt, og grænsen er dens venlige udgave. */
+export type Bounds = { min?: Bound; max?: Bound }
+
+/** Tallet i en grænse — det, der klemmes imod, uanset om grænsen bærer en
+    begrundelse. */
+export function boundValue(bound: Bound): number {
+  return typeof bound === 'number' ? bound : bound.value
+}
+
+/** Begrundelsen i en grænse, hvor der er en. Er der ingen, siger fladen
+    ingenting: væggen kan ses i forvejen. */
+export function boundReason(bound: Bound | undefined): string | undefined {
+  return typeof bound === 'object' ? bound.reason : undefined
+}
+
+/** Grænserne for ét af en overførsels to periodeendepunkter.
+
+    I dag er der én regel at svare på: overførslen må ikke hente fra en
+    ordning før dens pensionsudbetalingsalder. En hævning før den koster 20 %
+    i afgift og er ikke noget, planen skal kunne beskrive, jf. ADR-0022 — og
+    `transferEnds` afviser den plan. Grænsen står her ved siden af
+    afvisningen, så håndtaget, feltet og afvisningen ikke kan komme til at
+    sige hver sit; det er den samme grund, `payoutDurationBounds` findes af.
+
+    Svaret er i endepunktets egen enhed: et årstal til en kalenderårsforankret
+    periode, en alder til en aldersforankret. Alderen findes ved at flytte den
+    alder, endepunktet står på, lige så mange år som kalenderåret skal flytte
+    sig — samme oversættelse som `clampLifeAnnuityStart`. Den bevarer en
+    brøkalder, hvor et årstal minus fødselsåret ville have tabt halvåret.
+    Står endepunktet åbent, er der ingen alder at flytte, og alderen i
+    grænseåret er svaret. */
+export function periodEndpointBounds(
+  plan: Plan,
+  transfer: Transfer,
+  endpoint: 'from' | 'to',
+): Bounds {
+  if (endpoint === 'to') return {}
+  const from = holdingsById(plan).get(transfer.from)
+  const owner = ownersByHolding(plan).get(transfer.from)
+  if (from === undefined || owner === undefined || !isPensionScheme(from)) return {}
+
+  const door = payoutYear(from, owner)
+  return {
+    min: {
+      value: inEndpointUnit(transfer.period, endpoint, door, owner),
+      reason: `Beholdningen ${from.name} må tidligst udbetales i ${door}.`,
+    },
+  }
+}
+
+function inEndpointUnit(
+  period: Period,
+  endpoint: 'from' | 'to',
+  year: SimulationYear,
+  owner: Person,
+): number {
+  if (period.anchor === 'CalendarYear') return year
+  const standing = period[endpoint]
+  if (typeof standing !== 'number') return year - owner.birthYear
+  return standing + (year - yearAtAge(owner, standing))
 }
 
 /** En variant, personen kun kan have én af, må ikke stå to gange hos samme

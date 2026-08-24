@@ -58,7 +58,7 @@ describe('Timeline', () => {
   it('tegner en periodepost som en boks i sin gruppe', () => {
     const plan = aPlan({ entries: [aSalary({ amountInRealKroner: 600_000 })] })
 
-    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />)
+    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />)
 
     const box = screen.getByRole('button', { name: 'Løn' })
     expect(box.className).toContain('tl-boks')
@@ -76,7 +76,7 @@ describe('Timeline', () => {
       ],
     })
 
-    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />)
+    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />)
 
     const box = screen.getByRole('button', { name: 'Løn' })
     expect(box.style.left).toBe(`${(2030 - 2026) * 18}px`)
@@ -96,7 +96,7 @@ describe('Timeline', () => {
       ],
     })
 
-    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />)
+    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />)
 
     const point = screen.getByRole('button', { name: 'Arv' })
     expect(point.className).toContain('tl-punkt')
@@ -110,7 +110,7 @@ describe('Timeline', () => {
     const plan = aPlan({ entries: [aSalary({ amountInRealKroner: 600_000 })] })
     const onSelect = vi.fn()
 
-    render(<Timeline plan={plan} selected={null} onSelect={onSelect} onChange={() => {}} />)
+    render(<Timeline plan={plan} selected={null} onSelect={onSelect} onClamp={() => {}} onChange={() => {}} />)
     await user.click(screen.getByRole('button', { name: 'Løn' }))
 
     expect(onSelect).toHaveBeenCalledWith({ kind: 'entry', id: 'salary' })
@@ -129,7 +129,7 @@ describe('Timeline', () => {
     })
     const onSelect = vi.fn()
 
-    render(<Timeline plan={plan} selected={null} onSelect={onSelect} onChange={() => {}} />)
+    render(<Timeline plan={plan} selected={null} onSelect={onSelect} onClamp={() => {}} onChange={() => {}} />)
     await user.click(screen.getByRole('button', { name: 'Arv' }))
 
     expect(onSelect).toHaveBeenCalledWith({ kind: 'entry', id: 'inheritance' })
@@ -141,7 +141,7 @@ describe('Timeline', () => {
       .find((g) => g.name === 'IncomeEntries')!
       .items[0]!.color
 
-    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />)
+    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />)
 
     // jsdom normaliserer en hex-farve til rgb(), når den læses tilbage fra
     // `style` — sammenligningen går derfor gennem samme normalisering i
@@ -165,7 +165,7 @@ describe('Timeline', () => {
     })
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />,
     )
 
     const box = screen.getByRole('button', { name: 'Løn' })
@@ -180,7 +180,7 @@ describe('Timeline', () => {
     const plan = aPlan({ entries: [aSalary({ amountInRealKroner: 600_000 })] })
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />,
     )
 
     const box = screen.getByRole('button', { name: 'Løn' })
@@ -197,7 +197,7 @@ describe('Timeline', () => {
       ],
     })
 
-    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />)
+    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />)
 
     await user.click(screen.getByRole('button', { name: /Indtægter/ }))
 
@@ -213,7 +213,7 @@ describe('Timeline', () => {
     const plan = aPlan()
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />,
     )
 
     const aarraekke = container.querySelector('.tl-akse-raekke.aar') as HTMLElement
@@ -224,7 +224,7 @@ describe('Timeline', () => {
     const plan = aTwoPersonPlan()
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />,
     )
 
     // 2058: Jesper (f. 1973) er 85 — inden for sin horisont på 90.
@@ -247,7 +247,7 @@ describe('Timeline', () => {
       ],
     })
 
-    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />)
+    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />)
 
     const top = (name: string) => screen.getByRole('button', { name }).style.top
     expect(top('A')).not.toBe(top('B'))
@@ -264,7 +264,7 @@ describe('Timeline', () => {
     })
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />,
     )
 
     expect(container.querySelectorAll('.tl-haandtag')).toHaveLength(2)
@@ -283,7 +283,7 @@ describe('Timeline', () => {
     })
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />,
     )
 
     expect(container.querySelectorAll('.tl-haandtag')).toHaveLength(0)
@@ -301,7 +301,7 @@ describe('Timeline', () => {
     const onChange = vi.fn()
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />,
     )
 
     const handle = container.querySelector('.tl-haandtag.fra') as HTMLElement
@@ -326,7 +326,7 @@ describe('Timeline', () => {
     const onChange = vi.fn()
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />,
     )
 
     const handle = container.querySelector('.tl-haandtag.fra') as HTMLElement
@@ -349,7 +349,7 @@ describe('Timeline', () => {
     const onChange = vi.fn()
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />,
     )
 
     const handle = container.querySelector('.tl-haandtag.fra') as HTMLElement
@@ -373,7 +373,7 @@ describe('Timeline', () => {
     })
     const onChange = vi.fn()
 
-    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />)
+    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />)
 
     const box = screen.getByRole('button', { name: 'Løn' })
     expect(box.className).toContain('krop-fri')
@@ -398,7 +398,7 @@ describe('Timeline', () => {
     })
     const onChange = vi.fn()
 
-    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />)
+    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />)
 
     const box = screen.getByRole('button', { name: 'Løn' })
     expect(box.className).not.toContain('krop-fri')
@@ -427,7 +427,7 @@ describe('Timeline', () => {
     const onChange = vi.fn()
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />,
     )
 
     expect(container.querySelectorAll('.tl-haandtag.fra')).toHaveLength(0)
@@ -448,7 +448,7 @@ describe('Timeline', () => {
     const onChange = vi.fn()
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />,
     )
 
     const krop = container.querySelector('.tl-krop') as HTMLElement
@@ -463,7 +463,7 @@ describe('Timeline', () => {
     const plan = aTwoPersonPlan()
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />,
     )
 
     // Jesper: født 1973, ophør 58 → 2031. Anne: født 1975, ophør 62 → 2037.
@@ -479,7 +479,7 @@ describe('Timeline', () => {
     const onChange = vi.fn()
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />,
     )
 
     const handle = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
@@ -496,7 +496,7 @@ describe('Timeline', () => {
     const onChange = vi.fn()
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />,
     )
 
     const handle = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
@@ -522,7 +522,7 @@ describe('Timeline', () => {
     const onChange = vi.fn()
 
     const { container, rerender } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />,
     )
 
     const handle = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
@@ -530,7 +530,7 @@ describe('Timeline', () => {
     fireEvent.mouseMove(window, { clientX: 3 * 18 })
 
     const nextPlan = onChange.mock.calls[0]![0] as Plan
-    rerender(<Timeline plan={nextPlan} selected={null} onSelect={() => {}} onChange={onChange} />)
+    rerender(<Timeline plan={nextPlan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />)
 
     // Ny workEndAge 61 → 'to'-rollen løser til 2033.
     const box = screen.getByRole('button', { name: 'Løn' })
@@ -549,7 +549,7 @@ describe('Timeline', () => {
     const onChange = vi.fn()
 
     const { container, rerender } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />,
     )
 
     const handle = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
@@ -559,7 +559,7 @@ describe('Timeline', () => {
     const nextPlan = onChange.mock.calls[0]![0] as Plan
     expect(nextPlan.entries[0]).toMatchObject({ period: { from: 2030, to: 2035 } })
 
-    rerender(<Timeline plan={nextPlan} selected={null} onSelect={() => {}} onChange={onChange} />)
+    rerender(<Timeline plan={nextPlan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />)
     const box = screen.getByRole('button', { name: 'Løn' })
     expect(box.style.left).toBe(`${(2030 - 2026) * 18}px`)
   })
@@ -568,7 +568,7 @@ describe('Timeline', () => {
     const plan = aTwoPersonPlan()
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={() => {}} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />,
     )
 
     const lines = container.querySelectorAll('.tl-ophoer')
@@ -584,7 +584,7 @@ describe('Timeline', () => {
     const onChange = vi.fn()
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />,
     )
 
     const handle = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
@@ -604,7 +604,7 @@ describe('Timeline', () => {
     const onChange = vi.fn()
 
     const { container } = render(
-      <Timeline plan={plan} selected={null} onSelect={() => {}} onChange={onChange} />,
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />,
     )
 
     const handle = container.querySelector('.tl-ophoer-greb[data-person="jesper"]') as HTMLElement
@@ -630,7 +630,7 @@ describe('Timeline', () => {
       <Timeline
         plan={plan}
         selected={{ kind: 'entry', id: 'salary' }}
-        onSelect={() => {}}
+        onSelect={() => {}} onClamp={() => {}}
         onChange={() => {}}
       />,
     )

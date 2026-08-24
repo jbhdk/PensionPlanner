@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgeBound, Holding, PayoutSchedule, Plan } from '../engine/plan'
+import type { AgeBound, Holding, PayoutSchedule, Period, Plan } from '../engine/plan'
 import {
   aContribution,
   aHolding,
@@ -4482,6 +4482,247 @@ describe('fladen', () => {
 
     await user.click(screen.getByRole('button', { name: 'Tilbage til planlæggeren' }))
     expect(document.querySelector('.graf-lag')).toBeTruthy()
+  })
+
+  describe('klemningen, der siger hvorfor', () => {
+    /** En aldersopsparing, der tømmes af en overførsel fra 2040. Ordningens
+        pensionsudbetalingsalder er 60, og fixturens ejer er født i juni 1973
+        — døren går op i 2033, og alt før det er den grænse, fladen skal
+        klemme til. */
+    function aPlanWithOldAgeSavingsPayout(period?: Period): Plan {
+      return {
+        ...aPlan({ holdings: [anOldAgeSavings('aldersopsparing', 'Aldersopsparing')] }),
+        transfers: [
+          aTransfer({
+            from: 'aldersopsparing',
+            to: 'free-assets',
+            amountInRealKroner: 50_000,
+            period: period ?? { anchor: 'CalendarYear', from: 2040 },
+          }),
+        ],
+      }
+    }
+
+    it('lader ikke et tastet startår ligge før afgiverens pensionsudbetalingsalder', async () => {
+      // Planen ville blive afvist af `transferEnds`, og hele resultatspalten
+      // ville forsvinde, mens brugeren ledte efter, hvad hun gjorde galt.
+      // Værdien snapper i stedet til det år, døren går op, jf. ADR-0045.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithOldAgeSavingsPayout()} />)
+
+      await user.click(navigatorButton(/Overførslen/))
+      const fra = () => screen.getByLabelText('Fra (år)') as HTMLInputElement
+      await user.clear(fra())
+      await user.type(fra(), '2030')
+      await user.tab()
+
+      expect(fra().value).toBe('2033')
+      expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+    })
+
+    it('siger hvilken grænse der greb ind, og nævner ordningen ved planens navn', async () => {
+      // Væggen er usynlig: aksen har intet mærke for en ordnings
+      // pensionsudbetalingsalder, og uden beskeden ville feltet blot rette
+      // sig selv uden at sige hvorfor.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithOldAgeSavingsPayout()} />)
+
+      await user.click(navigatorButton(/Overførslen/))
+      await user.clear(screen.getByLabelText('Fra (år)'))
+      await user.type(screen.getByLabelText('Fra (år)'), '2030')
+
+      expect(
+        screen.getByText('Beholdningen Aldersopsparing må tidligst udbetales i 2033.'),
+      ).toBeTruthy()
+    })
+
+    it('siger det, når et skift af afgiver løfter starten til den nye dør', async () => {
+      // Løftet er der i forvejen — uden det ville ét klik på afgiverlisten
+      // gøre hele planen uregnelig. Det var bare tavst, og brugeren så et
+      // årstal, hun ikke havde tastet, uden at få at vide hvorfor.
+      const user = userEvent.setup()
+      render(
+        <App
+          initialPlan={{
+            ...aPlan({
+              holdings: [
+                aFreeHolding('anden-beholdning', 'Anden beholdning'),
+                anOldAgeSavings('aldersopsparing', 'Aldersopsparing'),
+              ],
+            }),
+            transfers: [
+              aTransfer({
+                from: 'anden-beholdning',
+                to: 'free-assets',
+                amountInRealKroner: 50_000,
+                period: { anchor: 'CalendarYear', from: 2028, to: 2045 },
+              }),
+            ],
+          }}
+        />,
+      )
+
+      await user.click(navigatorButton(/Overførslen/))
+      await user.selectOptions(screen.getByLabelText('Fra'), 'Aldersopsparing')
+
+      expect((screen.getByLabelText('Fra (år)') as HTMLInputElement).value).toBe('2033')
+      expect(
+        screen.getByText('Beholdningen Aldersopsparing må tidligst udbetales i 2033.'),
+      ).toBeTruthy()
+      // Kun det, valget rørte, viger: slutåret står, hvor det stod.
+      expect((screen.getByLabelText('Til (år)') as HTMLInputElement).value).toBe('2045')
+    })
+
+    it('svarer i alder, når overførslens periode er aldersforankret', async () => {
+      // Grænsen er et kalenderår — 2033 — men feltet spørger om en alder, og
+      // et årstal tastet ind i et aldersfelt ville være vrøvl. Jesper fylder
+      // 60 i 2033, og alderen er dermed 60.
+      const user = userEvent.setup()
+      render(
+        <App initialPlan={aPlanWithOldAgeSavingsPayout({ anchor: 'PersonAge', from: 62 })} />,
+      )
+
+      await user.click(navigatorButton(/Overførslen/))
+      const fra = () => screen.getByLabelText('Fra (alder)') as HTMLInputElement
+      await user.clear(fra())
+      await user.type(fra(), '55')
+      await user.tab()
+
+      expect(fra().value).toBe('60')
+      expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+    })
+
+    it('viser trækkets klemning i skuffen, fordi et greb også vælger figuren', async () => {
+      // Boksen standser i den blå luft: aksen har intet mærke for ordningens
+      // pensionsudbetalingsalder. Beskeden er derfor den eneste forklaring, og
+      // den kan kun læses, hvis skuffen står åben på den figur, der blev
+      // trukket i.
+      render(
+        <App
+          initialPlan={aPlanWithOldAgeSavingsPayout({
+            anchor: 'CalendarYear',
+            from: 2035,
+            to: 2045,
+          })}
+        />,
+      )
+
+      const handle = document.querySelector('.tl-haandtag.fra') as HTMLElement
+      fireEvent.mouseDown(handle, { clientX: 0 })
+      // Fem år tilbage på tidslinjens egen skala — 18 px pr. år.
+      fireEvent.mouseMove(window, { clientX: -5 * 18 })
+      fireEvent.mouseUp(window)
+
+      expect(
+        screen.getByText('Beholdningen Aldersopsparing må tidligst udbetales i 2033.'),
+      ).toBeTruthy()
+      expect((screen.getByLabelText('Fra (år)') as HTMLInputElement).value).toBe('2033')
+    })
+
+    it('lader klemningen overleve det klik, browseren fyrer, når boksen slippes', () => {
+      // Et træk i kroppen begynder og ender på boksens egen knap, og
+      // browseren fyrer derfor et klik oven på museslippet. Klikket vælger
+      // figuren igen — den samme, den var — og ryddede det klemningen, ville
+      // beskeden være væk i samme øjeblik, musen slap.
+      render(
+        <App
+          initialPlan={aPlanWithOldAgeSavingsPayout({
+            anchor: 'CalendarYear',
+            from: 2035,
+            to: 2045,
+          })}
+        />,
+      )
+
+      const boks = document.querySelector('.tl-boks') as HTMLElement
+      fireEvent.mouseDown(boks, { clientX: 0 })
+      fireEvent.mouseMove(window, { clientX: -5 * 18 })
+      fireEvent.mouseUp(window)
+      fireEvent.click(boks)
+
+      expect(
+        screen.getByText('Beholdningen Aldersopsparing må tidligst udbetales i 2033.'),
+      ).toBeTruthy()
+    })
+
+    it('lader klemningen dø af sig selv fem sekunder efter, at boksen er sluppet', () => {
+      // Beskeden hører til det ene øjeblik, hvor grænsen greb ind, og
+      // brugeren står og ser på netop det, hun rørte. Den skal stå længe nok
+      // til at blive læst efter et slip, og ikke længere.
+      vi.useFakeTimers()
+      try {
+        render(
+          <App
+            initialPlan={aPlanWithOldAgeSavingsPayout({
+              anchor: 'CalendarYear',
+              from: 2035,
+              to: 2045,
+            })}
+          />,
+        )
+
+        const handle = document.querySelector('.tl-haandtag.fra') as HTMLElement
+        fireEvent.mouseDown(handle, { clientX: 0 })
+        fireEvent.mouseMove(window, { clientX: -5 * 18 })
+        fireEvent.mouseUp(window)
+
+        act(() => void vi.advanceTimersByTime(4_000))
+        expect(document.querySelector('.klemning')).toBeTruthy()
+
+        act(() => void vi.advanceTimersByTime(1_500))
+        expect(document.querySelector('.klemning')).toBeNull()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('lader klemningen dø, når næste redigering af feltet går igennem uklemt', async () => {
+      // Beskeden hører til den ene redigering, den rettede. Blev den stående,
+      // var den en Hint — og en Hint om noget, planen ikke længere siger.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithOldAgeSavingsPayout()} />)
+
+      await user.click(navigatorButton(/Overførslen/))
+      const fra = () => screen.getByLabelText('Fra (år)') as HTMLInputElement
+      await user.clear(fra())
+      await user.type(fra(), '2030')
+      expect(document.querySelector('.klemning')).toBeTruthy()
+
+      await user.clear(fra())
+      await user.type(fra(), '2040')
+
+      expect(document.querySelector('.klemning')).toBeNull()
+    })
+
+    it('lader klemningen dø, når valget skifter', async () => {
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithOldAgeSavingsPayout()} />)
+
+      await user.click(navigatorButton(/Overførslen/))
+      await user.clear(screen.getByLabelText('Fra (år)'))
+      await user.type(screen.getByLabelText('Fra (år)'), '2030')
+      expect(document.querySelector('.klemning')).toBeTruthy()
+
+      await user.click(navigatorButton(/Aldersopsparing/))
+      await user.click(navigatorButton(/Overførslen/))
+
+      expect(document.querySelector('.klemning')).toBeNull()
+    })
+
+    it('lader et tømt Fra-felt falde tilbage på grænsen frem for at stå åbent', async () => {
+      // Tomt betyder ellers "fra planens start" — og dét år ligger før døren.
+      // Er endepunktet påkrævet, er grænsen det nærmeste gyldige svar, ganske
+      // som i et aldersfelt med en nedre grænse.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithOldAgeSavingsPayout()} />)
+
+      await user.click(navigatorButton(/Overførslen/))
+      const fra = () => screen.getByLabelText('Fra (år)') as HTMLInputElement
+      await user.clear(fra())
+      await user.tab()
+
+      expect(fra().value).toBe('2033')
+    })
   })
 
   describe('eksport og import', () => {

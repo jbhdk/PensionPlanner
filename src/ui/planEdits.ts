@@ -10,8 +10,9 @@ import {
 import { isLifeAnnuity, newLifeAnnuity } from '../engine/lifeAnnuity'
 import type { LifeAnnuityHolding } from '../engine/lifeAnnuity'
 import { periodBounds } from '../engine/age'
-import { payoutYear } from '../engine/payoutAge'
-import { minimumPayoutYears } from '../engine/validatePlan'
+import { boundValue, minimumPayoutYears, periodEndpointBounds } from '../engine/validatePlan'
+import { clampBy } from './fields'
+import type { Clamp } from './fields'
 import type {
   AgeBound,
   AllocationLine,
@@ -24,6 +25,7 @@ import type {
   PayoutSchedule,
   PensionAgreement,
   PensionSchemeHolding,
+  Period,
   Person,
   Plan,
   Transfer,
@@ -500,38 +502,66 @@ export function withTransferEnd(
   id: string,
   end: 'from' | 'to',
   holding: string,
-): Plan {
-  return withTransfer(plan, id, (transfer) => {
-    const other = end === 'from' ? 'to' : 'from'
-    const moved = { ...transfer, [end]: holding }
-    if (transfer[other] !== holding) return openDoorFor(plan, moved)
+): { plan: Plan; clamp: Clamp | null } {
+  const transfer = findTransfer(plan, id)
+  if (!transfer) return { plan, clamp: null }
 
-    const displaced = transfer[end]
-    if (transferEndOptions(plan, other).some((option) => option.id === displaced)) {
-      return openDoorFor(plan, { ...transfer, from: transfer.to, to: transfer.from })
-    }
+  const opened = openDoorFor(plan, withEnd(plan, transfer, end, holding))
+  return {
+    plan: withTransfer(plan, id, () => opened.transfer),
+    clamp: opened.clamp,
+  }
+}
 
-    const replacement = transferEndOptions(plan, other).find((option) => option.id !== holding)
-    return replacement ? openDoorFor(plan, { ...moved, [other]: replacement.id }) : transfer
-  })
+/** Overførslen med den ene ende sat — byttet med, hvor de to ellers ville
+    pege samme sted. Starten er ikke løftet endnu; det er `openDoorFor`s
+    arbejde, og de to er skilt ad, så byttet kan læses uden døren og omvendt. */
+function withEnd(plan: Plan, transfer: Transfer, end: 'from' | 'to', holding: string): Transfer {
+  const other = end === 'from' ? 'to' : 'from'
+  const moved = { ...transfer, [end]: holding }
+  if (transfer[other] !== holding) return moved
+
+  const displaced = transfer[end]
+  if (transferEndOptions(plan, other).some((option) => option.id === displaced)) {
+    return { ...transfer, from: transfer.to, to: transfer.from }
+  }
+
+  const replacement = transferEndOptions(plan, other).find((option) => option.id !== holding)
+  return replacement ? { ...moved, [other]: replacement.id } : transfer
 }
 
 /** Løfter overførslens start til afgiverens `PayoutAge`, hvis den ligger før.
     En overførsel, der begynder for tidligt, afvises af `validatePlan`, og et
     endeknap-valg skal ikke kunne gøre hele planen uregnelig — det er samme
     grund, som lader en ny udbetalingsplan begynde på ordningens tidligste
-    lovlige alder. Ligger starten allerede efter døren, røres den ikke. */
-function openDoorFor(plan: Plan, transfer: Transfer): Transfer {
-  const from = plan.household.persons
-    .flatMap((person) => person.holdings)
-    .find((holding) => holding.id === transfer.from)
-  const owner = findHoldingOwner(plan, transfer.from)
-  if (!from || !owner || !isPensionScheme(from)) return transfer
+    lovlige alder. Ligger starten allerede efter døren, røres den ikke.
 
-  const door = payoutYear(from, owner)
-  const start = periodBounds(transfer.period, owner).from
-  if (start !== undefined && start >= door) return transfer
-  return { ...transfer, period: { anchor: 'CalendarYear', from: door } }
+    Grænsen slås op i `periodEndpointBounds`, den samme, håndtaget og feltet
+    bruger, og løftet siger derfor det samme som dem. Det var tavst indtil
+    ADR-0045: brugeren så et årstal, hun ikke havde tastet, uden at få at vide
+    hvorfor.
+
+    Kun starten viger. Forankringen og slutåret står, hvor de stod — det er
+    afgiveren, brugeren rørte, og ikke perioden. */
+function openDoorFor(plan: Plan, transfer: Transfer): { transfer: Transfer; clamp: Clamp | null } {
+  const bounds = periodEndpointBounds(plan, transfer, 'from')
+  const owner = findHoldingOwner(plan, transfer.from)
+  if (bounds.min === undefined || owner === undefined) return { transfer, clamp: null }
+
+  const floor = boundValue(bounds.min)
+  // Begge sider måles i kalenderår. Grænsen er i endepunktets egen enhed, og
+  // det står endepunktet også — men en alder og et årstal kan ikke
+  // sammenlignes, og et endepunkt, der følger erhvervsophøret, er slet ikke
+  // et tal. Et åbent `from` betyder planens start, ganske som i
+  // `transferEnds`.
+  const asYear = (from: Period['from']) =>
+    periodBounds({ ...transfer.period, from } as Period, owner).from ?? plan.startYear
+  if (asYear(transfer.period.from) >= asYear(floor)) return { transfer, clamp: null }
+
+  return {
+    transfer: { ...transfer, period: { ...transfer.period, from: floor } as Period },
+    clamp: clampBy('Period.from', bounds.min),
+  }
 }
 
 /** Den tyndeste overførsel, der kan tilføjes: fra og til det første lovlige
@@ -557,7 +587,7 @@ export function addTransfer(plan: Plan): Plan {
     recurrence: { kind: 'Annual' },
   }
 
-  return { ...plan, transfers: [...plan.transfers, openDoorFor(plan, fresh)] }
+  return { ...plan, transfers: [...plan.transfers, openDoorFor(plan, fresh).transfer] }
 }
 
 /** De to første beholdninger, en overførsel kan gå mellem — og dermed også

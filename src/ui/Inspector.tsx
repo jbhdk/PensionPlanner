@@ -34,7 +34,8 @@ import { latestRateYear } from '../engine/rates/rates'
 import { conversionFactor, isLifeAnnuity } from '../engine/lifeAnnuity'
 import type { LifeAnnuityHolding } from '../engine/lifeAnnuity'
 import { payoutYear } from '../engine/payoutAge'
-import { payoutDurationBounds } from '../engine/validatePlan'
+import { payoutDurationBounds, periodEndpointBounds } from '../engine/validatePlan'
+import type { Bounds } from '../engine/validatePlan'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
 import type { YearResult } from '../engine/yearResult'
 import {
@@ -53,6 +54,7 @@ import {
   variants,
 } from './danish'
 import { entryNote, entryPeriodLabel } from './entryNote'
+import type { Clamp } from './fields'
 import {
   AgeBoundField,
   CheckboxField,
@@ -115,6 +117,8 @@ export function Inspector({
   plan,
   years,
   selected,
+  clamp,
+  onClamp,
   onChange,
   onClose,
 }: {
@@ -124,6 +128,12 @@ export function Inspector({
       jf. ADR-0012. Tom, når planen ikke kunne simuleres. */
   years: YearResult[]
   selected: Selection
+  /** Fladens seneste klemning — også en, der kom fra et træk på tidslinjen.
+      Skuffen ejer den ikke; den viser den ved det felt, den peger på. */
+  clamp: Clamp | null
+  /** Meldes ved hver redigering af et felt med grænser: klemningen, hvis
+      grænsen greb ind, ellers intet — og så dør den forrige. */
+  onClamp: (clamp: Clamp | null) => void
   onChange: (plan: Plan) => void
   /** Rydder markeringen. Ingen knap kalder den længere — skuffen er en fast
       spalte og har intet at lukke, jf. ADR-0035 — men en slettet linje må
@@ -179,6 +189,8 @@ export function Inspector({
           <TransferFields
             plan={plan}
             id={target.id}
+            clamp={clamp}
+            onClamp={onClamp}
             onChange={onChange}
             onClose={onClose}
           />
@@ -1328,10 +1340,6 @@ function ContributionAmountField({
     muligheder ud, og et aldersendepunkt har sit eget felt med sin egen
     henvisning til erhvervsophøret.
 
-    Overførslen står udenfor. Dens periode er kalenderår alene og bærer ingen
-    `anchor` at skifte på — den har ingen ejer at binde en alder til, jf.
-    `Transfer` — og den kunne kun komme med her ved at ændre det gemte skema.
-
     `children` er de felter, der hører til netop denne figurs periode og
     ingen andens: postens reguleringssats og dens note. */
 type Periodic = { period: Period; recurrence: Recurrence; timing: Timing }
@@ -1340,6 +1348,9 @@ function PeriodSection({
   value,
   owner,
   startYear,
+  bounds,
+  clamp,
+  onClamp,
   onChange,
   children,
 }: {
@@ -1348,6 +1359,12 @@ function PeriodSection({
   owner: Person
   /** Året et `Én gang`-felt falder tilbage på, når intet endepunkt er sat. */
   startYear: number
+  /** De to endepunkters grænser, slået op af den figur, perioden hænger på —
+      afsnittet regner dem ikke selv, for reglerne er figurens og ikke
+      periodens. Udeladt betyder frie endepunkter. Se `Bounds`. */
+  bounds?: { from?: Bounds; to?: Bounds }
+  clamp?: Clamp | null
+  onClamp?: (clamp: Clamp | null) => void
   onChange: (next: Periodic) => void
   children?: ReactNode
 }) {
@@ -1413,6 +1430,9 @@ function PeriodSection({
             help="Period.from"
             unit="år"
             value={period.from}
+            bounds={bounds?.from}
+            clamp={clamp}
+            onClamp={onClamp}
             onChange={(from) => change({ period: { ...period, from } })}
           />
           <OptionalNumberField
@@ -1430,6 +1450,7 @@ function PeriodSection({
             help="Period.from"
             workEndAge={owner.workEndAge}
             value={period.from}
+            bounds={bounds?.from}
             onChange={(from) => change({ period: { ...period, from } })}
           />
           <AgeBoundField
@@ -1837,7 +1858,14 @@ function withAmountForm(
     : { id, name, kind, source, to, amountInRealKroner: 0 }
 }
 
-function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {
+function TransferFields({
+  plan,
+  id,
+  clamp,
+  onClamp,
+  onChange,
+  onClose,
+}: FieldsProps & { id: string; clamp: Clamp | null; onClamp: (clamp: Clamp | null) => void }) {
   const transfer = findTransfer(plan, id)
   const fromOwner = findHoldingOwner(plan, transfer?.from ?? '')
   if (!transfer || !fromOwner) return null
@@ -1870,6 +1898,15 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
   // aldersopsparing — men figuren hedder stadig en overførsel i glossaret og
   // i koden, jf. ADR-0022. En etiket og ikke et begreb, og derfor står de
   // bøjede former som tekst her og ikke som en regel, der bøjer dem.
+  /** Vælger den ene ende. Løftet af starten, valget kan medføre, taler
+      gennem den samme kanal som feltet og håndtaget — det var tavst indtil
+      ADR-0045. */
+  function chooseEnd(end: 'from' | 'to', holding: string) {
+    const chosen = withTransferEnd(plan, id, end, holding)
+    onChange(chosen.plan)
+    onClamp(chosen.clamp)
+  }
+
   const from = holdings.find((holding) => holding.id === transfer.from)
   const label =
     from && !isFreeAssets(from)
@@ -1903,14 +1940,14 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
           help="Transfer.from"
           value={holdingName(transfer.from)}
           options={sources.map((holding) => holding.name)}
-          onChange={(name) => onChange(withTransferEnd(plan, id, 'from', holdingByName[name]!))}
+          onChange={(name) => chooseEnd('from', holdingByName[name]!)}
         />
         <SelectField
           label="Til"
           help="Transfer.to"
           value={holdingName(transfer.to)}
           options={destinations.map((holding) => holding.name)}
-          onChange={(name) => onChange(withTransferEnd(plan, id, 'to', holdingByName[name]!))}
+          onChange={(name) => chooseEnd('to', holdingByName[name]!)}
         />
         <NumberField
           label="Beløb"
@@ -1941,6 +1978,9 @@ function TransferFields({ plan, id, onChange, onClose }: FieldsProps & { id: str
         value={transfer}
         owner={fromOwner}
         startYear={plan.startYear}
+        bounds={{ from: periodEndpointBounds(plan, transfer, 'from') }}
+        clamp={clamp}
+        onClamp={onClamp}
         onChange={(next) => onChange(withTransfer(plan, id, (t) => ({ ...t, ...next })))}
       >
         <Hint>

@@ -17,7 +17,7 @@ describe('applyTimelineDrag', () => {
 
     const next = applyTimelineDrag(plan, item, 'from', 3)
 
-    expect(next.entries[0]).toMatchObject({
+    expect(next.plan.entries[0]).toMatchObject({
       period: { anchor: 'CalendarYear', from: 2033, to: 2035 },
     })
   })
@@ -35,7 +35,7 @@ describe('applyTimelineDrag', () => {
 
     const next = applyTimelineDrag(plan, item, 'to', -2)
 
-    expect(next.entries[0]).toMatchObject({
+    expect(next.plan.entries[0]).toMatchObject({
       period: { anchor: 'CalendarYear', from: 2030, to: 2033 },
     })
   })
@@ -53,7 +53,7 @@ describe('applyTimelineDrag', () => {
 
     const next = applyTimelineDrag(plan, item, 'body', 4)
 
-    expect(next.entries[0]).toMatchObject({
+    expect(next.plan.entries[0]).toMatchObject({
       period: { anchor: 'CalendarYear', from: 2034, to: 2039 },
     })
   })
@@ -73,7 +73,7 @@ describe('applyTimelineDrag', () => {
 
     const next = applyTimelineDrag(plan, item, 'from', 3)
 
-    expect(next.entries[0]).toMatchObject({
+    expect(next.plan.entries[0]).toMatchObject({
       period: { anchor: 'PersonAge', from: 60, to: 62 },
     })
   })
@@ -93,7 +93,7 @@ describe('applyTimelineDrag', () => {
 
     const next = applyTimelineDrag(plan, item, 'body', 2)
 
-    expect(next.transfers[0]).toMatchObject({
+    expect(next.plan.transfers[0]).toMatchObject({
       period: { anchor: 'CalendarYear', from: 2032, to: 2037 },
     })
   })
@@ -116,7 +116,7 @@ describe('applyTimelineDrag', () => {
 
     const next = applyTimelineDrag(plan, item, 'to', 1)
 
-    expect(next.contributions[0]).toMatchObject({
+    expect(next.plan.contributions[0]).toMatchObject({
       period: { anchor: 'CalendarYear', from: 2030, to: 2036 },
     })
   })
@@ -140,7 +140,7 @@ describe('applyTimelineDrag', () => {
 
     const next = applyTimelineDrag(plan, item, 'from', 2)
 
-    const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
+    const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
     expect(holding).toMatchObject({ payout: { start: 69, duration: 15 } })
   })
 
@@ -163,7 +163,7 @@ describe('applyTimelineDrag', () => {
 
     const next = applyTimelineDrag(plan, item, 'to', 3)
 
-    const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
+    const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
     expect(holding).toMatchObject({ payout: { start: 67, duration: 18 } })
   })
 
@@ -188,7 +188,7 @@ describe('applyTimelineDrag', () => {
     // klemning: fem år tilbage ville lande på 62, og trækket standser på 67.
     const next = applyTimelineDrag(plan, item, 'from', -5)
 
-    const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
+    const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
     expect(holding).toMatchObject({ payout: { start: 67, duration: 15 } })
   })
 
@@ -213,7 +213,7 @@ describe('applyTimelineDrag', () => {
     // udbetales over mindst ti — den nedre grænse er feltets egen.
     const next = applyTimelineDrag(plan, item, 'to', -10)
 
-    const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
+    const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
     expect(holding).toMatchObject({ payout: { start: 67, duration: 10 } })
   })
 
@@ -239,7 +239,7 @@ describe('applyTimelineDrag', () => {
     // klemmes derned og ikke til de 65, trækket bad om.
     const next = applyTimelineDrag(plan, item, 'to', 50)
 
-    const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
+    const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
     expect(holding).toMatchObject({ payout: { start: 67, duration: 31 } })
   })
 
@@ -265,7 +265,7 @@ describe('applyTimelineDrag', () => {
 
     const next = applyTimelineDrag(plan, item, 'from', -1)
 
-    const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'livrente')!
+    const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'livrente')!
     expect(holding).toMatchObject({ payout: { start: 67 } })
   })
 
@@ -293,8 +293,85 @@ describe('applyTimelineDrag', () => {
     // — trækket klemmes, det bliver ikke afvist bagefter.
     const next = applyTimelineDrag(plan, item, 'from', -5)
 
-    const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'livrente')!
+    const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'livrente')!
     expect(holding).toMatchObject({ payout: { start: 67 } })
+  })
+
+  it('klemmer en overførsels fra-håndtag til afgiverens pensionsudbetalingsalder og siger hvorfor', () => {
+    // Væggen er usynlig på tidslinjen: aksen har intet mærke for en ordnings
+    // pensionsudbetalingsalder, og boksen ville standse i den blå luft. Derfor
+    // følger beskeden med trækket, jf. ADR-0045.
+    const plan = aPlan({
+      holdings: [
+        aHolding({
+          id: 'aldersopsparing',
+          name: 'Aldersopsparing',
+          variant: 'OldAgeSavings',
+          balance: 500_000,
+          payoutAge: 60,
+        }),
+      ],
+      transfers: [
+        aTransfer({
+          from: 'aldersopsparing',
+          to: 'free-assets',
+          amountInRealKroner: 50_000,
+          period: { anchor: 'CalendarYear', from: 2035, to: 2045 },
+        }),
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'Transfers')!.items[0]!
+
+    // Jesper fylder 60 i 2033 (jf. aPlan), og fem år tilbage fra 2035 ville
+    // lande i 2030 — trækket standser på døren.
+    const next = applyTimelineDrag(plan, item, 'from', -5)
+
+    expect(next.plan.transfers[0]).toMatchObject({
+      period: { anchor: 'CalendarYear', from: 2033, to: 2045 },
+    })
+    expect(next.clamp).toEqual({
+      field: 'Period.from',
+      message: 'Beholdningen Aldersopsparing må tidligst udbetales i 2033.',
+    })
+  })
+
+  it('standser hele overførselsboksen ved døren, når det er kroppen, der trækkes', () => {
+    // Et træk i kroppen flytter posten; det ændrer den ikke. Klemtes kun
+    // `from`, ville boksen skrumpe af en bevægelse — og trækkes der langt nok,
+    // ville den vende om og beskrive en periode, der slutter, før den
+    // begynder. Det er bevægelsen, der standser ved væggen.
+    const plan = aPlan({
+      holdings: [
+        aHolding({
+          id: 'aldersopsparing',
+          name: 'Aldersopsparing',
+          variant: 'OldAgeSavings',
+          balance: 500_000,
+          payoutAge: 60,
+        }),
+      ],
+      transfers: [
+        aTransfer({
+          from: 'aldersopsparing',
+          to: 'free-assets',
+          amountInRealKroner: 50_000,
+          period: { anchor: 'CalendarYear', from: 2035, to: 2045 },
+        }),
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'Transfers')!.items[0]!
+
+    // Fem år tilbage ville lande på 2030, og døren er i 2033: der er kun to
+    // års bevægelse at få, og de gælder begge ender.
+    const next = applyTimelineDrag(plan, item, 'body', -5)
+
+    expect(next.plan.transfers[0]).toMatchObject({
+      period: { anchor: 'CalendarYear', from: 2033, to: 2043 },
+    })
+    expect(next.clamp).toEqual({
+      field: 'Period.from',
+      message: 'Beholdningen Aldersopsparing må tidligst udbetales i 2033.',
+    })
   })
 
   it('klemmer livrentens fra-håndtag til ét år før ejerens horisont, ikke længere op', () => {
@@ -321,7 +398,7 @@ describe('applyTimelineDrag', () => {
     // — ét år før det, 89, er det seneste boksen selv kan vise uden at vende om.
     const next = applyTimelineDrag(plan, item, 'from', 30)
 
-    const holding = next.household.persons[0]!.holdings.find((h) => h.id === 'livrente')!
+    const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'livrente')!
     expect(holding).toMatchObject({ payout: { start: 89 } })
   })
 })
