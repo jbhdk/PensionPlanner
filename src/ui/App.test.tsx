@@ -4285,10 +4285,10 @@ describe('fladen', () => {
     await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!) // 2043
 
     const folkepension = screen.getByRole('heading', {
-      name: 'Folkepension og aftrapning af pensionstillæg',
+      name: 'Folkepension · Jesper',
       level: 3,
     }).parentElement as HTMLElement
-    expect(within(folkepension).getByText('Jesper: grundbeløb')).toBeTruthy()
+    expect(within(folkepension).getByText('Grundbeløb')).toBeTruthy()
     expect(within(folkepension).getByText('90.528')).toBeTruthy()
     // Planen har ingen indkomst, så aftrapningen tager intet: det fulde og
     // det aftrappede tillæg er det samme beløb, og det står to gange.
@@ -4339,7 +4339,7 @@ describe('fladen', () => {
     await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!) // 2043
 
     const blok = screen.getByRole('heading', {
-      name: 'Folkepension og aftrapning af pensionstillæg',
+      name: 'Folkepension · Jesper',
       level: 3,
     }).parentElement as HTMLElement
 
@@ -4359,7 +4359,7 @@ describe('fladen', () => {
 
     expect(
       screen.queryByRole('heading', {
-        name: 'Folkepension og aftrapning af pensionstillæg',
+        name: /^Folkepension ·/,
         level: 3,
       }),
     ).toBeNull()
@@ -4382,7 +4382,7 @@ describe('fladen', () => {
     const rows = within(screen.getByRole('table')).getAllByRole('row')
     await user.click(rows[1]!) // 2026
 
-    const blok = screen.getByRole('heading', { name: 'Jesper', level: 3 }).closest('.blok') as HTMLElement
+    const blok = screen.getByRole('heading', { name: 'Skat · Jesper', level: 3 }).closest('.blok') as HTMLElement
     const rowFor = (label: string) =>
       within(blok)
         .getByText(label)
@@ -4430,7 +4430,7 @@ describe('fladen', () => {
     await user.click(rows[1]!) // 2026
 
     const blok = screen
-      .getByRole('heading', { name: 'Jesper', level: 3 })
+      .getByRole('heading', { name: 'Skat · Jesper', level: 3 })
       .closest('.blok') as HTMLElement
     // Pensionsindkomsten lægges til efter AM-bidraget, ikke før: bidraget
     // måles af lønnen alene. 600.000 − 48.000 + 200.000 = 752.000.
@@ -4475,7 +4475,7 @@ describe('fladen', () => {
     const rows = within(screen.getByRole('table')).getAllByRole('row')
     await user.click(rows[1]!) // 2026
 
-    const blok = screen.getByRole('heading', { name: 'Jesper', level: 3 }).closest('.blok') as HTMLElement
+    const blok = screen.getByRole('heading', { name: 'Skat · Jesper', level: 3 }).closest('.blok') as HTMLElement
     // 700.000 − 56.000 − 64.400 = 579.600. Det er de 64.400, der landede, og
     // ikke de 70.000, der forlod lønnen: AM-bidraget måles af bruttolønnen.
     // Bidraget er holdt under ratepensionens loft, så linjen her viser
@@ -4501,7 +4501,7 @@ describe('fladen', () => {
     const rows = within(screen.getByRole('table')).getAllByRole('row')
     await user.click(rows[1]!) // 2026
 
-    const blok = screen.getByRole('heading', { name: 'Jesper', level: 3 }).closest('.blok') as HTMLElement
+    const blok = screen.getByRole('heading', { name: 'Skat · Jesper', level: 3 }).closest('.blok') as HTMLElement
     expect(within(blok).queryByText('Indbetaling med fradragsret')).toBeNull()
     expect(
       within(blok).getByText('Personlig indkomst').closest('.stribepost')!.querySelector('.v')!

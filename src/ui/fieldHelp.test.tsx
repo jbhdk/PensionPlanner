@@ -298,7 +298,7 @@ describe('feltforklaringerne', () => {
     await user.click(within(screen.getByRole('table')).getAllByRole('row')[1]!)
 
     const blok = screen.getByRole('heading', {
-      name: 'Folkepension og aftrapning af pensionstillæg',
+      name: 'Folkepension · Jesper',
       level: 3,
     }).parentElement as HTMLElement
 

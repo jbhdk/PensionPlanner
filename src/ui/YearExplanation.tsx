@@ -895,19 +895,22 @@ function HoldingsBlock({
 }
 
 /** Folkepensionen og aftrapningen af pensionstillægget, for de af husstandens
-    personer der har nået folkepensionsalderen.
+    personer der har nået folkepensionsalderen — ét kort pr. person, ganske
+    som skattekortene ovenfor, fordi grundlaget og aftrapningen er hver
+    persons egen. Kun aftrapningsgrundlagets ægtefællelinje krydser den
+    grænse, og den lever fint i kortet, der har brug for den.
 
     Blokken findes af samme grund som ydelseslinjerne: beløbene står ingen
     andre steder. Brugeren har hverken tastet dem eller året, de begynder i — de
     første læses af satsåret, det sidste udledes af fødselsdatoen — og uden
     blokken kunne indtægten i striben ikke føres tilbage til noget.
 
-    Den er en regnestribe og ikke en tabel, ganske som mock-uppens, fordi det
-    er en fratrækning der skal vises: hver bestanddel af aftrapningsgrundlaget
-    for sig, grundlaget som deres sum, fradragsbeløbet trukket fra og
-    aftrapningen taget af det fulde tillæg. Lagt sammen til færre linjer kunne
-    hverken grundlaget eller tillægget efterregnes, og det er netop det tal i
-    hele fremskrivningen, der er sværest at tro på. */
+    Hvert kort er en regnestribe og ikke en tabel, ganske som mock-uppens,
+    fordi det er en fratrækning der skal vises: hver bestanddel af
+    aftrapningsgrundlaget for sig, grundlaget som deres sum, fradragsbeløbet
+    trukket fra og aftrapningen taget af det fulde tillæg. Lagt sammen til
+    færre linjer kunne hverken grundlaget eller tillægget efterregnes, og det
+    er netop det tal i hele fremskrivningen, der er sværest at tro på. */
 function StatePensionBlock({
   plan,
   year,
@@ -927,8 +930,7 @@ function StatePensionBlock({
   if (rows.length === 0) return null
 
   return (
-    <div className="blok">
-      <h3>Folkepension og aftrapning af pensionstillæg</h3>
+    <div className="blokke">
       {rows.map(({ line, owner, spouse }) => {
         const { taper } = line
         // Aftrapningen er ikke et felt på linjen: den er de to tillæg trukket
@@ -937,84 +939,87 @@ function StatePensionBlock({
         const reduction = taper.fullSupplement - line.pensionSupplement
 
         return (
-          <div className="regnestribe" key={owner?.id ?? ''}>
-            <StripePost
-              help="StatePensionYear.basicAmount"
-              label={`${owner?.name ?? ''}: grundbeløb`}
-              amount={display(line.basicAmount)}
-            />
-            <StripePost
-              help="Taper.fullSupplement"
-              label="Pensionstillæg, fuldt"
-              amount={display(taper.fullSupplement)}
-            />
-            <StripePost
-              help="TaperBase.pensionIncome"
-              label="Aftrapningsgrundlag — udbetalinger og ATP"
-              amount={display(taper.base.pensionIncome)}
-              step="step"
-            />
-            <StripePost
-              help="TaperBase.capitalIncome"
-              label="Positiv kapitalindkomst"
-              amount={display(taper.base.capitalIncome)}
-              step="step"
-            />
-            <StripePost
-              help="TaperBase.shareIncome"
-              label="Aktieindkomst"
-              amount={display(taper.base.shareIncome)}
-              step="step"
-            />
-            {/* Linjen udebliver i en husstand med én person: en post om en
-                ægtefælles indkomst ville påstå en ægtefælle, der ikke er. */}
-            {spouse !== undefined && (
+          <div className="blok" key={owner?.id ?? ''}>
+            <h3>Folkepension · {owner?.name ?? ''}</h3>
+            <div className="regnestribe">
               <StripePost
-                help="TaperBase.spouse"
-                label={`${spouse.name}s indkomst efter ${procent(taper.spouseDisregard)} bortseelse`}
-                amount={display(taper.base.spouse)}
+                help="StatePensionYear.basicAmount"
+                label="Grundbeløb"
+                amount={display(line.basicAmount)}
+              />
+              <StripePost
+                help="Taper.fullSupplement"
+                label="Pensionstillæg, fuldt"
+                amount={display(taper.fullSupplement)}
+              />
+              <StripePost
+                help="TaperBase.pensionIncome"
+                label="Aftrapningsgrundlag — udbetalinger og ATP"
+                amount={display(taper.base.pensionIncome)}
                 step="step"
               />
-            )}
-            <StripePost
-              help="TaperBase.total"
-              label="Aftrapningsgrundlag i alt"
-              amount={display(totalTaperBase(taper.base))}
-              step="subtotal"
-            />
-            <StripePost
-              help="Taper.allowance"
-              label="Fradragsbeløb"
-              amount={display(-taper.allowance)}
-              step="step"
-            />
-            <StripePost
-              help="Taper.reduction"
-              label={`Aftrapning, ${procent(taper.rate)} af det overskydende`}
-              amount={display(-reduction)}
-            />
-            <StripePost
-              help="StatePensionYear.pensionSupplement"
-              label="Pensionstillæg efter aftrapning"
-              amount={display(line.pensionSupplement)}
-            />
-            <StripePost
-              help="StatePensionYear.total"
-              label="Folkepension i alt"
-              amount={display(line.basicAmount + line.pensionSupplement)}
-              step="total"
-            />
+              <StripePost
+                help="TaperBase.capitalIncome"
+                label="Positiv kapitalindkomst"
+                amount={display(taper.base.capitalIncome)}
+                step="step"
+              />
+              <StripePost
+                help="TaperBase.shareIncome"
+                label="Aktieindkomst"
+                amount={display(taper.base.shareIncome)}
+                step="step"
+              />
+              {/* Linjen udebliver i en husstand med én person: en post om en
+                  ægtefælles indkomst ville påstå en ægtefælle, der ikke er. */}
+              {spouse !== undefined && (
+                <StripePost
+                  help="TaperBase.spouse"
+                  label={`${spouse.name}s indkomst efter ${procent(taper.spouseDisregard)} bortseelse`}
+                  amount={display(taper.base.spouse)}
+                  step="step"
+                />
+              )}
+              <StripePost
+                help="TaperBase.total"
+                label="Aftrapningsgrundlag i alt"
+                amount={display(totalTaperBase(taper.base))}
+                step="subtotal"
+              />
+              <StripePost
+                help="Taper.allowance"
+                label="Fradragsbeløb"
+                amount={display(-taper.allowance)}
+                step="step"
+              />
+              <StripePost
+                help="Taper.reduction"
+                label={`Aftrapning, ${procent(taper.rate)} af det overskydende`}
+                amount={display(-reduction)}
+              />
+              <StripePost
+                help="StatePensionYear.pensionSupplement"
+                label="Pensionstillæg efter aftrapning"
+                amount={display(line.pensionSupplement)}
+              />
+              <StripePost
+                help="StatePensionYear.total"
+                label="Folkepension i alt"
+                amount={display(line.basicAmount + line.pensionSupplement)}
+                step="total"
+              />
+            </div>
+            <p className="hint">
+              Folkepensionen står ikke i planen. Beløbene kommer fra årets
+              officielle satser, og året, de begynder i, følger af
+              fødselsdatoen — den er hverken tastet eller til at skrue på.
+              Arbejdsindkomst, udbetaling fra en aldersopsparing og afkast på
+              en aktiesparekonto indgår ikke i grundlaget
+              {spouse ? `, og ${spouse.name}s arbejdsindkomst indgår slet ikke` : ''}.
+            </p>
           </div>
         )
       })}
-      <p className="hint">
-        Folkepensionen står ikke i planen. Beløbene kommer fra årets officielle
-        satser, og året, de begynder i, følger af fødselsdatoen — den er hverken
-        tastet eller til at skrue på. Arbejdsindkomst, udbetaling fra en
-        aldersopsparing og afkast på en aktiesparekonto indgår ikke i
-        grundlaget
-        {rows[0]?.spouse ? `, og ${rows[0].spouse.name}s arbejdsindkomst indgår slet ikke` : ''}.
-      </p>
     </div>
   )
 }
@@ -1282,7 +1287,7 @@ function PersonTaxBlock({
 
   return (
     <div className="blok">
-      <h3>{person.name}</h3>
+      <h3>Skat · {person.name}</h3>
       {/* Vejen fra bruttolønnen til den personlige indkomst, som den er
           tegnet i docs/mockup/flade.js. Fradragsretten står her og ikke nede
           blandt de ligningsmæssige fradrag, fordi den nedsætter den
