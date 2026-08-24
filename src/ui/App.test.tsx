@@ -4000,6 +4000,81 @@ describe('fladen', () => {
     expect(screen.queryByRole('heading', { name: 'Ydelserne', level: 3 })).toBeNull()
   })
 
+  it('udelader en livrenteydelse på nul, når ejerens eget forløb er ovre', async () => {
+    // Jespers forløb slutter i 2025 (født januar 1960, horisont 65), og
+    // motoren viser hans livrenteydelse som nul i årene derefter i stedet
+    // for at fjerne linjen, jf. ADR-0030. Marias eget forløb rækker længere,
+    // så båndet som helhed er ikke nul i 2026 — men Jespers nullede linje
+    // hører ikke til i en tabel over, hvad husstanden faktisk fik udbetalt.
+    const user = userEvent.setup()
+    const base = aPlan({
+      startYear: 2023,
+      birthYear: 1960,
+      birthMonth: 1,
+      horizon: 65,
+      holdings: [
+        {
+          id: 'jespers-livrente',
+          name: 'Jespers livrente',
+          variant: 'LifeAnnuity',
+          payoutAge: 63,
+          balance: 1_000_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+          quotedReserve: 1_000_000,
+          quotedAnnualBenefit: 51_200,
+          bonusRate: 0,
+          payout: { start: 63 },
+        },
+      ],
+    })
+    const jesper = base.household.persons[0]!
+    render(
+      <App
+        initialPlan={{
+          ...base,
+          household: {
+            persons: [
+              jesper,
+              {
+                ...jesper,
+                id: 'maria',
+                name: 'Maria',
+                horizon: 90,
+                holdings: [
+                  aFreeHolding('marias-frie-midler', 'Marias frie midler'),
+                  {
+                    id: 'marias-livrente',
+                    name: 'Marias livrente',
+                    variant: 'LifeAnnuity',
+                    payoutAge: 63,
+                    balance: 1_000_000,
+                    grossReturn: 0,
+                    annualCostRate: 0,
+                    quotedReserve: 1_000_000,
+                    quotedAnnualBenefit: 40_000,
+                    bonusRate: 0,
+                    payout: { start: 63 },
+                  },
+                ],
+              },
+            ],
+          },
+        }}
+      />,
+    )
+
+    await showYearTable(user)
+    await explainYear(user, 2026)
+
+    const ydelser = await openBand(user, 'Ydelser')
+    const names = within(ydelser)
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => within(row).getAllByRole('cell')[0]!.textContent)
+    expect(names).toEqual(['Marias livrente'])
+  })
+
   it('folder årets udbetalinger ud under deres bånd, én linje pr. ordning', async () => {
     // Båndets tal er summen af det, ordningerne tømte sig med. Står der ét
     // tal og to ordninger bag det, kan året ikke efterregnes — og det er

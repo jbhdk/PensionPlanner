@@ -1139,7 +1139,13 @@ function PayoutsTable({
     grundbeløb og pensionstillæg blev til det, er aftrapningens egen blok.
 
     Modtageren står på linjen, fordi skatten er personens: pengene lander på
-    bufferen uanset ejer, men beskatningen gør ikke. */
+    bufferen uanset ejer, men beskatningen gør ikke.
+
+    En livrente, hvis ejer er ude af sit eget forløb, står stadig blandt
+    årets ydelser, men med beløbet nul — motoren stopper indkomsten ved
+    ejerens sidste år, jf. ADR-0030, uden at fjerne linjen selv. Den nullede
+    linje udelades her, ganske som et bånd på nul gør det i striben ovenfor:
+    en ydelse på 0 kr. er ikke en oplysning, læseren har brug for. */
 function BenefitsTable({
   plan,
   year,
@@ -1164,12 +1170,15 @@ function BenefitsTable({
             },
           ]
         : []),
-      ...personYear.lifeAnnuityBenefits.map((benefit) => ({
-        key: benefit.holding,
-        name: holdings.find((holding) => holding.id === benefit.holding)?.name ?? benefit.holding,
-        owner,
-        amount: benefit.amount,
-      })),
+      ...personYear.lifeAnnuityBenefits
+        .filter((benefit) => benefit.amount !== 0)
+        .map((benefit) => ({
+          key: benefit.holding,
+          name:
+            holdings.find((holding) => holding.id === benefit.holding)?.name ?? benefit.holding,
+          owner,
+          amount: benefit.amount,
+        })),
     ]
   })
 
