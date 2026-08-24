@@ -181,7 +181,10 @@ export function Timeline({
   // Den musefølgende årsmarkør, jf. ADR-0038 — samme sprog som hovedgrafens
   // `YearCursor`, men tegnet i almindeligt HTML/CSS som resten af
   // tidslinjen, og med mærkatet stående i den faste akse foroven i stedet
-  // for forneden.
+  // for forneden. Ud over årstallet bærer den ét aldersmærkat pr. person,
+  // sat i personens egen aldersrække — og ligger bevidst over
+  // erhvervsophørs-grebet, når de to kolliderer, jf. `.tl-aarsmarkoer-etiket`s
+  // z-index i app.css.
   const [hoveredYear, setHoveredYear] = useState<SimulationYear | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   // Sidst committede tag — et ref og ikke tilstand, for `mousemove` skal
@@ -348,10 +351,25 @@ export function Timeline({
                 </div>
               </div>
             ))}
-            {markerLeft !== null && (
-              <div className="tl-aarsmarkoer-etiket" style={{ left: `${markerLeft}px` }}>
-                {hoveredYear}
-              </div>
+            {hoveredYear !== null && (
+              <>
+                <div className="tl-aarsmarkoer-etiket" style={{ left: `${markerLeft}px` }}>
+                  {hoveredYear}
+                </div>
+                {plan.household.persons.map((person, index) => {
+                  const age = hoveredYear - person.birthYear
+                  if (age < 0 || age > person.horizon) return null
+                  return (
+                    <div
+                      key={person.id}
+                      className="tl-aarsmarkoer-etiket"
+                      style={{ left: `${markerLeft}px`, top: `${AXIS_ROW_HEIGHT * (1 + index)}px` }}
+                    >
+                      {age}
+                    </div>
+                  )
+                })}
+              </>
             )}
           </div>
           <div

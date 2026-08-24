@@ -305,6 +305,42 @@ describe('Timeline', () => {
     expect(within(annesRaekke).queryByText('85')).toBeNull()
   })
 
+  it('viser årstal og hver persons alder på den musefølgende markør', () => {
+    const plan = aTwoPersonPlan()
+
+    const { container } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />,
+    )
+
+    const indhold = container.querySelector('.tl-indhold') as HTMLElement
+    // 2030 er 4 år inde i planen (start 2026), 18 px pr. år i testmiljøet.
+    fireEvent.mouseMove(indhold, { clientX: 4 * 18 })
+
+    const labels = [...container.querySelectorAll('.tl-aarsmarkoer-etiket')].map(
+      (label) => label.textContent,
+    )
+    // Jesper (f. 1973) er 57, Anne (f. 1975) er 55.
+    expect(labels).toEqual(['2030', '57', '55'])
+  })
+
+  it('udelader en persons aldersmærkat på markøren, når året ligger efter hendes egen horisont', () => {
+    const plan = aTwoPersonPlan()
+
+    const { container } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />,
+    )
+
+    const indhold = container.querySelector('.tl-indhold') as HTMLElement
+    // 2058 er 32 år inde: Jesper bliver 85 (inden for sin horisont på 90),
+    // Anne ville blive 83, men hendes horisont stopper ved 80.
+    fireEvent.mouseMove(indhold, { clientX: 32 * 18 })
+
+    const labels = [...container.querySelectorAll('.tl-aarsmarkoer-etiket')].map(
+      (label) => label.textContent,
+    )
+    expect(labels).toEqual(['2058', '85'])
+  })
+
   it('placerer to overlappende poster i hver sin række, lodret adskilt', () => {
     // A og B overlapper i 2028-2030 og skal derfor stå i hver sin række, jf.
     // timelineLayout.ts's pakning — komponenten skal afspejle den række,
