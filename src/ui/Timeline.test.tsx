@@ -85,6 +85,54 @@ describe('Timeline', () => {
     expect(box.style.width).toBe(`${(2035 - 2030 + 1) * 18}px`)
   })
 
+  it('lader kanten følge den tidligste post, uden at flytte hvad en post med åbent fra begynder', () => {
+    // Udgiften begynder i 2022, fire år før planens start, og trækker
+    // tidslinjens venstre kant derud — ellers ville dens boks få en negativ
+    // `left` og blive klippet væk af `overflow: auto`. Lønnens åbne `fra`
+    // betyder stadig planens startår, 2026, og ikke kanten.
+    const plan = aPlan({
+      entries: [
+        aSalary({ amountInRealKroner: 600_000 }),
+        anExpense({
+          amountInRealKroner: 300_000,
+          period: { anchor: 'CalendarYear', from: 2022, to: 2030 },
+        }),
+      ],
+    })
+
+    render(<Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />)
+
+    expect(screen.getByRole('button', { name: 'Faste udgifter' }).style.left).toBe('0px')
+    expect(screen.getByRole('button', { name: 'Løn' }).style.left).toBe(`${(2026 - 2022) * 18}px`)
+  })
+
+  it('giver ingen boks og intet punkt en negativ venstre kant, heller ikke før planens startår', () => {
+    // En negativ `left` klippes væk af `.tidslinje-rul`s `overflow: auto`
+    // uden at kunne rulles frem — posten ville dermed kun kunne reddes
+    // tilbage gennem Navigatoren og skuffen.
+    const plan = aPlan({
+      entries: [
+        anExpense({
+          amountInRealKroner: 300_000,
+          period: { anchor: 'CalendarYear', from: 2022, to: 2030 },
+        }),
+        aTaxFreeIncome({
+          amountInRealKroner: 100_000,
+          period: { anchor: 'CalendarYear', from: 2020 },
+          recurrence: { kind: 'Once' },
+        }),
+      ],
+    })
+
+    const { container } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />,
+    )
+
+    const figurer = [...container.querySelectorAll<HTMLElement>('.tl-boks, .tl-punkt, .tl-maerke')]
+    expect(figurer).not.toHaveLength(0)
+    expect(figurer.every((figur) => Number.parseFloat(figur.style.left) >= 0)).toBe(true)
+  })
+
   it('tegner en engangspost som et punkt uden udstrækning, ikke som en boks', () => {
     const plan = aPlan({
       entries: [
@@ -220,6 +268,27 @@ describe('Timeline', () => {
     expect(within(aarraekke).getByText('2026')).toBeTruthy()
   })
 
+  it('tegner kalenderårsrækken helt ud til den tidligste post, også når den ligger før planens startår', () => {
+    const plan = aPlan({
+      entries: [
+        anExpense({
+          amountInRealKroner: 300_000,
+          period: { anchor: 'CalendarYear', from: 2022, to: 2030 },
+        }),
+      ],
+    })
+
+    const { container } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={() => {}} />,
+    )
+
+    const aarraekke = container.querySelector('.tl-akse-raekke.aar') as HTMLElement
+    const kant = within(aarraekke).getByText('2022')
+    expect(kant.style.left).toBe('0px')
+    // Aksen og posterne måler fra den samme kant — 2025 ligger tre år inde.
+    expect(within(aarraekke).getByText('2025').style.left).toBe(`${3 * 18}px`)
+  })
+
   it('viser aldersrækken blank for en person efter hendes egen horisont, mens den anden persons stadig viser en alder', () => {
     const plan = aTwoPersonPlan()
 
@@ -312,6 +381,32 @@ describe('Timeline', () => {
     expect(onChange).toHaveBeenCalledTimes(1)
     const next = onChange.mock.calls[0]![0]
     expect(next.entries[0]).toMatchObject({ period: { from: 2033, to: 2035 } })
+  })
+
+  it('lader en post fra før planens startår trækkes på tidslinjen som enhver anden', () => {
+    const plan = aPlan({
+      entries: [
+        anExpense({
+          amountInRealKroner: 300_000,
+          period: { anchor: 'CalendarYear', from: 2022, to: 2030 },
+        }),
+      ],
+    })
+    const onChange = vi.fn()
+
+    const { container } = render(
+      <Timeline plan={plan} selected={null} onSelect={() => {}} onClamp={() => {}} onChange={onChange} />,
+    )
+
+    const handle = container.querySelector('.tl-haandtag.fra') as HTMLElement
+    // Kanten er 2022, så håndtaget sidder ved 0 og er inden for fladen.
+    expect(handle.style.left).toBe('0px')
+
+    fireEvent.mouseDown(handle, { clientX: 0 })
+    fireEvent.mouseMove(window, { clientX: 2 * 18 })
+
+    const next = onChange.mock.calls[0]![0] as Plan
+    expect(next.entries[0]).toMatchObject({ period: { from: 2024, to: 2030 } })
   })
 
   it('kalder ikke onChange, før musen har flyttet sig et helt snappet år', () => {

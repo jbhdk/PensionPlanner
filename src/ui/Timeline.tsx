@@ -172,7 +172,11 @@ export function Timeline({
   onChange: (plan: Plan) => void
 }) {
   const groups = timelineLayout(plan)
-  const { start, end } = timelineBounds(plan)
+  // `start` er aksens venstre kant og det, alle pixelpositioner måles fra;
+  // `openStart` er det år et *åbent* endepunkt betyder. De to falder sammen,
+  // indtil en post rækker til venstre for planens start, og må derfor ikke
+  // læses som ét tal, jf. `timelineBounds`.
+  const { start, openStart, end } = timelineBounds(plan)
   const [drag, setDrag] = useState<Drag | null>(null)
   // Den musefølgende årsmarkør, jf. ADR-0038 — samme sprog som hovedgrafens
   // `YearCursor`, men tegnet i almindeligt HTML/CSS som resten af
@@ -391,7 +395,7 @@ export function Timeline({
                           type="button"
                           key={targetKey(item.target)}
                           className={'tl-punkt' + (sameSelection(selected, item.target) ? ' valgt' : '')}
-                          style={pointStyle(endpointYear(item.at, start), start, item.row, yearWidth)}
+                          style={pointStyle(endpointYear(item.at, openStart), start, item.row, yearWidth)}
                           onMouseDown={item.at.kind === 'Free' ? startDrag(item, 'point') : undefined}
                           onClick={() => onSelect(item.target)}
                         >
@@ -401,7 +405,7 @@ export function Timeline({
                       )
                     }
 
-                    const fromYear = endpointYear(item.from, start)
+                    const fromYear = endpointYear(item.from, openStart)
                     const toYear = endpointYear(item.to, end)
                     const repeated = item.marks.length > 0
                     return (

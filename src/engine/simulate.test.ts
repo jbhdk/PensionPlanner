@@ -314,6 +314,33 @@ describe('simulate', () => {
     expect(expensesIn(2034)).toBe(420_000)
   })
 
+  it('lader en "Hvert N. år"-post med "Fra" før planens startår beholde sin fase', () => {
+    // `from` bærer fasen og ikke bare begyndelsen: "hvert 8. år fra 2022"
+    // falder i 2030 og 2038, hvor en klemning op til planens startår ville
+    // flytte den til 2026 og 2034. Det er derfor tidslinjens venstre kant
+    // flytter sig frem for at klemme posten, jf. ADR-0045.
+    const plan = aPlan({
+      startYear: 2026,
+      balance: 1_000_000,
+      inflationAssumption: 0,
+      entries: [
+        anExpense({
+          amountInRealKroner: 420_000,
+          period: { anchor: 'CalendarYear', from: 2022 },
+          recurrence: { kind: 'EveryNYears', n: 8 },
+        }),
+      ],
+    })
+
+    const years = simulateChecked(plan)
+    const expensesIn = (year: number) => years.find((y) => y.year === year)!.expenses
+
+    expect(expensesIn(2030)).toBe(420_000)
+    expect(expensesIn(2038)).toBe(420_000)
+    expect(expensesIn(2026)).toBe(0)
+    expect(expensesIn(2034)).toBe(0)
+  })
+
   it('forankrer en post til en fast alder, så perioden følger personens fødselsår', () => {
     const plan = aPlan({
       startYear: 2026,

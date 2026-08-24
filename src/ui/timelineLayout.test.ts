@@ -12,7 +12,7 @@ import {
   aTaxFreeIncome,
   aTransfer,
 } from '../engine/testing/planFixture'
-import { timelineLayout } from './timelineLayout'
+import { timelineBounds, timelineLayout } from './timelineLayout'
 
 describe('tidslinjens lag', () => {
   it('giver et item i indtægtsgruppen for en indtægtspost og ét i udgiftsgruppen for en udgiftspost', () => {
@@ -283,6 +283,29 @@ describe('tidslinjens lag', () => {
     expect(item.marks).toEqual([2026, 2031, 2036])
   })
 
+  it('beholder en "Hvert N. år"-posts fase, når dens from ligger før planens startår', () => {
+    // Samme fase som motorens `matchesRecurrence`: 2030, 2038 og 2046, og
+    // ikke 2026, 2034 og 2042, som en klemning op til startåret ville give.
+    // Mærket i 2022 er selve fasens udgangspunkt og står med, ganske som
+    // boksen selv rækker derud.
+    const plan = aPlan({
+      startYear: 2026,
+      entries: [
+        anExpense({
+          amountInRealKroner: 420_000,
+          period: { anchor: 'CalendarYear', from: 2022, to: 2050 },
+          recurrence: { kind: 'EveryNYears', n: 8 },
+        }),
+      ],
+    })
+
+    const groups = timelineLayout(plan)
+    const item = groups.find((g) => g.name === 'ExpenseEntries')!.items[0]!
+
+    if (item.point) throw new Error('posten skal være en periode, ikke et punkt')
+    expect(item.marks).toEqual([2022, 2030, 2038, 2046])
+  })
+
   it('giver ingen mærke-år til en post, der ikke gentages hvert N. år', () => {
     const plan = aPlan({ entries: [aSalary({ amountInRealKroner: 600_000 })] })
 
@@ -431,6 +454,52 @@ describe('tidslinjens lag', () => {
       colorOf('Transfers'),
     ])
     expect(categoryColors.size).toBe(4)
+  })
+
+  it('pakker en post med åbent fra fra planens startår, og ikke fra tidslinjens flyttede kant', () => {
+    // A slutter i 2025, året før planen begynder. B's åbne `fra` betyder
+    // planens startår 2026, og de to overlapper derfor ikke — læste
+    // pakningen i stedet kanten, 2022, ville B dække A og skubbe den i en
+    // række for sig.
+    const plan = aPlan({
+      startYear: 2026,
+      entries: [
+        {
+          ...anExpense({ amountInRealKroner: 1 }),
+          id: 'a',
+          name: 'A',
+          period: { anchor: 'CalendarYear', from: 2022, to: 2025 },
+        },
+        {
+          ...anExpense({ amountInRealKroner: 1 }),
+          id: 'b',
+          name: 'B',
+          period: { anchor: 'CalendarYear', to: 2030 },
+        },
+      ],
+    })
+
+    const expense = timelineLayout(plan).find((g) => g.name === 'ExpenseEntries')!
+
+    expect(expense.items.map((item) => item.row)).toEqual([0, 0])
+    expect(expense.rowCount).toBe(1)
+  })
+
+  it('flytter tidslinjens venstre kant ud til den tidligste post, uden at flytte hvad et åbent endepunkt betyder', () => {
+    const plan = aPlan({
+      startYear: 2026,
+      entries: [
+        anExpense({
+          amountInRealKroner: 420_000,
+          period: { anchor: 'CalendarYear', from: 2022, to: 2045 },
+        }),
+      ],
+    })
+
+    const bounds = timelineBounds(plan)
+
+    expect(bounds.start).toBe(2022)
+    expect(bounds.openStart).toBe(2026)
   })
 
   it('pakker to ikke-overlappende poster i samme række, selv om de har hver sin ejer', () => {

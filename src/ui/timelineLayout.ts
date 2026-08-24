@@ -133,14 +133,35 @@ function periodItem(
 /** Tidslinjens fem grupper, afledt af planen, jf. ADR-0036. Ingen egen
     tilstand — kaldes om ved hver ændring, ganske som `surplusBands`. */
 export function timelineLayout(plan: Plan): TimelineGroup[] {
+  const { openStart, openEnd } = openBounds(plan)
+  const items = buildItems(plan, openStart, openEnd)
+
+  return timelineGroupOrder.map((name) => {
+    const packed = pack(
+      items.filter((item) => item.group === name),
+      openStart,
+      openEnd,
+    )
+    return { name, items: packed.items, rowCount: packed.rowCount }
+  })
+}
+
+/** Planens poster som tidslinjens items, upakkede — hver med sine endepunkter
+    allerede opløst til kalenderår. Både `timelineLayout` og `timelineBounds`
+    bygger på den: kanten kan ikke findes uden at kende posterne, og de to må
+    aldrig komme til at læse den samme periode forskelligt. */
+function buildItems(
+  plan: Plan,
+  openStart: SimulationYear,
+  openEnd: SimulationYear,
+): TimelineItem[] {
   const personById = new Map(plan.household.persons.map((person) => [person.id, person]))
   const holdingOwner = new Map(
     plan.household.persons.flatMap((person) => person.holdings.map((holding) => [holding.id, person])),
   )
   const holdingIndex = new Map(orderedHoldings(plan.household).map((holding, index) => [holding.id, index]))
-  const { start: openStart, end: openEnd } = timelineBounds(plan)
 
-  const items: TimelineItem[] = [
+  return [
     ...plan.entries.map((entry) =>
       periodItem(
         {
@@ -236,26 +257,52 @@ export function timelineLayout(plan: Plan): TimelineGroup[] {
       }),
     ),
   ]
-
-  return timelineGroupOrder.map((name) => {
-    const packed = pack(
-      items.filter((item) => item.group === name),
-      openStart,
-      openEnd,
-    )
-    return { name, items: packed.items, rowCount: packed.rowCount }
-  })
 }
 
-/** Planens start og den seneste horisont, nogen af husstandens personer når —
-    start-/sluttidspunktet et åbent endepunkt bruges som, og de samme grænser
-    `Timeline.tsx` tegner x-aksen ud fra, så aksen og pakningen aldrig kan
-    komme til at regne på hver sin horisont. */
-export function timelineBounds(plan: Plan): { start: SimulationYear; end: SimulationYear } {
+/** De to år, et *åbent* endepunkt opløses til: planens start og den seneste
+    horisont, nogen af husstandens personer når. Et udeladt endepunkt betyder
+    "fra planens start" og ikke "fra tidslinjens venstre kant", jf. `Period` i
+    plan.ts — de to er ikke længere det samme tal. */
+function openBounds(plan: Plan): { openStart: SimulationYear; openEnd: SimulationYear } {
   return {
-    start: plan.startYear,
-    end: Math.max(...plan.household.persons.map((person) => person.birthYear + person.horizon)),
+    openStart: plan.startYear,
+    openEnd: Math.max(...plan.household.persons.map((person) => person.birthYear + person.horizon)),
   }
+}
+
+/** Tidslinjens vandrette udstrækning, plus det år et åbent `from` betyder.
+    `start` er den tidligste af planens startår og posternes egne endepunkter:
+    en post trukket ud til venstre for planens start ville ellers få en negativ
+    `left`, som `.tidslinje-rul`s `overflow: auto` klipper væk uden at kunne
+    rulle derhen — og posten kunne ikke længere fanges på tidslinjen. Kanten
+    flytter sig frem for at klemme posten, fordi en klemning ville ændre
+    planens betydning: `from` bærer en `EveryNYears`-posts fase, jf. ADR-0045.
+    `openStart` er derfor skilt ud og bliver ved med at være planens startår.
+
+    Samme grænser som `Timeline.tsx` tegner x-aksen ud fra, så aksen og
+    pakningen aldrig kan komme til at regne på hver sin udstrækning. */
+export function timelineBounds(plan: Plan): {
+  start: SimulationYear
+  openStart: SimulationYear
+  end: SimulationYear
+} {
+  const { openStart, openEnd } = openBounds(plan)
+  const items = buildItems(plan, openStart, openEnd)
+  const earliest = items.map((item) => earliestYear(item, openStart, openEnd))
+  return { start: Math.min(openStart, ...earliest), openStart, end: openEnd }
+}
+
+/** Postens tidligste endepunkt. Begge ender måles, og ikke kun `from`: en
+    omvendt periode har sit tidligste år i `to`, og kanten skal også nå den —
+    ellers ville boksens venstre kant lande uden for fladen igen. */
+function earliestYear(
+  item: TimelineItem,
+  openStart: SimulationYear,
+  openEnd: SimulationYear,
+): SimulationYear {
+  return item.point
+    ? endpointYear(item.at, openStart)
+    : Math.min(endpointYear(item.from, openStart), endpointYear(item.to, openEnd))
 }
 
 export function endpointYear(endpoint: TimelineEndpoint, fallback: SimulationYear): SimulationYear {
