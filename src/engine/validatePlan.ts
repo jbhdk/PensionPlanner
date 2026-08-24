@@ -18,6 +18,7 @@ import type {
   EntryId,
   Holding,
   HoldingId,
+  HoldingSourcedContribution,
   PensionSchemeHolding,
   Period,
   Person,
@@ -67,8 +68,56 @@ export function validatePlan(plan: Plan): string | undefined {
     oneOfEachUniqueVariant(plan) ??
     entrySourcedDestination(plan) ??
     pensionAgreements(plan) ??
-    payoutSchedules(plan)
+    payoutSchedules(plan) ??
+    reversedPeriods(plan)
   )
+}
+
+/** En periode, hvis slutår ligger før dens startår, beskriver ingenting:
+    motoren regner nul år, og figuren forsvinder tavst ud af planen. Reglen
+    hører ved indgangen af samme grund som de øvrige, jf. ADR-0020 — svaret
+    er det samme i alle simuleringsår.
+
+    Målt på opløste kalenderår. En `PersonAge`-periode og en
+    `CalendarYear`-periode skal måles med det samme, og et endepunkt sat til
+    erhvervsophør opløses forskelligt i de to roller, jf. ADR-0031: to flueben
+    på den samme alder giver Y til Y−1 uden at et eneste tal er tastet.
+
+    Et udeladt endepunkt binder ingenting. Det betyder "fra planens start"
+    henholdsvis "til horisontens slut", og de to vægge er ikke denne regels:
+    den venstre er med vilje ikke klemt, jf. ADR-0045, og den højre er
+    husstandens sidste år og en regel for sig.
+
+    Reglen kan ikke længere nås gennem fladen, som klemmer begge endepunkter
+    mod hinanden. Den bliver stående som nettet under en håndredigeret fil,
+    jf. ADR-0045. */
+function reversedPeriods(plan: Plan): string | undefined {
+  for (const figure of periodicFigures(plan)) {
+    // Ejeren findes: pegerreglerne er kørt før denne, og de har afvist en
+    // post uden en ejer, en overførsel uden en afgiver og en indbetaling uden
+    // en destination.
+    const owner = periodOwner(plan, figure)!
+    const { from, to } = periodBounds(figure.period, owner)
+    if (from === undefined || to === undefined || to >= from) continue
+    return (
+      `${figureSubject(figure)} løber fra ${from} til ${to}. ` +
+      `En periode kan ikke slutte, før den begynder.`
+    )
+  }
+  return undefined
+}
+
+/** Planens figurer med udstrækning. Den lønkildede indbetaling er ikke
+    iblandt: den arver lønpostens periode, og posten står allerede på listen. */
+function periodicFigures(plan: Plan): PeriodicFigure[] {
+  return [
+    ...plan.entries,
+    ...plan.transfers,
+    ...plan.contributions.filter(
+      (contribution): contribution is HoldingSourcedContribution =>
+        contribution.kind === 'HoldingSourced',
+    ),
+  ]
 }
 
 /** Pensionsaftalens strukturelle regler. De er alle de samme i alle
@@ -377,7 +426,17 @@ export type Bound = number | { value: number; reason: string }
     dem, så almindelig indtastning ikke kan skrive en plan, motoren afviser —
     reglen selv står her i indgangskontrollen, fordi en importeret fil ikke er
     gået gennem et felt, og grænsen er dens venlige udgave. */
-export type Bounds = { min?: Bound; max?: Bound }
+export type Bounds = {
+  min?: Bound
+  max?: Bound
+  /** Om tomt er et svar. En nedre grænse gør ellers feltet påkrævet — en
+      udbetalingsplan skal begynde et sted, og et tømt felt falder da tilbage
+      på grænsen. Et periodeendepunkt er den anden slags: tomt betyder "fra
+      planens start" henholdsvis "til horisontens slut", og den betydning
+      overlever, at det andet endepunkt har lagt en grænse. Udeladt er det
+      påkrævede, som er den ældste af de to. */
+  mayBeEmpty?: boolean
+}
 
 /** Tallet i en grænse — det, der klemmes imod, uanset om grænsen bærer en
     begrundelse. */
@@ -463,14 +522,30 @@ function payoutDoorReason(holding: Holding, door: SimulationYear): string {
   return `Beholdningen ${holding.name} må tidligst udbetales i ${door}.`
 }
 
-/** Grænserne for ét af en overførsels to periodeendepunkter.
+/** En figur med udstrækning: den slags, hvis periode har to endepunkter at
+    binde mod hinanden. Den lønkildede indbetaling er ikke iblandt — den
+    arver lønpostens periode og har ingen egen, jf. ADR-0016. */
+export type PeriodicFigure = Entry | Transfer | HoldingSourcedContribution
 
-    I dag er der én regel at svare på: overførslen må ikke hente fra en
-    ordning før dens pensionsudbetalingsalder. En hævning før den koster 20 %
-    i afgift og er ikke noget, planen skal kunne beskrive, jf. ADR-0022 — og
-    `transferEnds` afviser den plan. Grænsen står her ved siden af
-    afvisningen, så håndtaget, feltet og afvisningen ikke kan komme til at
-    sige hver sit; det er den samme grund, `payoutDurationBounds` findes af.
+/** Grænserne for ét af en figurs to periodeendepunkter.
+
+    Der er to regler at svare på. Den ene rammer kun overførslen: den må ikke
+    hente fra en ordning før dens pensionsudbetalingsalder. En hævning før den
+    koster 20 % i afgift og er ikke noget, planen skal kunne beskrive, jf.
+    ADR-0022 — og `transferEnds` afviser den plan. Den anden rammer alle tre:
+    perioden må ikke vendes om, og de to endepunkter binder derfor hinanden.
+    Grænserne står her ved siden af afvisningerne, så håndtaget, feltet og
+    afvisningen ikke kan komme til at sige hver sit; det er den samme grund,
+    `payoutDurationBounds` findes af.
+
+    Bindingen måles på opløste kalenderår. En `PersonAge`-periode og en
+    `CalendarYear`-periode skal måles med det samme, og et endepunkt sat til
+    erhvervsophør opløses forskelligt i de to roller, jf. ADR-0031.
+
+    Et udeladt endepunkt binder ingenting. Det betyder "fra planens start"
+    henholdsvis "til horisontens slut", og ingen af de to vægge er denne
+    regels: den venstre er med vilje ikke klemt, jf. ADR-0045, og den højre er
+    husstandens sidste år og en regel for sig.
 
     Svaret er i endepunktets egen enhed: et årstal til en kalenderårsforankret
     periode, en alder til en aldersforankret. Alderen findes ved at flytte den
@@ -481,21 +556,122 @@ function payoutDoorReason(holding: Holding, door: SimulationYear): string {
     grænseåret er svaret. */
 export function periodEndpointBounds(
   plan: Plan,
-  transfer: Transfer,
+  figure: PeriodicFigure,
   endpoint: 'from' | 'to',
 ): Bounds {
-  if (endpoint === 'to') return {}
-  const from = holdingsById(plan).get(transfer.from)
-  const owner = ownersByHolding(plan).get(transfer.from)
-  if (from === undefined || owner === undefined || !isPensionScheme(from)) return {}
+  const owner = periodOwner(plan, figure)
+  if (owner === undefined) return {}
 
-  const door = payoutYear(from, owner)
-  return {
-    min: {
-      value: inEndpointUnit(transfer.period, endpoint, door, owner),
-      reason: payoutDoorReason(from, door),
-    },
+  const unit = (year: SimulationYear) => inEndpointUnit(figure.period, endpoint, year, owner)
+  const opposite = periodBounds(figure.period, owner)[endpoint === 'from' ? 'to' : 'from']
+
+  if (endpoint === 'to') {
+    return {
+      // Et åbent slutår betyder horisontens slut og er stadig et svar, selv
+      // om startåret har lagt en nedre grænse — derfor falder et tømt felt
+      // ikke tilbage på den, jf. `Bounds`.
+      mayBeEmpty: true,
+      ...(opposite === undefined
+        ? {}
+        : { min: { value: unit(opposite), reason: cannotEndBeforeReason(figure, opposite) } }),
+    }
   }
+
+  const door = payoutDoor(plan, figure)
+  return {
+    // Et åbent startår betyder planens start, og ligger døren efter den, er
+    // tomt ikke et svar: overførslen ville hente fra ordningen, før den må
+    // udbetales.
+    mayBeEmpty: door === undefined,
+    ...(door === undefined
+      ? {}
+      : { min: { value: unit(door.year), reason: payoutDoorReason(door.holding, door.year) } }),
+    ...(opposite === undefined
+      ? {}
+      : { max: { value: unit(opposite), reason: cannotBeginAfterReason(opposite) } }),
+  }
+}
+
+/** Ordningens dør, hvor figuren har en at måle mod: overførslen, som henter
+    fra en beholdning, og kun når den beholdning er en pensionsordning. En
+    post og en indbetaling henter ikke fra noget og har ingen. */
+function payoutDoor(
+  plan: Plan,
+  figure: PeriodicFigure,
+): { holding: Holding; year: SimulationYear } | undefined {
+  if (!isTransfer(figure)) return undefined
+  const from = holdingsById(plan).get(figure.from)
+  const owner = ownersByHolding(plan).get(figure.from)
+  if (from === undefined || owner === undefined || !isPensionScheme(from)) return undefined
+  return { holding: from, year: payoutYear(from, owner) }
+}
+
+/** Den person, figurens aldersforankring måles på. Posten har sin ejer,
+    overførslen afgiverens — en beholdning har præcis én, jf. `Transfer` — og
+    den beholdningskildede indbetaling destinationens, jf.
+    `holdingSourcedInYear`: kilden kan tilhøre den anden person, og det er
+    destinationen, ordningens loft og fradragsret allerede følger.
+
+    Findes personen ikke, er pegeren hængende, og der er ingen grænse at
+    svare med. Det er `validatePlan`s egen sag og ikke grænsens, jf.
+    `repairPlan`. */
+export function periodOwner(plan: Plan, figure: PeriodicFigure): Person | undefined {
+  if (isEntry(figure)) {
+    return plan.household.persons.find((person) => person.id === figure.owner)
+  }
+  return ownersByHolding(plan).get(isTransfer(figure) ? figure.from : figure.to)
+}
+
+/** Figuren ved det navn, planen giver den, med det ord brugeren kender den
+    på. Samme sprog som afvisningernes egne beskeder — hun har aldrig set
+    `entry-4`, jf. `validatePlan`. */
+export function figureSubject(figure: PeriodicFigure): string {
+  if (isEntry(figure)) return `Posten ${figure.name}`
+  return isTransfer(figure)
+    ? `Overførslen ${figure.name}`
+    : `Indbetalingen ${figure.name}`
+}
+
+/** De tre figurer deles ikke om et mærke, der siger hvad de er — de er tre
+    typer i planen og ikke tre grene af én union. De kendes derfor på det
+    felt, kun den ene har: retningen er postens, og kilden er indbetalingens.
+    Overførslen er den, der har ingen af dem. */
+function isEntry(figure: PeriodicFigure): figure is Entry {
+  return 'direction' in figure
+}
+
+function isTransfer(figure: PeriodicFigure): figure is Transfer {
+  return !isEntry(figure) && !('kind' in figure)
+}
+
+/** Den ene sætning om slutårets væg: periodens eget startår. Væggen kan ses —
+    det er boksens anden kant — men den siger alligevel, hvad den er, for det
+    er den samme væg, fluebenet støder på, og dér er der intet at se.
+
+    Sætningen siger perioden og ikke figuren. Den vises altid dér, hvor
+    figuren i forvejen er nævnt — skuffen står åben på den, og
+    reparationsbeskeden har allerede sagt dens navn — og et navn to gange i
+    træk læses som to figurer.
+
+    Følger startåret erhvervsophøret, er det en anden sætning. Perioden er da
+    ikke rørt af et eneste tastet tal, og det, der overrasker, er ADR-0031:
+    erhvervsophørsåret er det første år uden arbejde og tælles derfor med som
+    `from` og ikke med som `to`. En besked, der blot meldte årstallet, ville
+    lade brugeren gætte, hvor det kom fra. */
+function cannotEndBeforeReason(figure: PeriodicFigure, from: SimulationYear): string {
+  if (figure.period.anchor === 'PersonAge' && figure.period.from === 'WorkEndAge') {
+    return (
+      `Perioden begynder ved erhvervsophøret i ${from}. Erhvervsophørsåret er det ` +
+      `første år uden arbejde og tæller ikke med som slutår.`
+    )
+  }
+  return `Perioden begynder i ${from} og kan ikke slutte før.`
+}
+
+/** Den ene sætning om startårets væg: periodens eget slutår, set fra den
+    anden ende. */
+function cannotBeginAfterReason(to: SimulationYear): string {
+  return `Perioden slutter i ${to} og kan ikke begynde efter.`
 }
 
 function inEndpointUnit(

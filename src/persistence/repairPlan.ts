@@ -1,7 +1,7 @@
 import { periodBounds, yearAtAge } from '../engine/age'
-import { boundValue, periodEndpointBounds } from '../engine/validatePlan'
-import type { Bound, Bounds } from '../engine/validatePlan'
-import type { Period, Person, Plan, SimulationYear, Transfer } from '../engine/plan'
+import { boundValue, figureSubject, periodEndpointBounds, periodOwner } from '../engine/validatePlan'
+import type { Bound, Bounds, PeriodicFigure } from '../engine/validatePlan'
+import type { Period, Person, Plan, SimulationYear } from '../engine/plan'
 
 /** Klemmer en indlæst plans periodeendepunkter ind i de grænser, fladen selv
     ville have klemt dem til — og siger, hvad der blev rettet.
@@ -26,20 +26,33 @@ import type { Period, Person, Plan, SimulationYear, Transfer } from '../engine/p
     `validatePlan` afviser den bagefter som før. */
 export function repairPlan(plan: Plan): { plan: Plan; repairs: string[] } {
   const repairs: string[] = []
-  const transfers = plan.transfers.map((transfer) => {
-    let repaired = transfer
+  const repaired = <T extends PeriodicFigure>(figure: T): T => {
+    let stepped = figure
     // Det andet endepunkt måles mod det første, som det blev, og ikke som
-    // det stod: en regel om en omvendt periode ville ellers klemme `to` op
+    // det stod: reglen om den omvendte periode ville ellers klemme `to` op
     // mod et `from`, reparationen lige havde flyttet væk fra.
     for (const endpoint of ['from', 'to'] as const) {
-      const step = repairedEndpoint(plan, repaired, endpoint)
+      const step = repairedEndpoint(plan, stepped, endpoint)
       if (step === undefined) continue
-      repaired = step.transfer
+      stepped = step.figure
       repairs.push(step.repair)
     }
-    return repaired
-  })
-  return { plan: { ...plan, transfers }, repairs }
+    return stepped
+  }
+
+  return {
+    plan: {
+      ...plan,
+      entries: plan.entries.map(repaired),
+      transfers: plan.transfers.map(repaired),
+      // Den lønkildede indbetaling har ingen periode at reparere — den arver
+      // lønpostens, og posten er allerede gået igennem ovenfor.
+      contributions: plan.contributions.map((contribution) =>
+        contribution.kind === 'HoldingSourced' ? repaired(contribution) : contribution,
+      ),
+    },
+    repairs,
+  }
 }
 
 /** Det ene endepunkt klemt — eller intet, hvis det lå inden for sine
@@ -47,29 +60,29 @@ export function repairPlan(plan: Plan): { plan: Plan; repairs: string[] } {
     grænsen står i endepunktets egen enhed, og det gør endepunktet også, men
     et endepunkt kan være åbent eller følge erhvervsophøret, og hverken det
     ene eller det andet er et tal, der kan holdes op mod en alder. */
-function repairedEndpoint(
+function repairedEndpoint<T extends PeriodicFigure>(
   plan: Plan,
-  transfer: Transfer,
+  figure: T,
   endpoint: 'from' | 'to',
-): { transfer: Transfer; repair: string } | undefined {
-  const bounds = periodEndpointBounds(plan, transfer, endpoint)
+): { figure: T; repair: string } | undefined {
+  const bounds = periodEndpointBounds(plan, figure, endpoint)
   if (bounds.min === undefined && bounds.max === undefined) return undefined
 
-  const owner = ownerOf(plan, transfer.from)
+  const owner = periodOwner(plan, figure)
   if (owner === undefined) return undefined
-  const year = standingYear(plan, transfer.period, endpoint, owner)
+  const year = standingYear(plan, figure.period, endpoint, owner)
   if (year === undefined) return undefined
 
-  const broken = brokenBound(bounds, year, (bound) => inYears(transfer.period, owner, bound))
+  const broken = brokenBound(bounds, year, (bound) => inYears(figure.period, owner, bound))
   if (broken === undefined) return undefined
 
   const value = boundValue(broken)
   return {
-    transfer: {
-      ...transfer,
-      period: { ...transfer.period, [endpoint]: value } as Period,
+    figure: {
+      ...figure,
+      period: { ...figure.period, [endpoint]: value } as Period,
     },
-    repair: repairSentence(transfer, endpoint, value, broken),
+    repair: repairSentence(figure, endpoint, value, broken),
   }
 }
 
@@ -118,14 +131,14 @@ function inYears(period: Period, owner: Person, value: number): SimulationYear {
     indlæsningen møder den samme væg og skal ikke kunne komme til at sige
     hver sit om den, jf. `Bound`. */
 function repairSentence(
-  transfer: Transfer,
+  figure: PeriodicFigure,
   endpoint: 'from' | 'to',
   value: number,
   bound: Bound,
 ): string {
   const sentence =
-    `Overførslen ${transfer.name} ${stoodAt(transfer.period, endpoint)} ` +
-    `og er rettet til ${inUnit(transfer.period, value)}.`
+    `${figureSubject(figure)} ${stoodAt(figure.period, endpoint)} ` +
+    `og er rettet til ${inUnit(figure.period, value)}.`
   return typeof bound === 'number' ? sentence : `${sentence} ${bound.reason}`
 }
 
@@ -158,11 +171,3 @@ function danishNumber(value: number): string {
   return String(value).replace('.', ',')
 }
 
-/** Ejeren af den beholdning, overførslen henter fra. Alderen i en
-    aldersforankret periode måles på hende — en beholdning har præcis én, jf.
-    `Transfer`. */
-function ownerOf(plan: Plan, holdingId: string): Person | undefined {
-  return plan.household.persons.find((person) =>
-    person.holdings.some((holding) => holding.id === holdingId),
-  )
-}

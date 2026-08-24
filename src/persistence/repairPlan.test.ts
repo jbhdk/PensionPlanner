@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { aHolding, aPlan, aTransfer } from '../engine/testing/planFixture'
+import {
+  aHolding,
+  aHoldingContribution,
+  aPlan,
+  aTransfer,
+  anExpense,
+} from '../engine/testing/planFixture'
 import type { Period } from '../engine/plan'
 import { repairPlan } from './repairPlan'
 
@@ -66,6 +72,65 @@ describe('repairPlan', () => {
     expect(repaired.repairs).toEqual([
       'Overførslen Tømning fulgte erhvervsophøret og er rettet til alder 67. ' +
         'Beholdningen Aldersopsparing må tidligst udbetales i 2040.',
+    ])
+  })
+
+  it('retter en post, hvis slutår ligger før dens startår, og siger det med postens eget navn', () => {
+    // `validatePlan` afviser den plan, og uden dette trin ville en allerede
+    // gemt plan give fejlskærmen ved næste indlæsning, uden at brugeren havde
+    // rørt noget. Ved fladen viger det, brugeren rører; her har hun ikke rørt
+    // noget, og endepunkterne måles i den rækkefølge, de står.
+    const repaired = repairPlan(
+      aPlan({
+        entries: [
+          anExpense({
+            amountInRealKroner: 100_000,
+            period: { anchor: 'CalendarYear', from: 2040, to: 2030 },
+          }),
+        ],
+      }),
+    )
+
+    expect(repaired.plan.entries[0]!.period).toEqual({
+      anchor: 'CalendarYear',
+      from: 2030,
+      to: 2030,
+    })
+    expect(repaired.repairs).toEqual([
+      'Posten Faste udgifter begyndte i 2040 og er rettet til 2030. ' +
+        'Perioden slutter i 2030 og kan ikke begynde efter.',
+    ])
+  })
+
+  it('retter en beholdningskildet indbetalings omvendte periode', () => {
+    const repaired = repairPlan(
+      aPlan({
+        holdings: [
+          aHolding({
+            id: 'aldersopsparing',
+            name: 'Aldersopsparing',
+            variant: 'OldAgeSavings',
+            balance: 0,
+          }),
+        ],
+        contributions: [
+          aHoldingContribution({
+            name: 'Opsparing',
+            source: 'free-assets',
+            to: 'aldersopsparing',
+            amountInRealKroner: 10_000,
+            period: { anchor: 'CalendarYear', from: 2040, to: 2030 },
+          }),
+        ],
+      }),
+    )
+
+    expect(repaired.plan.contributions[0]).toMatchObject({
+      period: { anchor: 'CalendarYear', from: 2030, to: 2030 },
+    })
+    expect(repaired.repairs).toEqual([
+      'Indbetalingen Opsparing begyndte i 2040 og er rettet til 2030. ' +
+        'Perioden slutter i 2030 og kan ikke begynde efter.',
     ])
   })
 

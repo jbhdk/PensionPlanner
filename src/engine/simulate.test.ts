@@ -5264,6 +5264,108 @@ describe('udbetalingsplanens lovregler', () => {
   })
 })
 
+describe('den omvendte periode', () => {
+  it('afviser en post, hvis slutår ligger før dens startår, og nævner den ved planens eget navn', () => {
+    // Motoren regner blot nul år, og posten forsvinder tavst. Reglen kan ikke
+    // længere nås gennem fladen, jf. ADR-0045, men en håndredigeret fil kan
+    // bære tilstanden, og den skal ikke regnes på.
+    const plan = aPlan({
+      entries: [
+        anExpense({
+          amountInRealKroner: 100_000,
+          period: { anchor: 'CalendarYear', from: 2040, to: 2030 },
+        }),
+      ],
+    })
+
+    expect(validatePlan(plan)).toBe(
+      'Posten Faste udgifter løber fra 2040 til 2030. En periode kan ikke slutte, ' +
+        'før den begynder.',
+    )
+    expect(() => simulate(plan)).toThrow(/Faste udgifter løber fra 2040 til 2030/i)
+  })
+
+  it('afviser en overførsel, hvis slutår ligger før dens startår', () => {
+    const plan = aPlan({
+      holdings: [aHolding({ id: 'aktiedepot', name: 'Aktiedepot', variant: 'ShareDepot', balance: 500_000 })],
+      transfers: [
+        aTransfer({
+          name: 'Tømning',
+          from: 'aktiedepot',
+          to: 'free-assets',
+          amountInRealKroner: 50_000,
+          period: { anchor: 'CalendarYear', from: 2040, to: 2030 },
+        }),
+      ],
+    })
+
+    expect(validatePlan(plan)).toBe(
+      'Overførslen Tømning løber fra 2040 til 2030. En periode kan ikke slutte, ' +
+        'før den begynder.',
+    )
+  })
+
+  it('afviser en beholdningskildet indbetaling og måler dens aldre i kalenderår', () => {
+    // Aldersforankringen måles på destinationens ejer, jf.
+    // `holdingSourcedInYear` — og beskeden siger de opløste år og ikke de
+    // tastede aldre: en alder siger intet om, hvornår perioden løber.
+    // Jesper er født i juni 1973, så alder 70 er 2043 og alder 65 er 2038.
+    const plan = aPlan({
+      holdings: [
+        aHolding({ id: 'ratepension', name: 'Ratepension', variant: 'InstalmentPension', balance: 0 }),
+      ],
+      contributions: [
+        aHoldingContribution({
+          name: 'Opsparing',
+          source: 'free-assets',
+          to: 'ratepension',
+          amountInRealKroner: 10_000,
+          period: { anchor: 'PersonAge', from: 70, to: 65 },
+        }),
+      ],
+    })
+
+    expect(validatePlan(plan)).toBe(
+      'Indbetalingen Opsparing løber fra 2043 til 2038. En periode kan ikke slutte, ' +
+        'før den begynder.',
+    )
+  })
+
+  it('afviser en periode, hvis begge endepunkter følger erhvervsophøret', () => {
+    // To flueben og ikke et eneste tastet tal: erhvervsophørsåret regnes med
+    // som `from` og ikke med som `to`, jf. ADR-0031, og perioden opløses
+    // derfor til Y til Y−1. Jesper holder op som 58 og er født i juni 1973,
+    // så året er 2031 — og posten falder i nul år.
+    const plan = aPlan({
+      entries: [
+        anExpense({
+          amountInRealKroner: 100_000,
+          period: { anchor: 'PersonAge', from: 'WorkEndAge', to: 'WorkEndAge' },
+        }),
+      ],
+    })
+
+    expect(validatePlan(plan)).toBe(
+      'Posten Faste udgifter løber fra 2031 til 2030. En periode kan ikke slutte, ' +
+        'før den begynder.',
+    )
+  })
+
+  it('lader en engangspost stå — den har ét endepunkt og ingen udstrækning at vende om', () => {
+    const plan = aPlan({
+      entries: [
+        anExpense({
+          amountInRealKroner: 100_000,
+          period: { anchor: 'CalendarYear', from: 2040 },
+          recurrence: { kind: 'Once' },
+        }),
+      ],
+    })
+
+    expect(validatePlan(plan)).toBeUndefined()
+  })
+})
+
 /** Fixturens buffer plus en aldersopsparing, oprettet før maj 2007 og derfor
     under det faste regime: pensionsudbetalingsalderen er 60 år, uafhængigt af
     folkepensionsalderens tabel. Fixturens person er født i juni 1973 og når

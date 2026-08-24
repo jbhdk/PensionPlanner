@@ -4966,6 +4966,27 @@ describe('fladen', () => {
       expect(document.querySelector('.klemning')).toBeNull()
     })
 
+    it('afviser Følger erhvervsophør, når erhvervsophøret ligger før døren', async () => {
+      // Fluebenet har kun to stillinger og kan ikke klemmes: Jesper holder op
+      // som 58 — i 2031 — og ordningen må tidligst udbetales i 2033. Uden
+      // afvisningen ville ét klik gøre hele planen uregnelig, jf. ADR-0045.
+      const user = userEvent.setup()
+      render(
+        <App initialPlan={aPlanWithOldAgeSavingsPayout({ anchor: 'PersonAge', from: 62 })} />,
+      )
+
+      await user.click(navigatorButton(/Overførslen/))
+      const flueben = () =>
+        screen.getAllByLabelText('Følger erhvervsophør')[0] as HTMLInputElement
+      await user.click(flueben())
+
+      expect(flueben().checked).toBe(false)
+      expect((screen.getByLabelText('Fra (alder)') as HTMLInputElement).value).toBe('62')
+      expect(
+        screen.getByText('Beholdningen Aldersopsparing må tidligst udbetales i 2033.'),
+      ).toBeTruthy()
+    })
+
     it('lader et tømt Fra-felt falde tilbage på grænsen frem for at stå åbent', async () => {
       // Tomt betyder ellers "fra planens start" — og dét år ligger før døren.
       // Er endepunktet påkrævet, er grænsen det nærmeste gyldige svar, ganske
@@ -4979,6 +5000,188 @@ describe('fladen', () => {
       await user.tab()
 
       expect(fra().value).toBe('2033')
+    })
+  })
+
+  describe('den omvendte periode', () => {
+    /** En udgiftspost, der løber fra 2030 til 2035 — de to endepunkter, der
+        skal binde hinanden. */
+    function aPlanWithExpense(period: Period): Plan {
+      return aPlan({ entries: [anExpense({ amountInRealKroner: 100_000, period })] })
+    }
+
+    it('lader ikke et tastet slutår ligge før startåret', async () => {
+      // Perioden ville falde i nul år, og boksen ville tegnes med negativ
+      // bredde. Det, brugeren rører, er det, der viger: hun taster i `Til`, og
+      // det er `Til`, der snapper, jf. ADR-0045.
+      const user = userEvent.setup()
+      render(
+        <App initialPlan={aPlanWithExpense({ anchor: 'CalendarYear', from: 2030, to: 2035 })} />,
+      )
+
+      await user.click(navigatorButton(/Faste udgifter/))
+      const til = () => screen.getByLabelText('Til (år)') as HTMLInputElement
+      await user.clear(til())
+      await user.type(til(), '2025')
+      await user.tab()
+
+      expect(til().value).toBe('2030')
+      expect(screen.getByText('Perioden begynder i 2030 og kan ikke slutte før.'))
+        .toBeTruthy()
+      // Det urørte endepunkt står, hvor det stod.
+      expect((screen.getByLabelText('Fra (år)') as HTMLInputElement).value).toBe('2030')
+    })
+
+    it('lader ikke et tastet startår ligge efter slutåret', async () => {
+      const user = userEvent.setup()
+      render(
+        <App initialPlan={aPlanWithExpense({ anchor: 'CalendarYear', from: 2030, to: 2035 })} />,
+      )
+
+      await user.click(navigatorButton(/Faste udgifter/))
+      const fra = () => screen.getByLabelText('Fra (år)') as HTMLInputElement
+      await user.clear(fra())
+      await user.type(fra(), '2040')
+      await user.tab()
+
+      expect(fra().value).toBe('2035')
+      expect(screen.getByText('Perioden slutter i 2035 og kan ikke begynde efter.'))
+        .toBeTruthy()
+      expect((screen.getByLabelText('Til (år)') as HTMLInputElement).value).toBe('2035')
+    })
+
+    it('lader et tømt Til-felt betyde horisontens slut, selv om startåret har lagt en grænse', async () => {
+      // Grænsen gør ikke endepunktet påkrævet. Faldt feltet tilbage på
+      // startåret, kunne en post, der løber resten af forløbet, ikke længere
+      // skrives — og tomt betyder netop "til horisontens slut", jf. `Period`.
+      const user = userEvent.setup()
+      render(
+        <App initialPlan={aPlanWithExpense({ anchor: 'CalendarYear', from: 2030, to: 2035 })} />,
+      )
+
+      await user.click(navigatorButton(/Faste udgifter/))
+      const til = () => screen.getByLabelText('Til (år)') as HTMLInputElement
+      await user.clear(til())
+      await user.tab()
+
+      expect(til().value).toBe('')
+    })
+
+    it('svarer i alder, når perioden er aldersforankret', async () => {
+      // Grænsen er et opløst kalenderår — Jesper fylder 60 i 2033 — og feltet
+      // spørger om en alder. Beskeden siger året, ganske som dørens gør det:
+      // den samme væg skal ikke sige to ting efter forankring.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithExpense({ anchor: 'PersonAge', from: 60, to: 65 })} />)
+
+      await user.click(navigatorButton(/Faste udgifter/))
+      const til = () => screen.getByLabelText('Til (alder)') as HTMLInputElement
+      await user.clear(til())
+      await user.type(til(), '55')
+      await user.tab()
+
+      expect(til().value).toBe('60')
+      expect(screen.getByText('Perioden begynder i 2033 og kan ikke slutte før.'))
+        .toBeTruthy()
+    })
+
+    it('binder også en overførsels to endepunkter i skuffen', async () => {
+      const user = userEvent.setup()
+      render(
+        <App
+          initialPlan={{
+            ...aPlanWithSecondHolding(),
+            transfers: [
+              aTransfer({
+                name: 'Tømning',
+                from: 'free-assets',
+                to: 'anden-beholdning',
+                amountInRealKroner: 50_000,
+                period: { anchor: 'CalendarYear', from: 2030, to: 2035 },
+              }),
+            ],
+          }}
+        />,
+      )
+
+      await user.click(navigatorButton(/Tømning/))
+      const fra = () => screen.getByLabelText('Fra (år)') as HTMLInputElement
+      await user.clear(fra())
+      await user.type(fra(), '2040')
+      await user.tab()
+
+      expect(fra().value).toBe('2035')
+      expect(screen.getByText('Perioden slutter i 2035 og kan ikke begynde efter.')).toBeTruthy()
+    })
+
+    it('binder også en beholdningskildet indbetalings to endepunkter i skuffen', async () => {
+      const user = userEvent.setup()
+      render(
+        <App
+          initialPlan={aPlan({
+            holdings: [anOldAgeSavings('aldersopsparing', 'Aldersopsparing', 0)],
+            contributions: [
+              aHoldingContribution({
+                name: 'Opsparing',
+                source: 'free-assets',
+                to: 'aldersopsparing',
+                amountInRealKroner: 10_000,
+                period: { anchor: 'CalendarYear', from: 2030, to: 2035 },
+              }),
+            ],
+          })}
+        />,
+      )
+
+      await user.click(navigatorButton(/Opsparing/))
+      const til = () => screen.getByLabelText('Til (år)') as HTMLInputElement
+      await user.clear(til())
+      await user.type(til(), '2025')
+      await user.tab()
+
+      expect(til().value).toBe('2030')
+      expect(screen.getByText('Perioden begynder i 2030 og kan ikke slutte før.')).toBeTruthy()
+    })
+
+    it('afviser Følger erhvervsophør på slutåret, når startåret allerede følger det', async () => {
+      // To flueben og ikke et eneste tastet tal: perioden ville opløses til
+      // 2031 til 2030 og falde i nul år. Fluebenet har kun to stillinger og
+      // kan ikke klemmes — redigeringen afvises derfor i stedet, jf.
+      // ADR-0045, og beskeden er den eneste rimelige lejlighed til at
+      // forklare, hvorfor erhvervsophørsåret ikke tæller med som slutår.
+      const user = userEvent.setup()
+      render(
+        <App initialPlan={aPlanWithExpense({ anchor: 'PersonAge', from: 'WorkEndAge', to: 65 })} />,
+      )
+
+      await user.click(navigatorButton(/Faste udgifter/))
+      const tilFlueben = () =>
+        screen.getAllByLabelText('Følger erhvervsophør')[1] as HTMLInputElement
+      await user.click(tilFlueben())
+
+      expect(tilFlueben().checked).toBe(false)
+      expect((screen.getByLabelText('Til (alder)') as HTMLInputElement).value).toBe('65')
+      expect(
+        screen.getByText(
+          'Perioden begynder ved erhvervsophøret i 2031. Erhvervsophørsåret er det ' +
+            'første år uden arbejde og tæller ikke med som slutår.',
+        ),
+      ).toBeTruthy()
+    })
+
+    it('lader Følger erhvervsophør på slutåret gå igennem, når perioden stadig har år i sig', async () => {
+      // Jesper holder op som 58 og er født i juni 1973: fluebenet på slutåret
+      // betyder 2030, og en periode fra alder 55 — 2028 — har to år i sig.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithExpense({ anchor: 'PersonAge', from: 55, to: 65 })} />)
+
+      await user.click(navigatorButton(/Faste udgifter/))
+      const tilFlueben = () =>
+        screen.getAllByLabelText('Følger erhvervsophør')[1] as HTMLInputElement
+      await user.click(tilFlueben())
+
+      expect(tilFlueben().checked).toBe(true)
+      expect(document.querySelector('.klemning')).toBeNull()
     })
   })
 

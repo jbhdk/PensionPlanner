@@ -225,9 +225,14 @@ function clampTo(value: number, bounds: Bounds | undefined): number {
 
 /** Det, et tømt felt falder tilbage på: den nedre grænse, hvor der er en.
     Er endepunktet påkrævet — en udbetalingsplan skal begynde et sted — er
-    tomt ikke et svar, og grænsen er det nærmeste gyldige. */
+    tomt ikke et svar, og grænsen er det nærmeste gyldige.
+
+    Siger grænsen selv, at tomt er et svar, står feltet tomt. Et
+    periodeendepunkt beholder på den måde sin åbne betydning, selv om det
+    andet endepunkt har lagt en grænse — se `mayBeEmpty` i `Bounds`. */
 function emptyFallsBackTo(bounds: Bounds | undefined): number | undefined {
-  return bounds?.min === undefined ? undefined : boundValue(bounds.min)
+  if (bounds?.min === undefined || bounds.mayBeEmpty) return undefined
+  return boundValue(bounds.min)
 }
 
 /** Klemningen, en redigering udløste — eller intet, hvis det tastede gik
@@ -313,7 +318,8 @@ export function OptionalNumberField({
   value: number | undefined
   /** Udeladt betyder et frit tal, og feltet kan da stå tomt — sådan skrives
       et åbent periodeendepunkt. Er en nedre grænse sat, falder et tømt felt
-      tilbage på den, ganske som i `AgeBoundField`. Se `Bounds`. */
+      tilbage på den, med mindre grænsen selv siger, at tomt er et svar.
+      Ganske som i `AgeBoundField`. Se `Bounds`. */
   bounds?: Bounds
   clamp?: Clamp | null
   onClamp?: (clamp: Clamp | null) => void
@@ -349,6 +355,7 @@ export function AgeBoundField({
   help,
   value,
   workEndAge,
+  followsWorkEndAt,
   bounds,
   clamp,
   onClamp,
@@ -362,10 +369,17 @@ export function AgeBoundField({
       det, spørgsmålet handler om, og den skal kunne læses uden at klikke
       tilvalget fra igen. */
   workEndAge: number
+  /** Den alder, tilvalget svarer til i feltets egen rolle — se
+      `workEndBoundAge`. Den er ikke altid den, feltet viser: som slutår
+      betyder erhvervsophør året før, jf. ADR-0031. Udeladt betyder
+      erhvervsophørsalderen selv. */
+  followsWorkEndAt?: number
   /** Udeladt betyder en fri alder, og feltet kan da også stå tomt — sådan
       skrives et åbent periodeendepunkt. Er en nedre grænse sat, er
       endepunktet påkrævet, og et tømt felt falder tilbage på grænsen: en
-      udbetalingsplan skal begynde et sted. Se `Bounds`. */
+      udbetalingsplan skal begynde et sted. Siger grænsen selv, at tomt er et
+      svar, står feltet tomt alligevel. Grænserne gælder også tilvalget
+      herunder, som ikke kan klemmes og derfor afvises. Se `Bounds`. */
   bounds?: Bounds
   clamp?: Clamp | null
   onClamp?: (clamp: Clamp | null) => void
@@ -381,7 +395,8 @@ export function AgeBoundField({
     },
     // Målt på det tastede og ikke på det, feltet gav videre — forskellen
     // mellem de to *er* klemningen, ganske som i `OptionalNumberField`.
-    // Tilvalget melder intet: det har kun to stillinger og kan ikke klemmes.
+    // Tilvalget herunder melder på sin egen måde: det kan ikke klemmes og
+    // afvises i stedet.
     (next, text) => {
       onClamp?.(clampedBy(parseOptional(text), bounds, help))
       onChange(next)
@@ -419,7 +434,22 @@ export function AgeBoundField({
             <input
               type="checkbox"
               checked={followsWorkEnd}
-              onChange={(event) => onChange(event.target.checked ? 'WorkEndAge' : undefined)}
+              // Tilvalget har kun to stillinger og kan ikke klemmes. Ligger
+              // den alder, det svarer til, uden for grænserne, afvises
+              // redigeringen i stedet, og fluebenet springer tilbage af sig
+              // selv — det er planen, der tegner det, jf. ADR-0045. Går den
+              // igennem, dør den forrige klemning som ved enhver anden
+              // uklemt redigering.
+              onChange={(event) => {
+                if (!event.target.checked) {
+                  onClamp?.(null)
+                  onChange(undefined)
+                  return
+                }
+                const refused = clampedBy(followsWorkEndAt ?? workEndAge, bounds, help)
+                onClamp?.(refused)
+                if (refused === null) onChange('WorkEndAge')
+              }}
             />{' '}
             Følger erhvervsophør
           </label>

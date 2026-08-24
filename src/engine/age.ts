@@ -67,6 +67,20 @@ function resolveAgeBound(
 ): SimulationYear | undefined {
   if (bound === undefined) return undefined
   if (bound !== 'WorkEndAge') return yearAtAge(owner, bound)
-  const year = yearAtAge(owner, owner.workEndAge)
-  return role === 'to' ? year - 1 : year
+  return yearAtAge(owner, workEndBoundAge(owner, role))
+}
+
+/** Den alder, et endepunkt sat til erhvervsophør svarer til i sin rolle:
+    erhvervsophørsalderen selv som `from`, året før som `to`, jf. ADR-0031.
+
+    Oversættelsen er eksakt og ikke en tilnærmelse. `yearAtAge` lægger
+    fødselsdagens plads i året til alderen og skærer resten væk, og et helt år
+    trukket fra alderen giver derfor altid ét kalenderår tilbage — også for en
+    brøkalder som 62,5.
+
+    Findes, fordi fladen har brug for fluebenets alder og ikke kun dets år:
+    et flueben, hvis alder ligger uden for feltets grænser, kan ikke klemmes
+    og skal afvises, jf. ADR-0045. */
+export function workEndBoundAge(owner: Person, role: 'from' | 'to'): number {
+  return role === 'to' ? owner.workEndAge - 1 : owner.workEndAge
 }

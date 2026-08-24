@@ -454,6 +454,11 @@ export type Contribution =
       recurrence: Recurrence
     })
 
+/** Den beholdningskildede form alene — den ene af de to, der bærer sin egen
+    periode. Navngivet, fordi enhver regel om en periode med udstrækning
+    rammer den og ikke søsteren, som arver lønpostens. */
+export type HoldingSourcedContribution = Extract<Contribution, { kind: 'HoldingSourced' }>
+
 export type Plan = {
   name: string
   startYear: SimulationYear

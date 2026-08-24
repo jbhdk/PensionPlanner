@@ -33,6 +33,7 @@ import type {
 import { latestRateYear } from '../engine/rates/rates'
 import { conversionFactor, isLifeAnnuity } from '../engine/lifeAnnuity'
 import type { LifeAnnuityHolding } from '../engine/lifeAnnuity'
+import { workEndBoundAge } from '../engine/age'
 import { payoutYear } from '../engine/payoutAge'
 import {
   boundValue,
@@ -40,7 +41,7 @@ import {
   payoutStartBounds,
   periodEndpointBounds,
 } from '../engine/validatePlan'
-import type { Bounds } from '../engine/validatePlan'
+import type { Bounds, PeriodicFigure } from '../engine/validatePlan'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
 import type { YearResult } from '../engine/yearResult'
 import {
@@ -179,6 +180,8 @@ export function Inspector({
             plan={plan}
             years={years}
             id={target.id}
+            clamp={clamp}
+            onClamp={onClamp}
             onChange={onChange}
             onClose={onClose}
           />
@@ -188,6 +191,8 @@ export function Inspector({
             plan={plan}
             years={years}
             id={target.id}
+            clamp={clamp}
+            onClamp={onClamp}
             onChange={onChange}
             onClose={onClose}
           />
@@ -821,9 +826,11 @@ function EntryFields({
   plan,
   years,
   id,
+  clamp,
+  onClamp,
   onChange,
   onClose,
-}: FieldsProps & { id: string; years: YearResult[] }) {
+}: FieldsProps & { id: string; years: YearResult[] } & ClampProps) {
   const entry = findEntry(plan, id)
   const owner = findPerson(plan, entry?.owner ?? '')
   if (!entry || !owner) return null
@@ -834,6 +841,8 @@ function EntryFields({
       years={years}
       entry={entry}
       owner={owner}
+      clamp={clamp}
+      onClamp={onClamp}
       onChange={onChange}
       onClose={onClose}
     />
@@ -843,11 +852,18 @@ function EntryFields({
       years={years}
       entry={entry}
       owner={owner}
+      clamp={clamp}
+      onClamp={onClamp}
       onChange={onChange}
       onClose={onClose}
     />
   )
 }
+
+/** Fladens seneste klemning og den kanal, en ny meldes gennem. Rækkes ned
+    gennem ruderne til det felt, grænsen står ved — skuffen ejer den ikke,
+    jf. ADR-0045. */
+type ClampProps = { clamp: Clamp | null; onClamp: (clamp: Clamp | null) => void }
 
 type EntryFieldsProps<T extends Entry> = {
   plan: Plan
@@ -858,7 +874,7 @@ type EntryFieldsProps<T extends Entry> = {
   owner: Person
   onChange: (plan: Plan) => void
   onClose: () => void
-}
+} & ClampProps
 
 /** Afsnittet **Posten**: navnet, beløbet og ejeren, som de to slags har med
     den samme betydning. `children` er de felter, kun den ene har — samme
@@ -926,6 +942,8 @@ function IncomeFields({
   years,
   entry,
   owner,
+  clamp,
+  onClamp,
   onChange,
   onClose,
 }: EntryFieldsProps<IncomeEntry>) {
@@ -968,6 +986,9 @@ function IncomeFields({
         value={entry}
         owner={owner}
         startYear={plan.startYear}
+        bounds={endpointBounds(plan, entry)}
+        clamp={clamp}
+        onClamp={onClamp}
         onChange={(next) => onChange(withEntry(plan, entry.id, (e) => ({ ...e, ...next })))}
       >
         <NumberField
@@ -995,6 +1016,8 @@ function ExpenseFields({
   years,
   entry,
   owner,
+  clamp,
+  onClamp,
   onChange,
   onClose,
 }: EntryFieldsProps<ExpenseEntry>) {
@@ -1014,6 +1037,9 @@ function ExpenseFields({
         value={entry}
         owner={owner}
         startYear={plan.startYear}
+        bounds={endpointBounds(plan, entry)}
+        clamp={clamp}
+        onClamp={onClamp}
         onChange={(next) => onChange(withEntry(plan, entry.id, (e) => ({ ...e, ...next })))}
       >
         <Hint>{entryNote(years, entry)}</Hint>
@@ -1383,6 +1409,16 @@ function ContributionAmountField({
     ingen andens: postens reguleringssats og dens note. */
 type Periodic = { period: Period; recurrence: Recurrence; timing: Timing }
 
+/** Begge endepunkters grænser for én figur. Slået op ét sted, så de tre
+    ruder ikke gør det hver for sig — og regnet i motoren, så feltet, håndtaget
+    og afvisningen ikke kan komme til at sige hver sit, jf. ADR-0045. */
+function endpointBounds(plan: Plan, figure: PeriodicFigure): { from: Bounds; to: Bounds } {
+  return {
+    from: periodEndpointBounds(plan, figure, 'from'),
+    to: periodEndpointBounds(plan, figure, 'to'),
+  }
+}
+
 function PeriodSection({
   value,
   owner,
@@ -1479,6 +1515,9 @@ function PeriodSection({
             help="Period.to"
             unit="år"
             value={period.to}
+            bounds={bounds?.to}
+            clamp={clamp}
+            onClamp={onClamp}
             onChange={(to) => change({ period: { ...period, to } })}
           />
         </>
@@ -1498,7 +1537,11 @@ function PeriodSection({
             label="Til (alder)"
             help="Period.to"
             workEndAge={owner.workEndAge}
+            followsWorkEndAt={workEndBoundAge(owner, 'to')}
             value={period.to}
+            bounds={bounds?.to}
+            clamp={clamp}
+            onClamp={onClamp}
             onChange={(to) => change({ period: { ...period, to } })}
           />
         </>
@@ -1539,9 +1582,11 @@ function ContributionFields({
   plan,
   years,
   id,
+  clamp,
+  onClamp,
   onChange,
   onClose,
-}: FieldsProps & { id: string; years: YearResult[] }) {
+}: FieldsProps & { id: string; years: YearResult[] } & ClampProps) {
   const contribution = findContribution(plan, id)
   if (!contribution) return null
 
@@ -1816,6 +1861,9 @@ function ContributionFields({
           value={contribution}
           owner={owner}
           startYear={plan.startYear}
+          bounds={endpointBounds(plan, contribution)}
+          clamp={clamp}
+          onClamp={onClamp}
           onChange={(next) =>
             onChange(
               withContribution(plan, id, (c) =>
@@ -2019,7 +2067,7 @@ function TransferFields({
         value={transfer}
         owner={fromOwner}
         startYear={plan.startYear}
-        bounds={{ from: periodEndpointBounds(plan, transfer, 'from') }}
+        bounds={endpointBounds(plan, transfer)}
         clamp={clamp}
         onClamp={onClamp}
         onChange={(next) => onChange(withTransfer(plan, id, (t) => ({ ...t, ...next })))}

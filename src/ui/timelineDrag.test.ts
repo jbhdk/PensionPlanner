@@ -58,6 +58,135 @@ describe('applyTimelineDrag', () => {
     })
   })
 
+  it('standser to-håndtaget ved postens eget startår og siger hvorfor', () => {
+    // En periode, der slutter før den begynder, falder i nul år, og boksen
+    // ville tegnes med negativ bredde. Det, brugeren rører, er det, der viger,
+    // jf. ADR-0045: trækket er i `to`, og det er `to`, der standser.
+    const plan = aPlan({
+      entries: [
+        aSalary({
+          amountInRealKroner: 600_000,
+          period: { anchor: 'CalendarYear', from: 2030, to: 2035 },
+        }),
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'IncomeEntries')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'to', -8)
+
+    expect(next.plan.entries[0]).toMatchObject({
+      period: { anchor: 'CalendarYear', from: 2030, to: 2030 },
+    })
+    expect(next.clamp).toEqual({
+      field: 'Period.to',
+      message: 'Perioden begynder i 2030 og kan ikke slutte før.',
+    })
+  })
+
+  it('standser fra-håndtaget ved postens eget slutår og siger hvorfor', () => {
+    // Den anden vej rundt: nu er det `from`, brugeren rører, og det er `from`,
+    // der viger. Det urørte slutår står, hvor det stod — ellers ville to
+    // felter bevæge sig af ét træk, jf. ADR-0045.
+    const plan = aPlan({
+      entries: [
+        aSalary({
+          amountInRealKroner: 600_000,
+          period: { anchor: 'CalendarYear', from: 2030, to: 2035 },
+        }),
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'IncomeEntries')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'from', 8)
+
+    expect(next.plan.entries[0]).toMatchObject({
+      period: { anchor: 'CalendarYear', from: 2035, to: 2035 },
+    })
+    expect(next.clamp).toEqual({
+      field: 'Period.from',
+      message: 'Perioden slutter i 2035 og kan ikke begynde efter.',
+    })
+  })
+
+  it('lader et træk i kroppen passere sin egen anden kant', () => {
+    // Boksen flytter sig med sin længde i behold, og de to endepunkter kan
+    // derfor ikke vende om. Måltes grænsen på den stående figur frem for på
+    // den forskudte, ville trækket blive standset af den kant, det lige selv
+    // havde flyttet lige så langt.
+    const plan = aPlan({
+      entries: [
+        aSalary({
+          amountInRealKroner: 600_000,
+          period: { anchor: 'CalendarYear', from: 2030, to: 2035 },
+        }),
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'IncomeEntries')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'body', 20)
+
+    expect(next.plan.entries[0]).toMatchObject({
+      period: { anchor: 'CalendarYear', from: 2050, to: 2055 },
+    })
+    expect(next.clamp).toBeNull()
+  })
+
+  it('binder en aldersforankret overførsels endepunkter i kalenderår og svarer i alder', () => {
+    // Grænsen er et opløst kalenderår — Jesper fylder 60 i 2033 — men
+    // endepunktet er en alder, og svaret skal være i feltets egen enhed.
+    // Beskeden siger året, ganske som dørens gør det, uanset forankring.
+    const plan = aPlan({
+      transfers: [
+        aTransfer({
+          name: 'Tømning',
+          from: 'free-assets',
+          to: 'free-assets',
+          amountInRealKroner: 10_000,
+          period: { anchor: 'PersonAge', from: 60, to: 65 },
+        }),
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'Transfers')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'to', -10)
+
+    expect(next.plan.transfers[0]).toMatchObject({
+      period: { anchor: 'PersonAge', from: 60, to: 60 },
+    })
+    expect(next.clamp).toEqual({
+      field: 'Period.to',
+      message: 'Perioden begynder i 2033 og kan ikke slutte før.',
+    })
+  })
+
+  it('standser et beholdningskildet bidrags fra-håndtag ved dets eget slutår', () => {
+    const plan = aPlan({
+      holdings: [
+        aHolding({ id: 'aldersopsparing', name: 'Aldersopsparing', variant: 'OldAgeSavings', balance: 0 }),
+      ],
+      contributions: [
+        aHoldingContribution({
+          name: 'Opsparing',
+          source: 'free-assets',
+          to: 'aldersopsparing',
+          amountInRealKroner: 10_000,
+          period: { anchor: 'CalendarYear', from: 2030, to: 2035 },
+        }),
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'Contributions')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'from', 9)
+
+    expect(next.plan.contributions[0]).toMatchObject({
+      period: { anchor: 'CalendarYear', from: 2035, to: 2035 },
+    })
+    expect(next.clamp).toEqual({
+      field: 'Period.from',
+      message: 'Perioden slutter i 2035 og kan ikke begynde efter.',
+    })
+  })
+
   it('rykker et aldersforankret frit endepunkt ved at forskyde den faste alder, ikke det opløste årstal', () => {
     // Jesper er født i juni 1973 (jf. aPlan). Et fast alderendepunkt på 57 år
     // løses til 2030 — forskydes alderen med 3, giver det 60, som løses til 2033.

@@ -7,7 +7,7 @@ import {
   payoutStartBounds,
   periodEndpointBounds,
 } from '../engine/validatePlan'
-import type { Bounds } from '../engine/validatePlan'
+import type { Bound, Bounds, PeriodicFigure } from '../engine/validatePlan'
 import { clampBy } from './fields'
 import type { Clamp } from './fields'
 import type { FieldHelpKey } from './fieldHelp'
@@ -41,45 +41,45 @@ export function applyTimelineDrag(
   if (deltaYears === 0) return { plan, clamp: null }
 
   switch (item.target.kind) {
-    case 'entry':
+    // De tre figurer med udstrækning går den samme vej. Grænserne er
+    // `periodEndpointBounds`', og de regnes ikke her — det er hele grunden
+    // til, at den funktion findes, jf. `clampPayoutDuration`.
+    case 'entry': {
+      const targetId = item.target.id
+      const entry = plan.entries.find((e) => e.id === targetId)
+      if (!entry) return { plan, clamp: null }
+      const moved = movedPeriod(plan, entry, edge, deltaYears)
       return {
-        plan: withEntry(plan, item.target.id, (entry) => ({
-          ...entry,
-          period: shiftPeriod(entry.period, edge, deltaYears),
-        })),
-        clamp: null,
+        plan: withEntry(plan, targetId, (e) => ({ ...e, period: moved.period })),
+        clamp: moved.clamp,
       }
+    }
     case 'transfer': {
-      // Overførslens ene grænse: den må ikke hente fra en ordning før dens
-      // pensionsudbetalingsalder. Grænsen regnes af `periodEndpointBounds` og
-      // ikke her — det er hele grunden til, at den funktion findes, jf.
-      // `clampPayoutDuration`.
       const targetId = item.target.id
       const transfer = plan.transfers.find((t) => t.id === targetId)
       if (!transfer) return { plan, clamp: null }
-      const allowed = allowedShift(
-        transfer.period,
-        edge,
-        deltaYears,
-        periodEndpointBounds(plan, transfer, 'from'),
-      )
+      const moved = movedPeriod(plan, transfer, edge, deltaYears)
       return {
-        plan: withTransfer(plan, transfer.id, (t) => ({
-          ...t,
-          period: shiftPeriod(t.period, edge, allowed.deltaYears),
-        })),
-        clamp: allowed.clamp,
+        plan: withTransfer(plan, targetId, (t) => ({ ...t, period: moved.period })),
+        clamp: moved.clamp,
       }
     }
-    case 'contribution':
-      return {
-        plan: withContribution(plan, item.target.id, (contribution) =>
-          contribution.kind === 'HoldingSourced'
-            ? { ...contribution, period: shiftPeriod(contribution.period, edge, deltaYears) }
-            : contribution,
-        ),
-        clamp: null,
+    case 'contribution': {
+      const targetId = item.target.id
+      const contribution = plan.contributions.find((c) => c.id === targetId)
+      // Den lønkildede form har ingen periode at trække i — den arver
+      // lønpostens, og boksen på tidslinjen er postens egen.
+      if (contribution === undefined || contribution.kind !== 'HoldingSourced') {
+        return { plan, clamp: null }
       }
+      const moved = movedPeriod(plan, contribution, edge, deltaYears)
+      return {
+        plan: withContribution(plan, targetId, (c) =>
+          c.kind === 'HoldingSourced' ? { ...c, period: moved.period } : c,
+        ),
+        clamp: moved.clamp,
+      }
+    }
     case 'holding': {
       // En livrentes eneste håndtag er boksens venstre kant: højre kant er
       // ejerens horisont og har intet håndtag, for ydelsen er livsvarig, jf.
@@ -291,6 +291,21 @@ function clampPayoutDuration(
   return { duration: clamped.value, clamp: clamped.clamp }
 }
 
+/** Den forskudte periode, klemt af figurens egne grænser — og beskeden om den
+    væg, der greb ind. */
+function movedPeriod(
+  plan: Plan,
+  figure: PeriodicFigure,
+  edge: TimelineDragEdge,
+  deltaYears: number,
+): { period: Period; clamp: Clamp | null } {
+  const allowed = allowedShift(plan, figure, edge, deltaYears)
+  return {
+    period: shiftPeriod(figure.period, edge, allowed.deltaYears),
+    clamp: allowed.clamp,
+  }
+}
+
 /** Det træk, grænserne tillader — og beskeden om den grænse, der greb ind.
 
     Klemningen rammer *bevægelsen* og ikke endepunktet. Et træk i kroppen
@@ -301,25 +316,57 @@ function clampPayoutDuration(
     er de to det samme: dér flytter trækket kun det ene endepunkt, og det er
     netop det, brugeren tog fat i, jf. ADR-0045.
 
-    Målt på `from` efter trækket. Er det endepunkt ikke et tal — åbent eller
-    sat til erhvervsophør — er der intet at måle, og der er heller intet
-    håndtag at have trukket i. Trækkes `to`, står `from` stille, og grænsen kan
-    ikke være brudt af trækket.
+    Grænserne slås op på den **forskudte** figur og ikke på den stående. De to
+    endepunkter binder hinanden, og et træk i kroppen ville ellers blive
+    standset af sin egen anden kant — den, det lige selv har flyttet lige så
+    langt.
 
-    Feltnøglen er `from`s egen, den samme som skuffen tegner feltet med, så
-    beskeden kan finde vej hen til det felt, væggen står ved. */
+    Kun de endepunkter, trækket rører, måles. Er et af dem ikke et tal — åbent
+    eller sat til erhvervsophør — er der intet at måle, og der er heller intet
+    håndtag at have trukket i.
+
+    Feltnøglen er endepunktets egen, den samme som skuffen tegner feltet med,
+    så beskeden kan finde vej hen til det felt, væggen står ved. */
 function allowedShift(
-  period: Period,
+  plan: Plan,
+  figure: PeriodicFigure,
   edge: TimelineDragEdge,
   deltaYears: number,
-  bounds: Bounds,
 ): { deltaYears: number; clamp: Clamp | null } {
-  const shifted = shiftPeriod(period, edge, deltaYears).from
-  if (typeof shifted !== 'number' || bounds.min === undefined) return { deltaYears, clamp: null }
+  let allowed = deltaYears
+  let clamp: Clamp | null = null
 
-  const floor = boundValue(bounds.min)
-  if (shifted >= floor) return { deltaYears, clamp: null }
-  return { deltaYears: deltaYears + (floor - shifted), clamp: clampBy('Period.from', bounds.min) }
+  for (const endpoint of shiftedEndpoints(edge)) {
+    // Regnet forfra hver gang: har det ene endepunkt allerede kortet trækket
+    // af, er det dét træk, det andet skal måles på.
+    const period = shiftPeriod(figure.period, edge, allowed)
+    const standing = period[endpoint]
+    if (typeof standing !== 'number') continue
+
+    const bounds = periodEndpointBounds(plan, { ...figure, period }, endpoint)
+    const broken = brokenBound(bounds, standing)
+    if (broken === undefined) continue
+
+    allowed += boundValue(broken) - standing
+    clamp = clampBy(endpoint === 'from' ? 'Period.from' : 'Period.to', broken)
+  }
+  return { deltaYears: allowed, clamp }
+}
+
+/** De endepunkter, trækket flytter. Et træk i kroppen flytter begge, et
+    håndtag sit eget, og et punkt uden udstrækning sit ene. */
+function shiftedEndpoints(edge: TimelineDragEdge): ('from' | 'to')[] {
+  if (edge === 'body') return ['from', 'to']
+  return edge === 'to' ? ['to'] : ['from']
+}
+
+/** Den af de to grænser, en værdi ligger uden for — eller intet. Begge sider
+    er i endepunktets egen enhed: grænsen svarer i den, og værdien står i
+    den. */
+function brokenBound(bounds: Bounds, value: number): Bound | undefined {
+  if (bounds.min !== undefined && value < boundValue(bounds.min)) return bounds.min
+  if (bounds.max !== undefined && value > boundValue(bounds.max)) return bounds.max
+  return undefined
 }
 
 function shiftPeriod(period: Period, edge: TimelineDragEdge, deltaYears: number): Period {
