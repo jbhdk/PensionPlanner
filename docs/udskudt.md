@@ -72,6 +72,16 @@ Ting vi har undersøgt, forstået og valgt ikke at bygge endnu. Ikke en backlog 
 
 **Hvad der skal bygges, hvis det tages op:** Et nyt medlem i `AgeBound` og opløsningen af det i `resolveAgeBound`. Det ville være billigt — enhver person har præcis én folkepensionsalder, så den giver mening alle de steder `AgeBound` bruges.
 
+## Den kalenderårsforankrede periodes øvre loft
+
+**Status:** Udskudt. Den aldersforankrede grænse holdes inden for `[0, husstandens sidste år]`, jf. [ADR-0045](./adr/0045-fladen-klemmer-og-siger-hvorfor-indgangskontrollen-er-bagstopperen.md) og [ADR-0030](./adr/0030-en-persons-horisont-stopper-hendes-egen-indkomst-ikke-husstandens-udgifter-eller-hendes-beholdninger.md); en `CalendarYear`-forankret periode har ikke fået det tilsvarende loft.
+
+**Hvorfor det betyder noget:** En udgift, der slutter i 2400, beskriver lige så lidt som en, der slutter ved alder 200 — motoren regner blot årene ud til husstandens sidste og lader resten falde på gulvet. De to forankringer er dermed løse hver sin vej: den aldersforankrede standses nu, den kalenderårsforankrede ikke. Den nedre grænse deler de ikke, og det er efter hensigten — et årstal har ingen fødsel at måle mod, og venstre kant er med vilje ikke klemt, fordi `from` bærer en `EveryNYears`-posts fase.
+
+**Prisen ved at lade den ligge:** Lille og synlig. Tidslinjens udstrækning ender ved husstandens sidste år, så en boks trukket derud kan slet ikke nås med et håndtag — kun skuffens felt kan skrive årstallet, og posten tegnes da med sin højre kant uden for det, brugeren kan se. Planen regner videre og giver de samme tal som en post uden slutår.
+
+**Hvad der skal bygges, når det tages op:** En linje i `householdBounds`, som i dag svarer `undefined` for `CalendarYear`. Loftet er det samme kalenderår, den aldersforankrede måles mod, og oversættelsen til endepunktets egen enhed er allerede en identitet for et årstal. Sætningen findes: `householdEndsReason`. Det åbne spørgsmål er ikke prisen, men om det overhovedet er en regel — et årstal efter husstandens sidste år er ikke ulovligt på samme måde som en alder før en fødsel, det er bare uden virkning.
+
 ## Efterladtescenarie (dødsfald)
 
 **Status:** Delvist bygget, resten udskudt til efter v1. Jf. [ADR-0030](./adr/0030-en-persons-horisont-stopper-hendes-egen-indkomst-ikke-husstandens-udgifter-eller-hendes-beholdninger.md) stopper en persons indtægtsposter, folkepension og livrenteydelse allerede ved hendes egen `horizon`. Det er en tilnærmelse og ikke en modellering af dødsfaldet selv: ingen enlig-sats, intet udgiftsfald, og beholdninger fortsætter uændret.
