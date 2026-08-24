@@ -2,11 +2,38 @@ import { describe, expect, it } from 'vitest'
 import { simulate } from '../engine/simulate'
 import {
   aContribution,
+  aHolding,
   aHoldingContribution,
   aPlan,
   aSalary,
+  aTransfer,
 } from '../engine/testing/planFixture'
 import { exportPlan, importPlan } from './planFile'
+
+/** En plan, hvis overførsel henter fra en aldersopsparing i 2030, ti år før
+    dens dør: ejeren er født i juni 1973, og pensionsudbetalingsalderen er 67. */
+function planWithEarlyTransfer() {
+  return aPlan({
+    holdings: [
+      aHolding({
+        id: 'aldersopsparing',
+        name: 'Aldersopsparing',
+        variant: 'OldAgeSavings',
+        payoutAge: 67,
+        balance: 300_000,
+      }),
+    ],
+    transfers: [
+      aTransfer({
+        name: 'Tømning',
+        from: 'aldersopsparing',
+        to: 'free-assets',
+        amountInRealKroner: 50_000,
+        period: { anchor: 'CalendarYear', from: 2030 },
+      }),
+    ],
+  })
+}
 
 describe('planFile', () => {
   it('giver præcis den samme årsrække tilbage efter en eksport efterfulgt af en import', () => {
@@ -45,6 +72,40 @@ describe('planFile', () => {
     const result = importPlan(exportPlan(aPlan()))
 
     expect((result as { notice?: string }).notice).toBeUndefined()
+  })
+
+  it('reparerer en importeret fil på den nuværende skemaversion frem for at afvise den', () => {
+    // Trinnet er ikke et migrationsled. En importeret fil kan komme fra hvor
+    // som helst og bære tilstanden på den nuværende skemaversion, hvor en
+    // migration kun ville fange planer gemt før sit eget nummer.
+    const result = importPlan(exportPlan(planWithEarlyTransfer()))
+
+    expect(result.kind).toBe('Loaded')
+    expect((result as { notice?: string }).notice).toMatch(/Tømning begyndte i 2030/)
+  })
+
+  it('siger både om lønposterne og om det klemte, når en gammel fil bærer begge dele', () => {
+    // De to beskeder deler én kanal, og en fil fra før ADR-0040 kan udmærket
+    // også bære en periode, fladen ville have klemt. Tabte den ene den
+    // anden, ville planlæggeren aldrig få det at vide.
+    const result = importPlan(
+      JSON.stringify({ schemaVersion: 13, plan: planWithEarlyTransfer() }),
+    )
+
+    expect(result.kind).toBe('Loaded')
+    expect((result as { notice?: string }).notice).toMatch(/lønposter/i)
+    expect((result as { notice?: string }).notice).toMatch(/Tømning/)
+  })
+
+  it('afviser stadig en fil, hvis overførsel henter fra en beholdning, der ikke findes', () => {
+    // Reparationen udvider ikke sit hverv til pegerne: en hængende peger får
+    // motoren til at lyve eller styrte, og den skal stoppes ved indgangen.
+    const plan = planWithEarlyTransfer()
+    const result = importPlan(
+      exportPlan({ ...plan, transfers: [{ ...plan.transfers[0]!, from: 'findes-ikke' }] }),
+    )
+
+    expect(result.kind).toBe('Failed')
   })
 
   it('bærer en plan med de fire pensionsvarianter hele vejen rundt', () => {

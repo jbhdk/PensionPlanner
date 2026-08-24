@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { aPlan } from '../engine/testing/planFixture'
+import { simulate } from '../engine/simulate'
+import { aHolding, aPlan, aTransfer } from '../engine/testing/planFixture'
 import { loadPlan, savePlan, STORAGE_KEY } from './planStorage'
 
 describe('planStorage', () => {
@@ -74,6 +75,39 @@ describe('planStorage', () => {
 
     expect(result.kind).toBe('Failed')
     expect((result as { reason: string }).reason).toMatch(/nyere version/i)
+  })
+
+  it('reparerer en gemt overførsel, der henter før afgiverens dør, frem for at afvise planen', () => {
+    // Planen kan ligge i localStorage fra før klemningen kom til fladen, og
+    // uden reparationen ville næste indlæsning give fejlskærmen, uden at
+    // brugeren havde rørt noget, jf. ADR-0045.
+    const plan = aPlan({
+      holdings: [
+        aHolding({
+          id: 'aldersopsparing',
+          name: 'Aldersopsparing',
+          variant: 'OldAgeSavings',
+          payoutAge: 67,
+          balance: 300_000,
+        }),
+      ],
+      transfers: [
+        aTransfer({
+          name: 'Tømning',
+          from: 'aldersopsparing',
+          to: 'free-assets',
+          amountInRealKroner: 50_000,
+          period: { anchor: 'CalendarYear', from: 2030 },
+        }),
+      ],
+    })
+    savePlan(plan)
+
+    const result = loadPlan()
+
+    expect(result.kind).toBe('Loaded')
+    expect(() => simulate((result as { plan: typeof plan }).plan)).not.toThrow()
+    expect((result as { notice?: string }).notice).toMatch(/Tømning/)
   })
 
   it('giver Failed frem for at kaste, når det gemte er gyldig JSON men ikke en konvolut', () => {
