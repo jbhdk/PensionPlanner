@@ -658,7 +658,7 @@ table.aar th,
    med "%" og "kr." fylder mere end den bredeste tekst, og de knap 12px er
    taget af indtastningsfeltet frem for lagt til kolonnen. Værdikolonnen
    holder dermed sine 186px, og etiketten beholder sin plads —
-   `Pensionsudbetalingsalder` er allerede for langt et ord til at kunne
+   `Udbetalingsalder` er allerede for langt et ord til at kunne
    undvære den. */
 .felt .enhed {
   color: var(--muted);

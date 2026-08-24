@@ -892,7 +892,7 @@ describe('fladen', () => {
     await user.click(navigatorButton(/Anden beholdning/))
     await user.selectOptions(screen.getByLabelText(/Type/), 'Kapitalpension')
 
-    const alder = screen.getByLabelText('Pensionsudbetalingsalder')
+    const alder = screen.getByLabelText('Udbetalingsalder')
     expect((alder as HTMLInputElement).value).toBe('0')
 
     await user.clear(alder)
@@ -1217,30 +1217,37 @@ describe('fladen', () => {
     expect(nettoafkast.textContent).toContain('udledt')
   })
 
-  it('viser ordningens pensionsudbetalingsalder som et tastet felt', async () => {
+  it('viser ordningens udbetalingsalder som et tastet felt under Beholdningen', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithPension()} />)
 
     await user.click(navigatorButton(/Ratepension/))
 
-    expect((screen.getByLabelText('Pensionsudbetalingsalder') as HTMLInputElement).value).toBe(
-      '67',
-    )
+    expect((screen.getByLabelText('Udbetalingsalder') as HTMLInputElement).value).toBe('67')
+    // Feltet er ordningens egen stamdata og hører derfor til i Beholdningen,
+    // ved siden af Navn, Type, Ejer og Saldo — ikke i et afsnit for sig selv.
+    expect(sectionLabels('Beholdningen')).toEqual([
+      'Navn',
+      'Type',
+      'Ejer',
+      'Saldo',
+      'Udbetalingsalder',
+    ])
   })
 
-  it('retter pensionsudbetalingsalderen, når brugeren taster et nyt tal', async () => {
+  it('retter udbetalingsalderen, når brugeren taster et nyt tal', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithPension()} />)
 
     await user.click(navigatorButton(/Ratepension/))
-    const alder = screen.getByLabelText('Pensionsudbetalingsalder')
+    const alder = screen.getByLabelText('Udbetalingsalder')
     await user.clear(alder)
     await user.type(alder, '60')
 
     expect((alder as HTMLInputElement).value).toBe('60')
   })
 
-  it('viser ingen pensionsudbetalingsalder på en aktiesparekonto', async () => {
+  it('viser ingen udbetalingsalder på en aktiesparekonto', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlan({ holdings: [aShareSavingsAccount()] })} />)
 
@@ -1248,7 +1255,7 @@ describe('fladen', () => {
 
     // Kontoen har ingen: ejeren hæver af den, når hun vil, og et felt om en
     // udbetalingsalder ville påstå en lovregel, der ikke findes.
-    expect(screen.queryByLabelText('Pensionsudbetalingsalder')).toBeNull()
+    expect(screen.queryByLabelText('Udbetalingsalder')).toBeNull()
   })
 
   it('tilbyder ikke bufferfeltet på en pensionsbeholdning', async () => {

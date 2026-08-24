@@ -452,6 +452,9 @@ function HoldingFields({
             onChange(withHolding(plan, id, (h) => ({ ...h, balance })))
           }
         />
+        {isPensionScheme(holding) && (
+          <PayoutFields plan={plan} holding={holding} onChange={onChange} />
+        )}
         {isFreeAssets(holding) && (
           <>
             <RadioField
@@ -498,11 +501,6 @@ function HoldingFields({
           unit="udledt"
         />
       </Section>
-      {isPensionScheme(holding) && (
-        <Section title="Udbetaling">
-          <PayoutFields plan={plan} holding={holding} onChange={onChange} />
-        </Section>
-      )}
       {isLifeAnnuity(holding) && (
         <ConversionSection
           plan={plan}
@@ -528,8 +526,8 @@ function HoldingFields({
 }
 
 /** Hvornår ordningen tidligst må udbetales. Tastet direkte, som
-    pensionsselskabet oplyser den, jf. ADR-0032 — afsnittet står kun på de
-    fire pensionsvarianter: en aktiesparekonto og frie midler har ingen
+    pensionsselskabet oplyser den, jf. ADR-0032 — feltet står kun på de fire
+    pensionsvarianter: en aktiesparekonto og frie midler har ingen
     udbetalingsalder, og et felt om en, der ikke findes, ville påstå en
     lovregel, der ikke gør. */
 function PayoutFields({
@@ -543,7 +541,7 @@ function PayoutFields({
 }) {
   return (
     <NumberField
-      label="Pensionsudbetalingsalder"
+      label="Udbetalingsalder"
       help="Holding.payoutAge"
       unit="år"
       value={holding.payoutAge}
