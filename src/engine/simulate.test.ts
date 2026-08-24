@@ -23,6 +23,7 @@ import {
   anExpense,
   aTransfer,
   bufferBalance,
+  withSecondPerson,
 } from './testing/planFixture'
 import { simulateChecked } from './testing/simulateChecked'
 import type { CapYear, YearResult } from './yearResult'
@@ -5358,6 +5359,71 @@ describe('den omvendte periode', () => {
           amountInRealKroner: 100_000,
           period: { anchor: 'CalendarYear', from: 2040 },
           recurrence: { kind: 'Once' },
+        }),
+      ],
+    })
+
+    expect(validatePlan(plan)).toBeUndefined()
+  })
+})
+
+describe('den aldersforankrede grænse', () => {
+  it('afviser en post, der begynder før ejerens fødsel, og nævner den ved planens eget navn', () => {
+    // En alder før fødslen beskriver ingenting. Reglen kan ikke længere nås
+    // gennem fladen, jf. ADR-0045, men en håndredigeret fil kan bære
+    // tilstanden.
+    const plan = aPlan({
+      entries: [
+        anExpense({
+          amountInRealKroner: 100_000,
+          period: { anchor: 'PersonAge', from: -4, to: 60 },
+        }),
+      ],
+    })
+
+    expect(validatePlan(plan)).toBe(
+      'Posten Faste udgifter begynder ved alder -4. Jesper er født i 1973 og har ' +
+        'ingen alder før da.',
+    )
+    expect(() => simulate(plan)).toThrow(/Faste udgifter begynder ved alder -4/i)
+  })
+
+  it('måler loftet mod husstandens sidste år og ikke mod ejerens egen horisont', () => {
+    // Jesper har horisont 95 og er født i 1973: husstanden regnes til og med
+    // 2068. Maria er født i 1975 og har horisont 90, så hendes egen slutter i
+    // 2065 — men udgiftsposten er husstandens og fortsætter til det fælles
+    // sidste år, selv om dens periode er forankret til hendes alder, jf.
+    // ADR-0030. Hendes alder 93 er 2068 og går igennem; 94 er 2069 og gør
+    // ikke. Klemtes der til hendes egen horisont, ville 91 være uskrivelig.
+    const withMaria = (to: number): Plan =>
+      withSecondPerson(
+        aPlan({
+          horizon: 95,
+          entries: [
+            anExpense({
+              amountInRealKroner: 100_000,
+              owner: 'maria',
+              period: { anchor: 'PersonAge', from: 60, to },
+            }),
+          ],
+        }),
+      )
+
+    expect(validatePlan(withMaria(93))).toBeUndefined()
+    expect(validatePlan(withMaria(94))).toBe(
+      'Posten Faste udgifter slutter ved alder 94. Husstandens forløb slutter i 2068.',
+    )
+  })
+
+  it('lader en kalenderårsforankret periode stå — den har ingen alder at måle', () => {
+    // 1960 ligger før Jespers fødsel i 1973, men et årstal siger ingenting om
+    // en alder, og venstre kant er med vilje ikke klemt: `from` bærer en
+    // `EveryNYears`-posts fase, jf. ADR-0045.
+    const plan = aPlan({
+      entries: [
+        anExpense({
+          amountInRealKroner: 100_000,
+          period: { anchor: 'CalendarYear', from: 1960, to: 2040 },
         }),
       ],
     })

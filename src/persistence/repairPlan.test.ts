@@ -170,4 +170,49 @@ describe('repairPlan', () => {
         'Beholdningen Aldersopsparing må tidligst udbetales i 2040.',
     ])
   })
+
+  it('retter en aldersforankret periode, der begynder før ejerens fødsel', () => {
+    // Reglen kan ikke længere nås gennem fladen, men en gemt eller
+    // håndredigeret fil kan bære alderen −4, og uden trinnet ville den give
+    // fejlskærmen ved næste indlæsning. Trinnet er generisk: grænsen kom til i
+    // `periodEndpointBounds`, og reparationen fandt den af sig selv.
+    const repaired = repairPlan(
+      aPlan({
+        entries: [
+          anExpense({
+            amountInRealKroner: 100_000,
+            period: { anchor: 'PersonAge', from: -4, to: 60 },
+          }),
+        ],
+      }),
+    )
+
+    expect(repaired.plan.entries[0]!.period).toEqual({ anchor: 'PersonAge', from: 0, to: 60 })
+    expect(repaired.repairs).toEqual([
+      'Posten Faste udgifter begyndte ved alder -4 og er rettet til alder 0. ' +
+        'Jesper er født i 1973 og har ingen alder før da.',
+    ])
+  })
+
+  it('lader et åbent startpunkt stå, hvor tomt selv er et svar', () => {
+    // Ejeren er her født efter planens start, og fødslen ligger dermed efter
+    // det år, et åbent `from` betyder. Grænsen findes, men den siger selv, at
+    // tomt er et svar, jf. `mayBeEmpty` — posten løber "fra planens start", og
+    // det er ikke en værdi, der skal klemmes til alder 0. Kun døren gør tomt
+    // til et ikke-svar, og den er en overførsels alene.
+    const plan = aPlan({
+      birthYear: 2030,
+      entries: [
+        anExpense({
+          amountInRealKroner: 100_000,
+          period: { anchor: 'PersonAge', to: 60 },
+        }),
+      ],
+    })
+
+    const repaired = repairPlan(plan)
+
+    expect(repaired.plan).toEqual(plan)
+    expect(repaired.repairs).toEqual([])
+  })
 })

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { aHolding, aHoldingContribution, aPlan, aSalary, aTransfer } from '../engine/testing/planFixture'
+import {
+  aHolding,
+  aHoldingContribution,
+  aPlan,
+  aSalary,
+  aTransfer,
+  anExpense,
+  withSecondPerson,
+} from '../engine/testing/planFixture'
+import type { Entry, Plan } from '../engine/plan'
 import { timelineLayout } from './timelineLayout'
 import { applyTimelineDrag } from './timelineDrag'
 
@@ -156,6 +165,93 @@ describe('applyTimelineDrag', () => {
     expect(next.clamp).toEqual({
       field: 'Period.to',
       message: 'Perioden begynder i 2033 og kan ikke slutte før.',
+    })
+  })
+
+  it('standser et aldersforankret fra-håndtag ved alder 0 og siger hvorfor', () => {
+    // `shiftBound` er ren addition, så kanten kunne trækkes negativ. En post
+    // fra alder −4 er ingen fejl, motoren tager skade af — den beskriver bare
+    // ingenting: en person kan ikke have et endepunkt før sin fødsel.
+    const plan = aPlan({
+      entries: [
+        aSalary({
+          amountInRealKroner: 600_000,
+          period: { anchor: 'PersonAge', from: 5, to: 62 },
+        }),
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'IncomeEntries')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'from', -20)
+
+    expect(next.plan.entries[0]).toMatchObject({
+      period: { anchor: 'PersonAge', from: 0, to: 62 },
+    })
+    expect(next.clamp).toEqual({
+      field: 'Period.from',
+      message: 'Jesper er født i 1973 og har ingen alder før da.',
+    })
+  })
+
+  it('standser et aldersforankret til-håndtag ved husstandens sidste år og ikke ved ejerens egen horisont', () => {
+    // Jesper har horisont 95 og er født i 1973: husstanden regnes til og med
+    // 2068. Maria er født i 1975 og har horisont 90, så hendes egen slutter i
+    // 2065 — men udgiftsposten er husstandens og fortsætter til det fælles
+    // sidste år, jf. ADR-0030. Loftet er derfor hendes alder i 2068, altså 93,
+    // og ikke hendes horisont 90.
+    const plan = aPlanWithMaria(
+      anExpense({
+        amountInRealKroner: 100_000,
+        owner: 'maria',
+        period: { anchor: 'PersonAge', from: 60, to: 80 },
+      }),
+    )
+    const item = timelineLayout(plan).find((g) => g.name === 'ExpenseEntries')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'to', 20)
+
+    expect(next.plan.entries[0]).toMatchObject({
+      period: { anchor: 'PersonAge', from: 60, to: 93 },
+    })
+    expect(next.clamp).toEqual({
+      field: 'Period.to',
+      message: 'Husstandens forløb slutter i 2068.',
+    })
+  })
+
+  it('lader fødselsmåneden bestemme, hvilken brøkalder der stadig ligger i husstandens sidste år', () => {
+    // Loftet regnes i kalenderår og oversættes tilbage til alder, jf.
+    // ADR-0045. Maria er nu født i januar 1975, og hun fylder 93½ i juli 2068
+    // — husstandens sidste år, som Jespers horisont 95 sætter. Alderen 93,5 er
+    // derfor stadig inden for forløbet, hvor et loft målt i aldre havde
+    // standset ved 93 og gjort feltet strengere end året.
+    const plan = aPlanWithMaria(
+      anExpense({
+        amountInRealKroner: 100_000,
+        owner: 'maria',
+        period: { anchor: 'PersonAge', from: 60, to: 92.5 },
+      }),
+      1,
+    )
+    const item = timelineLayout(plan).find((g) => g.name === 'ExpenseEntries')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'to', 1)
+
+    expect(next.plan.entries[0]).toMatchObject({
+      period: { anchor: 'PersonAge', from: 60, to: 93.5 },
+    })
+    expect(next.clamp).toBeNull()
+
+    // Ét år længere er 94½ i 2069, og dér er husstanden ikke længere. Væggen
+    // står altså — den står bare et halvt år senere end aldrene antyder.
+    const beyond = applyTimelineDrag(plan, item, 'to', 2)
+
+    expect(beyond.plan.entries[0]).toMatchObject({
+      period: { anchor: 'PersonAge', from: 60, to: 93.5 },
+    })
+    expect(beyond.clamp).toEqual({
+      field: 'Period.to',
+      message: 'Husstandens forløb slutter i 2068.',
     })
   })
 
@@ -674,3 +770,9 @@ describe('applyTimelineDrag', () => {
     expect(holding).toMatchObject({ payout: { start: 89 } })
   })
 })
+
+/** Fixturens Jesper med horisont 95, og Maria ved siden af ham med 90:
+    husstanden regnes til og med 2068, hvor hendes egen slutter i 2065. */
+function aPlanWithMaria(entry: Entry, birthMonth?: number): Plan {
+  return withSecondPerson(aPlan({ horizon: 95, entries: [entry] }), { birthMonth })
+}

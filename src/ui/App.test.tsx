@@ -4849,6 +4849,35 @@ describe('fladen', () => {
       ).toBeTruthy()
     })
 
+    it('lader ikke en tastet alder ligge før ejerens fødsel', async () => {
+      // Skuffens felt er lige så løst som tidslinjens håndtag var: alderen −4
+      // kan tastes, og posten beskriver da ingenting. Værdien snapper til 0,
+      // og beskeden siger hvorfor — den samme sætning, håndtaget melder.
+      const user = userEvent.setup()
+      render(
+        <App
+          initialPlan={aPlan({
+            entries: [
+              anExpense({
+                amountInRealKroner: 100_000,
+                period: { anchor: 'PersonAge', from: 60, to: 80 },
+              }),
+            ],
+          })}
+        />,
+      )
+
+      await user.click(navigatorButton(/Faste udgifter/))
+      const fra = () => screen.getByLabelText('Fra (alder)') as HTMLInputElement
+      await user.clear(fra())
+      await user.type(fra(), '-4')
+
+      expect(screen.getByText('Jesper er født i 1973 og har ingen alder før da.')).toBeTruthy()
+      await user.tab()
+      expect(fra().value).toBe('0')
+      expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+    })
+
     it('viser trækkets klemning i skuffen, fordi et greb også vælger figuren', async () => {
       // Boksen standser i den blå luft: aksen har intet mærke for ordningens
       // pensionsudbetalingsalder. Beskeden er derfor den eneste forklaring, og

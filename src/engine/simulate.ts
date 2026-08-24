@@ -33,7 +33,7 @@ import type {
   Timing,
   Transfer,
 } from './plan'
-import { periodBounds, personLastYear } from './age'
+import { householdLastYear, periodBounds, personLastYear } from './age'
 import { payoutStartYear, transferAllowedFrom } from './payoutAge'
 import {
   cap,
@@ -188,7 +188,7 @@ export function simulate(plan: Plan): YearResult[] {
 
   const holdings = allHoldings(plan)
   const results: YearResult[] = []
-  for (let year = plan.startYear; year <= lastYear(plan); year++) {
+  for (let year = plan.startYear; year <= householdLastYear(plan.household); year++) {
     const { rates, basis } = rateYearFor(year, plan)
     const previous = results.at(-1)
     const opening =
@@ -2013,9 +2013,3 @@ function allHoldings(plan: Plan): Holding[] {
   return plan.household.persons.flatMap((person) => person.holdings)
 }
 
-function lastYear(plan: Plan): SimulationYear {
-  const horizons = plan.household.persons.map(
-    (person) => person.birthYear + person.horizon,
-  )
-  return Math.max(...horizons)
-}

@@ -10,7 +10,7 @@ import {
   payoutTaxation,
 } from './holdingVariant'
 import { payoutStartYear, payoutYear, transferAllowedFrom } from './payoutAge'
-import { periodBounds, yearAtAge } from './age'
+import { householdLastYear, periodBounds, yearAtAge } from './age'
 import type {
   AgeBound,
   ContributionAmount,
@@ -69,8 +69,78 @@ export function validatePlan(plan: Plan): string | undefined {
     entrySourcedDestination(plan) ??
     pensionAgreements(plan) ??
     payoutSchedules(plan) ??
+    ageBoundedPeriods(plan) ??
     reversedPeriods(plan)
   )
+}
+
+/** En aldersforankret periode skal beskrive noget. En post fra alder −4 er
+    ingen fejl, motoren tager skade af — den beskriver bare ingenting: en
+    person kan ikke have et endepunkt før sin fødsel.
+
+    Målt på opløste kalenderår som de øvrige, jf. ADR-0045. En fødselsmåned må
+    ikke kunne gøre afvisningen strengere end fladens egen klemning.
+
+    Kun de aldersforankrede måles. En kalenderårsperiode har ingen alder at
+    holde op mod en fødsel.
+
+    Reglen kan ikke længere nås gennem fladen, som klemmer begge endepunkter.
+    Den bliver stående som nettet under en håndredigeret fil, jf. ADR-0045. */
+function ageBoundedPeriods(plan: Plan): string | undefined {
+  const last = householdLastYear(plan.household)
+  for (const figure of periodicFigures(plan)) {
+    const period = figure.period
+    if (period.anchor !== 'PersonAge') continue
+    // Ejeren findes: pegerreglerne er kørt før denne, jf. `reversedPeriods`.
+    const owner = periodOwner(plan, figure)!
+
+    for (const endpoint of ['from', 'to'] as const) {
+      const standing = period[endpoint]
+      // Et åbent endepunkt og et flueben er ingen alder at måle: det ene
+      // betyder planens start eller horisontens slut, det andet følger
+      // erhvervsophøret, som ligger inden for forløbet i forvejen.
+      if (typeof standing !== 'number') continue
+      const year = yearAtAge(owner, standing)
+      const broken =
+        year < yearAtAge(owner, 0)
+          ? bornInReason(owner)
+          : year > last
+            ? householdEndsReason(last)
+            : undefined
+      if (broken === undefined) continue
+      return (
+        `${figureSubject(figure)} ${runsFrom(endpoint)} ved alder ` +
+        `${danishNumber(standing)}. ${broken}`
+      )
+    }
+  }
+  return undefined
+}
+
+/** Den ene sætning om fødslen. Grænsen, afvisningen og reparationsbeskeden
+    møder den samme væg og skal ikke kunne komme til at sige hver sit om den,
+    jf. `Bound`. */
+function bornInReason(owner: Person): string {
+  return `${owner.name} er født i ${owner.birthYear} og har ingen alder før da.`
+}
+
+/** Den ene sætning om husstandens sidste år. Væggen er husstandens og ikke
+    ejerens: en udgiftspost forankret til den korteste horisont må løbe helt
+    til det fælles sidste år, jf. ADR-0030 og `householdLastYear`. */
+function householdEndsReason(last: SimulationYear): string {
+  return `Husstandens forløb slutter i ${last}.`
+}
+
+/** Det, endepunktet gør ved perioden. Samme ord som reparationsbeskedens, blot
+    i nutid: afvisningen taler om den plan, der ligger der nu. */
+function runsFrom(endpoint: 'from' | 'to'): string {
+  return endpoint === 'from' ? 'begynder' : 'slutter'
+}
+
+/** Et tal, som brugeren ville have læst det: komma som decimaltegn. En alder
+    kan være en brøk — folkepensionsalderen er 65,5 for én årgang. */
+function danishNumber(value: number): string {
+  return String(value).replace('.', ',')
 }
 
 /** En periode, hvis slutår ligger før dens startår, beskriver ingenting:
@@ -529,23 +599,28 @@ export type PeriodicFigure = Entry | Transfer | HoldingSourcedContribution
 
 /** Grænserne for ét af en figurs to periodeendepunkter.
 
-    Der er to regler at svare på. Den ene rammer kun overførslen: den må ikke
-    hente fra en ordning før dens pensionsudbetalingsalder. En hævning før den
-    koster 20 % i afgift og er ikke noget, planen skal kunne beskrive, jf.
+    Der er tre regler at svare på. Den første rammer kun overførslen: den må
+    ikke hente fra en ordning før dens pensionsudbetalingsalder. En hævning før
+    den koster 20 % i afgift og er ikke noget, planen skal kunne beskrive, jf.
     ADR-0022 — og `transferEnds` afviser den plan. Den anden rammer alle tre:
     perioden må ikke vendes om, og de to endepunkter binder derfor hinanden.
-    Grænserne står her ved siden af afvisningerne, så håndtaget, feltet og
-    afvisningen ikke kan komme til at sige hver sit; det er den samme grund,
+    Den tredje rammer kun de aldersforankrede: endepunktet skal ligge inden for
+    husstandens forløb, jf. `householdBounds` og `ageBoundedPeriods`. Grænserne
+    står her ved siden af afvisningerne, så håndtaget, feltet og afvisningen
+    ikke kan komme til at sige hver sit; det er den samme grund,
     `payoutDurationBounds` findes af.
 
-    Bindingen måles på opløste kalenderår. En `PersonAge`-periode og en
-    `CalendarYear`-periode skal måles med det samme, og et endepunkt sat til
-    erhvervsophør opløses forskelligt i de to roller, jf. ADR-0031.
+    De måles alle tre på opløste kalenderår, og først dér kan de holdes op mod
+    hinanden: en `PersonAge`-periode og en `CalendarYear`-periode skal måles
+    med det samme, og et endepunkt sat til erhvervsophør opløses forskelligt i
+    de to roller, jf. ADR-0031. Møder flere vægge det samme endepunkt, er det
+    kun den strammeste, der svarer — se `latest` og `earliest`.
 
     Et udeladt endepunkt binder ingenting. Det betyder "fra planens start"
-    henholdsvis "til horisontens slut", og ingen af de to vægge er denne
-    regels: den venstre er med vilje ikke klemt, jf. ADR-0045, og den højre er
-    husstandens sidste år og en regel for sig.
+    henholdsvis "til horisontens slut", og ingen af de to er en væg, en anden
+    figur skal måles mod: den venstre er med vilje ikke klemt, jf. ADR-0045, og
+    den højre er husstandens sidste år, som er den tredje regels øvre grænse i
+    forvejen.
 
     Svaret er i endepunktets egen enhed: et årstal til en kalenderårsforankret
     periode, en alder til en aldersforankret. Alderen findes ved at flytte den
@@ -562,34 +637,94 @@ export function periodEndpointBounds(
   const owner = periodOwner(plan, figure)
   if (owner === undefined) return {}
 
-  const unit = (year: SimulationYear) => inEndpointUnit(figure.period, endpoint, year, owner)
+  const unit = (bound: YearBound): Bound => ({
+    value: inEndpointUnit(figure.period, endpoint, bound.value, owner),
+    reason: bound.reason,
+  })
   const opposite = periodBounds(figure.period, owner)[endpoint === 'from' ? 'to' : 'from']
+  // Døren måler kun startåret: en overførsel må ikke *hente* fra ordningen,
+  // før den må udbetales, og et slutår henter ingenting.
+  const door = endpoint === 'from' ? payoutDoor(plan, figure) : undefined
+  const household = householdBounds(plan, figure.period, owner)
 
-  if (endpoint === 'to') {
-    return {
-      // Et åbent slutår betyder horisontens slut og er stadig et svar, selv
-      // om startåret har lagt en nedre grænse — derfor falder et tømt felt
-      // ikke tilbage på den, jf. `Bounds`.
-      mayBeEmpty: true,
-      ...(opposite === undefined
-        ? {}
-        : { min: { value: unit(opposite), reason: cannotEndBeforeReason(figure, opposite) } }),
-    }
-  }
+  const min = latest([
+    household?.min,
+    door === undefined
+      ? undefined
+      : { value: door.year, reason: payoutDoorReason(door.holding, door.year) },
+    endpoint === 'to' && opposite !== undefined
+      ? { value: opposite, reason: cannotEndBeforeReason(figure, opposite) }
+      : undefined,
+  ])
+  const max = earliest([
+    household?.max,
+    endpoint === 'from' && opposite !== undefined
+      ? { value: opposite, reason: cannotBeginAfterReason(opposite) }
+      : undefined,
+  ])
 
-  const door = payoutDoor(plan, figure)
   return {
-    // Et åbent startår betyder planens start, og ligger døren efter den, er
-    // tomt ikke et svar: overførslen ville hente fra ordningen, før den må
-    // udbetales.
-    mayBeEmpty: door === undefined,
-    ...(door === undefined
-      ? {}
-      : { min: { value: unit(door.year), reason: payoutDoorReason(door.holding, door.year) } }),
-    ...(opposite === undefined
-      ? {}
-      : { max: { value: unit(opposite), reason: cannotBeginAfterReason(opposite) } }),
+    // Et åbent slutår betyder horisontens slut og er stadig et svar, selv om
+    // startåret har lagt en nedre grænse — derfor falder et tømt felt ikke
+    // tilbage på den, jf. `Bounds`. Et åbent startår betyder planens start, og
+    // ligger døren efter den, er tomt derimod ikke et svar: overførslen ville
+    // hente fra ordningen, før den må udbetales.
+    mayBeEmpty: endpoint === 'to' || door === undefined,
+    ...(min === undefined ? {} : { min: unit(min) }),
+    ...(max === undefined ? {} : { max: unit(max) }),
   }
+}
+
+/** En grænse målt i kalenderår, med den begrundelse den melder. Vægge fra
+    forskellige regler kan kun sammenlignes i den ene enhed, de deler, jf.
+    ADR-0045 — oversættelsen til endepunktets egen sker først, når den
+    strammeste er fundet. */
+type YearBound = { value: SimulationYear; reason: string }
+
+/** Husstandens forløb som de to vægge, en aldersforankret periode skal ligge
+    inden for: fødslen og husstandens sidste år.
+
+    Loftet er husstandens og ikke ejerens egen horisont, jf.
+    `householdLastYear`. Døren er fødslen, fordi en alder før den ikke
+    beskriver noget — en person kan ikke have et endepunkt før sin fødsel.
+
+    En kalenderårsforankret periode har ingen af de to. Den har ingen alder at
+    holde op mod en fødsel, og dens venstre kant er med vilje ikke klemt, jf.
+    ADR-0045. */
+function householdBounds(
+  plan: Plan,
+  period: Period,
+  owner: Person,
+): { min: YearBound; max: YearBound } | undefined {
+  if (period.anchor === 'CalendarYear') return undefined
+  const last = householdLastYear(plan.household)
+  return {
+    min: { value: yearAtAge(owner, 0), reason: bornInReason(owner) },
+    max: { value: last, reason: householdEndsReason(last) },
+  }
+}
+
+/** Den strammeste af flere nedre grænser — den seneste — og af flere øvre:
+    den tidligste. Et endepunkt skal stå inden for dem alle, og det er derfor
+    kun den strammeste, der nogensinde griber ind. */
+function latest(bounds: (YearBound | undefined)[]): YearBound | undefined {
+  return bounds.reduce<YearBound | undefined>(
+    (tightest, bound) =>
+      bound !== undefined && (tightest === undefined || bound.value > tightest.value)
+        ? bound
+        : tightest,
+    undefined,
+  )
+}
+
+function earliest(bounds: (YearBound | undefined)[]): YearBound | undefined {
+  return bounds.reduce<YearBound | undefined>(
+    (tightest, bound) =>
+      bound !== undefined && (tightest === undefined || bound.value < tightest.value)
+        ? bound
+        : tightest,
+    undefined,
+  )
 }
 
 /** Ordningens dør, hvor figuren har en at måle mod: overførslen, som henter

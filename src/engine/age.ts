@@ -1,4 +1,4 @@
-import type { AgeBound, Period, Person, SimulationYear } from './plan'
+import type { AgeBound, Household, Period, Person, SimulationYear } from './plan'
 
 /** Det kalenderår en person når en alder. Formlen er
     `birthYear + floor(age + (birthMonth − 1) / 12)`: den lægger fødselsdagens
@@ -21,6 +21,19 @@ export function yearAtAge(person: Person, age: number): SimulationYear {
     post kan række forbi. */
 export function personLastYear(person: Person): SimulationYear {
   return yearAtAge(person, person.horizon)
+}
+
+/** Det sidste år, husstanden regnes i: den seneste af personernes egne. En
+    aldersforankret grænse måles mod det og ikke mod ejerens egen horisont —
+    en udgiftspost er husstandens og fortsætter til det fælles sidste år, selv
+    om dens periode er forankret til ejerens alder, jf. ADR-0030. Klemtes der
+    til ejerens horisont, ville en fuldt lovlig post være uskrivelig.
+
+    Står her ved siden af `personLastYear` af samme grund som `periodBounds`:
+    motoren, indgangskontrollen og fladen måler alle tre mod den, og et
+    horisontår regnet hvert sit sted kunne før eller siden svare hver sit. */
+export function householdLastYear(household: Household): SimulationYear {
+  return Math.max(...household.persons.map((person) => personLastYear(person)))
 }
 
 /** Periodens to endepunkter oversat til kalenderår. Ved `PersonAge` følger et

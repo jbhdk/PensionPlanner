@@ -68,6 +68,12 @@ function repairedEndpoint<T extends PeriodicFigure>(
   const bounds = periodEndpointBounds(plan, figure, endpoint)
   if (bounds.min === undefined && bounds.max === undefined) return undefined
 
+  // Står endepunktet tomt, og siger grænsen selv, at tomt er et svar, er der
+  // intet at reparere: "fra planens start" er en betydning og ikke en værdi,
+  // en væg kan klemme, jf. `mayBeEmpty`. Kun ordningens dør gør tomt til et
+  // ikke-svar — dér ville overførslen hente, før den må.
+  if (figure.period[endpoint] === undefined && bounds.mayBeEmpty) return undefined
+
   const owner = periodOwner(plan, figure)
   if (owner === undefined) return undefined
   const year = standingYear(plan, figure.period, endpoint, owner)

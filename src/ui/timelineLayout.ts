@@ -1,4 +1,4 @@
-import { periodBounds, personLastYear } from '../engine/age'
+import { householdLastYear, periodBounds, personLastYear } from '../engine/age'
 import { payoutStartYear } from '../engine/payoutAge'
 import type { AgeBound, Period, Person, PersonId, Plan, Recurrence, SimulationYear } from '../engine/plan'
 import { CATEGORICAL_PALETTE, holdingColor, orderedHoldings } from './palette'
@@ -259,14 +259,14 @@ function buildItems(
   ]
 }
 
-/** De to år, et *åbent* endepunkt opløses til: planens start og den seneste
-    horisont, nogen af husstandens personer når. Et udeladt endepunkt betyder
-    "fra planens start" og ikke "fra tidslinjens venstre kant", jf. `Period` i
-    plan.ts — de to er ikke længere det samme tal. */
+/** De to år, et *åbent* endepunkt opløses til: planens start og husstandens
+    sidste år. Et udeladt endepunkt betyder "fra planens start" og ikke "fra
+    tidslinjens venstre kant", jf. `Period` i plan.ts — de to er ikke længere
+    det samme tal. */
 function openBounds(plan: Plan): { openStart: SimulationYear; openEnd: SimulationYear } {
   return {
     openStart: plan.startYear,
-    openEnd: Math.max(...plan.household.persons.map((person) => person.birthYear + person.horizon)),
+    openEnd: householdLastYear(plan.household),
   }
 }
 

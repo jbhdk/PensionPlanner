@@ -112,6 +112,40 @@ export function aPlan(options: Options = {}): Plan {
   }
 }
 
+/** Planen med en person mere: Maria, født i 1975 og med sin egen horisont.
+    To personer med hver sin horisont er dét, en grænse mod husstandens sidste
+    år kan tage fejl af — loftet er husstandens og ikke ejerens, jf. ADR-0030,
+    og med kun én person er de to tal det samme.
+
+    Fødselsmåneden kan skrues på: en brøkalder rammer hvert sit kalenderår
+    efter den, og det er dér, en grænse målt i aldre og en målt i kalenderår
+    skiller sig fra hinanden. */
+export function withSecondPerson(
+  plan: Plan,
+  options: { birthMonth?: number; horizon?: number } = {},
+): Plan {
+  const { birthMonth = 3, horizon = 90 } = options
+  return {
+    ...plan,
+    household: {
+      persons: [
+        ...plan.household.persons,
+        {
+          id: 'maria',
+          name: 'Maria',
+          birthYear: 1975,
+          birthMonth,
+          workEndAge: 60,
+          horizon,
+          municipality: 'Hvidovre',
+          churchMember: true,
+          holdings: [],
+        },
+      ],
+    },
+  }
+}
+
 /** En beholdning af den ønskede variant. Opslaget på varianten er det
     eneste, der kan skrive unionen, når varianten først kendes ved kaldet —
     uden et cast, som netop ville skjule det, felternes plads i unionen er
@@ -164,6 +198,7 @@ export function aHolding(options: {
     andet angives. */
 export function anExpense(options: {
   amountInRealKroner: number
+  owner?: string
   timing?: Timing
   period?: Period
   recurrence?: Recurrence
@@ -172,7 +207,7 @@ export function anExpense(options: {
     id: 'living-costs',
     name: 'Faste udgifter',
     amountInRealKroner: options.amountInRealKroner,
-    owner: 'jesper',
+    owner: options.owner ?? 'jesper',
     direction: 'Expense',
     timing: options.timing ?? 'Even',
     period: options.period ?? wholeHorizon,
