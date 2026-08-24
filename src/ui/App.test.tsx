@@ -1251,19 +1251,16 @@ describe('fladen', () => {
     expect(screen.queryByLabelText('Pensionsudbetalingsalder')).toBeNull()
   })
 
-  it('lader ikke bufferen udpeges til en pensionsbeholdning, og siger hvorfor', async () => {
+  it('tilbyder ikke bufferfeltet på en pensionsbeholdning', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithPension()} />)
 
     await user.click(navigatorButton(/Ratepension/))
-    const buffer = screen.getByLabelText(/Buffer/) as HTMLInputElement
 
-    expect(buffer.checked).toBe(false)
-    expect(buffer.disabled).toBe(true)
-    // Reglen står i skuffen frem for at være et felt, der forsvandt.
-    expect(screen.getByText(/Bufferen skal være frie midler/i)).toBeTruthy()
-
-    await user.click(buffer)
+    // Bufferen skal være frie midler, jf. ADR-0004. En pensionsordning kan
+    // aldrig blive planens buffer, og feltet står derfor slet ikke i skuffen
+    // frem for at vise et valg, der ikke findes.
+    expect(screen.queryByLabelText(/Buffer/)).toBeNull()
 
     await user.click(navigatorButton(/Frie midler/))
     expect((screen.getByLabelText(/Buffer/) as HTMLInputElement).checked).toBe(true)

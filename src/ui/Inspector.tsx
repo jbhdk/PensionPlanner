@@ -452,18 +452,21 @@ function HoldingFields({
             onChange(withHolding(plan, id, (h) => ({ ...h, balance })))
           }
         />
-        <RadioField
-          label="Buffer"
-          help="Plan.buffer"
-          checked={plan.buffer === id}
-          disabled={!isFreeAssets(holding)}
-          onSelect={() => onChange({ ...plan, buffer: id })}
-        />
-        <Hint>
-          Årets samlede over- eller underskud lander på bufferen. Præcis én
-          beholdning kan være det, og bufferen skal være frie midler — penge
-          ind i en ordning er en indbetaling.
-        </Hint>
+        {isFreeAssets(holding) && (
+          <>
+            <RadioField
+              label="Buffer"
+              help="Plan.buffer"
+              checked={plan.buffer === id}
+              onSelect={() => onChange({ ...plan, buffer: id })}
+            />
+            <Hint>
+              Årets samlede over- eller underskud lander på bufferen. Præcis én
+              beholdning kan være det, og bufferen skal være frie midler —
+              penge ind i en ordning er en indbetaling.
+            </Hint>
+          </>
+        )}
       </Section>
       <Section title="Afkast">
         <NumberField
