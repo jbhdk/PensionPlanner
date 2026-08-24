@@ -3462,6 +3462,43 @@ describe('fladen', () => {
       expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
     })
 
+    it('forkorter perioden i skuffen, når boksens venstre kant trækkes ind', () => {
+      // Kanten flytter sig, og den anden står stille — som enhver anden boks
+      // på tidslinjen. Begge tal i skuffen følger med, for det er dem, boksen
+      // er tegnet af.
+      render(
+        <App
+          initialPlan={aPlan({
+            startYear: 2026,
+            birthYear: 1973,
+            horizon: 90,
+            balance: 500_000,
+            holdings: [
+              {
+                id: 'ratepension',
+                name: 'Ratepension',
+                variant: 'InstalmentPension',
+                payoutAge: 60,
+                balance: 1_000_000,
+                grossReturn: 0,
+                annualCostRate: 0,
+                payout: { start: 67, duration: 15, principle: 'SerialPrinciple' },
+              },
+            ],
+          })}
+        />,
+      )
+
+      const handle = document.querySelector('.tl-haandtag.fra') as HTMLElement
+      fireEvent.mouseDown(handle, { clientX: 0 })
+      // Tre år frem på tidslinjens egen skala — 18 px pr. år.
+      fireEvent.mouseMove(window, { clientX: 3 * 18 })
+      fireEvent.mouseUp(window)
+
+      expect((screen.getByLabelText('Start') as HTMLInputElement).value).toBe('70')
+      expect((screen.getByLabelText('Varighed') as HTMLInputElement).value).toBe('12')
+    })
+
     it('viser trækkets klemning ved Start-feltet, når håndtaget standser ved døren', () => {
       // Trækket vælger allerede figuren, så skuffen står åben på ordningen.
       // Uden beskeden ville boksen standse i den blå luft: aksen har intet
@@ -3478,6 +3515,30 @@ describe('fladen', () => {
         screen.getByText('Beholdningen Ratepension må tidligst udbetales i 2030.'),
       ).toBeTruthy()
       expect((screen.getByLabelText('Start') as HTMLInputElement).value).toBe('62')
+    })
+
+    it('lader ikke Start-feltet skubbe den sidste rate forbi trediveårsgrænsen', async () => {
+      // Feltet flytter starten med varigheden i behold, og den sidste rate
+      // flytter sig derfor med. Ordningen må udbetales fra 2026, sidste rate
+      // skal falde senest i 2056, og en plan på ti år må derfor tidligst
+      // begynde i 2047 — alder 74.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithPayoutFromStart()} />)
+      await user.click(navigatorButton(/Ratepension/))
+
+      const start = screen.getByLabelText('Start') as HTMLInputElement
+      await user.clear(start)
+      await user.type(start, '80')
+      await user.tab()
+
+      expect(start.value).toBe('74')
+      expect(
+        screen.getByText(
+          'Beholdningen Ratepension skal udbetale sin sidste rate senest i 2056, ' +
+            '30 år efter pensionsudbetalingsalderen.',
+        ),
+      ).toBeTruthy()
+      expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
     })
 
     it('siger hvorfor, når varigheden klemmes op til de ti år', async () => {

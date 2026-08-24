@@ -121,7 +121,10 @@ describe('applyTimelineDrag', () => {
     })
   })
 
-  it('rykker en ratepensions udbetalingsstart, når fra-håndtaget trækkes', () => {
+  it('rykker hele ratepensionens udbetalingsplan, når kroppen trækkes', () => {
+    // Kroppen flytter planen og ændrer den ikke: samme varighed, senere
+    // start. Det er dét, der skiller den fra fra-håndtaget, som holder højre
+    // kant fast og forkorter perioden i stedet.
     const plan = aPlan({
       holdings: [
         {
@@ -138,7 +141,7 @@ describe('applyTimelineDrag', () => {
     })
     const item = timelineLayout(plan).find((g) => g.name === 'HoldingPayouts')!.items[0]!
 
-    const next = applyTimelineDrag(plan, item, 'from', 2)
+    const next = applyTimelineDrag(plan, item, 'body', 2)
 
     const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
     expect(holding).toMatchObject({ payout: { start: 69, duration: 15 } })
@@ -190,6 +193,98 @@ describe('applyTimelineDrag', () => {
 
     const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
     expect(holding).toMatchObject({ payout: { start: 67, duration: 15 } })
+  })
+
+  it('forkorter ratepensionens udbetalingsperiode, når fra-håndtaget trækkes ind', () => {
+    // Boksens venstre kant er starten, dens højre er `start + duration − 1`.
+    // Trækkes kanten ind, står den anden stille, og perioden bliver kortere —
+    // som enhver anden boks på tidslinjen. Skal hele planen flytte sig med
+    // samme længde, er det kroppen, man tager fat i.
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 60,
+          balance: 1_000_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+          payout: { start: 67, duration: 15, principle: 'SerialPrinciple' },
+        },
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'HoldingPayouts')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'from', 3)
+
+    const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
+    expect(holding).toMatchObject({ payout: { start: 70, duration: 12 } })
+    expect(next.clamp).toBeNull()
+  })
+
+  it('standser kroppen, før den sidste rate skubbes forbi trediveårsgrænsen', () => {
+    // Kroppen flytter starten med varigheden i behold, og den sidste rate
+    // flytter sig derfor med. Uden denne grænse kunne et træk skrive en plan,
+    // `payoutSchedules` afviser, og hele resultatspalten ville forsvinde midt
+    // i trækket. Jesper når 67 i 2040, sidste rate skal falde senest i 2070,
+    // og en plan på 28 år må derfor tidligst begynde i 2043 — alder 70.
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 1_000_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+          payout: { start: 67, duration: 28, principle: 'SerialPrinciple' },
+        },
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'HoldingPayouts')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'body', 5)
+
+    const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
+    expect(holding).toMatchObject({ payout: { start: 70, duration: 28 } })
+    expect(next.clamp).toEqual({
+      field: 'PayoutSchedule.start',
+      message:
+        'Beholdningen Ratepension skal udbetale sin sidste rate senest i 2070, ' +
+        '30 år efter pensionsudbetalingsalderen.',
+    })
+  })
+
+  it('standser fra-håndtaget, når perioden ville blive kortere end ti år', () => {
+    // Otte år ind ville give en varighed på syv. Væggen er tiårsreglen og
+    // ikke døren: det er varigheden, kanten spiser af, når den anden står
+    // stille.
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 60,
+          balance: 1_000_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+          payout: { start: 67, duration: 15, principle: 'SerialPrinciple' },
+        },
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'HoldingPayouts')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'from', 8)
+
+    const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
+    expect(holding).toMatchObject({ payout: { start: 72, duration: 10 } })
+    expect(next.clamp).toEqual({
+      field: 'PayoutSchedule.start',
+      message: 'En ratepension skal udbetales over mindst 10 år.',
+    })
   })
 
   it('klemmer ratepensionens fra-håndtag til brøkalderens eget kalenderår, og siger hvorfor', () => {

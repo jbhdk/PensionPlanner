@@ -81,16 +81,28 @@ export function applyTimelineDrag(
         clamp: null,
       }
     case 'holding': {
-      // En livrentes eneste håndtag er boksens venstre kant, klemt til de
-      // grænser `validatePlan` alligevel ville afvise uden for, jf. ADR-0037;
-      // en ratepensions to-håndtag er dens varighed, jf. `to = from + duration
-      // − 1` i `timelineLayout.ts` — starten står urørt, når det er den, der
-      // trækkes. Begge ordningers håndtag klemmes, og til de samme grænser
-      // som skuffens egne felter: et håndtag, der kunne skrive en plan,
+      // En livrentes eneste håndtag er boksens venstre kant: højre kant er
+      // ejerens horisont og har intet håndtag, for ydelsen er livsvarig, jf.
+      // ADR-0037.
+      //
+      // En ratepensions boks er tegnet af planens to tal — `to = from +
+      // duration − 1` i `timelineLayout.ts` — og dens tre greb skriver hver
+      // sit:
+      //
+      //   `to`     ændrer varigheden og lader starten stå.
+      //   `from`   lader den sidste rate stå og lader varigheden vige, så
+      //            perioden bliver kortere eller længere. Kanten opfører sig
+      //            dermed som enhver anden boks' kant på tidslinjen, og
+      //            kroppen er ikke længere det samme greb en gang til.
+      //   `body`   flytter hele planen med varigheden i behold.
+      //
+      // De to sidste flytter begge starten, men holder hver sit fast, og
+      // deres øvre grænse er derfor ikke den samme væg — se `keeping` i
+      // `payoutStartBounds`. Den nedre er: døren er den samme uanset
+      // gestussen. Alle tre klemmes, og til de samme grænser som skuffens
+      // egne felter, for et håndtag, der kunne skrive en plan,
       // indgangskontrollen afviser, ville lade hele resultatspalten forsvinde
-      // midt i et træk. De to starte deler lovreglen og dermed grænsen —
-      // `payoutStartBounds` — og siger derfor også det samme, når den greb
-      // ind.
+      // midt i et træk.
       const targetId = item.target.id
       const owner = plan.household.persons.find((person) => person.id === item.owner)!
       const holding = owner.holdings.find((h) => h.id === targetId)
@@ -142,6 +154,27 @@ export function applyTimelineDrag(
             duration: stretched.duration,
           })),
           clamp: stretched.clamp,
+        }
+      }
+      if (edge === 'from') {
+        // Venstre kant flytter sig, og højre står stille: perioden bliver
+        // kortere eller længere, og varigheden følger med. Er starten låst til
+        // erhvervsophør, har kanten slet intet håndtag, jf. `resolveStart` —
+        // og så er der intet at have trukket i.
+        if (typeof schedule.start !== 'number') return { plan, clamp: null }
+        const moved = clampedTo(
+          schedule.start + deltaYears,
+          payoutStartBounds(scheme, owner, schedule.start, 'LastInstalment'),
+          'PayoutSchedule.start',
+        )
+        const shift = moved.value - schedule.start
+        return {
+          plan: withPayoutSchedule(plan, targetId, (payout) => ({
+            ...payout,
+            start: moved.value,
+            duration: payout.duration - shift,
+          })),
+          clamp: moved.clamp,
         }
       }
       const moved = clampPayoutStart(

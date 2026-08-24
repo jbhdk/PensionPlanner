@@ -340,13 +340,7 @@ export function payoutDurationBounds(
   const room = latest - payoutStartYear(start, owner) + 1
   return {
     min: { value: minimumPayoutYears, reason: minimumDurationReason() },
-    max: {
-      value: Math.max(minimumPayoutYears, room),
-      reason:
-        `Beholdningen ${holding.name} skal udbetale sin sidste rate senest i ` +
-        `${latest}, ${latestPayoutYearsAfterPayoutAge} år efter ` +
-        `pensionsudbetalingsalderen.`,
-    },
+    max: { value: Math.max(minimumPayoutYears, room), reason: lastInstalmentReason(holding, latest) },
   }
 }
 
@@ -356,6 +350,17 @@ export function payoutDurationBounds(
     ramte, og grænsen beskriver væggen, der aldrig lod den komme dertil. */
 function minimumDurationReason(): string {
   return `En ratepension skal udbetales over mindst ${minimumPayoutYears} år.`
+}
+
+/** Den ene sætning om trediveårsgrænsen. To grænser møder den — varighedens
+    øvre og startens, når gestussen beholder varigheden — og det er den samme
+    væg set fra hver sin ende. */
+function lastInstalmentReason(holding: Holding, latest: SimulationYear): string {
+  return (
+    `Beholdningen ${holding.name} skal udbetale sin sidste rate senest i ` +
+    `${latest}, ${latestPayoutYearsAfterPayoutAge} år efter ` +
+    `pensionsudbetalingsalderen.`
+  )
 }
 
 /** En grænse: tallet alene, eller tallet og den besked, fladen siger, når den
@@ -405,21 +410,48 @@ export function boundReason(bound: Bound | undefined): string | undefined {
     plan, er der ingen alder at flytte, og ordningens egen
     pensionsudbetalingsalder er svaret — den rammer døren pr. definition.
 
-    Uden en øvre grænse. Trediveårsgrænsen for den sidste rate bindes af
-    varigheden og ikke af starten, jf. `payoutDurationBounds`, og et loft her
-    ville lægge den regel to steder. */
+    Den øvre grænse afhænger af, hvad redigeringen holder fast, mens starten
+    flytter sig — og de to svar er forskellige vægge, ikke det samme tal skrevet
+    to gange. `'Duration'` beholder varigheden, så hele planen flytter sig, og
+    den sidste rate flytter sig med: loftet er da det seneste år, planen må
+    begynde i, for at den sidste rate stadig falder inden for de tredive år.
+    `'LastInstalment'` lader den sidste rate stå og lader varigheden vige i
+    stedet: loftet er da de ti år, varigheden aldrig må komme under. Skuffens
+    felt og et træk i kroppen holder varigheden fast; tidslinjens venstre
+    håndtag holder den sidste rate fast.
+
+    Livrenten har ingen af de to. Den er livsvarig og har hverken en varighed
+    eller en sidste rate, og dens eneste grænse er derfor døren. */
 export function payoutStartBounds(
   holding: PensionSchemeHolding,
   owner: Person,
   start: AgeBound | undefined,
-): { min: Bound } {
+  keeping: 'Duration' | 'LastInstalment' = 'Duration',
+  // Døren står altid: enhver pensionsordning har en, og et kald kan derfor
+  // læse `min` uden at spørge, om den er der. Loftet kan mangle — livrenten
+  // har intet.
+): Bounds & { min: Bound } {
   const door = payoutYear(holding, owner)
   const standing = typeof start === 'number' ? start : holding.payoutAge
+  const asAge = (year: SimulationYear) => standing + (year - yearAtAge(owner, standing))
+  const min: Bound = { value: asAge(door), reason: payoutDoorReason(holding, door) }
+
+  const schedule = bearsPayoutSchedule(holding) ? holding.payout : undefined
+  if (schedule === undefined) return { min }
+
+  const latest = door + latestPayoutYearsAfterPayoutAge
   return {
-    min: {
-      value: standing + (door - yearAtAge(owner, standing)),
-      reason: payoutDoorReason(holding, door),
-    },
+    min,
+    max:
+      keeping === 'Duration'
+        ? {
+            value: asAge(latest - (schedule.duration - 1)),
+            reason: lastInstalmentReason(holding, latest),
+          }
+        : {
+            value: standing + (schedule.duration - minimumPayoutYears),
+            reason: minimumDurationReason(),
+          },
   }
 }
 
