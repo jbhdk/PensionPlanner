@@ -432,6 +432,67 @@ function aPlanWithPayoutFromStart() {
   return aPlanWithRatepension({ start: 53, duration: 10, principle: 'SerialPrinciple' })
 }
 
+/** En ratepension, hvis dør falder mellem to hele aldre. Ejeren er født i
+    marts 1968, og pensionsudbetalingsalderen er 62,5, som selskabet oplyser
+    den: døren går op i 1968 + ⌊62,5 + 2/12⌋ = 2030. Alder 62 rammer det
+    samme år — 1968 + ⌊62 + 2/12⌋ — og en plan, der starter dér, findes i
+    virkeligheden.
+
+    Den findes for at stille de to enheder op mod hinanden: målt i aldre er
+    62 for tidligt, målt i kalenderår er det ikke, og kalenderåret er det,
+    loven måler i. */
+function aPlanWithFractionalPayoutAge(start?: AgeBound) {
+  return aPlan({
+    startYear: 2026,
+    birthYear: 1968,
+    birthMonth: 3,
+    horizon: 90,
+    balance: 500_000,
+    holdings: [
+      {
+        id: 'ratepension',
+        name: 'Ratepension',
+        variant: 'InstalmentPension',
+        payoutAge: 62.5,
+        balance: 1_000_000,
+        grossReturn: 0,
+        annualCostRate: 0,
+        ...(start === undefined
+          ? {}
+          : { payout: { start, duration: 10, principle: 'SerialPrinciple' as const } }),
+      },
+    ],
+  })
+}
+
+/** Den samme brøkalder og den samme fødselsmåned på en livrente. De to
+    ordninger deler lovreglen, jf. `payoutSchedules`, og feltet skal møde den
+    ens begge steder. */
+function aLifeAnnuityWithFractionalPayoutAge(start: AgeBound) {
+  return aPlan({
+    startYear: 2026,
+    birthYear: 1968,
+    birthMonth: 3,
+    horizon: 90,
+    balance: 500_000,
+    holdings: [
+      {
+        id: 'livrente',
+        name: 'Livrente',
+        variant: 'LifeAnnuity',
+        payoutAge: 62.5,
+        balance: 1_000_000,
+        grossReturn: 0,
+        annualCostRate: 0,
+        quotedReserve: 1_000_000,
+        quotedAnnualBenefit: 51_200,
+        bonusRate: 0,
+        payout: { start },
+      },
+    ],
+  })
+}
+
 /** En plan med en livrente, der omsættes i planens allerførste år.
     Pensionsudbetalingsalderen er tastet til 53 — den alder, ejeren fylder i
     2026 — så omsætningen kan ses uden at rulle fjorten år frem.
@@ -3347,6 +3408,119 @@ describe('fladen', () => {
       expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
     })
 
+    it('lader den alder stå, motoren accepterer, når ordningens dør er en brøkalder', async () => {
+      // Feltet målte i aldre, hvor håndtaget og `validatePlan` måler i
+      // kalenderår, og var derfor strengere end dem begge: 62 er lovligt —
+      // året, ejeren fylder 62, er det samme år, hun fylder 62,5 — men
+      // feltet løftede det til 62,5, hver gang der blev rørt ved det.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithFractionalPayoutAge(62)} />)
+      await user.click(navigatorButton(/Ratepension/))
+
+      const start = screen.getByLabelText('Start') as HTMLInputElement
+      await user.clear(start)
+      await user.type(start, '62')
+      await user.tab()
+
+      expect(start.value).toBe('62')
+      expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+    })
+
+    it('siger hvilken grænse der greb ind, da starten blev klemt op', async () => {
+      // Væggen er usynlig: aksen har intet mærke for en ordnings
+      // pensionsudbetalingsalder, og feltet ville ellers blot rette sig selv
+      // uden at sige hvorfor. Beskeden siger kalenderåret, som er den enhed,
+      // grænsen findes i — og dermed også, hvorfor 62 gik igennem og 61 ikke
+      // gjorde.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithFractionalPayoutAge(62)} />)
+      await user.click(navigatorButton(/Ratepension/))
+
+      const start = screen.getByLabelText('Start') as HTMLInputElement
+      await user.clear(start)
+      await user.type(start, '61')
+      await user.tab()
+
+      expect(start.value).toBe('62')
+      expect(
+        screen.getByText('Beholdningen Ratepension må tidligst udbetales i 2030.'),
+      ).toBeTruthy()
+    })
+
+    it('lægger en ny plan på brøkalderen selv, ikke på det hele år under den', async () => {
+      // Den nye plans start slås op i den samme grænse som feltets og
+      // håndtagets. Er der endnu ingen plan, er der ingen alder at flytte, og
+      // ordningens egen pensionsudbetalingsalder er svaret — den rammer døren
+      // pr. definition, og et hele år under den ville lægge planen et år for
+      // tidligt for de fødselsmåneder, hvor brøken ikke skubber årstallet.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithFractionalPayoutAge()} />)
+      await user.click(navigatorButton(/Ratepension/))
+      await user.click(screen.getByRole('button', { name: '+ Tilføj' }))
+
+      expect((screen.getByLabelText('Start') as HTMLInputElement).value).toBe('62,5')
+      expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+    })
+
+    it('viser trækkets klemning ved Start-feltet, når håndtaget standser ved døren', () => {
+      // Trækket vælger allerede figuren, så skuffen står åben på ordningen.
+      // Uden beskeden ville boksen standse i den blå luft: aksen har intet
+      // mærke for en ordnings pensionsudbetalingsalder.
+      render(<App initialPlan={aPlanWithFractionalPayoutAge(62)} />)
+
+      const handle = document.querySelector('.tl-haandtag.fra') as HTMLElement
+      fireEvent.mouseDown(handle, { clientX: 0 })
+      // Ét år tilbage på tidslinjens egen skala — 18 px pr. år.
+      fireEvent.mouseMove(window, { clientX: -18 })
+      fireEvent.mouseUp(window)
+
+      expect(
+        screen.getByText('Beholdningen Ratepension må tidligst udbetales i 2030.'),
+      ).toBeTruthy()
+      expect((screen.getByLabelText('Start') as HTMLInputElement).value).toBe('62')
+    })
+
+    it('siger hvorfor, når varigheden klemmes op til de ti år', async () => {
+      // De to varighedsgrænser er lige så usynlige som døren: tidslinjen har
+      // intet mærke for hverken tiårsreglen eller trediveårsgrænsen, og
+      // feltet rettede sig selv uden at sige hvorfor.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithPayoutFromStart()} />)
+      await user.click(navigatorButton(/Ratepension/))
+
+      const duration = screen.getByLabelText('Varighed') as HTMLInputElement
+      await user.clear(duration)
+      await user.type(duration, '5')
+      await user.tab()
+
+      expect(duration.value).toBe('10')
+      expect(
+        screen.getByText('En ratepension skal udbetales over mindst 10 år.'),
+      ).toBeTruthy()
+    })
+
+    it('siger hvorfor, når varigheden klemmes ned til trediveårsgrænsen', async () => {
+      // Ordningen må udbetales fra 2026, og sidste rate skal derfor falde
+      // senest i 2056 — 31 år. Grænsen er startens og lovens tilsammen, og
+      // beskeden siger året, så den kan efterregnes.
+      const user = userEvent.setup()
+      render(<App initialPlan={aPlanWithPayoutFromStart()} />)
+      await user.click(navigatorButton(/Ratepension/))
+
+      const duration = screen.getByLabelText('Varighed') as HTMLInputElement
+      await user.clear(duration)
+      await user.type(duration, '40')
+      await user.tab()
+
+      expect(duration.value).toBe('31')
+      expect(
+        screen.getByText(
+          'Beholdningen Ratepension skal udbetale sin sidste rate senest i 2056, ' +
+            '30 år efter pensionsudbetalingsalderen.',
+        ),
+      ).toBeTruthy()
+    })
+
     it('viser start, varighed og princip for en ratepension, der har en plan', async () => {
       const user = userEvent.setup()
       render(<App initialPlan={aPlanWithPayoutFromStart()} />)
@@ -3442,6 +3616,22 @@ describe('fladen', () => {
       await user.tab()
 
       expect(start.value).toBe('53')
+      expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+    })
+
+    it('måler også livrentens dør i kalenderår, når alderen er en brøk', async () => {
+      // Ratepensionen og livrenten deler den lovregel, og de to felter skal
+      // derfor slå op i den samme grænse — ikke hver sin.
+      const user = userEvent.setup()
+      render(<App initialPlan={aLifeAnnuityWithFractionalPayoutAge(62)} />)
+      await user.click(navigatorButton(/Livrente/))
+
+      const start = screen.getByLabelText('Udbetalingsstart') as HTMLInputElement
+      await user.clear(start)
+      await user.type(start, '62')
+      await user.tab()
+
+      expect(start.value).toBe('62')
       expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
     })
   })
@@ -4590,6 +4780,12 @@ describe('fladen', () => {
 
       expect(fra().value).toBe('60')
       expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+      // Beskeden er den samme uanset forankring. Grænsen er ét kalenderår, og
+      // et aldersfelt, der klemte tavst, hvor årsfeltet forklarer sig, ville
+      // gøre den samme væg til to.
+      expect(
+        screen.getByText('Beholdningen Aldersopsparing må tidligst udbetales i 2033.'),
+      ).toBeTruthy()
     })
 
     it('viser trækkets klemning i skuffen, fordi et greb også vælger figuren', async () => {

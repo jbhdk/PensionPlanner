@@ -34,7 +34,12 @@ import { latestRateYear } from '../engine/rates/rates'
 import { conversionFactor, isLifeAnnuity } from '../engine/lifeAnnuity'
 import type { LifeAnnuityHolding } from '../engine/lifeAnnuity'
 import { payoutYear } from '../engine/payoutAge'
-import { payoutDurationBounds, periodEndpointBounds } from '../engine/validatePlan'
+import {
+  boundValue,
+  payoutDurationBounds,
+  payoutStartBounds,
+  periodEndpointBounds,
+} from '../engine/validatePlan'
 import type { Bounds } from '../engine/validatePlan'
 import { deriveStatePensionAge } from '../engine/statePensionAge'
 import type { YearResult } from '../engine/yearResult'
@@ -163,6 +168,8 @@ export function Inspector({
           <HoldingFields
             plan={plan}
             id={target.id}
+            clamp={clamp}
+            onClamp={onClamp}
             onChange={onChange}
             onClose={onClose}
           />
@@ -377,7 +384,14 @@ function StatePensionAgeFields({ plan, id }: { plan: Plan; id: string }) {
   )
 }
 
-function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: string }) {
+function HoldingFields({
+  plan,
+  id,
+  clamp,
+  onClamp,
+  onChange,
+  onClose,
+}: FieldsProps & { id: string; clamp: Clamp | null; onClamp: (clamp: Clamp | null) => void }) {
   const holding = findHolding(plan, id)
   const owner = findHoldingOwner(plan, id)
   if (!holding || !owner) return null
@@ -482,13 +496,22 @@ function HoldingFields({ plan, id, onChange, onClose }: FieldsProps & { id: stri
         </Section>
       )}
       {isLifeAnnuity(holding) && (
-        <ConversionSection plan={plan} holding={holding} owner={owner} onChange={onChange} />
+        <ConversionSection
+          plan={plan}
+          holding={holding}
+          owner={owner}
+          clamp={clamp}
+          onClamp={onClamp}
+          onChange={onChange}
+        />
       )}
       {bearsPayoutSchedule(holding) && (
         <PayoutScheduleSection
           plan={plan}
           holding={holding}
           owner={owner}
+          clamp={clamp}
+          onClamp={onClamp}
           onChange={onChange}
         />
       )}
@@ -537,15 +560,20 @@ function ConversionSection({
   plan,
   holding,
   owner,
+  clamp,
+  onClamp,
   onChange,
 }: {
   plan: Plan
   holding: LifeAnnuityHolding
   owner: Person
+  clamp: Clamp | null
+  onClamp: (clamp: Clamp | null) => void
   onChange: (plan: Plan) => void
 }) {
-  const earliest = holding.payoutAge
   const start = holding.payout?.start
+  const bounds = payoutStartBounds(holding, owner, start)
+  const earliest = boundValue(bounds.min)
   const factor = conversionFactor(holding)
 
   return (
@@ -586,7 +614,9 @@ function ConversionSection({
           help="LifeAnnuity.payoutStart"
           value={start}
           workEndAge={owner.workEndAge}
-          bounds={{ min: earliest }}
+          bounds={bounds}
+          clamp={clamp}
+          onClamp={onClamp}
           onChange={(next) =>
             onChange(
               withLifeAnnuity(plan, holding.id, (h) => ({
@@ -654,15 +684,20 @@ function PayoutScheduleSection({
   plan,
   holding,
   owner,
+  clamp,
+  onClamp,
   onChange,
 }: {
   plan: Plan
   holding: PayoutScheduleHolding
   owner: Person
+  clamp: Clamp | null
+  onClamp: (clamp: Clamp | null) => void
   onChange: (plan: Plan) => void
 }) {
   const payout = holding.payout
-  const earliest = holding.payoutAge
+  const bounds = payoutStartBounds(holding, owner, payout?.start)
+  const earliest = boundValue(bounds.min)
 
   if (payout === undefined) {
     return (
@@ -707,7 +742,9 @@ function PayoutScheduleSection({
         help="PayoutSchedule.start"
         value={payout.start}
         workEndAge={owner.workEndAge}
-        bounds={{ min: earliest }}
+        bounds={bounds}
+        clamp={clamp}
+        onClamp={onClamp}
         onChange={(start) =>
           onChange(
             withPayoutSchedule(plan, holding.id, (p) => ({ ...p, start: start ?? earliest })),
@@ -720,6 +757,8 @@ function PayoutScheduleSection({
         unit="år"
         value={payout.duration}
         bounds={payoutDurationBounds(holding, owner, payout.start)}
+        clamp={clamp}
+        onClamp={onClamp}
         onChange={(duration) =>
           onChange(withPayoutSchedule(plan, holding.id, (p) => ({ ...p, duration })))
         }
@@ -1451,6 +1490,8 @@ function PeriodSection({
             workEndAge={owner.workEndAge}
             value={period.from}
             bounds={bounds?.from}
+            clamp={clamp}
+            onClamp={onClamp}
             onChange={(from) => change({ period: { ...period, from } })}
           />
           <AgeBoundField

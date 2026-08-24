@@ -192,6 +192,42 @@ describe('applyTimelineDrag', () => {
     expect(holding).toMatchObject({ payout: { start: 67, duration: 15 } })
   })
 
+  it('klemmer ratepensionens fra-håndtag til brøkalderens eget kalenderår, og siger hvorfor', () => {
+    // Ejeren er født i marts 1968, og døren er 62,5 — altså kalenderåret
+    // 2030. Alder 62 falder i det samme år og er lovlig; alder 61 gør ikke.
+    // Skuffens Start-felt svarer 62 på det samme spørgsmål, fordi de to slår
+    // op i den samme grænse. Væggen er usynlig — aksen har intet mærke for en
+    // ordnings pensionsudbetalingsalder — og beskeden følger derfor med
+    // trækket, jf. ADR-0045.
+    const plan = aPlan({
+      birthYear: 1968,
+      birthMonth: 3,
+      horizon: 90,
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 62.5,
+          balance: 1_000_000,
+          grossReturn: 0,
+          annualCostRate: 0,
+          payout: { start: 62, duration: 15, principle: 'SerialPrinciple' },
+        },
+      ],
+    })
+    const item = timelineLayout(plan).find((g) => g.name === 'HoldingPayouts')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'from', -1)
+
+    const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
+    expect(holding).toMatchObject({ payout: { start: 62 } })
+    expect(next.clamp).toEqual({
+      field: 'PayoutSchedule.start',
+      message: 'Beholdningen Ratepension må tidligst udbetales i 2030.',
+    })
+  })
+
   it('klemmer ratepensionens til-håndtag til ti års varighed, ikke kortere', () => {
     const plan = aPlan({
       holdings: [
@@ -215,6 +251,12 @@ describe('applyTimelineDrag', () => {
 
     const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
     expect(holding).toMatchObject({ payout: { start: 67, duration: 10 } })
+    // Væggen er lige så usynlig som dørens: aksen har intet mærke for
+    // tiårsreglen, og boksens højre kant standser i den blå luft.
+    expect(next.clamp).toEqual({
+      field: 'PayoutSchedule.duration',
+      message: 'En ratepension skal udbetales over mindst 10 år.',
+    })
   })
 
   it('klemmer ratepensionens til-håndtag, så sidste rate ikke falder efter trediveårsgrænsen', () => {
@@ -241,6 +283,12 @@ describe('applyTimelineDrag', () => {
 
     const holding = next.plan.household.persons[0]!.holdings.find((h) => h.id === 'ratepension')!
     expect(holding).toMatchObject({ payout: { start: 67, duration: 31 } })
+    expect(next.clamp).toEqual({
+      field: 'PayoutSchedule.duration',
+      message:
+        'Beholdningen Ratepension skal udbetale sin sidste rate senest i 2070, ' +
+        '30 år efter pensionsudbetalingsalderen.',
+    })
   })
 
   it('rykker en livrentes omsætningstidspunkt, når boksens fra-håndtag trækkes', () => {

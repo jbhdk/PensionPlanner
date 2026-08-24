@@ -281,7 +281,7 @@ function payoutSchedules(plan: Plan): string | undefined {
       if (schedule.duration < minimumPayoutYears) {
         return (
           `Beholdningen ${holding.name} udbetales over ${schedule.duration} år. ` +
-          `En ratepension skal udbetales over mindst ${minimumPayoutYears} år.`
+          `${minimumDurationReason()}`
         )
       }
 
@@ -325,15 +325,37 @@ const latestPayoutYearsAfterPayoutAge = 30
 
     Den øvre grænse falder aldrig under den nedre. Ligger starten så sent, at
     de tredive år er brugt op, findes der ingen lovlig varighed — feltet har
-    da ingen at tilbyde, og afvisningen ovenfor er den, der siger hvorfor. */
+    da ingen at tilbyde, og afvisningen ovenfor er den, der siger hvorfor.
+
+    Begge grænser bærer en begrundelse. Ingen af de to vægge kan ses: aksen
+    har hverken et mærke for tiårsreglen eller for det år, den sidste rate
+    senest må falde i, og et felt, der blot rettede sig selv, ville lade
+    brugeren gætte, jf. `Bound` og ADR-0045. */
 export function payoutDurationBounds(
   holding: PensionSchemeHolding,
   owner: Person,
   start: AgeBound,
-): { min: number; max: number } {
+): { min: Bound; max: Bound } {
   const latest = payoutYear(holding, owner) + latestPayoutYearsAfterPayoutAge
   const room = latest - payoutStartYear(start, owner) + 1
-  return { min: minimumPayoutYears, max: Math.max(minimumPayoutYears, room) }
+  return {
+    min: { value: minimumPayoutYears, reason: minimumDurationReason() },
+    max: {
+      value: Math.max(minimumPayoutYears, room),
+      reason:
+        `Beholdningen ${holding.name} skal udbetale sin sidste rate senest i ` +
+        `${latest}, ${latestPayoutYearsAfterPayoutAge} år efter ` +
+        `pensionsudbetalingsalderen.`,
+    },
+  }
+}
+
+/** Den ene sætning om tiårsreglen. Afvisningen ovenfor og feltets grænse
+    siger den samme lovregel, og de er den samme sætning — hvor
+    trediveårsgrænsens to ikke er det: afvisningen melder det år, planen
+    ramte, og grænsen beskriver væggen, der aldrig lod den komme dertil. */
+function minimumDurationReason(): string {
+  return `En ratepension skal udbetales over mindst ${minimumPayoutYears} år.`
 }
 
 /** En grænse: tallet alene, eller tallet og den besked, fladen siger, når den
@@ -362,6 +384,51 @@ export function boundValue(bound: Bound): number {
     ingenting: væggen kan ses i forvejen. */
 export function boundReason(bound: Bound | undefined): string | undefined {
   return typeof bound === 'object' ? bound.reason : undefined
+}
+
+/** Udbetalingsstartens nedre grænse: ordningens egen dør, jf.
+    `payoutSchedules`-reglen ovenfor og PBL § 11 A, stk. 1. Ratepensionens
+    `Start` og livrentens `Udbetalingsstart` deler den lovregel og slår begge
+    op her, ligesom deres to håndtag på tidslinjen.
+
+    Målt i kalenderår og svaret i alder. Døren er et årstal, fordi
+    pensionsudbetalingsalderen ofte er en brøk: året, hvor personen fylder
+    62,5, indeholder lovlige udbetalingsmåneder, og en plan, der starter
+    dér, findes i virkeligheden, jf. `payoutYear`. Målt i aldre ville feltet
+    være strengere end både håndtaget og afvisningen — og alderen 62 ville
+    blive løftet til 62,5, selv om de to falder i det samme kalenderår.
+
+    Oversættelsen tilbage går gennem endepunktets egen delta, den samme som
+    `periodEndpointBounds` bruger: den alder, feltet står på, flyttet lige så
+    mange år som kalenderåret skal flytte sig. Den bevarer en brøkalder, hvor
+    et årstal minus fødselsåret ville have tabt halvåret. Er der endnu ingen
+    plan, er der ingen alder at flytte, og ordningens egen
+    pensionsudbetalingsalder er svaret — den rammer døren pr. definition.
+
+    Uden en øvre grænse. Trediveårsgrænsen for den sidste rate bindes af
+    varigheden og ikke af starten, jf. `payoutDurationBounds`, og et loft her
+    ville lægge den regel to steder. */
+export function payoutStartBounds(
+  holding: PensionSchemeHolding,
+  owner: Person,
+  start: AgeBound | undefined,
+): { min: Bound } {
+  const door = payoutYear(holding, owner)
+  const standing = typeof start === 'number' ? start : holding.payoutAge
+  return {
+    min: {
+      value: standing + (door - yearAtAge(owner, standing)),
+      reason: payoutDoorReason(holding, door),
+    },
+  }
+}
+
+/** Den ene sætning om den ene dør. To grænser møder den — udbetalingsplanens
+    start og overførslens tidligste år — og det er den samme lovregel og
+    dermed den samme besked. Skrevet to steder ville de to før eller siden
+    sige hver sit om den samme væg. */
+function payoutDoorReason(holding: Holding, door: SimulationYear): string {
+  return `Beholdningen ${holding.name} må tidligst udbetales i ${door}.`
 }
 
 /** Grænserne for ét af en overførsels to periodeendepunkter.
@@ -394,7 +461,7 @@ export function periodEndpointBounds(
   return {
     min: {
       value: inEndpointUnit(transfer.period, endpoint, door, owner),
-      reason: `Beholdningen ${from.name} må tidligst udbetales i ${door}.`,
+      reason: payoutDoorReason(from, door),
     },
   }
 }

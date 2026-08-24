@@ -263,6 +263,8 @@ export function NumberField({
   unit,
   value,
   bounds,
+  clamp,
+  onClamp,
   onChange,
 }: {
   label: string
@@ -271,17 +273,24 @@ export function NumberField({
   value: number
   /** Udeladt betyder et frit tal. Se `Bounds`. */
   bounds?: Bounds
+  clamp?: Clamp | null
+  onClamp?: (clamp: Clamp | null) => void
   onChange: (value: number) => void
 }) {
   const tal = useNumberText(
     value,
     formatNumber,
     (text) => clampTo(parseNumber(text), bounds),
-    onChange,
+    // En grænse uden begrundelse melder intet, jf. `clampedBy` — et felt med
+    // to bare tal om sig klemmer derfor lige så tavst som før.
+    (next, text) => {
+      onClamp?.(clampedBy(parseNumber(text), bounds, help))
+      onChange(next)
+    },
   )
 
   return (
-    <Field label={label} help={help} unit={unit}>
+    <Field label={label} help={help} unit={unit} clamp={clamp}>
       {(id) => <input id={id} type="text" inputMode="decimal" className="tal" {...tal} />}
     </Field>
   )
@@ -341,6 +350,8 @@ export function AgeBoundField({
   value,
   workEndAge,
   bounds,
+  clamp,
+  onClamp,
   onChange,
 }: {
   label: string
@@ -356,6 +367,8 @@ export function AgeBoundField({
       endepunktet påkrævet, og et tømt felt falder tilbage på grænsen: en
       udbetalingsplan skal begynde et sted. Se `Bounds`. */
   bounds?: Bounds
+  clamp?: Clamp | null
+  onClamp?: (clamp: Clamp | null) => void
   onChange: (value: AgeBound | undefined) => void
 }) {
   const followsWorkEnd = value === 'WorkEndAge'
@@ -366,7 +379,13 @@ export function AgeBoundField({
       const parsed = parseOptional(text)
       return parsed === undefined ? emptyFallsBackTo(bounds) : clampTo(parsed, bounds)
     },
-    onChange,
+    // Målt på det tastede og ikke på det, feltet gav videre — forskellen
+    // mellem de to *er* klemningen, ganske som i `OptionalNumberField`.
+    // Tilvalget melder intet: det har kun to stillinger og kan ikke klemmes.
+    (next, text) => {
+      onClamp?.(clampedBy(parseOptional(text), bounds, help))
+      onChange(next)
+    },
   )
 
   // Tilvalget får sin egen linje under aldersfeltet. Proppet ind i
@@ -374,7 +393,7 @@ export function AgeBoundField({
   // og skubbede inputtet ud af flugt med resten af sektionen.
   return (
     <>
-      <Field label={label} help={help} unit="år">
+      <Field label={label} help={help} unit="år" clamp={clamp}>
         {(id) => (
           <input
             id={id}
