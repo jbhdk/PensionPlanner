@@ -88,7 +88,7 @@ body {
 .topbjaelke {
   flex: 0 0 auto;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 14px;
   padding: 11px 18px;
   background: var(--top);
@@ -97,7 +97,7 @@ body {
 
 .maerke {
   display: inline-flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 6px;
   font-family: var(--f-titel);
   font-weight: 650;
