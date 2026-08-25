@@ -156,6 +156,28 @@ body {
   opacity: 0;
 }
 
+/* Bunden af skærmen, i familie med topbjælken: en fast stribe, der ikke
+   ruller med, jf. reglen øverst i filen om at siden som helhed ikke ruller.
+   Teksten er lille og dæmpet — den skal kunne læses, men ikke konkurrere med
+   noget, brugeren rent faktisk arbejder med. */
+.fodnote {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 8px 18px;
+  background: var(--top);
+  border-top: 1px solid var(--linje);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.fodnote span:first-child {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* Inspektørskuffen er en fast tredje spalte og ikke et lag oven på
    resultatspalten — den var det, men lå og bredte sig et par pixels ind
    over mini-graferne, fordi en absolut positioneret boks ikke selv retter

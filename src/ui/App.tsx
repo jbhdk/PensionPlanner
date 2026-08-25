@@ -53,6 +53,23 @@ function Maerke() {
   )
 }
 
+/** Bunden af skærmen: ophavsret og en påmindelse om, at tallene er et skøn.
+    Egen funktion af samme grund som `Maerke` — fejlskærmen og den
+    almindelige visning har hver sin `<footer>`, og de to skal sige det
+    samme. */
+function Fod() {
+  return (
+    <footer className="fodnote">
+      <span>© {new Date().getFullYear()} Jesper Baagøe Hansen</span>
+      <span>
+        Beregningerne er vejledende og bygger på forenklede antagelser om
+        skat, afkast og fremtidige satser. De er ikke en anbefaling og
+        erstatter ikke rådgivning fra en revisor eller pensionsrådgiver.
+      </span>
+    </footer>
+  )
+}
+
 /** Resultatspaltens visninger. Planlæggeren er standardfanen, jf. issue #12
     — man justerer i navigatoren og konstaterer visuelt på graf-laget, om
     planen holder; tabellen er laget man går ned i bagefter. Forklar-året er
@@ -282,6 +299,7 @@ export function App({
             </div>
           </div>
         </div>
+        <Fod />
       </div>
     )
   }
@@ -462,6 +480,7 @@ export function App({
           />
         </aside>
       </div>
+      <Fod />
     </div>
   )
 }
