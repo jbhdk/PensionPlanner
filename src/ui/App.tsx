@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react'
 import type { Plan } from '../engine/plan'
 import { simulate } from '../engine/simulate'
 import { validatePlan } from '../engine/validatePlan'
+import { exampleName, loadExamplePlan } from '../persistence/examplePlan'
 import { exportPlan, importPlan } from '../persistence/planFile'
 import { savePlan, storedPlanText } from '../persistence/planStorage'
 import { defaultPlan } from './defaultPlan'
@@ -77,6 +78,12 @@ function Fod() {
     jf. issue #13 — den har sin egen vej tilbage til Årstabellen. */
 type ResultView = 'Planner' | 'YearTable' | 'YearExplanation'
 
+/** De tre destruktive handlinger topbjælken kan spørge om, før den udfører
+    dem: sletning, import af en fil, og indlæsning af den bundlede eksempel.
+    De tre deler én bekræftelsesfigur, fordi de deler samme spørgsmål — den
+    nuværende plan forsvinder, og der er ingen fortrydelse. */
+type PendingAction = 'Delete' | 'Import' | 'Example'
+
 /** Hvor længe en klemningsbesked står, efter den redigering, den forklarer.
     Uret stilles om ved hver ny klemning, så et træk, der bliver ved med at
     støde mod væggen, ikke taber beskeden undervejs — de fem sekunder løber
@@ -140,6 +147,11 @@ export function App({
   // hvor man oprindelig kom fra).
   const [returnView, setReturnView] = useState<Exclude<ResultView, 'YearExplanation'>>('Planner')
   const [importError, setImportError] = useState<string | null>(null)
+  // Adskilt fra importError: fejler den bundlede fil, er det en fejl i
+  // værktøjet selv og ikke i noget, brugeren har gjort — de to fortjener
+  // hver sin ordlyd, jf. issue #2. `examplePlan.test.ts` er bagstopperen,
+  // der skal gøre denne tilstand praktisk umulig at nå.
+  const [exampleError, setExampleError] = useState<string | null>(null)
   // Fejlen er en tilstand og ikke en egenskab ved fladen: brugeren skal kunne
   // komme ud af den uden at genindlæse siden.
   const [loadError, setLoadError] = useState(initialLoadError)
@@ -148,8 +160,9 @@ export function App({
   const [loadNotice, setLoadNotice] = useState(initialLoadNotice)
   // Bekræftelsen er en tilstand og ikke en dialog: fladen har ingen modaler,
   // og spørgsmålet stilles i den samme figur som fejlskærmens — med
-  // navigatoren stående ved siden af, så man ser, hvad der forsvinder.
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  // navigatoren stående ved siden af, så man ser, hvad der forsvinder. Én
+  // tilstand for alle tre handlinger, fordi kun én kan afventes ad gangen.
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Ingen gem-knap: planen gemmes ved hver ændring, jf. issue #15. Er
@@ -213,7 +226,8 @@ export function App({
     setReturnView('Planner')
     setMainGraph('Wealth')
     setImportError(null)
-    setConfirmingDelete(false)
+    setExampleError(null)
+    setPendingAction(null)
     setLoadError(undefined)
     // Den kasserede plan er væk, og med den det, beskeden handlede om.
     setLoadNotice(undefined)
@@ -242,21 +256,57 @@ export function App({
     }
   }
 
-  /** Filvælgeren og dens knap. Den samme på begge skærme — kun én af dem er
+  /** Åbner filvælgeren efter en bekræftet import. Selve importen sker først,
+      når `handleFileChosen` får en fil ind — annullerer brugeren
+      filvælgeren, sker der intet, og den overskrevne plan er derfor kun den,
+      der rent faktisk blev valgt. */
+  function handleImportConfirmed() {
+    setPendingAction(null)
+    fileInputRef.current?.click()
+  }
+
+  /** Erstatter planen med den bundlede eksempelplan — samme vej ind som en
+      importeret fil, jf. `examplePlan.ts`. Fejler den (kun teoretisk muligt,
+      jf. `examplePlan.test.ts`), får brugeren en ærlig besked om, at det er
+      værktøjets fejl og ikke deres egen, i stedet for importfejlens tekst om
+      en fil, de aldrig valgte. */
+  function handleLoadExample() {
+    const result = loadExamplePlan()
+    if (result.kind === 'Loaded') {
+      setPlan(result.plan)
+      setExampleError(null)
+      setLoadNotice(result.notice)
+      setLoadError(undefined)
+    } else {
+      setExampleError(result.reason)
+    }
+    setPendingAction(null)
+  }
+
+  /** Filvælgeren, skjult og delt mellem fejlskærmens direkte "Importer" og
+      den bekræftede import i den almindelige visning — kun én af de to er
       monteret ad gangen, så de kan dele reference. */
+  const fileInput = (
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept="application/json,.json"
+      className="skjult-filvaelger"
+      aria-label="Importer"
+      onChange={handleFileChosen}
+    />
+  )
+
+  /** Fejlskærmens "Importer": ingen bekræftelse, fordi skærmen selv allerede
+      er sin egen bekræftelse — der er ingen fungerende plan at overskrive,
+      kun ulæst data man allerede har fået tilbudt at redde med "Hent det
+      gemte". */
   const importAction = (
     <>
       <button type="button" className="knap" onClick={() => fileInputRef.current?.click()}>
         Importer
       </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="application/json,.json"
-        className="skjult-filvaelger"
-        aria-label="Importer"
-        onChange={handleFileChosen}
-      />
+      {fileInput}
     </>
   )
 
@@ -275,8 +325,12 @@ export function App({
               {importError && (
                 <p role="alert">Filen kan ikke importeres: {importError}</p>
               )}
+              {exampleError && <p role="alert">Eksemplet kunne ikke indlæses: {exampleError}</p>}
               <div className="udveje">
                 {importAction}
+                <button type="button" className="knap" onClick={handleLoadExample}>
+                  Indlæs eksempel
+                </button>
                 {stored !== null && (
                   <button
                     type="button"
@@ -291,10 +345,11 @@ export function App({
                 </button>
               </div>
               <p className="uddybning">
-                Det gemte røres ikke, før du vælger. Importerer du en fil,
-                erstatter den det — sletter du alt, kasseres det til fordel for
-                en plan med én person og én tom beholdning. Hent det først,
-                hvis du vil rette i det og importere det igen.
+                Det gemte røres ikke, før du vælger. Importerer du en fil eller
+                indlæser eksemplet, erstatter det det gemte — sletter du alt,
+                kasseres det til fordel for en plan med én person og én tom
+                beholdning. Hent det først, hvis du vil rette i det og
+                importere det igen.
               </p>
             </div>
           </div>
@@ -324,7 +379,7 @@ export function App({
             lade sig gøre. Derfor står den ikke i fladekortet, som tegner det
             færdige system — dér er der et planbibliotek, og den destruktive
             handling fjerner én plan ud af flere. */}
-        <button type="button" className="knap" onClick={() => setConfirmingDelete(true)}>
+        <button type="button" className="knap" onClick={() => setPendingAction('Delete')}>
           Slet alt
         </button>
         <span className="filhandlinger">
@@ -333,10 +388,21 @@ export function App({
               Filen kan ikke importeres: {importError}
             </span>
           )}
+          {exampleError && (
+            <span className="importfejl" role="alert">
+              Eksemplet kunne ikke indlæses: {exampleError}
+            </span>
+          )}
           <button type="button" className="knap" onClick={handleExport}>
             Eksporter
           </button>
-          {importAction}
+          <button type="button" className="knap" onClick={() => setPendingAction('Import')}>
+            Importer
+          </button>
+          <button type="button" className="knap" onClick={() => setPendingAction('Example')}>
+            Indlæs eksempel
+          </button>
+          {fileInput}
         </span>
       </header>
 
@@ -367,32 +433,65 @@ export function App({
 
         <div className="spalte resultatspalte">
           {/* Bekræftelsen er fejlskærmens figur og ikke en dialog: fladen har
-              ingen modaler, og den ene anden gang appen stiller et alvorligt
+              ingen modaler, og de tre gange appen stiller et alvorligt
               spørgsmål, ser det sådan ud. Navigatoren bliver stående ved
               siden af, så man ser, hvad der forsvinder, mens man beslutter
-              sig. "Eksporter først" er den vigtigste af de tre udveje — der
+              sig. "Eksporter først" er den vigtigste af udvejene — der
               findes ingen fortrydelse, og en gemt fil er den eneste vej
               tilbage til den plan, der står nu. Uden den skulle tvivlen
-              løses med et gæt. */}
-          {confirmingDelete ? (
+              løses med et gæt. Importens bekræftelse kommer bevidst *før*
+              filvælgeren og ikke efter: at vælge en fil først for bagefter
+              at opdage, man har glemt at eksportere, ville spilde brugerens
+              tid to gange. */}
+          {pendingAction ? (
             <div className="besked stop">
-              <h3>Slet alt?</h3>
-              <p>
-                Hele planen kasseres, og du begynder forfra med én person og
-                én tom beholdning. Der er ingen fortrydelse.
-              </p>
+              {pendingAction === 'Delete' && (
+                <>
+                  <h3>Slet alt?</h3>
+                  <p>
+                    Hele planen kasseres, og du begynder forfra med én person
+                    og én tom beholdning. Der er ingen fortrydelse.
+                  </p>
+                </>
+              )}
+              {pendingAction === 'Import' && (
+                <>
+                  <h3>Importer fra fil?</h3>
+                  <p>
+                    Den nuværende plan "{plan.name}" bliver overskrevet med
+                    den fil, du vælger. Der er ingen fortrydelse.
+                  </p>
+                </>
+              )}
+              {pendingAction === 'Example' && (
+                <>
+                  <h3>Indlæs eksempel?</h3>
+                  <p>
+                    Den nuværende plan "{plan.name}" erstattes af eksemplet "
+                    {exampleName}". Der er ingen fortrydelse.
+                  </p>
+                </>
+              )}
               <div className="udveje">
                 <button type="button" className="knap" onClick={handleExport}>
                   Eksporter først
                 </button>
-                <button type="button" className="knap" onClick={handleDelete}>
-                  Slet alt
-                </button>
-                <button
-                  type="button"
-                  className="knap"
-                  onClick={() => setConfirmingDelete(false)}
-                >
+                {pendingAction === 'Delete' && (
+                  <button type="button" className="knap" onClick={handleDelete}>
+                    Slet alt
+                  </button>
+                )}
+                {pendingAction === 'Import' && (
+                  <button type="button" className="knap" onClick={handleImportConfirmed}>
+                    Vælg fil
+                  </button>
+                )}
+                {pendingAction === 'Example' && (
+                  <button type="button" className="knap" onClick={handleLoadExample}>
+                    Indlæs eksempel
+                  </button>
+                )}
+                <button type="button" className="knap" onClick={() => setPendingAction(null)}>
                   Fortryd
                 </button>
               </div>

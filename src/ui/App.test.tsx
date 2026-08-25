@@ -12,6 +12,8 @@ import {
   aTransfer,
   anExpense,
 } from '../engine/testing/planFixture'
+import * as examplePlanModule from '../persistence/examplePlan'
+import { exampleName, loadExamplePlan } from '../persistence/examplePlan'
 import { exportPlan } from '../persistence/planFile'
 import { STORAGE_KEY, loadPlan } from '../persistence/planStorage'
 import { App } from './App'
@@ -5380,6 +5382,166 @@ describe('fladen', () => {
       // Beskeden kan lukkes: den er læst, når planlæggeren siger, den er.
       await user.click(screen.getByRole('button', { name: 'Forstået' }))
       expect(screen.queryByText(/lønposterne skal efterses/i)).toBeNull()
+    })
+
+    /** Topbjælkens "Importer" og bekræftelsesskærmens "Vælg fil" hedder ikke
+        det samme, så de kan skilles ad uden en spalte at afgrænse med. */
+    function iTopbjaelken() {
+      return within(document.querySelector('.topbjaelke')!)
+    }
+
+    it('spørger, før filvælgeren åbnes, og lader planen stå urørt ved fortrydelse', async () => {
+      // Bekræftelsen kommer bevidst før filvælgeren: at vælge en fil for
+      // bagefter at opdage, man har glemt at eksportere først, ville spilde
+      // brugerens tid to gange.
+      const user = userEvent.setup()
+      const plan = aThreeYearPlan()
+      render(<App initialPlan={plan} />)
+
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Importer' }))
+
+      expect(screen.getByText(/ingen fortrydelse/i)).toBeTruthy()
+      expect(screen.getByText('Ophør som 58', { selector: '.plannavn' })).toBeTruthy()
+
+      await user.click(screen.getByRole('button', { name: 'Fortryd' }))
+
+      expect(screen.queryByText(/ingen fortrydelse/i)).toBeNull()
+      expect(loadPlan()).toEqual({ kind: 'Loaded', plan })
+    })
+
+    it('importerer stadig, når filen vælges efter bekræftelsen', async () => {
+      const user = userEvent.setup()
+      render(<App initialPlan={aThreeYearPlan()} />)
+
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Importer' }))
+      await user.click(screen.getByRole('button', { name: 'Vælg fil' }))
+
+      const importeretPlan: Plan = { ...aPlan(), name: 'Importeret plan' }
+      await user.upload(
+        screen.getByLabelText(/Importer/),
+        new File([exportPlan(importeretPlan)], 'plan.json', { type: 'application/json' }),
+      )
+
+      expect(await screen.findByText('Importeret plan', { selector: '.plannavn' })).toBeTruthy()
+    })
+
+    it('tilbyder at eksportere planen, mens importen afventer bekræftelse', async () => {
+      const user = userEvent.setup()
+      const plan = aThreeYearPlan()
+      render(<App initialPlan={plan} />)
+
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Importer' }))
+      await user.click(screen.getByRole('button', { name: 'Eksporter først' }))
+
+      expect(createdBlobs).toHaveLength(1)
+      expect(await createdBlobs[0]!.text()).toBe(exportPlan(plan))
+      expect(screen.getByText(/ingen fortrydelse/i)).toBeTruthy()
+    })
+  })
+
+  describe('indlæs eksempel', () => {
+    let createdBlobs: Blob[]
+
+    beforeEach(() => {
+      createdBlobs = []
+      URL.createObjectURL = vi.fn((blob: Blob) => {
+        createdBlobs.push(blob)
+        return 'blob:mock'
+      }) as typeof URL.createObjectURL
+      URL.revokeObjectURL = vi.fn()
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    function iTopbjaelken() {
+      return within(document.querySelector('.topbjaelke')!)
+    }
+
+    function iBekraeftelsen() {
+      return within(document.querySelector('.besked')!)
+    }
+
+    it('spørger, og nævner både den nuværende plan og eksemplet ved navn', async () => {
+      const user = userEvent.setup()
+      render(<App initialPlan={aThreeYearPlan()} />)
+
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Indlæs eksempel' }))
+
+      expect(screen.getByText(/ingen fortrydelse/i)).toBeTruthy()
+      expect(screen.getByText('Ophør som 58', { selector: '.plannavn' })).toBeTruthy()
+      expect(screen.getByText(new RegExp(exampleName))).toBeTruthy()
+    })
+
+    it('erstatter planen med eksemplet, når bekræftelsen accepteres', async () => {
+      const user = userEvent.setup()
+      render(<App initialPlan={aThreeYearPlan()} />)
+
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Indlæs eksempel' }))
+      await user.click(iBekraeftelsen().getByRole('button', { name: 'Indlæs eksempel' }))
+
+      const forventet = loadExamplePlan()
+      expect(forventet.kind).toBe('Loaded')
+      expect(screen.getByText(exampleName, { selector: '.plannavn' })).toBeTruthy()
+      expect(loadPlan()).toEqual(forventet)
+    })
+
+    it('fører tilbage til resultatet, når bekræftelsen fortrydes', async () => {
+      const user = userEvent.setup()
+      const plan = aThreeYearPlan()
+      render(<App initialPlan={plan} />)
+
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Indlæs eksempel' }))
+      await user.click(screen.getByRole('button', { name: 'Fortryd' }))
+
+      expect(screen.queryByText(/ingen fortrydelse/i)).toBeNull()
+      expect(loadPlan()).toEqual({ kind: 'Loaded', plan })
+    })
+
+    it('tilbyder at eksportere den nuværende plan, før eksemplet overskriver den', async () => {
+      const user = userEvent.setup()
+      const plan = aThreeYearPlan()
+      render(<App initialPlan={plan} />)
+
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Indlæs eksempel' }))
+      await user.click(iBekraeftelsen().getByRole('button', { name: 'Eksporter først' }))
+
+      expect(createdBlobs).toHaveLength(1)
+      expect(await createdBlobs[0]!.text()).toBe(exportPlan(plan))
+      expect(loadPlan()).toEqual({ kind: 'Loaded', plan })
+    })
+
+    it('kan indlæses fra fejlskærmen uden en bekræftelse, fordi skærmen selv allerede er én', async () => {
+      const user = userEvent.setup()
+      localStorage.setItem(STORAGE_KEY, 'ikke json{')
+      render(<App initialPlan={defaultPlan()} loadError="Det gemte er ikke gyldig JSON." />)
+
+      await user.click(screen.getByRole('button', { name: 'Indlæs eksempel' }))
+
+      const forventet = loadExamplePlan()
+      expect(screen.queryByText(/ikke indlæses/i)).toBeNull()
+      expect(screen.getByText(exampleName, { selector: '.plannavn' })).toBeTruthy()
+      expect(loadPlan()).toEqual(forventet)
+    })
+
+    it('viser en ærlig besked, forskellig fra importfejlens, hvis den bundlede fil skulle fejle', async () => {
+      // Praktisk umuligt, jf. examplePlan.test.ts — men fejler den alligevel,
+      // skal brugeren ikke tro, det er en fil, de selv har valgt forkert.
+      const user = userEvent.setup()
+      const loadSpy = vi
+        .spyOn(examplePlanModule, 'loadExamplePlan')
+        .mockReturnValue({ kind: 'Failed', reason: 'Eksemplet er i stykker.' })
+      render(<App initialPlan={aThreeYearPlan()} />)
+
+      await user.click(iTopbjaelken().getByRole('button', { name: 'Indlæs eksempel' }))
+      await user.click(iBekraeftelsen().getByRole('button', { name: 'Indlæs eksempel' }))
+
+      expect(screen.getByText(/Eksemplet kunne ikke indlæses/i)).toBeTruthy()
+      expect(screen.queryByText(/Filen kan ikke importeres/i)).toBeNull()
+      expect(screen.getByText('Ophør som 58', { selector: '.plannavn' })).toBeTruthy()
+
+      loadSpy.mockRestore()
     })
   })
 

@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 15,
+  "plan": {
+    "name": "Eksempelplan – Anders og Camilla",
+    "startYear": 2026,
+    "inflationAssumption": 0.02,
+    "section20ProjectionAssumption": 0.02,
+    "statePensionProjectionAssumption": 0.02,
+    "buffer": "frie-midler",
+    "household": {
+      "persons": [
+        {
+          "id": "anders",
+          "name": "Anders",
+          "birthYear": 1966,
+          "birthMonth": 4,
+          "workEndAge": 67,
+          "horizon": 92,
+          "municipality": "Aarhus",
+          "churchMember": true,
+          "holdings": [
+            {
+              "id": "frie-midler",
+              "name": "Frie midler",
+              "variant": "SavingsAccount",
+              "balance": 120000,
+              "grossReturn": 0.015,
+              "annualCostRate": 0
+            },
+            {
+              "id": "aktiedepot",
+              "name": "Aktiedepot",
+              "variant": "ShareDepot",
+              "balance": 350000,
+              "grossReturn": 0.055,
+              "annualCostRate": 0.003
+            },
+            {
+              "id": "ratepension-anders",
+              "name": "Ratepension",
+              "variant": "InstalmentPension",
+              "balance": 2400000,
+              "grossReturn": 0.045,
+              "annualCostRate": 0.008,
+              "payoutAge": 65,
+              "payout": { "start": 67, "duration": 20, "principle": "AnnuityPrinciple" }
+            },
+            {
+              "id": "livrente-anders",
+              "name": "Livrente",
+              "variant": "LifeAnnuity",
+              "balance": 650000,
+              "grossReturn": 0.04,
+              "annualCostRate": 0.007,
+              "payoutAge": 65,
+              "quotedReserve": 700000,
+              "quotedAnnualBenefit": 32000,
+              "bonusRate": 0.01,
+              "payout": { "start": 67 }
+            }
+          ]
+        },
+        {
+          "id": "camilla",
+          "name": "Camilla",
+          "birthYear": 1969,
+          "birthMonth": 9,
+          "workEndAge": 68,
+          "horizon": 94,
+          "municipality": "Aarhus",
+          "churchMember": false,
+          "holdings": [
+            {
+              "id": "ratepension-camilla",
+              "name": "Ratepension",
+              "variant": "InstalmentPension",
+              "balance": 1600000,
+              "grossReturn": 0.045,
+              "annualCostRate": 0.008,
+              "payoutAge": 65,
+              "payout": { "start": 68, "duration": 20, "principle": "AnnuityPrinciple" }
+            },
+            {
+              "id": "aktiesparekonto-camilla",
+              "name": "Aktiesparekonto",
+              "variant": "ShareSavingsAccount",
+              "balance": 90000,
+              "grossReturn": 0.055,
+              "annualCostRate": 0.003
+            },
+            {
+              "id": "aldersopsparing-camilla",
+              "name": "Aldersopsparing",
+              "variant": "OldAgeSavings",
+              "balance": 60000,
+              "grossReturn": 0.035,
+              "annualCostRate": 0.006,
+              "payoutAge": 65
+            }
+          ]
+        }
+      ]
+    },
+    "entries": [
+      {
+        "id": "loen-anders",
+        "name": "Løn",
+        "amountInRealKroner": 650000,
+        "owner": "anders",
+        "direction": "Income",
+        "taxTreatment": "EarnedIncome",
+        "timing": "Even",
+        "period": { "anchor": "PersonAge", "to": "WorkEndAge" },
+        "recurrence": { "kind": "Annual" },
+        "regulationRate": 0.025,
+        "pensionAgreement": {
+          "employerContribution": { "percentageOfEntry": 0.08 },
+          "employeeContribution": { "percentageOfEntry": 0.04 },
+          "fee": 600,
+          "insurancePremium": 1800,
+          "allocation": [
+            { "to": "ratepension-anders", "form": "Percentage", "percentage": 0.75 },
+            { "to": "livrente-anders", "form": "Remainder" }
+          ]
+        }
+      },
+      {
+        "id": "loen-camilla",
+        "name": "Løn",
+        "amountInRealKroner": 480000,
+        "owner": "camilla",
+        "direction": "Income",
+        "taxTreatment": "EarnedIncome",
+        "timing": "Even",
+        "period": { "anchor": "PersonAge", "to": "WorkEndAge" },
+        "recurrence": { "kind": "Annual" },
+        "regulationRate": 0.025,
+        "pensionAgreement": {
+          "employerContribution": { "percentageOfEntry": 0.1 },
+          "employeeContribution": { "percentageOfEntry": 0.05 },
+          "fee": 450,
+          "insurancePremium": 1200,
+          "allocation": [{ "to": "ratepension-camilla", "form": "Remainder" }]
+        }
+      },
+      {
+        "id": "atp-anders",
+        "name": "ATP",
+        "amountInRealKroner": 24000,
+        "owner": "anders",
+        "direction": "Income",
+        "taxTreatment": "PensionIncome",
+        "timing": "Even",
+        "period": { "anchor": "PersonAge", "from": 67 },
+        "recurrence": { "kind": "Annual" },
+        "regulationRate": 0.02
+      },
+      {
+        "id": "atp-camilla",
+        "name": "ATP",
+        "amountInRealKroner": 22000,
+        "owner": "camilla",
+        "direction": "Income",
+        "taxTreatment": "PensionIncome",
+        "timing": "Even",
+        "period": { "anchor": "PersonAge", "from": 67 },
+        "recurrence": { "kind": "Annual" },
+        "regulationRate": 0.02
+      },
+      {
+        "id": "leveomkostninger",
+        "name": "Leveomkostninger",
+        "amountInRealKroner": 340000,
+        "owner": "anders",
+        "direction": "Expense",
+        "timing": "Even",
+        "period": { "anchor": "CalendarYear" },
+        "recurrence": { "kind": "Annual" }
+      },
+      {
+        "id": "boligudgifter",
+        "name": "Boligudgifter",
+        "amountInRealKroner": 85000,
+        "owner": "camilla",
+        "direction": "Expense",
+        "timing": "Even",
+        "period": { "anchor": "CalendarYear" },
+        "recurrence": { "kind": "Annual" }
+      },
+      {
+        "id": "ny-bil",
+        "name": "Ny bil",
+        "amountInRealKroner": 280000,
+        "owner": "anders",
+        "direction": "Expense",
+        "timing": "Even",
+        "period": { "anchor": "CalendarYear", "from": 2032 },
+        "recurrence": { "kind": "Once" }
+      },
+      {
+        "id": "sommerhus-vedligehold",
+        "name": "Sommerhus – vedligehold",
+        "amountInRealKroner": 45000,
+        "owner": "camilla",
+        "direction": "Expense",
+        "timing": "Even",
+        "period": { "anchor": "CalendarYear", "from": 2030 },
+        "recurrence": { "kind": "EveryNYears", "n": 5 }
+      }
+    ],
+    "transfers": [
+      {
+        "id": "opsparing-aktier",
+        "name": "Opsparing til aktiedepot",
+        "from": "frie-midler",
+        "to": "aktiedepot",
+        "amountInRealKroner": 70000,
+        "timing": "Even",
+        "period": { "anchor": "PersonAge", "to": "WorkEndAge" },
+        "recurrence": { "kind": "Annual" }
+      },
+      {
+        "id": "hjemtagning-aktier",
+        "name": "Hjemtagning fra aktiedepot",
+        "from": "aktiedepot",
+        "to": "frie-midler",
+        "amountInRealKroner": 50000,
+        "timing": "Even",
+        "period": { "anchor": "PersonAge", "from": "WorkEndAge" },
+        "recurrence": { "kind": "Annual" }
+      }
+    ],
+    "contributions": [
+      {
+        "id": "ekstra-opsparing-alderspension",
+        "name": "Ekstra opsparing",
+        "kind": "HoldingSourced",
+        "source": "frie-midler",
+        "to": "aldersopsparing-camilla",
+        "amountInRealKroner": 15000,
+        "timing": "Even",
+        "period": { "anchor": "PersonAge", "to": "WorkEndAge" },
+        "recurrence": { "kind": "Annual" }
+      }
+    ]
+  }
+}
