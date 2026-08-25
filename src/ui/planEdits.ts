@@ -15,6 +15,7 @@ import { clampBy } from './fields'
 import type { Clamp } from './fields'
 import type {
   AgeBound,
+  Allocation,
   AllocationLine,
   Contribution,
   Direction,
@@ -185,8 +186,9 @@ export function addHolding(plan: Plan): Plan {
 }
 
 /** Fjerner beholdningen, overførslerne der peger på den (en overførsel uden
-    begge ender ville flytte penge fra eller til et ingenting), og
-    indbetalingerne der havde den som destination. Var
+    begge ender ville flytte penge fra eller til et ingenting), indbetalingerne
+    der havde den som destination, og fordelingslinjerne i enhver
+    pensionsaftale der peger på den, jf. ADR-0046. Var
     beholdningen bufferen, arver den første tilbageværende beholdning rollen,
     ligesom ved `removePerson` — findes ingen, peger bufferen videre på et
     tomrum, og resultatspalten viser det som en simuleringsfejl frem for at
@@ -202,9 +204,36 @@ export function removeHolding(plan: Plan, id: string): Plan {
     ...plan,
     buffer,
     household: { persons },
+    entries: plan.entries.map((entry) =>
+      entry.direction === 'Income' && entry.pensionAgreement
+        ? {
+            ...entry,
+            pensionAgreement: {
+              ...entry.pensionAgreement,
+              allocation: allocationWithoutHolding(entry.pensionAgreement.allocation, id),
+            },
+          }
+        : entry,
+    ),
     transfers: plan.transfers.filter((transfer) => transfer.from !== id && transfer.to !== id),
     contributions: plan.contributions.filter((contribution) => contribution.to !== id),
   }
+}
+
+/** Fordelingen uden linjen til den slettede beholdning. Var den restlinjen,
+    overtager den første tilbageværende linje rollen og mister i samme greb
+    sit eget tal — der findes ingen `AllocationShare`-form, der er både
+    `Remainder` og husker en procent eller et kronebeløb. Er den den eneste
+    linje, ender fordelingen med nul restlinjer, og `validatePlan` melder det
+    ligesom den allerede gør, når bufferen mister sin sidste frie beholdning,
+    jf. ADR-0046. */
+function allocationWithoutHolding(allocation: Allocation, id: string): Allocation {
+  const removed = allocation.find((line) => line.to === id)
+  const rest = allocation.filter((line) => line.to !== id)
+  if (removed?.form !== 'Remainder' || rest.length === 0) return rest
+
+  const [first, ...others] = rest
+  return [{ to: first!.to, form: 'Remainder' }, ...others]
 }
 
 /** Bufferpegeren efter en sletning: den samme, hvis beholdningen stadig

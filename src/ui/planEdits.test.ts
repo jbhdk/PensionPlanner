@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { aContribution, aPlan, aSalary, aTransfer, anExpense } from '../engine/testing/planFixture'
-import type { Plan } from '../engine/plan'
+import type { Entry, PensionAgreement, Plan } from '../engine/plan'
 import { validatePlan } from '../engine/validatePlan'
 import { defaultPlan } from './defaultPlan'
 import {
@@ -223,6 +223,114 @@ describe('removeHolding', () => {
   })
 })
 
+
+/** Narrer unionen på `Entry`s retning — testene her handler kun om
+    indtægtsposter med en pensionsaftale. */
+function agreementOf(entry: Entry): PensionAgreement {
+  if (entry.direction !== 'Income' || !entry.pensionAgreement) {
+    throw new Error('forventede en indtægtspost med en pensionsaftale')
+  }
+  return entry.pensionAgreement
+}
+
+describe('fordelingens linjer overlever ikke det, de peger på', () => {
+  /** Fixturens Jesper med en lønpost, hvis aftale fordeler til to ordninger:
+      en almindelig procentlinje til ratepensionen, og resten til
+      aldersopsparingen. */
+  function aPlanWithAllocation(): Plan {
+    return aPlan({
+      entries: [
+        aSalary({
+          amountInRealKroner: 600_000,
+          pensionAgreement: {
+            employerContribution: { percentageOfEntry: 0 },
+            employeeContribution: { percentageOfEntry: 0 },
+            allocation: [
+              { to: 'ratepension', form: 'Percentage', percentage: 0.4 },
+              { to: 'aldersopsparing', form: 'Remainder' },
+            ],
+          },
+        }),
+      ],
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+        {
+          id: 'aldersopsparing',
+          name: 'Aldersopsparing',
+          variant: 'OldAgeSavings',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+  }
+
+  it('fjerner en almindelig linje, når dens destination fjernes', () => {
+    const result = removeHolding(aPlanWithAllocation(), 'ratepension')
+
+    const agreement = agreementOf(result.entries[0]!)
+    expect(agreement.allocation).toEqual([{ to: 'aldersopsparing', form: 'Remainder' }])
+    expect(validatePlan(result)).toBeUndefined()
+  })
+
+  it('lader den første tilbageværende linje overtage resten, når restlinjens destination fjernes', () => {
+    // Restlinjen findes ikke bare halvvejs: Ratepension-linjen mister sine
+    // 40 % i samme greb, ganske som bufferrollen springer videre uden at
+    // spørge, jf. ADR-0046.
+    const result = removeHolding(aPlanWithAllocation(), 'aldersopsparing')
+
+    const agreement = agreementOf(result.entries[0]!)
+    expect(agreement.allocation).toEqual([{ to: 'ratepension', form: 'Remainder' }])
+    expect(validatePlan(result)).toBeUndefined()
+  })
+
+  it('efterlader nul restlinjer, når restlinjens destination var fordelingens eneste', () => {
+    // Intet at arve resten til: validatePlan melder det, ligesom den allerede
+    // gør, når bufferen mister sin sidste frie beholdning, jf. ADR-0046.
+    const plan = aPlan({
+      entries: [
+        aSalary({
+          amountInRealKroner: 600_000,
+          pensionAgreement: {
+            employerContribution: { percentageOfEntry: 0 },
+            employeeContribution: { percentageOfEntry: 0 },
+            allocation: [{ to: 'aldersopsparing', form: 'Remainder' }],
+          },
+        }),
+      ],
+      holdings: [
+        {
+          id: 'aldersopsparing',
+          name: 'Aldersopsparing',
+          variant: 'OldAgeSavings',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+
+    const result = removeHolding(plan, 'aldersopsparing')
+
+    const agreement = agreementOf(result.entries[0]!)
+    expect(agreement.allocation).toEqual([])
+    expect(validatePlan(result)).toBe(
+      'Pensionsaftalen på posten Løn har 0 linjer med resten. Præcis én linje skal ' +
+        'være resten, så fordelingen går op i hvert eneste år.',
+    )
+  })
+})
 
 describe('indbetalingens pegere overlever ikke det, de peger på', () => {
   /** Fixturens Jesper med en lønpost og en ratepension, og et bidrag imellem
