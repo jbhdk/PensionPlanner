@@ -96,9 +96,19 @@ body {
 }
 
 .maerke {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 6px;
   font-family: var(--f-titel);
   font-weight: 650;
   font-size: 15px;
+}
+
+.maerke-ikon {
+  width: 27px;
+  height: 27px;
+  flex: none;
+  color: var(--accent);
 }
 
 .plannavn {

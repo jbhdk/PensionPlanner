@@ -31,6 +31,28 @@ function download(contents: string, filename: string): void {
   URL.revokeObjectURL(url)
 }
 
+/** Mærket i topbjælken: ikonet og navnet, samlet ét sted så de to
+    fejlvisninger og den almindelige visning ikke tegner hver sit. */
+function Maerke() {
+  return (
+    <span className="maerke">
+      <svg className="maerke-ikon" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">
+        <rect x="20" y="62" width="12" height="22" rx="2" />
+        <rect x="44" y="48" width="12" height="36" rx="2" />
+        <rect x="68" y="30" width="12" height="54" rx="2" />
+        <path
+          d="M16 52 C 34 56, 52 50, 76 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3.4"
+          strokeLinecap="round"
+        />
+      </svg>
+      Min Pensionsformue
+    </span>
+  )
+}
+
 /** Resultatspaltens visninger. Planlæggeren er standardfanen, jf. issue #12
     — man justerer i navigatoren og konstaterer visuelt på graf-laget, om
     planen holder; tabellen er laget man går ned i bagefter. Forklar-året er
@@ -226,7 +248,7 @@ export function App({
     return (
       <div className="app">
         <header className="topbjaelke">
-          <span className="maerke">Pensionsplanner</span>
+          <Maerke />
         </header>
         <div className="spalter">
           <div className="spalte resultatspalte">
@@ -274,7 +296,7 @@ export function App({
   return (
     <div className="app">
       <header className="topbjaelke">
-        <span className="maerke">Pensionsplanner</span>
+        <Maerke />
         <span className="plannavn">{plan.name}</span>
         {/* Planhåndtering og ikke en filhandling: knappen rører ingen fil,
             den kasserer den plan, der står på skærmen. Den sidder derfor i
