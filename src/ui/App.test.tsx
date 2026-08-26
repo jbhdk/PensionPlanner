@@ -2800,6 +2800,32 @@ describe('fladen', () => {
     expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
   })
 
+  it('vender en udbetaling om til et bidrag, når "Fra" kolliderer med "Til", og husstanden kun har én frie midler-konto', async () => {
+    // Med kun én frie midler-konto er der intet andet lovligt "Til" at give
+    // den fortrængte aktiesparekonto som ren overførsel — byttegrebet må
+    // derfor reklassificere figuren i stedet, jf. ADR-0048. Uden rettelsen
+    // sprang "Fra" tavst tilbage til Aktiesparekonto, og planen stod urørt.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...aPlan({ holdings: [aShareSavingsAccount(200_000)] }),
+          transfers: [
+            aTransfer({ from: 'aktiesparekonto', to: 'free-assets', amountInRealKroner: 10_000 }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(navigatorButton(/Overførslen/))
+    await user.selectOptions(screen.getByLabelText('Fra'), 'Frie midler')
+
+    expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Frie midler')
+    expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Aktiesparekonto')
+    expect(optionsOf('Til')).toEqual(['Frie midler', 'Aktiesparekonto'])
+    expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+  })
+
   it('tilføjer en overførsel via overførselsgruppen, og dens inspektør kan åbnes', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithSecondHolding()} />)

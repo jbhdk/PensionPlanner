@@ -646,24 +646,48 @@ export function findTransferOrContribution(
   return contribution?.kind === 'HoldingSourced' ? contribution : undefined
 }
 
+/** Den "Til"-værdi et kolliderende "Fra"-valg reelt efterlader figuren med —
+    samme spørgsmål, `withEnd`s bytte stiller, men svaret her bruges til at
+    afgøre klassificeringen, før byttet selv skrives. Uden kollision (valgets
+    beholdning er ikke allerede "Til") ændrer "Fra" aldrig "Til", og
+    funktionen kaldes ikke.
+
+    Kan den fortrængte værdi selv stå som "Til" i en ren overførsel, bytter de
+    to plads, som de altid har gjort. Ellers findes en anden frie midler at
+    sætte i stedet, hvis husstanden har en. Findes ingen af delene — en eneste
+    frie midler-konto, og den fortrængte er en ordning — er der intet lovligt
+    "Til" tilbage for en `Transfer`, og den fortrængte værdi bliver stående
+    som "Til": det er signalet, `withTransferOrContributionEnd` reklassificerer
+    på, jf. ADR-0048. */
+function resolvedToAfterFromCollision(plan: Plan, displaced: string, holding: string): string {
+  if (transferEndOptions(plan, 'to').some((option) => option.id === displaced)) return displaced
+  const alternative = transferEndOptions(plan, 'to').find((option) => option.id !== holding)
+  return alternative ? alternative.id : displaced
+}
+
 /** Sætter den ene ende af den sammenlagte Overførsel-figur, og lader den
     usynligt skifte mellem en `Transfer` og et beholdningskildet bidrag, når
     "Til" krydser grænsen mellem frie midler og en ordning, jf. ADR-0047.
 
-    Hvilken figur resultatet bliver, afgør sig alene af den nye "Til": en
-    `Transfer`s `to` er altid frie midler, et beholdningskildet bidrags er
-    aldrig det — og de to domæner er derfor disjunkte. Det er også derfor
-    kun "Til" kan flytte figuren mellem de to arrays; en ændring af "Fra"
-    ændrer aldrig klassificeringen.
+    Hvilken figur resultatet bliver, afgør sig i almindelighed alene af den
+    nye "Til": en `Transfer`s `to` er altid frie midler, et beholdningskildet
+    bidrags er aldrig det. Men vælges "Fra" til den beholdning, der allerede
+    står som "Til", kolliderer de to ender, og byttet, kollisionen normalt
+    løser, kan selv kræve reklassificering — har husstanden kun én frie
+    midler-konto, og den fortrængte værdi er en ordning, findes intet lovligt
+    "Til" tilbage for en `Transfer`, og figuren må blive et bidrag i stedet,
+    jf. ADR-0048. `resolvedToAfterFromCollision` regner det bytte hjem, før
+    klassificeringen afgøres, så et "Fra"-valg kan krydse grænsen præcis dér,
+    hvor det ellers ville gå i stå.
 
-    Bliver figuren ved med at være en `Transfer`, overlades kollisionen —
-    de to ender må ikke pege på det samme — til `withTransferEnd`, uændret
-    af sammenlægningen. Bliver den ved med at være et beholdningskildet
-    bidrag, kan enderne aldrig kollidere: kilden skal være frie midler,
-    destinationen må aldrig være det. Krydser figuren grænsen, findes ingen
-    kollision af samme grund, og figuren flytter til enden af sit nye array
-    — dens plads i det gamle var en prioritet blandt sine egne, jf.
-    ADR-0019, og har intet at sige om en liste, den lige er kommet ind i. */
+    Bliver figuren ved med at være en `Transfer`, overlades selve byttet — de
+    to ender må ikke pege på det samme — til `withTransferEnd`, uændret af
+    sammenlægningen. Bliver den ved med at være et beholdningskildet bidrag,
+    kan enderne aldrig kollidere: kilden skal være frie midler, destinationen
+    må aldrig være det. Krydser figuren grænsen, findes ingen kollision af
+    samme grund, og figuren flytter til enden af sit nye array — dens plads i
+    det gamle var en prioritet blandt sine egne, jf. ADR-0019, og har intet at
+    sige om en liste, den lige er kommet ind i. */
 export function withTransferOrContributionEnd(
   plan: Plan,
   id: string,
@@ -676,7 +700,12 @@ export function withTransferOrContributionEnd(
   const wasTransfer = !('kind' in figure)
   const from = wasTransfer ? figure.from : figure.source
   const to = figure.to
-  const nextTo = end === 'to' ? holding : to
+  const nextTo =
+    end === 'to'
+      ? holding
+      : wasTransfer && holding === to
+        ? resolvedToAfterFromCollision(plan, from, holding)
+        : to
   const destination = findHolding(plan, nextTo)
   const becomesTransfer = destination ? isFreeAssets(destination) : wasTransfer
 

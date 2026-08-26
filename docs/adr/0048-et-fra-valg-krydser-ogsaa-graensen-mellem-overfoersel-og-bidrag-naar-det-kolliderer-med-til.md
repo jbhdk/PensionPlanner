@@ -1,0 +1,14 @@
+# Et "Fra"-valg krydser også grænsen mellem Overførsel og Bidrag, når det kolliderer med "Til"
+
+[ADR-0047](./0047-overfoerslen-kendes-paa-sin-kilde-i-skuffen-ikke-paa-sin-destination-i-motoren.md) lod alene "Til" afgøre, om den sammenlagte figur er en `Transfer` eller et beholdningskildet bidrag, og skrev det som en fast regel: en ændring af "Fra" ændrer aldrig klassificeringen. Reglen holdt, så længe et "Fra"-valg, der kolliderede med "Til" — brugeren vælger den beholdning, der allerede står i den anden ende — altid kunne løses med det gamle byttegreb: enten byttede de to ender plads, eller også fandtes der en anden frie midler-konto at sætte i "Til" i stedet.
+
+Har husstanden kun én frie midler-konto, findes ingen af delene. En Udbetaling fra en ordning ind i den ene frie midler-konto står med "Til" låst på den kontos id — det er den eneste lovlige destination, en `Transfer` kan have. Vil brugeren vende figuren om og i stedet lade den samme konto være "Fra", kolliderer valget med "Til", og byttegrebet leder efter et sted at gøre af den fortrængte ordning: den kan ikke stå som "Til" i en ren overførsel, og der findes ingen anden frie midler-konto at falde tilbage på. Byttet gav op og lod planen stå urørt, og brugeren så sit "Fra"-valg springe tilbage til den gamle værdi uden forklaring.
+
+Løsningen flytter kollisionens afgørelse ét niveau op, fra `withEnd` til `withTransferOrContributionEnd`: før klassificeringen afgøres, regnes byttet hjem med `resolvedToAfterFromCollision`, som stiller det samme spørgsmål som `withEnd` altid har gjort — kan den fortrængte værdi selv stå som "Til", eller findes en anden frie midler at sætte der i stedet. Er svaret nej begge steder, bliver den fortrængte værdi stående som "Til", og det er præcis det signal, der allerede fik "Til"-valg til at omklassificere efter ADR-0047. Figuren bliver et beholdningskildet bidrag med den nye "Fra" som kilde og den fortrængte ordning som destination — den retning, brugeren rent faktisk bad om.
+
+Reglen fra ADR-0047 er dermed ikke længere helt bogstavelig: "Til" er stadig den ende, der normalt afgør klassificeringen, men "Fra" kan nu gøre det samme i det snævre tilfælde, hvor kollisionen ellers ikke har noget lovligt sted at gøre af den fortrængte værdi. De to veje lander i samme klassificeringsgren og bruger samme reklassificering, så resten af `withTransferOrContributionEnd` er uændret.
+
+## Se også
+
+- [ADR-0047](./0047-overfoerslen-kendes-paa-sin-kilde-i-skuffen-ikke-paa-sin-destination-i-motoren.md) — reglen om at "Til" afgør klassificeringen, som denne beslutning udvider til også at gælde et kolliderende "Fra".
+- [ADR-0045](./0045-fladen-klemmer-og-siger-hvorfor-indgangskontrollen-er-bagstopperen.md) — grebet der lader fladen sige, hvorfor et valg fik en konsekvens, brugeren ikke tastede.
