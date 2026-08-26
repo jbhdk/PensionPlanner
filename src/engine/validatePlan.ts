@@ -70,7 +70,8 @@ export function validatePlan(plan: Plan): string | undefined {
     pensionAgreements(plan) ??
     payoutSchedules(plan) ??
     ageBoundedPeriods(plan) ??
-    reversedPeriods(plan)
+    reversedPeriods(plan) ??
+    undatedOnce(plan)
   )
 }
 
@@ -173,6 +174,30 @@ function reversedPeriods(plan: Plan): string | undefined {
       `${figureSubject(figure)} løber fra ${from} til ${to}. ` +
       `En periode kan ikke slutte, før den begynder.`
     )
+  }
+  return undefined
+}
+
+/** En `Én gang`-gentagelse uden et kalenderår beskriver ingenting: motoren
+    leder efter det år, hvor `year === (from ?? to)`, og uden nogen af dem
+    sat, findes det år ikke. Figuren forsvinder ligeså tavst som en omvendt
+    periode, jf. `reversedPeriods` — og er lige så let at overse, fordi planen
+    ellers ser komplet ud.
+
+    Kun kalenderårsforankringen rammes. En aldersforankret `Én gang` uden en
+    alder viser sig som et tomt felt i fladen, ikke som et årstal der ligner
+    et gyldigt svar, og fanges i øvrigt af `ageBoundedPeriods`, når alderen
+    til sidst sættes til noget, der ikke kan lade sig gøre.
+
+    Reglen kan ikke længere nås gennem fladen, som skriver et konkret år, så
+    snart gentagelsen bliver `Én gang`. Den bliver stående som nettet under en
+    håndredigeret fil, jf. ADR-0045. */
+function undatedOnce(plan: Plan): string | undefined {
+  for (const figure of periodicFigures(plan)) {
+    if (figure.recurrence.kind !== 'Once') continue
+    if (figure.period.anchor !== 'CalendarYear') continue
+    if (figure.period.from !== undefined || figure.period.to !== undefined) continue
+    return `${figureSubject(figure)} gentages "Én gang", men har intet år sat. Den falder aldrig.`
   }
   return undefined
 }

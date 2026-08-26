@@ -1460,7 +1460,14 @@ function PeriodSection({
           const kind = recurrences[choice]!
           change(
             kind === 'Once'
-              ? { recurrence: defaultRecurrence(kind), timing: timingForOnce(timing) }
+              ? {
+                  recurrence: defaultRecurrence(kind),
+                  timing: timingForOnce(timing),
+                  period:
+                    period.anchor === 'CalendarYear'
+                      ? { anchor: 'CalendarYear', from: period.from ?? period.to ?? startYear }
+                      : period,
+                }
               : { recurrence: defaultRecurrence(kind) },
           )
         }}
@@ -1479,7 +1486,7 @@ function PeriodSection({
         help="Period.anchor"
         value={danish(anchors, period.anchor)}
         options={Object.keys(anchors)}
-        onChange={(choice) => change({ period: defaultPeriod(anchors[choice]!) })}
+        onChange={(choice) => change({ period: defaultPeriod(anchors[choice]!, recurrence, startYear) })}
       />
       {recurrence.kind === 'Once' ? (
         period.anchor === 'CalendarYear' ? (
@@ -1560,9 +1567,12 @@ function PeriodSection({
 }
 
 /** En ny periode ved skift af forankring: begge endepunkter åbne, altså hele
-    horisonten. Ternæren narrower kun `anchor` til den rette gren af unionen. */
-function defaultPeriod(anchor: Anchor): Period {
-  return anchor === 'CalendarYear' ? { anchor } : { anchor }
+    horisonten — undtagen for `Én gang` med kalenderårsforankring, hvor et åbent
+    år aldrig falder, jf. `matchesRecurrence`. Dér skal et konkret år stå i
+    periodens data med det samme, ikke kun vises som et faldback i feltet. */
+function defaultPeriod(anchor: Anchor, recurrence: Recurrence, startYear: number): Period {
+  if (recurrence.kind === 'Once' && anchor === 'CalendarYear') return { anchor, from: startYear }
+  return { anchor }
 }
 
 function defaultRecurrence(kind: Recurrence['kind']): Recurrence {
