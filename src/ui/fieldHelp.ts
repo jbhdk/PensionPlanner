@@ -203,7 +203,7 @@ export const fieldHelp = {
     'Det, indbetalingen hedder i listen og i forklaringen af et år. Hedder den noget om, hvilken aftale den hører til, kan to bidrag til den samme ordning skelnes fra hinanden. Det indgår ikke i nogen beregning.',
 
   'Contribution.source':
-    'Hvor pengene til indbetalingen kommer fra. Er det en lønpost, trækkes de af lønnen før skat; er det en beholdning, flyttes allerede beskattede penge. En løn kan kun betale til ordninger i lønmodtagerens eget navn, mens opsparede penge kan gå til begges.',
+    'Den lønpost, indbetalingen trækkes af, før skatten beregnes af resten. Ordningen skal stå i lønmodtagerens eget navn, så valget her låser samtidig hvilke ordninger der kan vælges som mål.',
 
   'Contribution.to':
     'Hvilken ordning pengene lander i. Valget afgør resten: om indbetalingen nedsætter skatten, hvilket loft den måles mod, og hvordan pengene beskattes, mens de står der.',

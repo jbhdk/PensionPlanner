@@ -49,7 +49,10 @@ describe('tidslinjens lag', () => {
     const contributions = groups.find((g) => g.name === 'Contributions')!
 
     expect(contributions.items).toHaveLength(1)
-    expect(contributions.items[0]!.target).toEqual({ kind: 'contribution', id: 'bufferbidrag' })
+    // Målet er 'transfer' og ikke 'contribution': det beholdningskildede
+    // bidrag hører til den sammenlagte Overførsel-sektion i skuffen, jf.
+    // ADR-0047 og Navigator.tsx.
+    expect(contributions.items[0]!.target).toEqual({ kind: 'transfer', id: 'bufferbidrag' })
   })
 
   it('giver et item i overførselsgruppen for en overførsel', () => {

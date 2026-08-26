@@ -21,6 +21,7 @@ import type {
   Direction,
   Entry,
   Holding,
+  HoldingSourcedContribution,
   HoldingVariant,
   IncomeEntry,
   PayoutSchedule,
@@ -593,30 +594,85 @@ function openDoorFor(plan: Plan, transfer: Transfer): { transfer: Transfer; clam
   }
 }
 
-/** Den tyndeste overførsel, der kan tilføjes: fra og til det første lovlige
-    par, hele horisonten, hvert år. Brugeren retter enderne i skuffen
-    bagefter. Findes intet par, er der ingenting at tilføje, og knappen der
-    kalder her, er selv skjult.
+/** Slår den sammenlagte Overførsel-figur op, uanset om den lige nu er en
+    `Transfer` eller et beholdningskildet bidrag. `Contribution`s to grene
+    skelnes på `kind`, som kun `Transfer` mangler — det er nok til at
+    diskriminere unionen uden endnu en type. */
+export function findTransferOrContribution(
+  plan: Plan,
+  id: string,
+): Transfer | HoldingSourcedContribution | undefined {
+  const transfer = findTransfer(plan, id)
+  if (transfer) return transfer
+  const contribution = findContribution(plan, id)
+  return contribution?.kind === 'HoldingSourced' ? contribution : undefined
+}
 
-    Starten løftes til afgiverens `PayoutAge`, hvis den har en. En tilføjelse,
-    der gjorde hele planen uregnelig i samme klik, ville lade resultatspalten
-    forsvinde, før brugeren nåede at skrive et beløb. */
-export function addTransfer(plan: Plan): Plan {
-  const pair = firstTransferPair(plan)
-  if (!pair) return plan
+/** Sætter den ene ende af den sammenlagte Overførsel-figur, og lader den
+    usynligt skifte mellem en `Transfer` og et beholdningskildet bidrag, når
+    "Til" krydser grænsen mellem frie midler og en ordning, jf. ADR-0047.
 
-  const fresh: Transfer = {
-    id: freshTransferId(plan),
-    name: `Overførsel ${plan.transfers.length + 1}`,
-    from: pair.from,
-    to: pair.to,
-    amountInRealKroner: 0,
-    timing: 'Even',
-    period: { anchor: 'CalendarYear' },
-    recurrence: { kind: 'Annual' },
+    Hvilken figur resultatet bliver, afgør sig alene af den nye "Til": en
+    `Transfer`s `to` er altid frie midler, et beholdningskildet bidrags er
+    aldrig det — og de to domæner er derfor disjunkte. Det er også derfor
+    kun "Til" kan flytte figuren mellem de to arrays; en ændring af "Fra"
+    ændrer aldrig klassificeringen.
+
+    Bliver figuren ved med at være en `Transfer`, overlades kollisionen —
+    de to ender må ikke pege på det samme — til `withTransferEnd`, uændret
+    af sammenlægningen. Bliver den ved med at være et beholdningskildet
+    bidrag, kan enderne aldrig kollidere: kilden skal være frie midler,
+    destinationen må aldrig være det. Krydser figuren grænsen, findes ingen
+    kollision af samme grund, og figuren flytter til enden af sit nye array
+    — dens plads i det gamle var en prioritet blandt sine egne, jf.
+    ADR-0019, og har intet at sige om en liste, den lige er kommet ind i. */
+export function withTransferOrContributionEnd(
+  plan: Plan,
+  id: string,
+  end: 'from' | 'to',
+  holding: string,
+): { plan: Plan; clamp: Clamp | null } {
+  const figure = findTransferOrContribution(plan, id)
+  if (!figure) return { plan, clamp: null }
+
+  const wasTransfer = !('kind' in figure)
+  const from = wasTransfer ? figure.from : figure.source
+  const to = figure.to
+  const nextTo = end === 'to' ? holding : to
+  const destination = findHolding(plan, nextTo)
+  const becomesTransfer = destination ? isFreeAssets(destination) : wasTransfer
+
+  if (wasTransfer && becomesTransfer) return withTransferEnd(plan, id, end, holding)
+
+  const nextFrom = end === 'from' ? holding : from
+  const shared = {
+    id: figure.id,
+    name: figure.name,
+    amountInRealKroner: figure.amountInRealKroner,
+    timing: figure.timing,
+    period: figure.period,
+    recurrence: figure.recurrence,
   }
 
-  return { ...plan, transfers: [...plan.transfers, openDoorFor(plan, fresh).transfer] }
+  if (!wasTransfer && !becomesTransfer) {
+    const fresh: Contribution = { ...shared, kind: 'HoldingSourced', source: nextFrom, to: nextTo }
+    return { plan: withContribution(plan, id, () => fresh), clamp: null }
+  }
+
+  const withoutOld: Plan = wasTransfer
+    ? { ...plan, transfers: plan.transfers.filter((candidate) => candidate.id !== id) }
+    : { ...plan, contributions: plan.contributions.filter((candidate) => candidate.id !== id) }
+
+  if (becomesTransfer) {
+    const opened = openDoorFor(withoutOld, { ...shared, from: nextFrom, to: nextTo })
+    return {
+      plan: { ...withoutOld, transfers: [...withoutOld.transfers, opened.transfer] },
+      clamp: opened.clamp,
+    }
+  }
+
+  const fresh: Contribution = { ...shared, kind: 'HoldingSourced', source: nextFrom, to: nextTo }
+  return { plan: { ...withoutOld, contributions: [...withoutOld.contributions, fresh] }, clamp: null }
 }
 
 /** De to første beholdninger, en overførsel kan gå mellem — og dermed også
@@ -680,65 +736,41 @@ export function withIncomeEntry(
   )
 }
 
-/** Den tyndeste indbetaling, der kan tilføjes: nul kroner eller nul procent,
-    fra den første lovlige kilde til den første ordning, den må gå til.
-    Destinationen må ikke være frie midler, jf. ADR-0016 — findes intet
-    sådant par, er der ingenting at tilføje, og knappen der kalder her, er
-    selv skjult.
-
-    Er kilden en lønpost, er formen procent frem for et fast beløb: det er
-    den, der følger lønnen op af sig selv, og den brugeren skal skulle vælge
-    sig væk fra. Et beholdningskildet bidrag har ingen post at måle en procent
-    af og kan kun være et kronebeløb. */
+/** Den tyndeste lønkildede indbetaling, der kan tilføjes: nul procent af den
+    første lovlige lønpost, ind i den første ordning, den må gå til.
+    Destinationen må ikke være frie midler, jf. ADR-0016, og skal kunne
+    administreres af en arbejdsgiver — findes intet sådant par, er der
+    ingenting at tilføje, og knappen der kalder her, er selv skjult. Den
+    beholdningskildede form hører til den sammenlagte Overførsel-sektion, jf.
+    `addTransferOrContribution` og ADR-0047. */
 export function addContribution(plan: Plan): Plan {
   const pair = firstContributionPair(plan)
   if (!pair) return plan
 
   const id = freshContributionId(plan)
-  const name = `Indbetaling ${plan.contributions.length + 1}`
+  const number = plan.contributions.filter((c) => c.kind === 'EntrySourced').length + 1
+  const name = `Indbetaling ${number}`
   return {
     ...plan,
     contributions: [
       ...plan.contributions,
-      pair.kind === 'EntrySourced'
-        ? { id, name, kind: pair.kind, source: pair.source, to: pair.to, percentageOfEntry: 0 }
-        : {
-            id,
-            name,
-            kind: pair.kind,
-            source: pair.source,
-            to: pair.to,
-            amountInRealKroner: 0,
-            timing: 'Even',
-            period: { anchor: 'CalendarYear' },
-            recurrence: { kind: 'Annual' },
-          },
+      { id, name, kind: 'EntrySourced', source: pair.source, to: pair.to, percentageOfEntry: 0 },
     ],
   }
 }
 
-/** Det første lovlige par af kilde og ordning — og dermed også svaret på, om
-    en indbetaling overhovedet kan tilføjes.
+/** Det første lovlige par af lønpost og ordning — og dermed også svaret på,
+    om en lønkildet indbetaling overhovedet kan tilføjes. Det beholdningskildede
+    par hører til den sammenlagte Overførsel-sektion og besvares i stedet af
+    `firstTransferOrContributionPair`, jf. ADR-0047.
 
-    Lønposten kommer først: de fleste bidrag er en procent af en løn. Har
-    husstanden ingen indtægtspost, er der stadig en indbetaling at skrive fra
-    de frie midler — det er hele grunden til, at den beholdningskildede form
-    findes, og var knappen skjult her, kunne aldersopsparingens vindue efter
-    erhvervsophør ikke tastes.
-
-    En ordning, ingen arbejdsgiver kan administrere, kan ikke være enden på
-    et lønkildet par: så ville ét klik skrive en plan, `validatePlan`
-    afviser, jf. ADR-0020. Den springes over i første omgang og findes af den
-    beholdningskildede i anden.
-
-    Det lønkildede par skal tilhøre samme person — en arbejdsgiverordning
-    står i lønmodtagerens eget navn — mens det beholdningskildede må krydse
-    ejerskellet, jf. ADR-0028. Husstandens første frie midler kan derfor
-    parres med husstandens første ordning, og i den almindelige husstand,
-    hvor begge findes hos den første person, bliver parret det samme som før. */
+    En ordning, ingen arbejdsgiver kan administrere, kan ikke være enden på et
+    lønkildet par: så ville ét klik skrive en plan, `validatePlan` afviser,
+    jf. ADR-0020. Parret skal desuden tilhøre samme person — en
+    arbejdsgiverordning står i lønmodtagerens eget navn. */
 export function firstContributionPair(
   plan: Plan,
-): { kind: Contribution['kind']; source: string; to: string } | undefined {
+): { kind: 'EntrySourced'; source: string; to: string } | undefined {
   for (const entry of plan.entries) {
     if (entry.direction !== 'Income') continue
     const owner = plan.household.persons.find((person) => person.id === entry.owner)
@@ -747,11 +779,79 @@ export function firstContributionPair(
     )
     if (to) return { kind: 'EntrySourced', source: entry.id, to: to.id }
   }
-  const holdings = plan.household.persons.flatMap((person) => person.holdings)
-  const source = holdings.find(isFreeAssets)
-  const to = holdings.find((holding) => !isFreeAssets(holding))
-  if (source && to) return { kind: 'HoldingSourced', source: source.id, to: to.id }
   return undefined
+}
+
+/** Det første par, et beholdningskildet bidrag kan gå mellem: husstandens
+    første frie midler til dens første ordning. Delt af `firstContributionPair`
+    og `firstTransferOrContributionPair`, så de to ikke kan komme til at svare
+    hver sit på det samme spørgsmål. */
+function firstHoldingSourcedPair(plan: Plan): { from: string; to: string } | undefined {
+  const holdings = plan.household.persons.flatMap((person) => person.holdings)
+  const from = holdings.find(isFreeAssets)
+  const to = holdings.find((holding) => !isFreeAssets(holding))
+  return from && to ? { from: from.id, to: to.id } : undefined
+}
+
+/** Det første lovlige par for den sammenlagte Overførsel-sektion i skuffen —
+    og dermed også svaret på, om dens "+"-knap overhovedet kan aktiveres.
+    Transfer-parret først: en overførsel mellem to frie beholdninger er den
+    almindelige vej, og det beholdningskildede bidrag findes af samme grund
+    som i `firstContributionPair` — der er stadig noget at oprette, når
+    husstanden ingen anden fri beholdning har at overføre til, men vel en
+    ordning at betale ind på, jf. ADR-0047. */
+export function firstTransferOrContributionPair(
+  plan: Plan,
+): { kind: 'Transfer'; from: string; to: string } | { kind: 'HoldingSourced'; from: string; to: string } | undefined {
+  const transferPair = firstTransferPair(plan)
+  if (transferPair) return { kind: 'Transfer', ...transferPair }
+
+  const holdingSourcedPair = firstHoldingSourcedPair(plan)
+  return holdingSourcedPair && { kind: 'HoldingSourced', ...holdingSourcedPair }
+}
+
+/** Den tyndeste figur, den sammenlagte Overførsel-sektion kan tilføje: en
+    Transfer, når der findes et lovligt Transfer-par, ellers et
+    beholdningskildet bidrag. De to deler én nummerering, fordi de deler én
+    liste og én "+"-knap på skærmen, jf. ADR-0047 — en bruger, der tæller
+    "Overførsel 1", "Overførsel 2" i navigatoren, skal ikke opdage et hul,
+    fordi den ene er en Transfer og den anden et bidrag under motorhjelmen. */
+export function addTransferOrContribution(plan: Plan): Plan {
+  const pair = firstTransferOrContributionPair(plan)
+  if (!pair) return plan
+
+  const number =
+    plan.transfers.length +
+    plan.contributions.filter((contribution) => contribution.kind === 'HoldingSourced').length +
+    1
+  const name = `Overførsel ${number}`
+
+  if (pair.kind === 'Transfer') {
+    const fresh: Transfer = {
+      id: freshTransferId(plan),
+      name,
+      from: pair.from,
+      to: pair.to,
+      amountInRealKroner: 0,
+      timing: 'Even',
+      period: { anchor: 'CalendarYear' },
+      recurrence: { kind: 'Annual' },
+    }
+    return { ...plan, transfers: [...plan.transfers, openDoorFor(plan, fresh).transfer] }
+  }
+
+  const fresh: Contribution = {
+    id: freshContributionId(plan),
+    name,
+    kind: 'HoldingSourced',
+    source: pair.from,
+    to: pair.to,
+    amountInRealKroner: 0,
+    timing: 'Even',
+    period: { anchor: 'CalendarYear' },
+    recurrence: { kind: 'Annual' },
+  }
+  return { ...plan, contributions: [...plan.contributions, fresh] }
 }
 
 function freshContributionId(plan: Plan): string {
@@ -988,8 +1088,29 @@ export function moveEntry(plan: Plan, id: string, to: number): Plan {
   return { ...plan, entries }
 }
 
+/** Pladsen tælles blandt bidrag af samme slags som det, der flyttes — de to
+    sektioner i navigatoren viser hver sin delmængde af `plan.contributions`
+    (lønkildet og beholdningskildet), og kun de pladser, den flyttede figurs
+    egen slags optager, må bytte indhold. Samme mønster som `moveEntry`
+    bruger på retning. */
 export function moveContribution(plan: Plan, id: string, to: number): Plan {
-  return { ...plan, contributions: movedById(plan.contributions, id, to) }
+  const moving = findContribution(plan, id)
+  if (moving === undefined) return plan
+
+  const slots = plan.contributions.flatMap((contribution, index) =>
+    contribution.kind === moving.kind ? [index] : [],
+  )
+  const reordered = movedById(
+    slots.map((slot) => plan.contributions[slot]!),
+    id,
+    to,
+  )
+
+  const contributions = [...plan.contributions]
+  slots.forEach((slot, index) => {
+    contributions[slot] = reordered[index]!
+  })
+  return { ...plan, contributions }
 }
 
 export function moveTransfer(plan: Plan, id: string, to: number): Plan {

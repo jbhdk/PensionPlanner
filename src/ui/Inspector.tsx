@@ -17,7 +17,6 @@ import type {
   Contribution,
   ContributionAmount,
   Entry,
-  EntryId,
   ExpenseEntry,
   Holding,
   HoldingId,
@@ -112,7 +111,7 @@ import {
   withPerson,
   withPensionScheme,
   withTransfer,
-  withTransferEnd,
+  withTransferOrContributionEnd,
   withVariant,
 } from './planEdits'
 import type { Selection } from './selection'
@@ -186,16 +185,33 @@ export function Inspector({
             onClose={onClose}
           />
         )}
+        {/* Målet siger kun, i hvilket array figuren står — ikke om den
+            lønkildede eller den beholdningskildede rude skal tegnes.
+            Reklassificeringen i `withTransferOrContributionEnd` kan flytte
+            figuren mellem `plan.transfers` og `plan.contributions` uden at
+            `target` følger med, jf. ADR-0047 — de to ruder afgør derfor selv,
+            ud fra figurens egen `kind`, om de har noget at tegne, og lader
+            hinanden stå tomme, når de ikke har. */}
         {target.kind === 'contribution' && (
-          <ContributionFields
-            plan={plan}
-            years={years}
-            id={target.id}
-            clamp={clamp}
-            onClamp={onClamp}
-            onChange={onChange}
-            onClose={onClose}
-          />
+          <>
+            <ContributionFields
+              plan={plan}
+              years={years}
+              id={target.id}
+              clamp={clamp}
+              onClamp={onClamp}
+              onChange={onChange}
+              onClose={onClose}
+            />
+            <TransferFields
+              plan={plan}
+              id={target.id}
+              clamp={clamp}
+              onClamp={onClamp}
+              onChange={onChange}
+              onClose={onClose}
+            />
+          </>
         )}
         {target.kind === 'transfer' && (
           <TransferFields
@@ -1579,117 +1595,70 @@ function defaultRecurrence(kind: Recurrence['kind']): Recurrence {
   return kind === 'EveryNYears' ? { kind, n: 2 } : { kind }
 }
 
-/** Indbetalingens rude — ét objekt i to udgaver, ikke to slags. Kilden er ét
-    spørgsmål og ikke to, og ruden skifter form efter svaret: er kilden en
-    lønpost, står periode, forankring, gentagelse og forfald slet ikke her —
-    hverken som felter eller som grå felter — men som én linje, der siger,
-    hvad bidraget følger. Er kilden en beholdning, er der ingen post at arve
-    fra, og bidraget bærer dem selv.
+/** Indbetalingens rude — den lønkildede udgave alene. Den beholdningskildede
+    hører til den sammenlagte Overførsel-sektion og tegnes af `TransferFields`
+    i stedet, jf. ADR-0047: kilden er her altid en lønpost, og periode,
+    forankring, gentagelse og forfald står derfor slet ikke her — hverken som
+    felter eller som grå felter — men som én linje, der siger, hvad bidraget
+    følger.
 
-    Fradragsretten og loftet står ikke her i nogen af udgaverne, men af en
-    anden grund: de følger destinationens variant og er ikke noget, brugeren
-    svarer på, jf. ADR-0016. */
+    Fradragsretten og loftet står ikke her, men af en anden grund: de følger
+    destinationens variant og er ikke noget, brugeren svarer på, jf.
+    ADR-0016. */
 function ContributionFields({
   plan,
   years,
   id,
-  clamp,
-  onClamp,
   onChange,
   onClose,
 }: FieldsProps & { id: string; years: YearResult[] } & ClampProps) {
   const contribution = findContribution(plan, id)
-  if (!contribution) return null
+  if (!contribution || contribution.kind !== 'EntrySourced') return null
 
   const holdings = plan.household.persons.flatMap((person) => person.holdings)
   const holdingName = (holdingId: string) =>
     holdings.find((holding) => holding.id === holdingId)?.name ?? holdingId
-  const ownerOfHolding = new Map(
-    plan.household.persons.flatMap((person) =>
-      person.holdings.map((holding) => [holding.id, person] as const),
-    ),
-  )
 
-  const sourceEntry =
-    contribution.kind === 'EntrySourced' ? findEntry(plan, contribution.source) : undefined
-  // Ejeren, de to felter hænger op på, er kildens i den lønkildede udgave og
-  // destinationens i den beholdningskildede, jf. ADR-0028: en lønkildet
-  // indbetaling skal ende i lønmodtagerens egen ordning, mens en
-  // beholdningskildet må krydse ejerskellet. Det er derfor også kun den
-  // sidste, der har en alder at forankre en periode med — og den måles på
-  // destinationen, som motoren gør det.
-  const owner =
-    contribution.kind === 'EntrySourced'
-      ? plan.household.persons.find((person) => person.id === sourceEntry?.owner)
-      : ownerOfHolding.get(contribution.to)
+  const sourceEntry = findEntry(plan, contribution.source)
+  // En firmaordning står i lønmodtagerens eget navn, jf. ADR-0028 — ejeren,
+  // "Til"s liste og aldersforankringen hænger derfor alle på kildens ejer.
+  const owner = plan.household.persons.find((person) => person.id === sourceEntry?.owner)
   if (!owner) return null
 
-  // Kilden er ét felt med to grupper. Navnet bærer personen med, så to ens
-  // navne i husstanden kan skelnes fra hinanden i listen.
   const named = (name: string, person: string) => `${name} · ${person}`
-  const destination = holdings.find((holding) => holding.id === contribution.to)
-  // Lønposten kan pege på en anden persons løn, og så flytter destinationen
-  // med: en ordning, en arbejdsgiver administrerer, står i lønmodtagerens
-  // eget navn, jf. ADR-0028. Ligger den nuværende destination allerede hos
-  // den nye ejer, bliver den stående; ellers findes ejerens første
-  // arbejdsgiveradministrerede ordning. Er der ingen, er der intet at flytte
-  // til — og lønposten tilbydes ikke, frem for at lade ét klik skrive en
-  // plan, `validatePlan` afviser, jf. ADR-0020.
+  const personById = (personId: string) =>
+    plan.household.persons.find((person) => person.id === personId)
+  // Destinationen skal kunne administreres af en arbejdsgiver — ellers ville
+  // ét klik skrive en plan, `validatePlan` afviser, jf. ADR-0020. Ligger den
+  // nuværende destination allerede hos den nye ejer, bliver den stående;
+  // ellers findes ejerens første arbejdsgiveradministrerede ordning. Er der
+  // ingen, er der intet at flytte til — og lønposten tilbydes ikke.
   const employerDestinationUnder = (person: Person | undefined) => {
     if (person?.holdings.some((holding) => holding.id === contribution.to)) return contribution.to
     return person?.holdings.find(
       (holding) => !isFreeAssets(holding) && isEmployerAdministered(holding),
     )?.id
   }
-  const personById = (personId: string) =>
-    plan.household.persons.find((person) => person.id === personId)
-  // Går indbetalingen til en ordning, ingen arbejdsgiver kan administrere,
-  // tilbydes lønposterne slet ikke: den plan ville `validatePlan` afvise, og
-  // så forsvandt resultatspalten efter ét klik, jf. ADR-0020.
-  const entrySources =
-    destination && !isEmployerAdministered(destination)
-      ? []
-      : plan.entries.filter(
-          (entry) =>
-            entry.direction === 'Income' &&
-            employerDestinationUnder(personById(entry.owner)) !== undefined,
-        )
-  // Enhver af husstandens frie midler kan være kilde, også den anden
-  // persons: pengene flytter sig allerede uhindret mellem ejerne gennem en
-  // overførsel, og skattevirkningen følger destinationen, jf. ADR-0028.
-  // Destinationen bliver derfor stående, når kilden skifter.
-  const holdingSources = holdings.filter(isFreeAssets)
+  const entrySources = plan.entries.filter(
+    (entry) =>
+      entry.direction === 'Income' &&
+      employerDestinationUnder(personById(entry.owner)) !== undefined,
+  )
   const entryLabel = (entry: Entry) =>
     named(
       entry.name,
       plan.household.persons.find((person) => person.id === entry.owner)?.name ?? entry.owner,
     )
-  const holdingLabel = (holdingId: string) =>
-    named(holdingName(holdingId), ownerOfHolding.get(holdingId)?.name ?? '')
 
-  // En indbetaling går aldrig til frie midler — så er det en overførsel, jf.
-  // ADR-0016 — og aldrig til en kapitalpension, som har været lukket for
-  // indbetaling siden udgangen af 2012, jf. `OpenToContributions` i
-  // CONTEXT.md. Vælgerne tilbyder kun det, der kan vælges, frem for at lade
-  // motoren afvise planen bagefter.
-  //
-  // Destinationslisten er de ordninger, kilden må betale til: lønmodtagerens
-  // egne i den ene udgave, husstandens alle i den anden.
-  //
-  // Destinationen kan skifte bidragets udgave med sig: vælges en ordning,
-  // ingen arbejdsgiver kan administrere, mens kilden er en lønpost, flytter
-  // kilden med over på frie midler — helst lønmodtagerens egne, ellers
-  // husstandens buffer, som altid er frie midler. Der er derfor altid noget
-  // at skifte til, og enhver af ejerens ordninger kan stå som destination.
-  const freeAssetsForSource = owner.holdings.find(isFreeAssets) ?? holdings.find(isFreeAssets)
-  const destinations = (
-    contribution.kind === 'EntrySourced' ? owner.holdings : holdings
-  ).filter((holding) => !isFreeAssets(holding) && isOpenToContributions(holding))
-  // Feltet skal vise planens egen destination, også når den ligger uden for
-  // listen. Det gør en ordning hos en anden person i den lønkildede udgave,
-  // og faldt feltet tilbage på listens første, ville skuffen vise noget
-  // andet end det, motoren melder fejl om — og fejlen kunne ikke rettes ved
-  // at vælge om.
+  // Destinationen er ejerens egne ordninger, en arbejdsgiver kan
+  // administrere — aktiesparekontoen og en anden persons ordning står
+  // derfor aldrig her, jf. ADR-0028. Feltet skal vise planens egen
+  // destination, også når den ligger uden for listen, så en ulovlig
+  // destination i en importeret plan vises med sit navn og ikke forsvinder.
+  const destination = holdings.find((holding) => holding.id === contribution.to)
+  const destinations = owner.holdings.filter(
+    (holding) => !isFreeAssets(holding) && isEmployerAdministered(holding),
+  )
   const destinationOptions =
     destination && !destinations.some((holding) => holding.name === destination.name)
       ? [destination, ...destinations]
@@ -1729,166 +1698,88 @@ function ContributionFields({
           onChange={(name) => onChange(withContribution(plan, id, (c) => ({ ...c, name })))}
         />
         <SelectField
-          label="Kilde"
+          label="Fra"
           help="Contribution.source"
-          value={
-            contribution.kind === 'EntrySourced' && sourceEntry
-              ? entryLabel(sourceEntry)
-              : holdingLabel(contribution.source)
-          }
-          options={[
-            { label: 'Lønposter', options: entrySources.map(entryLabel) },
-            {
-              label: 'Beholdninger',
-              options: holdingSources.map((holding) => holdingLabel(holding.id)),
-            },
-            // En tom gruppe udelades: en overskrift uden noget under sig
-            // ligner en liste, der mangler at blive fyldt.
-          ].filter((group) => group.options.length > 0)}
+          value={sourceEntry ? entryLabel(sourceEntry) : contribution.source}
+          options={entrySources.map(entryLabel)}
           onChange={(choice) => {
-            const entry = entrySources.find((source) => entryLabel(source) === choice)
-            const holding = holdingSources.find((source) => holdingLabel(source.id) === choice)
+            const entry = entrySources.find((source) => entryLabel(source) === choice)!
             onChange(
               withContribution(plan, id, (c) =>
-                entry
-                  ? withSource(
-                      { ...c, to: employerDestinationUnder(personById(entry.owner))! },
-                      { kind: 'EntrySourced', source: entry.id },
-                    )
-                  : withSource(c, { kind: 'HoldingSourced', source: holding!.id }),
+                c.kind === 'EntrySourced'
+                  ? { ...c, source: entry.id, to: employerDestinationUnder(personById(entry.owner))! }
+                  : c,
               ),
             )
           }}
         />
         <SelectField
-          label="Destination"
+          label="Til"
           help="Contribution.to"
           value={holdingName(contribution.to)}
           options={destinationOptions.map((holding) => holding.name)}
           onChange={(name) => {
             const to = destinationOptions.find((holding) => holding.name === name)!
-            onChange(
-              withContribution(plan, id, (c) => {
-                const moved = { ...c, to: to.id }
-                return c.kind === 'EntrySourced' && !isEmployerAdministered(to)
-                  ? withSource(moved, { kind: 'HoldingSourced', source: freeAssetsForSource!.id })
-                  : moved
-              }),
-            )
+            onChange(withContribution(plan, id, (c) => ({ ...c, to: to.id })))
           }}
         />
         <Hint>
-          {contribution.kind === 'HoldingSourced'
-            ? 'Kilden er en beholdning, så der trækkes intet AM-bidrag — pengene er beskattet, og der lander 100 % i ordningen.'
-            : sourceEntry?.direction === 'Income' && sourceEntry.taxTreatment === 'EarnedIncome'
-              ? 'Kilden er en AM-pligtig post, så AM-bidraget trækkes på vejen ind — der lander 92 % i beholdningen.'
-              : 'Kilden har aldrig båret AM-bidrag, så hele beløbet går ind.'}{' '}
-          Begge dele følger kilden og tastes ikke.
+          {sourceEntry?.direction === 'Income' && sourceEntry.taxTreatment === 'EarnedIncome'
+            ? 'Kilden er en AM-pligtig post, så AM-bidraget trækkes på vejen ind — der lander 92 % i beholdningen.'
+            : 'Kilden har aldrig båret AM-bidrag, så hele beløbet går ind.'}{' '}
+          Det følger kilden og tastes ikke.
         </Hint>
       </Section>
       <Section title="Beløb">
-        {contribution.kind === 'EntrySourced' ? (
-          <>
-            {/* Begge former står synlige: en vælger ville skjule den ene bag
-                et klik, og der er kun to. De er ikke et spørgsmål for sig —
-                formen *er* feltets enhed, jf. `UnitToggle`. */}
-            {'percentageOfEntry' in contribution ? (
-              <NumberField
-                label="Beløb"
-                help="Contribution.percentageOfEntry"
-                unit={amountForm}
-                value={asPercent(contribution.percentageOfEntry)}
-                onChange={(percent) =>
-                  onChange(
-                    withContribution(plan, id, (c) =>
-                      'percentageOfEntry' in c ? { ...c, percentageOfEntry: percent / 100 } : c,
-                    ),
-                  )
-                }
-              />
-            ) : (
-              <NumberField
-                label="Beløb"
-                help="Contribution.amountInRealKroner"
-                unit={amountForm}
-                value={contribution.amountInRealKroner}
-                onChange={(amountInRealKroner) =>
-                  onChange(
-                    withContribution(plan, id, (c) =>
-                      c.kind === 'EntrySourced' && 'amountInRealKroner' in c
-                        ? { ...c, amountInRealKroner }
-                        : c,
-                    ),
-                  )
-                }
-              />
-            )}
-            {'percentageOfEntry' in contribution && sourceEntry && (
-              <Hint>
-                Måles af {sourceEntry.name}, så bidraget følger lønnen op uden at blive
-                rettet.
-              </Hint>
-            )}
-          </>
+        {/* Begge former står synlige: en vælger ville skjule den ene bag et
+            klik, og der er kun to. De er ikke et spørgsmål for sig — formen
+            *er* feltets enhed, jf. `UnitToggle`. */}
+        {'percentageOfEntry' in contribution ? (
+          <NumberField
+            label="Beløb"
+            help="Contribution.percentageOfEntry"
+            unit={amountForm}
+            value={asPercent(contribution.percentageOfEntry)}
+            onChange={(percent) =>
+              onChange(
+                withContribution(plan, id, (c) =>
+                  'percentageOfEntry' in c ? { ...c, percentageOfEntry: percent / 100 } : c,
+                ),
+              )
+            }
+          />
         ) : (
-          <>
-            <NumberField
-              label="Beløb"
-              help="Contribution.amountInRealKroner"
-              unit="kr."
-              value={contribution.amountInRealKroner}
-              onChange={(amountInRealKroner) =>
-                onChange(
-                  withContribution(plan, id, (c) =>
-                    c.kind === 'HoldingSourced' ? { ...c, amountInRealKroner } : c,
-                  ),
-                )
-              }
-            />
-            {/* Enheden står som ren tekst og ikke som en kontakt: en procent
-                skal have en post at måle af, og et valg, der aldrig kan
-                træffes, er værre end intet valg. */}
-            <Hint>
-              En procent skal have en post at måle af, og kilden er en beholdning — derfor
-              kun kronebeløbet. Det er tastet i nutidskroner og følger planens
-              inflationsantagelse, som en overførsel gør.
-            </Hint>
-          </>
+          <NumberField
+            label="Beløb"
+            help="Contribution.amountInRealKroner"
+            unit={amountForm}
+            value={contribution.amountInRealKroner}
+            onChange={(amountInRealKroner) =>
+              onChange(
+                withContribution(plan, id, (c) =>
+                  c.kind === 'EntrySourced' && 'amountInRealKroner' in c
+                    ? { ...c, amountInRealKroner }
+                    : c,
+                ),
+              )
+            }
+          />
+        )}
+        {'percentageOfEntry' in contribution && sourceEntry && (
+          <Hint>
+            Måles af {sourceEntry.name}, så bidraget følger lønnen op uden at blive rettet.
+          </Hint>
         )}
       </Section>
-      {contribution.kind === 'EntrySourced' ? (
-        sourceEntry && (
-          <section className="afsnit arvet">
-            <h3>Følger {sourceEntry.name}</h3>
-            <div className="arvelinje">{inheritedLine(years, sourceEntry)}</div>
-            <Hint>
-              Periode, forankring, gentagelse og forfald hører til posten. Bidraget har
-              dem ikke selv og ophører derfor af sig selv ved erhvervsophøret.
-            </Hint>
-          </section>
-        )
-      ) : (
-        <PeriodSection
-          value={contribution}
-          owner={owner}
-          startYear={plan.startYear}
-          bounds={endpointBounds(plan, contribution)}
-          clamp={clamp}
-          onClamp={onClamp}
-          onChange={(next) =>
-            onChange(
-              withContribution(plan, id, (c) =>
-                c.kind === 'HoldingSourced' ? { ...c, ...next } : c,
-              ),
-            )
-          }
-        >
+      {sourceEntry && (
+        <section className="afsnit arvet">
+          <h3>Følger {sourceEntry.name}</h3>
+          <div className="arvelinje">{inheritedLine(years, sourceEntry)}</div>
           <Hint>
-            Kilden er en beholdning og har ingen periode at låne ud. Til gengæld kan
-            bidraget aldersforankres: destinationen har en ejer og dermed en alder at
-            måle fra.
+            Periode, forankring, gentagelse og forfald hører til posten. Bidraget har
+            dem ikke selv og ophører derfor af sig selv ved erhvervsophøret.
           </Hint>
-        </PeriodSection>
+        </section>
       )}
     </>
   )
@@ -1907,41 +1798,6 @@ function inheritedLine(years: YearResult[], source: Entry): string {
     .join(' · ')
 }
 
-/** Skifter bidragets kilde — og dermed dets udgave. De to bærer hvert sit sæt
-    felter, så skiftet bygger et nyt bidrag frem for at sætte et felt, som
-    `withAmountForm` gør for beløbet.
-
-    Kronebeløbet overlever skiftet: det er det samme tal i begge udgaver.
-    Procenten gør ikke — den findes kun, hvor der er en post at måle af — og
-    perioden heller ikke, for den findes kun, hvor der ingen post er at arve
-    den fra. */
-function withSource(
-  contribution: Contribution,
-  source:
-    | { kind: 'EntrySourced'; source: EntryId }
-    | { kind: 'HoldingSourced'; source: HoldingId },
-): Contribution {
-  const { id, name, to } = contribution
-  const amountInRealKroner =
-    'amountInRealKroner' in contribution ? contribution.amountInRealKroner : undefined
-
-  if (source.kind === 'EntrySourced') {
-    return amountInRealKroner === undefined
-      ? { id, name, to, ...source, percentageOfEntry: 0 }
-      : { id, name, to, ...source, amountInRealKroner }
-  }
-  return {
-    id,
-    name,
-    to,
-    ...source,
-    amountInRealKroner: amountInRealKroner ?? 0,
-    timing: 'Even',
-    period: { anchor: 'CalendarYear' },
-    recurrence: { kind: 'Annual' },
-  }
-}
-
 /** Skifter beløbsangivelsens form på et lønkildet bidrag. De to former er
     hvert sit felt og ikke to værdier i ét, så skiftet bygger et nyt bidrag
     frem for at sætte et felt — som `withForm` gør for en fordelingslinje.
@@ -1958,6 +1814,17 @@ function withAmountForm(
     : { id, name, kind, source, to, amountInRealKroner: 0 }
 }
 
+/** Den sammenlagte Overførsel-rude. Skuffen kender kun kilden, jf. ADR-0047:
+    figuren, brugeren redigerer, er enten en `Transfer` eller et
+    beholdningskildet bidrag, og hvilken af de to det bliver, afgør sig alene
+    af "Til" — vælges en ordning, bliver figuren et bidrag; vælges frie
+    midler, bliver den en overførsel. Skiftet er `withTransferOrContributionEnd`s
+    arbejde og usynligt for brugeren; ordet på skærmen ("Overførsel"/
+    "Udbetaling") følger som hidtil alene "Fra"-beholdningen og ikke denne
+    klassificering — det ord bliver aldrig "Indbetaling" her.
+
+    Den lønkildede indbetaling er ikke en del af sammenlægningen og tegnes
+    fortsat af `ContributionFields`. */
 function TransferFields({
   plan,
   id,
@@ -1967,47 +1834,64 @@ function TransferFields({
   onClose,
 }: FieldsProps & { id: string; clamp: Clamp | null; onClamp: (clamp: Clamp | null) => void }) {
   const transfer = findTransfer(plan, id)
-  const fromOwner = findHoldingOwner(plan, transfer?.from ?? '')
-  if (!transfer || !fromOwner) return null
+  const holdingContribution = transfer ? undefined : findContribution(plan, id)
+  const contribution =
+    holdingContribution?.kind === 'HoldingSourced' ? holdingContribution : undefined
+  const figure = transfer ?? contribution
+  if (!figure) return null
+  const isContribution = contribution !== undefined
+
+  const fromId = isContribution ? contribution.source : transfer!.from
+  const toId = figure.to
+  const fromOwner = findHoldingOwner(plan, fromId)
+  const toOwner = findHoldingOwner(plan, toId)
+  // Ejeren, perioden forankrer sig på, er afgiverens for en overførsel og
+  // destinationens for et beholdningskildet bidrag, jf. ADR-0028 — det er
+  // derfor kun den sidste, der kan krydse ejerskellet mellem "Fra" og "Til".
+  const anchorOwner = isContribution ? toOwner : fromOwner
+  if (!anchorOwner) return null
 
   const holdings = plan.household.persons.flatMap((person) => person.holdings)
   const holdingName = (holdingId: string) =>
     holdings.find((holding) => holding.id === holdingId)?.name ?? holdingId
+  const from = holdings.find((holding) => holding.id === fromId)
+  const fromIsFreeAssets = from ? isFreeAssets(from) : false
 
-  // De to ender har hver sin regel og dermed hver sin liste. Afgiveren skal
-  // være en variant, hvis udbetaling er skattefri — også aldersopsparingen og
-  // aktiesparekontoen, som netop tømmes sådan, jf. ADR-0022. Destinationen er
-  // altid frie midler: ind i en ordning er det en indbetaling, jf. ADR-0016.
-  //
-  // Listerne tilbyder kun det, der kan vælges, frem for at lade motoren
-  // afvise planen bagefter — navneopslaget ovenfor står stadig på alle
-  // beholdninger, så en importeret plans ulovlige ende vises med sit navn og
-  // ikke med sit id.
-  const sources = transferEndOptions(plan, 'from')
-  const destinations = transferEndOptions(plan, 'to')
-  // Opslaget dækker afgiverlisten, og destinationerne er en delmængde af
-  // den: et navn, en af de to lister kan sende hertil, står altid i kortet.
-  // En beholdning, ingen af listerne tilbyder, hører ikke i det — den kunne
-  // stjæle et navn fra en, der gør.
+  // "Fra" er den brede liste, en overførsel altid har haft — også de låste
+  // ordninger, der netop tømmes ad denne vej, jf. ADR-0022 — men kun så
+  // længe figuren står som en overførsel. Er den et beholdningskildet
+  // bidrag, skal kilden altid være frie midler, og listen indskrænkes
+  // dertil, så et valg her aldrig kan bede om et bidrag, motoren afviser.
+  const fromOptions = isContribution ? holdings.filter(isFreeAssets) : transferEndOptions(plan, 'from')
+  // "Til" har to grupper: frie midler, som gør figuren til en overførsel
+  // (eller en udbetaling), og ordninger, som gør den til et bidrag. Sidste
+  // gruppe udelades helt, når "Fra" er en låst ordning — dér er destinationen
+  // altid frie midler, og der er intet at vælge fra, jf. ADR-0047.
+  const freeDestinations = transferEndOptions(plan, 'to')
+  const schemeDestinations = fromIsFreeAssets
+    ? holdings.filter((holding) => !isFreeAssets(holding) && isOpenToContributions(holding))
+    : []
   const holdingByName: Record<string, string> = Object.fromEntries(
-    sources.map((holding) => [holding.name, holding.id]),
+    [...fromOptions, ...freeDestinations, ...schemeDestinations].map((holding) => [
+      holding.name,
+      holding.id,
+    ]),
   )
 
-  // Fladen låner ordet "udbetaling", når pengene forlader en ordning. Det er
-  // det, den er i virkeligheden — man beder selskabet udbetale sin
-  // aldersopsparing — men figuren hedder stadig en overførsel i glossaret og
-  // i koden, jf. ADR-0022. En etiket og ikke et begreb, og derfor står de
-  // bøjede former som tekst her og ikke som en regel, der bøjer dem.
-  /** Vælger den ene ende. Løftet af starten, valget kan medføre, taler
-      gennem den samme kanal som feltet og håndtaget — det var tavst indtil
-      ADR-0045. */
+  /** Vælger den ene ende og lader figuren skifte klassificering usynligt.
+      Løftet af starten, valget kan medføre, taler gennem den samme kanal som
+      feltet og håndtaget — det var tavst indtil ADR-0045. */
   function chooseEnd(end: 'from' | 'to', holding: string) {
-    const chosen = withTransferEnd(plan, id, end, holding)
+    const chosen = withTransferOrContributionEnd(plan, id, end, holding)
     onChange(chosen.plan)
     onClamp(chosen.clamp)
   }
 
-  const from = holdings.find((holding) => holding.id === transfer.from)
+  // Fladen låner ordet "udbetaling", når pengene forlader en ordning — det
+  // er det, den er i virkeligheden, jf. ADR-0022 — men ordet er alene
+  // "Fra"-beholdningens: klassificeringen mellem overførsel og bidrag har
+  // intet at sige om det, og ordet bliver aldrig "Indbetaling" her, jf.
+  // ADR-0047.
   const label =
     from && !isFreeAssets(from)
       ? { slags: 'Udbetaling', bestemt: 'Udbetalingen', fjern: 'Fjern udbetaling' }
@@ -2016,10 +1900,10 @@ function TransferFields({
   return (
     <>
       <Head
-        title={transfer.name}
+        title={figure.name}
         subtitle={label.slags}
         onDelete={() => {
-          onChange(removeTransfer(plan, id))
+          onChange(isContribution ? removeContribution(plan, id) : removeTransfer(plan, id))
           onClose()
         }}
         deleteLabel={label.fjern}
@@ -2027,68 +1911,100 @@ function TransferFields({
       <Section title={label.bestemt}>
         <TextField
           label="Navn"
-          help="Transfer.name"
-          value={transfer.name}
-          onChange={(name) => onChange(withTransfer(plan, id, (t) => ({ ...t, name })))}
+          help={isContribution ? 'Contribution.name' : 'Transfer.name'}
+          value={figure.name}
+          onChange={(name) =>
+            onChange(
+              isContribution
+                ? withContribution(plan, id, (c) => ({ ...c, name }))
+                : withTransfer(plan, id, (t) => ({ ...t, name })),
+            )
+          }
         />
         {/* Står den beholdning, der allerede er den anden ende, i listen, og
-            kan de to bytte plads lovligt, gør de det — se `withTransferEnd`.
-            Udelod listen den anden ende, ville retningen være låst mellem to
-            frie midler, og der ville ikke være et valg tilbage overhovedet. */}
+            kan de to bytte plads lovligt, gør de det — se `withTransferEnd`,
+            som `withTransferOrContributionEnd` viderefører uændret, når
+            figuren bliver ved med at være en overførsel. */}
         <SelectField
           label="Fra"
           help="Transfer.from"
-          value={holdingName(transfer.from)}
-          options={sources.map((holding) => holding.name)}
+          value={holdingName(fromId)}
+          options={fromOptions.map((holding) => holding.name)}
           onChange={(name) => chooseEnd('from', holdingByName[name]!)}
         />
         <SelectField
           label="Til"
-          help="Transfer.to"
-          value={holdingName(transfer.to)}
-          options={destinations.map((holding) => holding.name)}
+          help={isContribution ? 'Contribution.to' : 'Transfer.to'}
+          value={holdingName(toId)}
+          options={[
+            { label: 'Frie midler', options: freeDestinations.map((holding) => holding.name) },
+            { label: 'Ordninger', options: schemeDestinations.map((holding) => holding.name) },
+            // En tom gruppe udelades: en overskrift uden noget under sig
+            // ligner en liste, der mangler at blive fyldt.
+          ].filter((group) => group.options.length > 0)}
           onChange={(name) => chooseEnd('to', holdingByName[name]!)}
         />
         <NumberField
           label="Beløb"
-          help="Transfer.amountInRealKroner"
+          help={isContribution ? 'Contribution.amountInRealKroner' : 'Transfer.amountInRealKroner'}
           unit="kr."
-          value={transfer.amountInRealKroner}
+          value={figure.amountInRealKroner}
           onChange={(amountInRealKroner) =>
-            onChange(withTransfer(plan, id, (t) => ({ ...t, amountInRealKroner })))
+            onChange(
+              isContribution
+                ? withContribution(plan, id, (c) => ({ ...c, amountInRealKroner }))
+                : withTransfer(plan, id, (t) => ({ ...t, amountInRealKroner })),
+            )
           }
         />
         {/* Denne plans tal og ikke feltets — en Hint og ikke en forklaring,
-            jf. ADR-0021. Afgiften rammer kun en kapitalpension, og beløbet
-            her er det ubeskårne: rækker ordningens saldo ikke til det
-            ønskede, afkortes det først, og forklar-året viser det faktiske. */}
-        {from && payoutTaxation(from) === 'Chargeable' && (
+            jf. ADR-0021. Afgiften rammer kun en kapitalpension, og den kan
+            aldrig være destination for et bidrag — figuren er derfor altid
+            en overførsel her. Beløbet er det ubeskårne: rækker ordningens
+            saldo ikke til det ønskede, afkortes det først, og forklar-året
+            viser det faktiske. */}
+        {!isContribution && from && payoutTaxation(from) === 'Chargeable' && (
           <Hint>
             Kapitalpensionens afgift trækkes fra på vejen ud. Af{' '}
-            {kroner(transfer.amountInRealKroner)} kr. lander{' '}
+            {kroner(figure.amountInRealKroner)} kr. lander{' '}
             {kroner(
-              transfer.amountInRealKroner -
-                transferCharge(from, transfer.amountInRealKroner, latestRateYear()),
+              figure.amountInRealKroner -
+                transferCharge(from, figure.amountInRealKroner, latestRateYear()),
             )}{' '}
             kr. i de frie midler.
           </Hint>
         )}
       </Section>
       <PeriodSection
-        value={transfer}
-        owner={fromOwner}
+        value={figure}
+        owner={anchorOwner}
         startYear={plan.startYear}
-        bounds={endpointBounds(plan, transfer)}
+        bounds={endpointBounds(plan, figure)}
         clamp={clamp}
         onClamp={onClamp}
-        onChange={(next) => onChange(withTransfer(plan, id, (t) => ({ ...t, ...next })))}
+        onChange={(next) =>
+          onChange(
+            isContribution
+              ? withContribution(plan, id, (c) => ({ ...c, ...next }))
+              : withTransfer(plan, id, (t) => ({ ...t, ...next })),
+          )
+        }
       >
         <Hint>
-          En aldersforankret overførsel måles på {fromOwner.name}, som ejer
-          den beholdning, pengene tages fra — så en tømning flytter sig med
-          erhvervsophøret.
-          {from && isPensionScheme(from) && (
-            <> Ordningen må tidligst udbetales i {payoutYear(from, fromOwner)}.</>
+          {isContribution ? (
+            <>
+              Et aldersforankret bidrag måles på {anchorOwner.name}, som ejer den ordning,
+              pengene lander i.
+            </>
+          ) : (
+            <>
+              En aldersforankret overførsel måles på {anchorOwner.name}, som ejer
+              den beholdning, pengene tages fra — så en tømning flytter sig med
+              erhvervsophøret.
+              {from && isPensionScheme(from) && (
+                <> Ordningen må tidligst udbetales i {payoutYear(from, anchorOwner)}.</>
+              )}
+            </>
           )}
         </Hint>
       </PeriodSection>

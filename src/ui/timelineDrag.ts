@@ -1,4 +1,11 @@
-import { withContribution, withEntry, withLifeAnnuity, withPayoutSchedule, withTransfer } from './planEdits'
+import {
+  findTransferOrContribution,
+  withContribution,
+  withEntry,
+  withLifeAnnuity,
+  withPayoutSchedule,
+  withTransfer,
+} from './planEdits'
 import { yearAtAge, personLastYear } from '../engine/age'
 import { bearsPayoutSchedule } from '../engine/holdingVariant'
 import {
@@ -55,30 +62,28 @@ export function applyTimelineDrag(
       }
     }
     case 'transfer': {
+      // Målet er 'transfer' for hele den sammenlagte Overførsel-sektion,
+      // også når figuren er et beholdningskildet bidrag under motorhjelmen,
+      // jf. ADR-0047 og Navigator.tsx — opslaget dækker derfor begge arrays.
       const targetId = item.target.id
-      const transfer = plan.transfers.find((t) => t.id === targetId)
-      if (!transfer) return { plan, clamp: null }
-      const moved = movedPeriod(plan, transfer, edge, deltaYears)
+      const figure = findTransferOrContribution(plan, targetId)
+      if (!figure) return { plan, clamp: null }
+      const moved = movedPeriod(plan, figure, edge, deltaYears)
       return {
-        plan: withTransfer(plan, targetId, (t) => ({ ...t, period: moved.period })),
+        plan:
+          'kind' in figure
+            ? withContribution(plan, targetId, (c) =>
+                c.kind === 'HoldingSourced' ? { ...c, period: moved.period } : c,
+              )
+            : withTransfer(plan, targetId, (t) => ({ ...t, period: moved.period })),
         clamp: moved.clamp,
       }
     }
     case 'contribution': {
-      const targetId = item.target.id
-      const contribution = plan.contributions.find((c) => c.id === targetId)
-      // Den lønkildede form har ingen periode at trække i — den arver
-      // lønpostens, og boksen på tidslinjen er postens egen.
-      if (contribution === undefined || contribution.kind !== 'HoldingSourced') {
-        return { plan, clamp: null }
-      }
-      const moved = movedPeriod(plan, contribution, edge, deltaYears)
-      return {
-        plan: withContribution(plan, targetId, (c) =>
-          c.kind === 'HoldingSourced' ? { ...c, period: moved.period } : c,
-        ),
-        clamp: moved.clamp,
-      }
+      // Rammes ikke af tidslinjen: den lønkildede form har ingen periode at
+      // trække i og bærer intet item, og den beholdningskildede tegnes nu
+      // under målet 'transfer' ovenfor.
+      return { plan, clamp: null }
     }
     case 'holding': {
       // En livrentes eneste håndtag er boksens venstre kant: højre kant er

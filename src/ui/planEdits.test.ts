@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { aContribution, aPlan, aSalary, aTransfer, anExpense } from '../engine/testing/planFixture'
+import {
+  aContribution,
+  aHoldingContribution,
+  aPlan,
+  aSalary,
+  aTransfer,
+  anExpense,
+} from '../engine/testing/planFixture'
 import type { Entry, PensionAgreement, Plan } from '../engine/plan'
 import { validatePlan } from '../engine/validatePlan'
 import { defaultPlan } from './defaultPlan'
@@ -8,7 +15,9 @@ import {
   addEntry,
   addPensionAgreement,
   addPerson,
-  addTransfer,
+  addTransferOrContribution,
+  firstTransferOrContributionPair,
+  firstTransferPair,
   moveContribution,
   moveEntry,
   moveHolding,
@@ -19,6 +28,7 @@ import {
   removePensionAgreement,
   removePerson,
   withPensionAgreement,
+  withTransferOrContributionEnd,
   withVariant,
 } from './planEdits'
 
@@ -466,7 +476,7 @@ describe('addPerson', () => {
   })
 })
 
-describe('addTransfer og addContribution', () => {
+describe('addContribution', () => {
   /** En plan med to beholdninger med frie midler og en ordning at betale
       til — nok til, at begge knapper har et lovligt par at bygge på. */
   function aPlanToAddTo(): Plan {
@@ -498,18 +508,6 @@ describe('addTransfer og addContribution', () => {
     }
   }
 
-  it('nummererer den nye overførsel og den nye indbetaling', () => {
-    // Navnet skrives ved oprettelsen som en beholdnings og udledes ikke af
-    // enderne: en etikette, der læste sig selv af de to beholdninger, ville
-    // skifte under brugeren, hver gang en ende blev valgt om.
-    const plan = addTransfer(addTransfer(aPlanToAddTo()))
-
-    expect(plan.transfers.map((transfer) => transfer.name)).toEqual([
-      'Overførsel 1',
-      'Overførsel 2',
-    ])
-  })
-
   it('nummererer den nye indbetaling', () => {
     const plan = addContribution(addContribution(aPlanToAddTo()))
 
@@ -517,6 +515,302 @@ describe('addTransfer og addContribution', () => {
       'Indbetaling 1',
       'Indbetaling 2',
     ])
+  })
+})
+
+describe('addTransferOrContribution', () => {
+  it('opretter en HoldingSourced Contribution, når intet Transfer-par findes', () => {
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+
+    const result = addTransferOrContribution(plan)
+
+    expect(result.transfers).toEqual([])
+    expect(result.contributions).toHaveLength(1)
+    expect(result.contributions[0]).toMatchObject({
+      kind: 'HoldingSourced',
+      source: 'free-assets',
+      to: 'ratepension',
+      name: 'Overførsel 1',
+    })
+  })
+
+  it('opretter en Transfer, når et Transfer-par findes', () => {
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'anden-frie',
+          name: 'Andre frie midler',
+          variant: 'SavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+
+    const result = addTransferOrContribution(plan)
+
+    expect(result.contributions).toEqual([])
+    expect(result.transfers).toHaveLength(1)
+    expect(result.transfers[0]).toMatchObject({
+      from: 'free-assets',
+      to: 'anden-frie',
+      name: 'Overførsel 1',
+    })
+  })
+
+  it('nummererer på tværs af begge arrays', () => {
+    // Et Transfer og et beholdningskildet bidrag hører til den samme liste på
+    // skærmen, og de skal derfor også dele én tælling.
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'anden-frie',
+          name: 'Andre frie midler',
+          variant: 'SavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+
+    const first = addTransferOrContribution(plan)
+    expect(first.transfers[0]!.name).toBe('Overførsel 1')
+
+    // Andre-frie er nu optaget som destination for det første Transfer, men
+    // begge par findes stadig — dette kald skal blot tælle videre.
+    const second = addTransferOrContribution(first)
+    expect(second.transfers).toHaveLength(2)
+    expect(second.transfers[1]!.name).toBe('Overførsel 2')
+  })
+
+  it('lader planen stå, når intet lovligt par findes', () => {
+    const plan = aPlan()
+
+    expect(addTransferOrContribution(plan)).toEqual(plan)
+  })
+})
+
+describe('withTransferOrContributionEnd', () => {
+  /** En Transfer mellem to frie beholdninger og en ordning ved siden af —
+      nok til at prøve begge retninger af reklassificeringen. */
+  function aPlanWithTransferAndScheme(): Plan {
+    return aPlan({
+      holdings: [
+        {
+          id: 'anden-frie',
+          name: 'Andre frie midler',
+          variant: 'SavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+      transfers: [
+        aTransfer({ id: 'flytning', from: 'free-assets', to: 'anden-frie', amountInRealKroner: 12_000 }),
+      ],
+    })
+  }
+
+  it('flytter figuren fra plan.transfers til plan.contributions, når "Til" bliver en ordning', () => {
+    const plan = aPlanWithTransferAndScheme()
+
+    const { plan: result, clamp } = withTransferOrContributionEnd(plan, 'flytning', 'to', 'ratepension')
+
+    expect(result.transfers).toEqual([])
+    expect(result.contributions).toEqual([
+      {
+        id: 'flytning',
+        name: 'Overførslen',
+        kind: 'HoldingSourced',
+        source: 'free-assets',
+        to: 'ratepension',
+        amountInRealKroner: 12_000,
+        timing: 'Even',
+        period: { anchor: 'CalendarYear' },
+        recurrence: { kind: 'Annual' },
+      },
+    ])
+    expect(clamp).toBeNull()
+  })
+
+  it('flytter figuren fra plan.contributions til plan.transfers, når "Til" bliver frie midler', () => {
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+        {
+          id: 'anden-frie',
+          name: 'Andre frie midler',
+          variant: 'SavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+      contributions: [
+        aHoldingContribution({
+          id: 'bidrag',
+          name: 'Overførslen',
+          source: 'free-assets',
+          to: 'ratepension',
+          amountInRealKroner: 8_000,
+        }),
+      ],
+    })
+
+    const { plan: result } = withTransferOrContributionEnd(plan, 'bidrag', 'to', 'anden-frie')
+
+    expect(result.contributions).toEqual([])
+    expect(result.transfers).toEqual([
+      {
+        id: 'bidrag',
+        name: 'Overførslen',
+        from: 'free-assets',
+        to: 'anden-frie',
+        amountInRealKroner: 8_000,
+        timing: 'Even',
+        period: { anchor: 'CalendarYear' },
+        recurrence: { kind: 'Annual' },
+      },
+    ])
+  })
+
+  it('opdaterer i planen på plads, når klassificeringen ikke skifter', () => {
+    // Figuren skal ikke miste sin plads i sit eget array, når redigeringen
+    // slet ikke krydser grænsen mellem de to figurtyper.
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'anden-frie',
+          name: 'Andre frie midler',
+          variant: 'SavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+        {
+          id: 'tredje-frie',
+          name: 'Tredje frie midler',
+          variant: 'SavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+      transfers: [
+        aTransfer({ id: 'foerst', from: 'free-assets', to: 'anden-frie', amountInRealKroner: 1 }),
+        aTransfer({ id: 'flytning', from: 'free-assets', to: 'anden-frie', amountInRealKroner: 12_000 }),
+      ],
+    })
+
+    const { plan: result } = withTransferOrContributionEnd(plan, 'flytning', 'to', 'tredje-frie')
+
+    expect(result.transfers.map((transfer) => transfer.id)).toEqual(['foerst', 'flytning'])
+    expect(result.transfers[1]).toMatchObject({ to: 'tredje-frie' })
+  })
+})
+
+describe('firstTransferOrContributionPair', () => {
+  /** Kun én fri beholdning i huset, så der intet Transfer-par er — en
+      overførsel kræver to forskellige frie midler at gå imellem. */
+  function aPlanWithNoTransferPair(): Plan {
+    return aPlan({
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+  }
+
+  it('finder det beholdningskildede par, når intet Transfer-par findes', () => {
+    const plan = aPlanWithNoTransferPair()
+
+    expect(firstTransferPair(plan)).toBeUndefined()
+    expect(firstTransferOrContributionPair(plan)).toEqual({
+      kind: 'HoldingSourced',
+      from: 'free-assets',
+      to: 'ratepension',
+    })
+  })
+
+  it('foretrækker Transfer-parret, når begge findes', () => {
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'anden-frie',
+          name: 'Andre frie midler',
+          variant: 'SavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+    })
+
+    expect(firstTransferOrContributionPair(plan)).toEqual({
+      kind: 'Transfer',
+      from: 'free-assets',
+      to: 'anden-frie',
+    })
+  })
+
+  it('returnerer intet, når intet lovligt par findes', () => {
+    expect(firstTransferOrContributionPair(aPlan())).toBeUndefined()
   })
 })
 
@@ -569,6 +863,45 @@ describe('rækkefølgen i planen', () => {
     const plan = threeContributions()
 
     expect(moveContribution(plan, 'findes-ikke', 0)).toEqual(plan)
+  })
+
+  it('flytter kun blandt bidrag af samme slags, og lader den anden slags stå', () => {
+    // De to sektioner i navigatoren viser hver sin delmængde af
+    // plan.contributions, og hver deres greb må kun bytte plads inden for
+    // egen slags — samme mønster som moveEntry bruger på retning.
+    const plan = aPlan({
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      holdings: [
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+        {
+          id: 'aldersopsparing',
+          name: 'Aldersopsparing',
+          variant: 'OldAgeSavings',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+      contributions: [
+        aContribution({ id: 'a', name: 'A', source: 'salary', to: 'ratepension', percentageOfEntry: 0.05 }),
+        aHoldingContribution({ id: 'x', name: 'X', source: 'free-assets', to: 'aldersopsparing', amountInRealKroner: 1_000 }),
+        aContribution({ id: 'b', name: 'B', source: 'salary', to: 'ratepension', percentageOfEntry: 0.05 }),
+        aHoldingContribution({ id: 'y', name: 'Y', source: 'free-assets', to: 'aldersopsparing', amountInRealKroner: 2_000 }),
+      ],
+    })
+
+    const result = moveContribution(plan, 'y', 0)
+
+    expect(result.contributions.map((contribution) => contribution.id)).toEqual(['a', 'y', 'b', 'x'])
   })
 
   it('flytter også overførslen, som deler råderum efter samme regel', () => {

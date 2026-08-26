@@ -7,9 +7,9 @@ import {
   addEntry,
   addHolding,
   addPerson,
-  addTransfer,
+  addTransferOrContribution,
   firstContributionPair,
-  firstTransferPair,
+  firstTransferOrContributionPair,
   moveContribution,
   moveEntry,
   moveHolding,
@@ -255,6 +255,11 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
   const holdingSum = holdings.reduce((sum, h) => sum + h.balance, 0)
   const income = plan.entries.filter((entry) => entry.direction === 'Income')
   const expenses = plan.entries.filter((entry) => entry.direction === 'Expense')
+  // De to grene af plan.contributions hører hver til sin egen sektion, jf.
+  // ADR-0047: den lønkildede bliver i Indbetalinger, den beholdningskildede
+  // flytter ind i den sammenlagte Overførsler-sektion sammen med Transfer.
+  const entrySourced = plan.contributions.filter((c) => c.kind === 'EntrySourced')
+  const holdingSourced = plan.contributions.filter((c) => c.kind === 'HoldingSourced')
 
   return [
     {
@@ -364,12 +369,12 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
       // resultat i en spalte, der kun viser planen. Antallet er nok.
       id: 'indbetalinger',
       title: 'Indbetalinger',
-      count: String(plan.contributions.length),
+      count: String(entrySourced.length),
       summary: '',
       blocks: [
         {
           id: 'indbetalinger',
-          rows: plan.contributions.map((contribution) => ({
+          rows: entrySourced.map((contribution) => ({
             id: contribution.id,
             name: contribution.name,
             value:
@@ -381,19 +386,26 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
           onMove: (id, to) => onChange(moveContribution(plan, id, to)),
         },
       ],
-      // Et bidrag kræver en kilde at komme fra og en ordning at gå til. Er
+      // Et lønkildet bidrag kræver en lønpost og en ordning at gå til. Er
       // der intet sådant par, er der ikke noget at tilføje, jf. ADR-0016.
+      // Det beholdningskildede par hører til Overførsler-sektionen herunder.
       addLabel: firstContributionPair(plan) ? '+ Indbetaling' : undefined,
       onAdd: () => onChange(addContribution(plan)),
     },
     {
+      // Sammenlagt af Transfer og det beholdningskildede bidrag: skuffen
+      // kender kun kilden, og en beholdningskildet indbetaling er, hvad
+      // brugeren allerede kalder en overførsel, jf. ADR-0047. De to blokke
+      // uden overskrift holder deres egen rækkefølge for sig — hver figurs
+      // plads er en prioritet blandt sine egne, jf. ADR-0019, og intet en
+      // beholdningskildet linje og en Transfer-linje kan dele.
       id: 'overfoersler',
       title: 'Overførsler',
-      count: String(plan.transfers.length),
+      count: String(plan.transfers.length + holdingSourced.length),
       summary: '',
       blocks: [
         {
-          id: 'overfoersler',
+          id: 'overfoersler-transfer',
           rows: plan.transfers.map((transfer) => ({
             id: transfer.id,
             name: transfer.name,
@@ -402,12 +414,28 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
           })),
           onMove: (id, to) => onChange(moveTransfer(plan, id, to)),
         },
+        {
+          id: 'overfoersler-contribution',
+          rows: holdingSourced.map((contribution) => ({
+            id: contribution.id,
+            name: contribution.name,
+            value: kroner(contribution.amountInRealKroner),
+            // Målet siges at være 'transfer', selv om figuren står i
+            // plan.contributions: Target-kindet følger sektionen i skuffen og
+            // ikke motorens array, jf. ADR-0047. Ellers ville en markering
+            // miste sit fluebeen i navigatoren, når "Til" krydser grænsen og
+            // reklassificerer figuren, uden at `selected` selv opdateres.
+            target: { kind: 'transfer', id: contribution.id },
+          })),
+          onMove: (id, to) => onChange(moveContribution(plan, id, to)),
+        },
       ],
-      // En overførsel flytter penge mellem to beholdninger med frie midler —
-      // der skal være to at vælge mellem, før knappen giver mening, jf.
-      // ADR-0016.
-      addLabel: firstTransferPair(plan) ? '+ Overførsel' : undefined,
-      onAdd: () => onChange(addTransfer(plan)),
+      // En overførsel flytter penge fra en beholdning — til frie midler
+      // eller til en ordning, som usynligt afgør, hvilken figur der skrives.
+      // Findes intet lovligt par af nogen af de to slags, er der ikke noget
+      // at tilføje, jf. ADR-0016 og ADR-0047.
+      addLabel: firstTransferOrContributionPair(plan) ? '+ Overførsel' : undefined,
+      onAdd: () => onChange(addTransferOrContribution(plan)),
     },
   ]
 }

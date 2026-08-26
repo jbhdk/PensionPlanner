@@ -382,10 +382,10 @@ export type Entry = IncomeEntry | ExpenseEntry
 export type Transfer = {
   id: TransferId
   /** Det, flytningen hedder på skærmen. Skrevet ved oprettelsen som
-      "Overførsel 1" og rettet i skuffen som en beholdnings, jf. `addTransfer`
-      — aldrig udledt af enderne. En etikette, der læste sig selv af de to
-      beholdninger, ville skifte under brugeren, hver gang en ende blev
-      valgt om. */
+      "Overførsel 1" og rettet i skuffen som en beholdnings, jf.
+      `addTransferOrContribution` — aldrig udledt af enderne. En etikette,
+      der læste sig selv af de to beholdninger, ville skifte under brugeren,
+      hver gang en ende blev valgt om. */
   name: string
   from: HoldingId
   to: HoldingId

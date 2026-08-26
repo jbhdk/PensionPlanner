@@ -985,39 +985,6 @@ describe('fladen', () => {
     expect(typeOptions()).toContain('Ratepension')
   })
 
-  it('tilbyder ikke lønposterne som kilde, når indbetalingen går til en aktiesparekonto', async () => {
-    // Der findes ingen arbejdsgiveradministreret aktiesparekonto, og en
-    // lønkildet indbetaling til den kan derfor ikke ske, jf. ADR-0020. Stod
-    // lønposten i listen, kunne ét klik skrive en plan, `validatePlan`
-    // afviser, og hele resultatspalten forsvandt.
-    const user = userEvent.setup()
-    render(
-      <App
-        initialPlan={aPlan({
-          holdings: [aShareSavingsAccount()],
-          entries: [aSalary({ amountInRealKroner: 600_000 })],
-          contributions: [
-            aHoldingContribution({
-              source: 'free-assets',
-              to: 'aktiesparekonto',
-              amountInRealKroner: 20_000,
-            }),
-          ],
-        })}
-      />,
-    )
-
-    await user.click(navigatorButton(/Indbetalingen/))
-    const kilde = screen.getByLabelText(/Kilde/) as HTMLSelectElement
-
-    expect(Array.from(kilde.options).map((option) => option.value)).toEqual([
-      'Frie midler · Jesper',
-    ])
-    // Og gruppen står ikke tom tilbage: en overskrift uden noget under sig
-    // ville se ud som en liste, der mangler at blive fyldt.
-    expect(kilde.querySelector('optgroup[label="Lønposter"]')).toBeNull()
-  })
-
   it('flytter destinationen med, når kilden skifter til ægtefællens lønpost', async () => {
     // En lønkildet indbetaling skal ende i lønmodtagerens egen ordning, jf.
     // ADR-0028. Skiftede kilden alene, blev bidraget stående på Jespers
@@ -1028,17 +995,19 @@ describe('fladen', () => {
     render(<App initialPlan={aPlanWithSpouse()} />)
 
     await user.click(navigatorButton(/Indbetalingen/))
-    await user.selectOptions(screen.getByLabelText(/Kilde/), 'Løn · Maria')
+    await user.selectOptions(screen.getByLabelText(/Fra/), 'Løn · Maria')
 
-    expect((screen.getByLabelText(/Destination/) as HTMLSelectElement).value).toBe(
+    expect((screen.getByLabelText(/Til/) as HTMLSelectElement).value).toBe(
       'Marias ratepension',
     )
     expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
   })
 
-  it('tilbyder ikke ægtefællens lønpost som kilde, når ægtefællen ingen ordning har', async () => {
+  it('tilbyder kun lønposter, hvis ejer har en ordning, en arbejdsgiver kan administrere', async () => {
     // Der er ingen destination at flytte med over, og valget kunne kun ende
     // i en plan, motoren afviser. Så står posten ikke i listen, jf. ADR-0020.
+    // De frie midler, ægtefællen ellers kunne betale ordningen med, hører nu
+    // til den sammenlagte Overførsel-sektion i stedet, jf. ADR-0047.
     const user = userEvent.setup()
     const withoutMariasPension = (plan: Plan): Plan => ({
       ...plan,
@@ -1053,13 +1022,7 @@ describe('fladen', () => {
 
     await user.click(navigatorButton(/Indbetalingen/))
 
-    // Hendes frie midler står der derimod: de må betale til Jespers ordning,
-    // jf. ADR-0028 — det er kun lønnen, der er bundet til sin egen ejer.
-    expect(optionsOf('Kilde')).toEqual([
-      'Løn · Jesper',
-      'Frie midler · Jesper',
-      'Marias frie · Maria',
-    ])
+    expect(optionsOf('Fra')).toEqual(['Løn · Jesper'])
   })
 
   it('udelader kapitalpensionen fra indbetalingens destinationsliste', async () => {
@@ -1091,7 +1054,7 @@ describe('fladen', () => {
 
     await user.click(navigatorButton(/Indbetalingen/))
 
-    expect(optionsOf('Destination')).not.toContain('Kapitalpension')
+    expect(optionsOf('Til')).not.toContain('Kapitalpension')
   })
 
   it('viser planens egen destination, når den ligger hos en anden person', async () => {
@@ -1114,10 +1077,10 @@ describe('fladen', () => {
 
     await user.click(navigatorButton(/Indbetalingen/))
 
-    expect((screen.getByLabelText(/Destination/) as HTMLSelectElement).value).toBe('Ratepension')
+    expect((screen.getByLabelText(/Til/) as HTMLSelectElement).value).toBe('Ratepension')
 
     // Og valget er der: ægtefællens egen ordning står i listen ved siden af.
-    await user.selectOptions(screen.getByLabelText(/Destination/), 'Marias ratepension')
+    await user.selectOptions(screen.getByLabelText(/Til/), 'Marias ratepension')
 
     expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
   })
@@ -1126,7 +1089,7 @@ describe('fladen', () => {
     // Alt årets overskud lander på bufferen, og den har én ejer. Kunne et
     // beholdningskildet bidrag ikke krydse ejerskellet, kunne ingen ordning
     // hos den anden person nås uden en mellemstation af frie midler, jf.
-    // ADR-0028.
+    // ADR-0028. Figuren tegnes nu af den sammenlagte Overførsel-rude.
     const user = userEvent.setup()
     const base = aPlanWithSpouse()
     const maria = base.household.persons[1]!
@@ -1152,41 +1115,11 @@ describe('fladen', () => {
     )
 
     await user.click(navigatorButton(/Indbetalingen/))
-    await user.selectOptions(screen.getByLabelText(/Destination/), 'Aktiesparekonto')
+    await user.selectOptions(screen.getByLabelText('Til'), 'Aktiesparekonto')
 
     // Kilden bliver stående: den beholdningskildede udgave har ingen ejer at
     // følge med over.
-    expect((screen.getByLabelText(/Kilde/) as HTMLSelectElement).value).toBe(
-      'Frie midler · Jesper',
-    )
-    expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
-  })
-
-  it('flytter kilden til de frie midler, når destinationen skifter til en aktiesparekonto', async () => {
-    // Aktiesparekontoen kan ikke tage imod en lønkildet indbetaling, og
-    // destinationen kan alligevel vælges: bidraget skifter udgave med, som
-    // det gør, når en gentagelse bliver til "Én gang" og forfaldet må følge
-    // med. Ét klik, og planen kan fortsat simuleres.
-    const user = userEvent.setup()
-    render(
-      <App
-        initialPlan={aPlan({
-          holdings: [aPensionHolding('ratepension', 'Ratepension'), aShareSavingsAccount()],
-          entries: [aSalary({ amountInRealKroner: 600_000 })],
-          contributions: [
-            aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
-          ],
-        })}
-      />,
-    )
-
-    await user.click(navigatorButton(/Indbetalingen/))
-    await user.selectOptions(screen.getByLabelText(/Destination/), 'Aktiesparekonto')
-
-    expect((screen.getByLabelText(/Kilde/) as HTMLSelectElement).value).toBe('Frie midler · Jesper')
-    expect((screen.getByLabelText(/Destination/) as HTMLSelectElement).value).toBe(
-      'Aktiesparekonto',
-    )
+    expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Frie midler')
     expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
   })
 
@@ -1829,7 +1762,7 @@ describe('fladen', () => {
 
     await user.click(navigatorButton(/Indbetalingen/))
 
-    expect(sectionLabels('Indbetalingen')).toEqual(['Navn', 'Kilde', 'Destination'])
+    expect(sectionLabels('Indbetalingen')).toEqual(['Navn', 'Fra', 'Til'])
     // Ét beløbsfelt og ikke to: formen er feltets enhed og ikke et spørgsmål
     // ved siden af det, så kontakten står, hvor enheden ellers stod.
     expect(sectionLabels('Beløb')).toEqual(['Beløb'])
@@ -1849,9 +1782,9 @@ describe('fladen', () => {
   })
 
   it('viser i det beholdningskildede bidrags skuffe de felter, det bærer selv', async () => {
-    // Samme figur i to udgaver, ikke to slags: kilden er det eneste, der
-    // skiller dem. En beholdning har ingen periode at låne ud, så bidraget
-    // bærer den selv — og kan til gengæld aldersforankres, hvor overførslen
+    // Beholdningskildede bidrag hører nu til den sammenlagte Overførsel-rude,
+    // jf. ADR-0047. En beholdning har ingen periode at låne ud, så bidraget
+    // bærer den selv — og kan til gengæld aldersforankres, hvor en overførsel
     // ikke kan, fordi destinationen har en ejer.
     const user = userEvent.setup()
     const plan = aPlanWithPension()
@@ -1872,11 +1805,10 @@ describe('fladen', () => {
 
     await user.click(navigatorButton(/Indbetalingen/))
 
-    expect(sectionLabels('Indbetalingen')).toEqual(['Navn', 'Kilde', 'Destination'])
+    expect(sectionLabels('Overførslen')).toEqual(['Navn', 'Fra', 'Til', 'Beløb'])
     // Kun den ene beløbsform: en procent skal have en post at måle af, og
     // enheden står derfor som ren tekst frem for som en kontakt, der ville
     // være et valg, der aldrig kan træffes.
-    expect(sectionLabels('Beløb')).toEqual(['Beløb'])
     expect(screen.queryByRole('button', { name: '%' })).toBeNull()
     expect(sectionLabels('Perioden')).toEqual([
       'Gentagelse',
@@ -1885,7 +1817,7 @@ describe('fladen', () => {
       'Til (år)',
       'Forfald',
     ])
-    // Der er ingen post at følge — arvelinjen hører til den anden udgave.
+    // Der er ingen post at følge — arvelinjen hører til den lønkildede udgave.
     expect(screen.queryByRole('heading', { name: /^Følger/ })).toBeNull()
   })
 
@@ -1922,47 +1854,10 @@ describe('fladen', () => {
     )
   })
 
-  it('skifter indbetalingens rude, når kilden skifter fra en lønpost til en beholdning', async () => {
-    // Kilden er ét spørgsmål, og ruden skifter form efter svaret. Arvelinjen
-    // forsvinder sammen med posten, og felterne, bidraget nu bærer selv,
-    // træder frem i stedet — samme figur i to udgaver, ikke to dialoger.
-    const user = userEvent.setup()
-    const plan = aPlanWithPension()
-    render(
-      <App
-        initialPlan={{
-          ...plan,
-          entries: [aSalary({ amountInRealKroner: 600_000 })],
-          contributions: [
-            aContribution({ source: 'salary', to: 'ratepension', percentageOfEntry: 0.08 }),
-          ],
-        }}
-      />,
-    )
-    await user.click(navigatorButton(/Indbetalingen/))
-    expect(screen.getByRole('heading', { name: 'Følger Løn' })).toBeTruthy()
-
-    // Vælgeren har begge slags kilder at tilbyde, i hver sin gruppe.
-    const kilde = screen.getByLabelText('Kilde')
-    expect(within(kilde).getByRole('group', { name: 'Lønposter' })).toBeTruthy()
-    expect(within(kilde).getByRole('group', { name: 'Beholdninger' })).toBeTruthy()
-
-    await user.selectOptions(kilde, 'Frie midler · Jesper')
-
-    expect(screen.queryByRole('heading', { name: /^Følger/ })).toBeNull()
-    expect(sectionLabels('Beløb')).toEqual(['Beløb'])
-    expect(sectionLabels('Perioden')).toEqual([
-      'Gentagelse',
-      'Forankring',
-      'Fra (år)',
-      'Til (år)',
-      'Forfald',
-    ])
-  })
-
-  it('viser begge indbetalingsformer i navigatorens gruppe, hver med sit navn', () => {
-    // De to udgaver står i den samme gruppe og læses som ét slags objekt.
-    // Hver bærer sit eget navn, præcis som en beholdning gør.
+  it('viser lønbidraget i Indbetalinger og det beholdningskildede bidrag i Overførsler', () => {
+    // De to udgaver er ikke længere ét slags objekt i navigatoren, jf.
+    // ADR-0047: ordet i skuffen følger kilden, og en beholdningskildet
+    // bevægelse hedder derfor en overførsel og bor i den sektion.
     const plan = aPlanWithPension()
     const person = plan.household.persons[0]!
     render(
@@ -2010,8 +1905,8 @@ describe('fladen', () => {
       />,
     )
 
-    const gruppe = navigatorButton(/Indbetalinger/)
-    expect(within(gruppe).getByText('2')).toBeTruthy()
+    expect(within(navigatorButton(/Indbetalinger/)).getByText('1')).toBeTruthy()
+    expect(within(navigatorButton(/Overførsler/)).getByText('1')).toBeTruthy()
     expect(within(navigatorButton(/Lønbidrag/)).getByText('8,00 %')).toBeTruthy()
     expect(within(navigatorButton(/Højt loft/)).getByText('64.200')).toBeTruthy()
   })
@@ -2031,25 +1926,27 @@ describe('fladen', () => {
     expect(screen.getByRole('heading', { name: 'Følger Løn' })).toBeTruthy()
   })
 
-  it('tilføjer en indbetaling i en husstand uden lønpost — kilden er så en beholdning', async () => {
-    // Formen findes netop for de år, hvor der ingen løn er. Var knappen
-    // skjult uden en lønpost, kunne aldersopsparingens vindue efter
-    // erhvervsophør slet ikke skrives, jf. ADR-0016.
+  it('skjuler "+ Indbetaling" i en husstand uden lønpost — det beholdningskildede bidrag hører til Overførsler', async () => {
+    // Formen findes netop for de år, hvor der ingen løn er, men oprettes nu
+    // fra den sammenlagte Overførsel-sektion i stedet, jf. ADR-0047 — knappen
+    // "+ Indbetaling" kræver stadig en lønpost.
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithPension()} />)
 
-    await user.click(screen.getByRole('button', { name: '+ Indbetaling' }))
+    expect(screen.queryByRole('button', { name: '+ Indbetaling' })).toBeNull()
 
-    await user.click(navigatorButton(/Indbetaling 1/))
-    expect(sectionLabels('Beløb')).toEqual(['Beløb'])
+    await user.click(screen.getByRole('button', { name: '+ Overførsel' }))
+
+    await user.click(navigatorButton(/Overførsel 1/))
+    expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Frie midler')
+    expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Ratepension')
+    expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
   })
 
-  it('tilføjer en indbetaling fra de frie midler, når husstandens eneste ordning er en aktiesparekonto', async () => {
-    // Lønposten kommer først, når knappen vælger sit par — men den kan ikke
-    // være kilde her, og ét klik må ikke skrive en plan, `validatePlan`
-    // afviser, jf. ADR-0020. Parret springer den over og tager de frie
-    // midler i stedet.
-    const user = userEvent.setup()
+  it('skjuler "+ Indbetaling", når husstandens eneste ordning ikke kan administreres af en arbejdsgiver', () => {
+    // Aktiesparekontoen kan ikke tage imod en lønkildet indbetaling, jf.
+    // ADR-0020 — vejen til den går nu gennem den sammenlagte
+    // Overførsel-sektion i stedet.
     render(
       <App
         initialPlan={aPlan({
@@ -2059,10 +1956,8 @@ describe('fladen', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: '+ Indbetaling' }))
-
-    expect(navigatorButton(/Indbetaling 1/)).toBeTruthy()
-    expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '+ Indbetaling' })).toBeNull()
+    expect(screen.getByRole('button', { name: '+ Overførsel' })).toBeTruthy()
   })
 
   it('skjuler "+ Indbetaling", når husstanden ingen ordning har at betale ind i', () => {
@@ -2629,10 +2524,12 @@ describe('fladen', () => {
     expect(ender()).toEqual(['Frie midler', 'Tredje beholdning'])
   })
 
-  it('holder en ratepension ude af begge en overførsels lister', async () => {
+  it('holder en ratepension ude af "Fra", men tilbyder den i "Til"s Ordninger-gruppe', async () => {
     // Ratepensionens udbetaling er personlig indkomst og skal gennem en
-    // udbetalingsplan. Stod den i listen, kunne ét klik skrive en plan,
-    // `validatePlan` afviser, jf. ADR-0022.
+    // udbetalingsplan — den kan derfor aldrig give en overførsel, jf.
+    // ADR-0022. Men den kan tage imod et beholdningskildet bidrag, og "Fra"
+    // er her frie midler, så "Til"s Ordninger-gruppe er ikke udeladt, jf.
+    // ADR-0047.
     const user = userEvent.setup()
     render(
       <App
@@ -2648,7 +2545,7 @@ describe('fladen', () => {
     await user.click(navigatorButton(/Overførslen/))
 
     expect(optionsOf('Fra')).toEqual(['Frie midler', 'Anden beholdning'])
-    expect(optionsOf('Til')).toEqual(['Frie midler', 'Anden beholdning'])
+    expect(optionsOf('Til')).toEqual(['Frie midler', 'Anden beholdning', 'Ratepension'])
   })
 
   it('tilbyder de skattefri ordninger i afgiverlisten, men ikke i modtagerlisten', async () => {
@@ -2852,15 +2749,55 @@ describe('fladen', () => {
     await user.click(screen.getByRole('button', { name: '+ Overførsel' }))
 
     // Den nye flytning nummereres som en beholdning og ikke efter sine
-    // ender: de er valgt af `addTransfer` og ikke af brugeren endnu.
+    // ender: de er valgt af `addTransferOrContribution` og ikke af brugeren
+    // endnu.
     expect(navigatorButton(/Overførsel 1/)).toBeTruthy()
     expect(screen.queryByText(/kan ikke simuleres/i)).toBeNull()
   })
 
-  it('skjuler "+ Overførsel", når husstanden kun har én beholdning med frie midler', () => {
+  it('viser "+ Overførsel", når husstanden har en ordning at betale et beholdningskildet bidrag til', () => {
+    // Der er intet Transfer-par — kun én fri beholdning findes — men
+    // ratepensionen er stadig et lovligt "Til", jf. ADR-0047.
     render(<App initialPlan={aPlanWithPension()} />)
 
-    expect(screen.queryByRole('button', { name: '+ Overførsel' })).toBeNull()
+    expect(screen.getByRole('button', { name: '+ Overførsel' })).toBeTruthy()
+  })
+
+  it('mister ikke sin plads i skuffen, når "Til" krydser grænsen til en ordning', async () => {
+    // Reklassificeringen fra Transfer til et beholdningskildet bidrag er
+    // usynlig for brugeren: rækken bliver stående, valgt, i den samme
+    // sektion, og skuffen bliver ved med at vise den samme figur, jf.
+    // ADR-0047.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...aPlanWithPensionBetweenFreeHoldings(),
+          transfers: [
+            aTransfer({
+              id: 'flytning',
+              name: 'Flytningen',
+              from: 'free-assets',
+              to: 'anden-beholdning',
+              amountInRealKroner: 50_000,
+            }),
+          ],
+        }}
+      />,
+    )
+
+    const raekke = navigatorButton(/Flytningen/)
+    await user.click(raekke)
+    expect(raekke.className).toContain('valgt')
+
+    await user.selectOptions(screen.getByLabelText('Til'), 'Ratepension')
+
+    // Samme figur, samme rude — nu med et felt til aldersforankring, som en
+    // overførsel til en anden persons ordning ikke kunne have.
+    expect((screen.getByLabelText('Fra') as HTMLSelectElement).value).toBe('Frie midler')
+    expect((screen.getByLabelText('Til') as HTMLSelectElement).value).toBe('Ratepension')
+    expect(navigatorButton(/Flytningen/).className).toContain('valgt')
+    expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
   })
 
   it('tilføjer en overførsel via overførselsgruppen, og dens inspektør kan åbnes', async () => {

@@ -185,7 +185,10 @@ function buildItems(
         const owner = holdingOwner.get(contribution.to)!
         return periodItem(
           {
-            target: { kind: 'contribution', id: contribution.id },
+            // 'transfer' og ikke 'contribution': målet følger den
+            // sammenlagte Overførsel-sektion i skuffen og ikke motorens
+            // array, jf. ADR-0047 og Navigator.tsx.
+            target: { kind: 'transfer', id: contribution.id },
             group: 'Contributions',
             name: contribution.name,
             owner: owner.id,

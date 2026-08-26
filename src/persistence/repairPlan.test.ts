@@ -161,7 +161,8 @@ describe('repairPlan', () => {
   it('lukker et åbent startpunkt op ved grænsen og siger, hvad det stod på', () => {
     // Et åbent `from` betyder planens start, ganske som i `transferEnds` — og
     // en overførsel, der løber hele horisonten fra en ordning med en dør, er
-    // netop den plan, `addTransfer` i dag løfter ved oprettelsen.
+    // netop den plan, `addTransferOrContribution` i dag løfter ved
+    // oprettelsen.
     const repaired = repairPlan(withTransferFrom({ anchor: 'CalendarYear' }))
 
     expect(repaired.plan.transfers[0]!.period).toEqual({ anchor: 'CalendarYear', from: 2040 })

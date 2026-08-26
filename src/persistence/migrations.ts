@@ -297,7 +297,7 @@ export const migrations: Migration[] = [
     // indtil nu, og de skrives derfor som navnet. En nummerering ville have
     // omdøbt hver eneste flytning i en gemt plan til noget, brugeren aldrig
     // har set. Nye figurer nummereres derimod — "Overførsel 1" — for dér er
-    // der ingen ender, der er valgt endnu, jf. `addTransfer`.
+    // der ingen ender, der er valgt endnu, jf. `addTransferOrContribution`.
     //
     // En ende, der ikke rammer noget, kan ikke navngives og beholder sit id.
     // Sådan en plan afvises alligevel ved indgangen, jf. ADR-0013, og
