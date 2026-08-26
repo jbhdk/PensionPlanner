@@ -130,6 +130,16 @@ Asymmetrien er værd at bemærke, for den går kun den ene vej: pensionstillægg
 
 **Konsekvens:** Planvælgeren i topbjælken bliver — man skifter mellem planer, man ser dem ikke samtidig. Grafbiblioteket skal ikke kunne stable flere sæt serier, hvilket fjerner et krav fra [#18](https://github.com/jbhdk/PensionPlanner/issues/18). Ordene fra `#sammenlign` skal aldrig gennem glossaret.
 
+## Eksplicit personvalgt aldersforankring på en periode
+
+**Status:** Udskudt. En `PersonAge`-periodes ejer udledes i dag af figurens struktur (`periodOwner` i `validatePlan.ts`) — en post har sin egen `owner`, en overførsel bruger afgiverens, en beholdningskildet indbetaling bruger destinationens (jf. [ADR-0028](./adr/0028-det-beholdningskildede-bidrag-maa-krydse-ejerskellet.md)), en lønkildet indbetaling arver lønpostens. Der findes intet felt, hvor brugeren vælger personen direkte.
+
+**Hvorfor det betyder noget:** Opstod under grillingen bag [ADR-0047](./adr/0047-overfoerslen-kendes-paa-sin-kilde-i-skuffen-ikke-paa-sin-destination-i-motoren.md): når "Fra" og "Til" har hver sin ejer, og figurtypen afhænger af "Til", flytter det udledte svar på "hvis alder?" sig usynligt, alt efter hvad brugeren vælger — uden noget signal om det. Et eksplicit felt, hvor brugeren selv vælger Person 1 eller Person 2, ville fjerne tvetydigheden ved roden i stedet for at forbyde den.
+
+**Prisen ved at lade den ligge:** Lille for nu. Løsningen, der er valgt i stedet — kræv samme ejer for at aldersforankre, når "Fra" er frie midler — er en indskrænkning, ikke en fejl. Den forhindrer en tvetydig plan i at opstå, på bekostning af nogle få par-på-tværs-af-ejer-scenarier, der ikke længere kan aldersforankres gennem den sammenlagte Overførsel-skærm; de kan stadig bruge kalenderår.
+
+**Hvad der skal bygges, når det tages op:** Et felt på `Period` selv, der bærer en eksplicit personreference for en `PersonAge`-forankring, uafhængig af figurens `owner`/`from`/`to`. Rører `periodOwner`, `periodBounds` og `periodEndpointBounds` i `validatePlan.ts`, og alle periodiske figurer — også `Entry`, som slet ikke er en del af Overførsel/Indbetaling-sammenlægningen. Mindst fire ADR'er bygger på den nuværende "ejeren udledes af strukturen"-antagelse ([ADR-0016](./adr/0016-indbetalingen-kendes-paa-sin-destination.md), [ADR-0022](./adr/0022-den-skattefri-ordning-toemmes-af-en-overfoersel-ikke-af-en-udbetalingsplan.md), [ADR-0028](./adr/0028-det-beholdningskildede-bidrag-maa-krydse-ejerskellet.md), [ADR-0031](./adr/0031-erhvervsophoersaaret-taeller-med-som-from-og-ikke-med-som-to.md)) og skal genlæses, hvis feltet tilføjes.
+
 ## PensionsInfo-import
 
 **Status:** Afvist, ikke udskudt. Undersøgt og lukket.
