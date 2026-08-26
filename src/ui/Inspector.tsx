@@ -89,6 +89,7 @@ import {
   findPerson,
   findTransfer,
   formatNumber,
+  guardTransferOrContributionAnchor,
   removeAllocationLine,
   removeContribution,
   removeEntry,
@@ -1502,6 +1503,7 @@ function PeriodSection({
         help="Period.anchor"
         value={danish(anchors, period.anchor)}
         options={Object.keys(anchors)}
+        clamp={clamp}
         onChange={(choice) => change({ period: defaultPeriod(anchors[choice]!, recurrence, startYear) })}
       />
       {recurrence.kind === 'Once' ? (
@@ -1982,13 +1984,18 @@ function TransferFields({
         bounds={endpointBounds(plan, figure)}
         clamp={clamp}
         onClamp={onClamp}
-        onChange={(next) =>
-          onChange(
-            isContribution
-              ? withContribution(plan, id, (c) => ({ ...c, ...next }))
-              : withTransfer(plan, id, (t) => ({ ...t, ...next })),
-          )
-        }
+        onChange={(next) => {
+          const updated = isContribution
+            ? withContribution(plan, id, (c) => ({ ...c, ...next }))
+            : withTransfer(plan, id, (t) => ({ ...t, ...next }))
+          // Fanger kun det tilfælde, hvor forankringen selv lige blev valgt
+          // til `PersonAge` med forskellig ejer på "Fra" og "Til" — "Fra" og
+          // "Til" ændres ikke her, kun perioden, så guarden rammer aldrig et
+          // klemt talfelts egen besked, jf. `guardTransferOrContributionAnchor`.
+          const guarded = guardTransferOrContributionAnchor(updated, id)
+          onChange(guarded.plan)
+          if (guarded.clamp) onClamp(guarded.clamp)
+        }}
       >
         <Hint>
           {isContribution ? (

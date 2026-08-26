@@ -612,16 +612,21 @@ export function SelectField({
   help,
   value,
   options,
+  clamp,
   onChange,
 }: {
   label: string
   help: FieldHelpKey
   value: string
   options: Options
+  /** Fladens seneste klemning — ikke feltets egen: en `SelectField` klemmer
+      aldrig sit eget valg, men et andet felts skift kan gøre det på dets
+      vegne, som forankringen gør på sig selv, jf. `guardTransferOrContributionAnchor`. */
+  clamp?: Clamp | null
   onChange: (value: string) => void
 }) {
   return (
-    <Field label={label} help={help}>
+    <Field label={label} help={help} clamp={clamp}>
       {(id) => (
         <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
           {options.map((option) =>

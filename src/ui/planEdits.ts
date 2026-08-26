@@ -594,6 +594,44 @@ function openDoorFor(plan: Plan, transfer: Transfer): { transfer: Transfer; clam
   }
 }
 
+/** Klemmer den sammenlagte Overførsel-figurs forankring tilbage til
+    kalenderår, når "Fra" er frie midler og "Fra"/"Til" har fået hver sin
+    ejer — det er dér, og kun dér, at "Til" reelt afgør, hvis alder
+    forankringen betyder: bliver figuren ved med at være en overførsel,
+    måles den på afgiverens ejer; bliver den et bidrag, måles den på
+    destinationens, jf. ADR-0028. En ejerforskel gør spørgsmålet tvetydigt.
+    Er "Fra" en låst ordning (en Udbetaling), er destinationen altid frie
+    midler, svaret altid afgiverens ejer, og guarden rører aldrig figuren,
+    jf. ADR-0047 og #82. */
+export function guardTransferOrContributionAnchor(
+  plan: Plan,
+  id: string,
+): { plan: Plan; clamp: Clamp | null } {
+  const figure = findTransferOrContribution(plan, id)
+  if (!figure || figure.period.anchor !== 'PersonAge') return { plan, clamp: null }
+
+  const isContribution = 'kind' in figure
+  const fromId = isContribution ? figure.source : figure.from
+  const from = findHolding(plan, fromId)
+  if (!from || !isFreeAssets(from)) return { plan, clamp: null }
+
+  const fromOwner = findHoldingOwner(plan, fromId)
+  const toOwner = findHoldingOwner(plan, figure.to)
+  if (!fromOwner || !toOwner || fromOwner.id === toOwner.id) return { plan, clamp: null }
+
+  const period: Period = { anchor: 'CalendarYear' }
+  const guardedPlan = isContribution
+    ? withContribution(plan, id, (c) => ({ ...c, period }))
+    : withTransfer(plan, id, (t) => ({ ...t, period }))
+  return {
+    plan: guardedPlan,
+    clamp: {
+      field: 'Period.anchor',
+      message: '"Fra" og "Til" tilhører hver sin ejer, så en aldersforankring er tvetydig.',
+    },
+  }
+}
+
 /** Slår den sammenlagte Overførsel-figur op, uanset om den lige nu er en
     `Transfer` eller et beholdningskildet bidrag. `Contribution`s to grene
     skelnes på `kind`, som kun `Transfer` mangler — det er nok til at
@@ -642,7 +680,9 @@ export function withTransferOrContributionEnd(
   const destination = findHolding(plan, nextTo)
   const becomesTransfer = destination ? isFreeAssets(destination) : wasTransfer
 
-  if (wasTransfer && becomesTransfer) return withTransferEnd(plan, id, end, holding)
+  if (wasTransfer && becomesTransfer) {
+    return withAnchorGuard(withTransferEnd(plan, id, end, holding), id)
+  }
 
   const nextFrom = end === 'from' ? holding : from
   const shared = {
@@ -656,7 +696,7 @@ export function withTransferOrContributionEnd(
 
   if (!wasTransfer && !becomesTransfer) {
     const fresh: Contribution = { ...shared, kind: 'HoldingSourced', source: nextFrom, to: nextTo }
-    return { plan: withContribution(plan, id, () => fresh), clamp: null }
+    return withAnchorGuard({ plan: withContribution(plan, id, () => fresh), clamp: null }, id)
   }
 
   const withoutOld: Plan = wasTransfer
@@ -665,14 +705,34 @@ export function withTransferOrContributionEnd(
 
   if (becomesTransfer) {
     const opened = openDoorFor(withoutOld, { ...shared, from: nextFrom, to: nextTo })
-    return {
-      plan: { ...withoutOld, transfers: [...withoutOld.transfers, opened.transfer] },
-      clamp: opened.clamp,
-    }
+    return withAnchorGuard(
+      {
+        plan: { ...withoutOld, transfers: [...withoutOld.transfers, opened.transfer] },
+        clamp: opened.clamp,
+      },
+      id,
+    )
   }
 
   const fresh: Contribution = { ...shared, kind: 'HoldingSourced', source: nextFrom, to: nextTo }
-  return { plan: { ...withoutOld, contributions: [...withoutOld.contributions, fresh] }, clamp: null }
+  return withAnchorGuard(
+    { plan: { ...withoutOld, contributions: [...withoutOld.contributions, fresh] }, clamp: null },
+    id,
+  )
+}
+
+/** Lader `guardTransferOrContributionAnchor` få det sidste ord om en
+    redigerings klemning. Den klemning, resultatet allerede bærer — dørens
+    løft i `openDoorFor`, som `withTransferEnd` selv kalder — melder om
+    `Period.from`, en anden væg end ejerreglens `Period.anchor`, og de to
+    sammenblandes ikke: rammer ejerreglen, er det den, brugeren skal se, for
+    det var den, redigeringen lige udløste. */
+function withAnchorGuard(
+  result: { plan: Plan; clamp: Clamp | null },
+  id: string,
+): { plan: Plan; clamp: Clamp | null } {
+  const guarded = guardTransferOrContributionAnchor(result.plan, id)
+  return guarded.clamp ? guarded : result
 }
 
 /** De to første beholdninger, en overførsel kan gå mellem — og dermed også

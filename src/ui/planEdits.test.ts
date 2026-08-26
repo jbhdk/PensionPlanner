@@ -18,6 +18,7 @@ import {
   addTransferOrContribution,
   firstTransferOrContributionPair,
   firstTransferPair,
+  guardTransferOrContributionAnchor,
   moveContribution,
   moveEntry,
   moveHolding,
@@ -746,6 +747,146 @@ describe('withTransferOrContributionEnd', () => {
 
     expect(result.transfers.map((transfer) => transfer.id)).toEqual(['foerst', 'flytning'])
     expect(result.transfers[1]).toMatchObject({ to: 'tredje-frie' })
+  })
+
+  it('klemmer en aldersforankret Overførsel tilbage til kalenderår, når "Til" skifter til en anden ejer', () => {
+    const base = aTwoPersonPlan()
+    const jesper = base.household.persons[0]!
+    const plan: Plan = {
+      ...base,
+      household: {
+        persons: [
+          {
+            ...jesper,
+            holdings: [
+              ...jesper.holdings,
+              {
+                id: 'anden-frie',
+                name: 'Andre frie midler',
+                variant: 'SavingsAccount',
+                balance: 0,
+                grossReturn: 0,
+                annualCostRate: 0,
+              },
+            ],
+          },
+          base.household.persons[1]!,
+        ],
+      },
+      transfers: [
+        aTransfer({
+          id: 'flytning',
+          from: 'free-assets',
+          to: 'anden-frie',
+          amountInRealKroner: 12_000,
+          period: { anchor: 'PersonAge' },
+        }),
+      ],
+    }
+
+    const { plan: result, clamp } = withTransferOrContributionEnd(plan, 'flytning', 'to', 'marias-konto')
+
+    expect(result.transfers[0]).toMatchObject({ to: 'marias-konto', period: { anchor: 'CalendarYear' } })
+    expect(clamp).toEqual({
+      field: 'Period.anchor',
+      message: '"Fra" og "Til" tilhører hver sin ejer, så en aldersforankring er tvetydig.',
+    })
+  })
+})
+
+describe('guardTransferOrContributionAnchor', () => {
+  it('klemmer en aldersforankret Overførsel tilbage til kalenderår, når "Fra" og "Til" har hver sin ejer', () => {
+    const plan = {
+      ...aTwoPersonPlan(),
+      transfers: [
+        aTransfer({
+          id: 'flytning',
+          from: 'free-assets',
+          to: 'marias-konto',
+          amountInRealKroner: 12_000,
+          period: { anchor: 'PersonAge' },
+        }),
+      ],
+    }
+
+    const { plan: result, clamp } = guardTransferOrContributionAnchor(plan, 'flytning')
+
+    expect(result.transfers[0]!.period).toEqual({ anchor: 'CalendarYear' })
+    expect(clamp).toEqual({
+      field: 'Period.anchor',
+      message: '"Fra" og "Til" tilhører hver sin ejer, så en aldersforankring er tvetydig.',
+    })
+  })
+
+  it('rører ikke en aldersforankret Overførsel, når "Fra" og "Til" har samme ejer', () => {
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'anden-frie',
+          name: 'Andre frie midler',
+          variant: 'SavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+      transfers: [
+        aTransfer({
+          id: 'flytning',
+          from: 'free-assets',
+          to: 'anden-frie',
+          amountInRealKroner: 12_000,
+          period: { anchor: 'PersonAge' },
+        }),
+      ],
+    })
+
+    const { plan: result, clamp } = guardTransferOrContributionAnchor(plan, 'flytning')
+
+    expect(result).toBe(plan)
+    expect(clamp).toBeNull()
+  })
+
+  it('rører ikke en aldersforankret Udbetaling, selv når "Til" har en anden ejer end afgiveren', () => {
+    const base = aTwoPersonPlan()
+    const jesper = base.household.persons[0]!
+    const plan: Plan = {
+      ...base,
+      household: {
+        persons: [
+          {
+            ...jesper,
+            holdings: [
+              {
+                id: 'aldersopsparing',
+                name: 'Aldersopsparing',
+                variant: 'OldAgeSavings',
+                payoutAge: 60,
+                balance: 200_000,
+                grossReturn: 0,
+                annualCostRate: 0,
+              },
+              ...jesper.holdings,
+            ],
+          },
+          base.household.persons[1]!,
+        ],
+      },
+      transfers: [
+        aTransfer({
+          id: 'udbetaling',
+          from: 'aldersopsparing',
+          to: 'marias-konto',
+          amountInRealKroner: 12_000,
+          period: { anchor: 'PersonAge' },
+        }),
+      ],
+    }
+
+    const { plan: result, clamp } = guardTransferOrContributionAnchor(plan, 'udbetaling')
+
+    expect(result).toBe(plan)
+    expect(clamp).toBeNull()
   })
 })
 
