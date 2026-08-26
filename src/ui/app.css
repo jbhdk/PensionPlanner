@@ -642,6 +642,7 @@ table.aar th,
 .postertabel th,
 .udbetalingstabel th,
 .indbetalingstabel th,
+.aftaletabel th,
 .overfoerselstabel th,
 .ydelsestabel th,
 .lofttabel th {
@@ -1452,6 +1453,7 @@ table.aar td .fremskrevet {
 .postertabel,
 .udbetalingstabel,
 .indbetalingstabel,
+.aftaletabel,
 .overfoerselstabel,
 .ydelsestabel,
 .lofttabel {
@@ -1467,6 +1469,7 @@ table.aar td .fremskrevet {
 .postertabel th,
 .udbetalingstabel th,
 .indbetalingstabel th,
+.aftaletabel th,
 .overfoerselstabel th,
 .ydelsestabel th,
 .lofttabel th {
@@ -1487,6 +1490,7 @@ table.aar td .fremskrevet {
 .postertabel td,
 .udbetalingstabel td,
 .indbetalingstabel td,
+.aftaletabel td,
 .overfoerselstabel td,
 .ydelsestabel td,
 .lofttabel td {
@@ -1495,6 +1499,16 @@ table.aar td .fremskrevet {
   font-size: 12px;
   white-space: nowrap;
   border-bottom: 1px solid var(--linje-svag);
+}
+
+/* Aftalens regnestykke spænder over sine destinationer med `rowSpan`, jf.
+   PensionAgreementsTable. Browserens standard er `vertical-align: middle`,
+   som centrerer cellen midt i mellem sine rækker — og med to lige høje
+   rækker lander lønnens tal ud for den *sidste* destination, ikke den
+   første, de faktisk hører til. `.aftaletabel` er den eneste tabel med
+   `rowSpan`, og reglen står derfor kun her. */
+.aftaletabel td {
+  vertical-align: top;
 }
 
 .lagtabel th:first-child,
@@ -1507,6 +1521,8 @@ table.aar td .fremskrevet {
 .udbetalingstabel td:first-child,
 .indbetalingstabel th:first-child,
 .indbetalingstabel td:first-child,
+.aftaletabel th:first-child,
+.aftaletabel td:first-child,
 .overfoerselstabel th:first-child,
 .overfoerselstabel td:first-child,
 .ydelsestabel th:first-child,
@@ -1521,6 +1537,17 @@ table.aar td .fremskrevet {
    venstrestillet i brødskriften som beholdningsnavnet ved siden af. */
 .ydelsestabel th:nth-child(2),
 .ydelsestabel td:nth-child(2) {
+  text-align: left;
+  font-family: var(--f-broed);
+}
+
+/* Aftaletabellens Destination er også et navn og ingen talkolonne — men den
+   står som 7. kolonne, ikke som 2., fordi aftalens eget regnestykke (fem
+   talkolonner) står foran fordelingens tre. Højrestillet ville en kort
+   ordning som "AP Rate" og en lang som "AP Livrente" se ud, som om de ikke
+   hørte til samme kolonne, når de to står lige under hinanden. */
+.aftaletabel th:nth-child(7),
+.aftaletabel td:nth-child(7) {
   text-align: left;
   font-family: var(--f-broed);
 }
