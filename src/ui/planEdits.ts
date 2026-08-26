@@ -781,8 +781,23 @@ export function firstTransferPair(plan: Plan): { from: string; to: string } | un
   return undefined
 }
 
+/** Id'erne, en frisk Overførsel eller et frisk beholdningskildet bidrag ikke
+    må vælge — begge arrays, ikke kun sit eget. Krydser en figur grænsen
+    mellem `Transfer` og `Contribution`, jf. ADR-0047, beholder den sit id
+    og flytter blot array; en tælling, der kun så sit eget array, ville tro
+    id'et var ledigt igen og give det til en ny figur, der intet har med den
+    gamle at gøre. To figurer med samme id er ikke en pyntefejl: navigatorens
+    markering kender kun id'et, jf. `sameSelection`, og ville da vise begge
+    som valgt på én gang. */
+function allTransferOrContributionIds(plan: Plan): Set<string> {
+  return new Set([
+    ...plan.transfers.map((transfer) => transfer.id),
+    ...plan.contributions.map((contribution) => contribution.id),
+  ])
+}
+
 function freshTransferId(plan: Plan): string {
-  const existing = new Set(plan.transfers.map((transfer) => transfer.id))
+  const existing = allTransferOrContributionIds(plan)
   let n = 1
   while (existing.has(`transfer-${n}`)) n++
   return `transfer-${n}`
@@ -944,7 +959,7 @@ export function addTransferOrContribution(plan: Plan): Plan {
 }
 
 function freshContributionId(plan: Plan): string {
-  const existing = new Set(plan.contributions.map((contribution) => contribution.id))
+  const existing = allTransferOrContributionIds(plan)
   let n = 1
   while (existing.has(`contribution-${n}`)) n++
   return `contribution-${n}`

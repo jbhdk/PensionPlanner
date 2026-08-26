@@ -2826,6 +2826,32 @@ describe('fladen', () => {
     expect(screen.queryByRole('heading', { name: 'Planen kan ikke simuleres' })).toBeNull()
   })
 
+  it('genbruger ikke en Overførsels id, når den er reklassificeret til et bidrag', async () => {
+    // Krydser "Overførsel 1" grænsen til et bidrag, jf. ADR-0047, beholder
+    // den sit "transfer-1"-id og flytter til plan.contributions. Så en
+    // fersk optælling, der kun ser plan.transfers, tror pladsen er ledig
+    // igen og giver samme id til "Overførsel 2" — to figurer, der deler ét
+    // id, markeres begge som valgt, uanset hvilken af dem der klikkes.
+    const user = userEvent.setup()
+    render(<App initialPlan={aPlanWithPensionBetweenFreeHoldings()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Overførsel' }))
+    await user.click(navigatorButton(/Overførsel 1/))
+    await user.selectOptions(screen.getByLabelText('Til'), 'Ratepension')
+
+    await user.click(screen.getByRole('button', { name: '+ Overførsel' }))
+    const raekke1 = navigatorButton(/Overførsel 1/)
+    const raekke2 = navigatorButton(/Overførsel 2/)
+
+    await user.click(raekke2)
+    expect(raekke2.className).toContain('valgt')
+    expect(raekke1.className).not.toContain('valgt')
+
+    await user.click(raekke1)
+    expect(raekke1.className).toContain('valgt')
+    expect(raekke2.className).not.toContain('valgt')
+  })
+
   it('tilføjer en overførsel via overførselsgruppen, og dens inspektør kan åbnes', async () => {
     const user = userEvent.setup()
     render(<App initialPlan={aPlanWithSecondHolding()} />)
