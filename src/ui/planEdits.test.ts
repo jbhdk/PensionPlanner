@@ -936,6 +936,26 @@ describe('guardTransferOrContributionAnchor', () => {
     expect(clamp).toBeNull()
   })
 
+  it('rører ikke en aldersforankret Overførsel med hver sin ejer, når det ene endepunkt er et fast alderstal, der eksplicit navngiver en person, jf. ADR-0051', () => {
+    const plan = {
+      ...aTwoPersonPlan(),
+      transfers: [
+        aTransfer({
+          id: 'flytning',
+          from: 'free-assets',
+          to: 'marias-konto',
+          amountInRealKroner: 12_000,
+          period: { anchor: 'PersonAge', from: { person: 'maria', age: 60 } },
+        }),
+      ],
+    }
+
+    const { plan: result, clamp } = guardTransferOrContributionAnchor(plan, 'flytning')
+
+    expect(result).toBe(plan)
+    expect(clamp).toBeNull()
+  })
+
   it('rører ikke en aldersforankret Overførsel, når "Fra" og "Til" har samme ejer', () => {
     const plan = aPlan({
       holdings: [

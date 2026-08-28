@@ -18,6 +18,7 @@ import type {
   EntryId,
   Holding,
   HoldingId,
+  Household,
   HoldingSourcedContribution,
   PensionSchemeHolding,
   Period,
@@ -662,9 +663,14 @@ export function periodEndpointBounds(
 ): Bounds {
   const owner = periodOwner(plan, figure)
   if (owner === undefined) return {}
+  // Det er dette endepunkts *egen* eventuelle navngivning, der afgør hvem
+  // dets vægge måles på — ikke figurens strukturelle ejer. Et fast alderstal,
+  // der eksplicit navngiver en anden, skal klemmes mod hendes fødselsår og
+  // hendes plads i husstandens sidste år, ikke mod ejerens, jf. ADR-0051.
+  const boundOwner = endpointOwner(figure.period, endpoint, owner, plan.household)
 
   const unit = (bound: YearBound): Bound => ({
-    value: inEndpointUnit(figure.period, endpoint, bound.value, owner),
+    value: inEndpointUnit(figure.period, endpoint, bound.value, boundOwner),
     reason: bound.reason,
   })
   const opposite = periodBounds(figure.period, owner, plan.household)[
@@ -673,7 +679,7 @@ export function periodEndpointBounds(
   // Døren måler kun startåret: en overførsel må ikke *hente* fra ordningen,
   // før den må udbetales, og et slutår henter ingenting.
   const door = endpoint === 'from' ? payoutDoor(plan, figure) : undefined
-  const household = householdBounds(plan, figure.period, owner)
+  const household = householdBounds(plan, figure.period, boundOwner)
 
   const min = latest([
     household?.min,
@@ -845,8 +851,25 @@ function inEndpointUnit(
 ): number {
   if (period.anchor === 'CalendarYear') return year
   const standing = period[endpoint]
-  if (typeof standing !== 'number') return year - owner.birthYear
-  return standing + (year - yearAtAge(owner, standing))
+  if (typeof standing === 'number') return standing + (year - yearAtAge(owner, standing))
+  if (standing !== undefined && 'age' in standing) return standing.age + (year - yearAtAge(owner, standing.age))
+  return year - owner.birthYear
+}
+
+/** Personen, et endepunkts egne vægge skal måles på: den, det eksplicit
+    navngiver — som følger eller som et navngivet fast alderstal — eller
+    ellers figurens strukturelt udledte ejer. Et bart tal og et åbent
+    endepunkt har ingen egen navngivning og måles fortsat på ejeren. */
+function endpointOwner(
+  period: Period,
+  endpoint: 'from' | 'to',
+  structuralOwner: Person,
+  household: Household,
+): Person {
+  if (period.anchor !== 'PersonAge') return structuralOwner
+  const bound = period[endpoint]
+  if (typeof bound !== 'object') return structuralOwner
+  return household.persons.find((person) => person.id === bound.person) ?? structuralOwner
 }
 
 /** En variant, personen kun kan have én af, må ikke stå to gange hos samme
@@ -1082,8 +1105,9 @@ function entryOwners(plan: Plan): string | undefined {
   return undefined
 }
 
-/** Et `PersonAge`-forankret periodeendepunkt, der eksplicit navngiver, hvis
-    erhvervsophør det følger, skal navngive nogen, der findes — samme peger,
+/** Et `PersonAge`-forankret periodeendepunkt, der eksplicit navngiver en
+    person — hvis erhvervsophør det følger, eller hvem et fast alderstal
+    måles på, jf. ADR-0051 — skal navngive nogen, der findes. Samme peger,
     samme afvisning, som `entryOwners`, jf. ADR-0013.
 
     Fjernes den navngivne person fra husstanden, mens et endepunkt følger
@@ -1099,7 +1123,9 @@ function followedPersonsExist(plan: Plan): string | undefined {
       const bound = period[endpoint]
       if (typeof bound !== 'object') continue
       if (!ids.has(bound.person)) {
-        return `${figureSubject(figure)} følger erhvervsophøret for en person, der ikke findes.`
+        return 'age' in bound
+          ? `${figureSubject(figure)} måler et fast alderstal på en person, der ikke findes.`
+          : `${figureSubject(figure)} følger erhvervsophøret for en person, der ikke findes.`
       }
     }
   }

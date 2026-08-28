@@ -464,11 +464,14 @@ export function AgeBoundField({
     eller afkrydset, en henvisning til en navngiven persons erhvervsophør, jf.
     `PersonAgeBound`. Samme opbygning som `AgeBoundField`, som bruger
     `AgeBound` til `PayoutSchedule.start` — de to felter deler visning, ikke
-    type, ganske som ADR-0050 lader de to bundne typer dele form og ikke navn.
+    type, ganske som ADR-0050 og ADR-0051 lader de to bundne typer dele form
+    og ikke navn.
 
-    Fluebenet får sin egen personvælger, når husstanden har to personer: uden
-    et valg ville "Til" på en Overførsel eller postens ejer stiltiende afgøre,
-    hvem der følges, netop den tvetydighed ADR-0050 fjerner. */
+    Både fluebenet og et fast alderstal får hver sin personvælger, når
+    husstanden har to personer: uden et valg ville "Til" på en Overførsel
+    eller postens ejer stiltiende afgøre, hvem der måles på, netop den
+    tvetydighed ADR-0050 og ADR-0051 fjerner. De to vælgere udelukker
+    hinanden — kun den, der svarer til feltets nuværende form, vises. */
 export function PersonAgeBoundField({
   label,
   help,
@@ -484,10 +487,10 @@ export function PersonAgeBoundField({
   label: string
   help: FieldHelpKey
   value: PersonAgeBound | undefined
-  /** Personen, et fast alderstal måles fra — uændret af tilvalget nedenfor,
-      jf. ADR-0050: kun "følger"-værdien kan navngive en anden. */
+  /** Personen, et fast alderstal måles fra, når hverken fluebenet eller dets
+      egen personvælger navngiver en anden, jf. ADR-0050 og ADR-0051. */
   owner: Person
-  /** Husstandens personer, til vælgeren. Vælgeren vises kun, når der er mere
+  /** Husstandens personer, til de to vælgere. De vises kun, når der er mere
       end én — er der kun `owner`, er der intet valg at tilbyde. */
   persons: Person[]
   /** Endepunktets rolle, til at oversætte den valgte persons erhvervsophør
@@ -498,16 +501,35 @@ export function PersonAgeBoundField({
   onClamp?: (clamp: Clamp | null) => void
   onChange: (value: PersonAgeBound | undefined) => void
 }) {
-  const follows = typeof value === 'object'
+  const follows = typeof value === 'object' && !('age' in value)
   const followedId = follows ? value.person : owner.id
   const followed = persons.find((person) => person.id === followedId) ?? owner
 
+  // Et fast alderstal, der eksplicit navngiver en anden end `owner` — `age`
+  // findes kun i den gren, jf. `PersonAgeBound`. `undefined` betyder her
+  // "ingen navngivning", ikke "intet tal": det bare tal måles fortsat på
+  // `owner`, som før ADR-0051.
+  const fixedPersonId = typeof value === 'object' && 'age' in value ? value.person : undefined
+  const fixedOwner = persons.find((person) => person.id === fixedPersonId) ?? owner
+  const fixedAge = follows
+    ? undefined
+    : typeof value === 'number'
+      ? value
+      : typeof value === 'object'
+        ? value.age
+        : undefined
+
   const tal = useNumberText<PersonAgeBound | undefined>(
     value,
-    (bound) => (typeof bound === 'object' ? formatNumber(followed.workEndAge) : formatOptional(bound)),
+    (bound) => {
+      if (typeof bound !== 'object') return formatOptional(bound)
+      return formatNumber('age' in bound ? bound.age : followed.workEndAge)
+    },
     (text) => {
       const parsed = parseOptional(text)
-      return parsed === undefined ? emptyFallsBackTo(bounds) : clampTo(parsed, bounds)
+      const resolved = parsed === undefined ? emptyFallsBackTo(bounds) : clampTo(parsed, bounds)
+      if (resolved === undefined) return undefined
+      return fixedPersonId === undefined ? resolved : { person: fixedPersonId, age: resolved }
     },
     (next, text) => {
       onClamp?.(clampedBy(parseOptional(text), bounds, help))
@@ -525,6 +547,18 @@ export function PersonAgeBoundField({
     const refused = clampedBy(workEndBoundAge(chosen, role), bounds, help)
     onClamp?.(refused)
     if (refused === null) onChange({ person: personId })
+  }
+
+  // Forsøger at navngive, hvem et fast alderstal måles på — tallet selv
+  // ændres ikke, kun hvis fødselsår det holdes op mod, og valget kan derfor
+  // ende uden for grænserne, selv om det ikke rørte selve alderen. Vælges
+  // `owner`, falder værdien tilbage til det bare tal, jf. ADR-0051. */
+  function attemptFixedPerson(personId: string) {
+    if (fixedAge === undefined) return
+    const refused = clampedBy(fixedAge, bounds, help)
+    onClamp?.(refused)
+    if (refused !== null) return
+    onChange(personId === owner.id ? fixedAge : { person: personId, age: fixedAge })
   }
 
   return (
@@ -575,6 +609,29 @@ export function PersonAgeBoundField({
                 onChange={(event) => {
                   const chosen = persons.find((person) => person.name === event.target.value)
                   if (chosen) attemptFollow(chosen.id)
+                }}
+              >
+                {persons.map((person) => (
+                  <option key={person.id} value={person.name}>
+                    {person.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </span>
+        </div>
+      )}
+      {!follows && fixedAge !== undefined && persons.length > 1 && (
+        <div className="felt felt--tilvalg felt--personvaelger">
+          <span className="vaerdi">
+            <label title={fieldHelp['Period.fixedAgeOf']}>
+              for{' '}
+              <select
+                aria-label={`${label} for`}
+                value={fixedOwner.name}
+                onChange={(event) => {
+                  const chosen = persons.find((person) => person.name === event.target.value)
+                  if (chosen) attemptFixedPerson(chosen.id)
                 }}
               >
                 {persons.map((person) => (

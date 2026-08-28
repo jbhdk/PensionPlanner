@@ -197,6 +197,9 @@ export const fieldHelp = {
   'Period.followsWorkEndOf':
     'Hvem det er, der holder op med at arbejde, når endepunktet er sat til at følge det — kun noget at vælge i en husstand med to personer. Skiftes valget til den anden, flytter beløbet sig med hendes stoptidspunkt i stedet, uanset hvem posten eller overførslen ellers måles på.',
 
+  'Period.fixedAgeOf':
+    'Hvem det er, tallet ovenfor er en alder for — kun noget at vælge i en husstand med to personer. Skiftes valget til den anden, måles tallet på hende i stedet, uanset hvem posten eller overførslen ellers måles på.',
+
   Timing:
     'Hvornår på året pengene falder. Det afgør, hvor længe de når at forrente sig, inden året er omme — et beløb i januar tæller et helt års afkast med, et i december næsten intet.',
 

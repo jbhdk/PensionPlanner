@@ -198,16 +198,22 @@ export function applyTimelineDrag(
   }
 }
 
-/** Forskyder et frit endepunkts rå værdi med `deltaYears` — et kalenderår
-    eller en fast alder, aldrig en henvisning til en (navngiven) følger, for så
-    var endepunktet låst og ville ikke have et håndtag at trække i. En
-    hel-tals aldersforskydning giver samme kalenderårsforskydning, uanset
-    ejerens fødselsmåned: se `yearAtAge` i `engine/age.ts`. */
+/** Forskyder et frit endepunkts rå værdi med `deltaYears` — et kalenderår, en
+    fast alder, eller et fast alderstal der eksplicit navngiver en person, jf.
+    ADR-0051. Aldrig en henvisning uden alderstal, for så følger endepunktet
+    en navngiven persons erhvervsophør, var låst, og ville ikke have et
+    håndtag at trække i. En hel-tals aldersforskydning giver samme
+    kalenderårsforskydning, uanset ejerens fødselsmåned: se `yearAtAge` i
+    `engine/age.ts`. */
 function shiftBound<T extends number | AgeBound | PersonAgeBound | undefined>(
   bound: T,
   deltaYears: number,
 ): T {
-  return typeof bound === 'number' ? ((bound + deltaYears) as T) : bound
+  if (typeof bound === 'number') return (bound + deltaYears) as T
+  if (typeof bound === 'object' && bound !== null && 'age' in bound) {
+    return { ...bound, age: bound.age + deltaYears } as T
+  }
+  return bound
 }
 
 /** Klemmer en trukken udbetalingsstart til de grænser, skuffens eget felt
@@ -329,9 +335,9 @@ function movedPeriod(
     standset af sin egen anden kant — den, det lige selv har flyttet lige så
     langt.
 
-    Kun de endepunkter, trækket rører, måles. Er et af dem ikke et tal — åbent
-    eller sat til erhvervsophør — er der intet at måle, og der er heller intet
-    håndtag at have trukket i.
+    Kun de endepunkter, trækket rører, måles. Er et af dem hverken et tal
+    eller et navngivet fast alderstal — åbent eller sat til erhvervsophør —
+    er der intet at måle, og der er heller intet håndtag at have trukket i.
 
     Feltnøglen er endepunktets egen, den samme som skuffen tegner feltet med,
     så beskeden kan finde vej hen til det felt, væggen står ved. */
@@ -348,17 +354,27 @@ function allowedShift(
     // Regnet forfra hver gang: har det ene endepunkt allerede kortet trækket
     // af, er det dét træk, det andet skal måles på.
     const period = shiftPeriod(figure.period, edge, allowed)
-    const standing = period[endpoint]
-    if (typeof standing !== 'number') continue
+    const standingValue = standingAge(period[endpoint])
+    if (standingValue === undefined) continue
 
     const bounds = periodEndpointBounds(plan, { ...figure, period }, endpoint)
-    const broken = brokenBound(bounds, standing)
+    const broken = brokenBound(bounds, standingValue)
     if (broken === undefined) continue
 
-    allowed += boundValue(broken) - standing
+    allowed += boundValue(broken) - standingValue
     clamp = clampBy(endpoint === 'from' ? 'Period.from' : 'Period.to', broken)
   }
   return { deltaYears: allowed, clamp }
+}
+
+/** Alderen, et endepunkt måler et træk mod — det bare tal eller et navngivet
+    fast alderstals `age`, jf. `shiftBound`. Intet svar for et åbent
+    endepunkt eller en henvisning uden alderstal: begge er låst og har intet
+    håndtag. */
+function standingAge(standing: number | AgeBound | PersonAgeBound | undefined): number | undefined {
+  if (typeof standing === 'number') return standing
+  if (typeof standing === 'object' && standing !== null && 'age' in standing) return standing.age
+  return undefined
 }
 
 /** De endepunkter, trækket flytter. Et træk i kroppen flytter begge, et

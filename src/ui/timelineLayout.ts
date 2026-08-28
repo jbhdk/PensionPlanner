@@ -81,9 +81,12 @@ const CATEGORY_COLOR: Record<PeriodGroupName, string> = {
     kommer fra `periodBounds`, som allerede kender `WorkEndAge`s forskellige
     rolle som `from` og som `to`, jf. ADR-0031 — den regel gentages ikke her.
     Låsning afgøres af den urørte grænse, fordi `periodBounds` selv oversætter
-    endepunktet til et rent årstal og dermed sletter den information. Et
-    `PersonAgeBound`, der følger nogen, er et objekt uanset hvem — hvilken
-    person, der følges, ændrer intet ved, om håndtaget er låst. */
+    endepunktet til et rent årstal og dermed sletter den information. Kun et
+    endepunkt, der *følger* nogen — `{ person }` uden et alderstal — flytter
+    sig af sig selv og er derfor låst; hvilken person, der følges, ændrer
+    intet ved det. Et navngivet fast alderstal, `{ person, age }`, er stadig
+    et håndtag, der kan trækkes, blot målt på en anden end den udledte ejer,
+    jf. ADR-0051 — det er frit ligesom det bare tal. */
 function resolvePeriodEndpoint(
   period: Period,
   key: 'from' | 'to',
@@ -93,7 +96,7 @@ function resolvePeriodEndpoint(
   const year = periodBounds(period, owner, household)[key]
   if (year === undefined) return { kind: 'Open' }
   const raw = period.anchor === 'PersonAge' ? period[key] : undefined
-  return typeof raw === 'object' ? { kind: 'Locked', year } : { kind: 'Free', year }
+  return typeof raw === 'object' && !('age' in raw) ? { kind: 'Locked', year } : { kind: 'Free', year }
 }
 
 /** En udbetalingsplans eller livrentes startpunkt. `start` er et

@@ -38,9 +38,11 @@ export function householdLastYear(household: Household): SimulationYear {
 
 /** Periodens to endepunkter oversat til kalenderår. Ved `PersonAge` følger et
     endepunkt sat til en navngiven person dennes `workEndAge`, jf.
-    `PersonAgeBound` og ADR-0050 — uafhængigt af `owner`, som kun bruges til et
-    fast alderstal. Personen slås op i `household` og ikke i et enkelt
-    `Person`, for hun er ikke nødvendigvis `owner`.
+    `PersonAgeBound` og ADR-0050, og et endepunkt sat til en navngiven person
+    og en alder måler den alder på hende i stedet for på `owner`, jf.
+    ADR-0051 — `owner` bruges dermed kun til det bare tal. Personen slås op i
+    `household` og ikke i et enkelt `Person`, for hun er ikke nødvendigvis
+    `owner`.
 
     Et endepunkt, der følger nogen, løses forskelligt som `from` og som `to`:
     erhvervsophørsåret er det første år uden arbejde, aldrig det sidste med.
@@ -86,7 +88,7 @@ function resolvePersonAgeBound(
   if (typeof bound === 'number') return yearAtAge(owner, bound)
   const followed = household.persons.find((person) => person.id === bound.person)
   if (followed === undefined) return undefined
-  return yearAtAge(followed, workEndBoundAge(followed, role))
+  return 'age' in bound ? yearAtAge(followed, bound.age) : yearAtAge(followed, workEndBoundAge(followed, role))
 }
 
 /** Den alder, et endepunkt sat til erhvervsophør svarer til i sin rolle:

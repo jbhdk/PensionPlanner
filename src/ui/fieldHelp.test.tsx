@@ -227,6 +227,16 @@ describe('feltforklaringerne', () => {
       .getByLabelText('Følger erhvervsophør for')
       .closest('label') as HTMLElement
     expect(vaelger.title).toBe(fieldHelp['Period.followsWorkEndOf'])
+
+    // `anAgeAnchoredSpan` bruger to bare fast alderstal, ikke et flueben, og
+    // dens egen personvælger har derfor sin egen tekst igen — jf. ADR-0051.
+    // Etiketten binder navnet til feltet, "Til (alder) for" og ikke bare
+    // "for", så de to endepunkters vælgere kan skelnes fra hinanden.
+    await user.click(within(navigatorspalte).getByRole('button', { name: /Broperiode/ }))
+    const fastAlderVaelger = screen
+      .getByLabelText('Til (alder) for')
+      .closest('label') as HTMLElement
+    expect(fastAlderVaelger.title).toBe(fieldHelp['Period.fixedAgeOf'])
   })
 
   it('giver hver kolonneoverskrift i årstabellen en forklaring', async () => {

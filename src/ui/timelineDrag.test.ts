@@ -219,6 +219,54 @@ describe('applyTimelineDrag', () => {
     })
   })
 
+  it('rykker et fast alderendepunkt, der eksplicit navngiver en person, og bevarer navngivningen, jf. ADR-0051', () => {
+    const plan = aPlanWithMaria(
+      aSalary({
+        amountInRealKroner: 600_000,
+        period: { anchor: 'PersonAge', from: 45, to: { person: 'maria', age: 70 } },
+      }),
+    )
+    const item = timelineLayout(plan).find((g) => g.name === 'IncomeEntries')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'to', 5)
+
+    expect(next.plan.entries[0]).toMatchObject({
+      period: { anchor: 'PersonAge', from: 45, to: { person: 'maria', age: 75 } },
+    })
+    expect(next.clamp).toBeNull()
+  })
+
+  it('klemmer et navngivet fast alderendepunkt mod den navngivne persons egne grænser, ikke postens ejers, jf. ADR-0051', () => {
+    // Jesper ejer posten, men "Til" er sat til at måle på Maria. Jespers
+    // egen horisont (90) rammer husstandens sidste år i 2063; det er Marias
+    // (95), som rammer det i 2070 og derfor er den reelle væg. Klemtes der
+    // mod Jesper, ville alderen 95 fejlagtigt komme til at stå — den alder
+    // Maria når 25 år efter husstandens sidste år.
+    const plan = withSecondPerson(
+      aPlan({
+        horizon: 90,
+        entries: [
+          anExpense({
+            amountInRealKroner: 100_000,
+            period: { anchor: 'PersonAge', to: { person: 'maria', age: 80 } },
+          }),
+        ],
+      }),
+      { horizon: 95 },
+    )
+    const item = timelineLayout(plan).find((g) => g.name === 'ExpenseEntries')!.items[0]!
+
+    const next = applyTimelineDrag(plan, item, 'to', 30)
+
+    expect(next.plan.entries[0]).toMatchObject({
+      period: { anchor: 'PersonAge', to: { person: 'maria', age: 95 } },
+    })
+    expect(next.clamp).toEqual({
+      field: 'Period.to',
+      message: 'Husstandens forløb slutter i 2070.',
+    })
+  })
+
   it('lader fødselsmåneden bestemme, hvilken brøkalder der stadig ligger i husstandens sidste år', () => {
     // Loftet regnes i kalenderår og oversættes tilbage til alder, jf.
     // ADR-0045. Maria er nu født i januar 1975, og hun fylder 93½ i juli 2068

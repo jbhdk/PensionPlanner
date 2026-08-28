@@ -11,6 +11,7 @@ import {
   aSalary,
   aTaxFreeIncome,
   aTransfer,
+  withSecondPerson,
 } from '../engine/testing/planFixture'
 import { timelineBounds, timelineLayout } from './timelineLayout'
 
@@ -155,6 +156,29 @@ describe('tidslinjens lag', () => {
     const jesper = plan.household.persons[0]!
     expect(item.from).toEqual({ kind: 'Free', year: yearAtAge(jesper, 45) })
     expect(item.to).toEqual({ kind: 'Free', year: yearAtAge(jesper, 65) })
+  })
+
+  it('markerer et fast alderendepunkt, der eksplicit navngiver en person, som frit og opløser det til hendes kalenderår, jf. ADR-0051', () => {
+    // I modsætning til "følger erhvervsophør" flytter et navngivet fast
+    // alderstal sig ikke af sig selv — det er stadig et håndtag, der kan
+    // trækkes, blot målt på en anden end postens egen ejer.
+    const plan = withSecondPerson(
+      aPlan({
+        entries: [
+          aSalary({
+            amountInRealKroner: 600_000,
+            period: { anchor: 'PersonAge', to: { person: 'maria', age: 60 } },
+          }),
+        ],
+      }),
+    )
+
+    const groups = timelineLayout(plan)
+    const item = groups.find((g) => g.name === 'IncomeEntries')!.items[0]!
+    if (item.point) throw new Error('lønnen skal være en periode, ikke et punkt')
+
+    const maria = plan.household.persons[1]!
+    expect(item.to).toEqual({ kind: 'Free', year: yearAtAge(maria, 60) })
   })
 
   it('måler en overførsels alder på afgiverbeholdningens ejer, og et beholdningskildet bidrags på destinationens', () => {

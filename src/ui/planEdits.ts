@@ -596,15 +596,17 @@ function openDoorFor(plan: Plan, transfer: Transfer): { transfer: Transfer; clam
 
 /** Klemmer den sammenlagte Overførsel-figurs forankring tilbage til
     kalenderår, når "Fra" er frie midler, "Fra"/"Til" har fået hver sin ejer,
-    og mindst ét af de satte endepunkter er et fast alderstal — det er dér,
-    og kun dér, at "Til" reelt afgør, hvis alder forankringen betyder: bliver
-    figuren ved med at være en overførsel, måles den på afgiverens ejer;
-    bliver den et bidrag, måles den på destinationens, jf. ADR-0028. Et fast
-    alderstal uden en fælles ejer er derfor tvetydigt.
+    og mindst ét af de satte endepunkter er et bart fast alderstal — det er
+    dér, og kun dér, at "Til" reelt afgør, hvis alder forankringen betyder:
+    bliver figuren ved med at være en overførsel, måles den på afgiverens
+    ejer; bliver den et bidrag, måles den på destinationens, jf. ADR-0028. Et
+    bart alderstal uden en fælles ejer er derfor tvetydigt.
 
-    Er begge satte endepunkter enten åbne eller en eksplicit navngiven
-    "følger", er der intet tvetydigt at klemme — hvert endepunkt siger selv,
-    hvem det måler på, uafhængigt af "Fra"/"Til", jf. ADR-0050.
+    Er begge satte endepunkter enten åbne, en eksplicit navngiven "følger",
+    eller et fast alderstal der selv navngiver personen, er der intet
+    tvetydigt at klemme — hvert endepunkt siger selv, hvem det måler på,
+    uafhængigt af "Fra"/"Til", jf. ADR-0050 og ADR-0051. Kun det bare tal,
+    uden en navngiven person, mangler et entydigt svar.
 
     Er "Fra" en låst ordning (en Udbetaling), er destinationen altid frie
     midler, svaret altid afgiverens ejer, og guarden rører aldrig figuren,
@@ -623,9 +625,9 @@ export function guardTransferOrContributionAnchor(
 
   const fromOwner = findHoldingOwner(plan, fromId)
   const toOwner = findHoldingOwner(plan, figure.to)
-  const hasFixedAge =
+  const hasAmbiguousAge =
     typeof figure.period.from === 'number' || typeof figure.period.to === 'number'
-  if (!fromOwner || !toOwner || fromOwner.id === toOwner.id || !hasFixedAge) {
+  if (!fromOwner || !toOwner || fromOwner.id === toOwner.id || !hasAmbiguousAge) {
     return { plan, clamp: null }
   }
 

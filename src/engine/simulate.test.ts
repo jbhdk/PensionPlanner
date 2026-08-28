@@ -6795,3 +6795,40 @@ describe('personvalgt "følger erhvervsophør"', () => {
     )
   })
 })
+
+describe('personvalgt fast alderstal', () => {
+  it('måler et fast alderstal på den navngivne person og ikke postens egen ejer', () => {
+    // Jespers egen alder 60 ville sætte slutåret til 2033 — før Marias, som
+    // giver 2035, jf. ADR-0051. Falder prøven her, har periodBounds ikke
+    // fået den navngivne person med.
+    const plan = withSecondPerson(
+      aPlan({
+        entries: [
+          anExpense({
+            amountInRealKroner: 60_000,
+            period: { anchor: 'PersonAge', to: { person: 'maria', age: 60 } },
+          }),
+        ],
+      }),
+    )
+
+    const years = simulateChecked(plan)
+    expect(years.find((y) => y.year === 2035)!.expenses).toBeCloseTo(60_000, 6)
+    expect(years.find((y) => y.year === 2036)!.expenses).toBeCloseTo(0, 6)
+  })
+
+  it('afviser et endepunkt, der navngiver en person, der ikke findes, selv med et fast alderstal', () => {
+    const plan = aPlan({
+      entries: [
+        anExpense({
+          amountInRealKroner: 60_000,
+          period: { anchor: 'PersonAge', to: { person: 'findes-ikke', age: 60 } },
+        }),
+      ],
+    })
+
+    expect(() => simulate(plan)).toThrow(
+      /Posten Faste udgifter måler et fast alderstal på en person, der ikke findes/i,
+    )
+  })
+})
