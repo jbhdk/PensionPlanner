@@ -860,7 +860,7 @@ function inEndpointUnit(
     navngiver — som følger eller som et navngivet fast alderstal — eller
     ellers figurens strukturelt udledte ejer. Et bart tal og et åbent
     endepunkt har ingen egen navngivning og måles fortsat på ejeren. */
-function endpointOwner(
+export function endpointOwner(
   period: Period,
   endpoint: 'from' | 'to',
   structuralOwner: Person,

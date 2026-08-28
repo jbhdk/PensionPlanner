@@ -6544,6 +6544,36 @@ describe('en persons horisont stopper hendes egen indkomst, ikke husstandens udg
     expect(entriesIn(2044)).toEqual([])
   })
 
+  it('lader et eksplicit fremmed følge sprænge ejerens egen horisont, jf. #88', () => {
+    const base = aPlanWithShorterLivedJesper({
+      entries: [
+        aPensionIncome({
+          amountInRealKroner: 30_000,
+          owner: 'jesper',
+          period: { anchor: 'PersonAge', to: { person: 'maria' } },
+        }),
+      ],
+    })
+    const plan: Plan = {
+      ...base,
+      household: {
+        ...base.household,
+        persons: base.household.persons.map((person) =>
+          person.id === 'maria' ? { ...person, workEndAge: 75 } : person,
+        ),
+      },
+    }
+    const years = simulateChecked(plan)
+    const entriesIn = (year: number) => years.find((y) => y.year === year)!.entries
+
+    // Marias erhvervsophør ved 75: som `to`-rolle tælles året før med, jf.
+    // ADR-0031 — 1975 + 74 = 2049, seks år efter Jespers egen horisont
+    // (2043), som posten dermed skal række forbi.
+    expect(entriesIn(2043)).toEqual([{ entry: 'atp', amount: 30_000 }])
+    expect(entriesIn(2049)).toEqual([{ entry: 'atp', amount: 30_000 }])
+    expect(entriesIn(2050)).toEqual([])
+  })
+
   it('lader en udgiftspost fortsætte forbi ejerens egen horisont — den er husstandens, ikke hendes', () => {
     const plan = aPlanWithShorterLivedJesper({
       entries: [anExpense({ amountInRealKroner: 40_000 })],

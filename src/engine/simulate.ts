@@ -54,7 +54,7 @@ import { statePensionYear } from './statePensionAge'
 import { assessHousehold, totalHouseholdTax } from './tax/assessHousehold'
 import type { HouseholdTaxAssessment, StatePensionYear } from './tax/assessHousehold'
 import type { TaxAssessmentInput } from './tax/assessTax'
-import { validatePlan } from './validatePlan'
+import { endpointOwner, validatePlan } from './validatePlan'
 import { totalYearTax } from './yearTax'
 import type {
   BufferState,
@@ -1569,9 +1569,16 @@ function entryProjection(entry: Entry, plan: Plan, year: SimulationYear): number
     dens gentagelse skal ramme netop det år.
 
     En indtægtspost har desuden ejerens egen horisont som et loft, der vinder
-    over et eksplicit sat slutpunkt — jf. ADR-0030. En udgiftspost er
-    husstandens og ikke personens og har intet loft ud over sin egen periode,
-    selvom den måtte være aldersforankret til netop denne ejer. */
+    over et eksplicit sat slutpunkt — jf. ADR-0030. Loftet gælder dog ikke,
+    når slutpunktet eksplicit følger en anden person end postens egen ejer,
+    jf. #88: fulgte det stadig ejerens horisont, ville et bevidst valg om at
+    følge fx samleverens erhvervsophør kunne blive klippet af en horisont,
+    valget netop var sat for at række forbi. Følger slutpunktet i stedet
+    postens egen ejer — eksplicit eller ej — gælder loftet uændret.
+
+    En udgiftspost er husstandens og ikke personens og har intet loft ud over
+    sin egen periode, selvom den måtte være aldersforankret til netop denne
+    ejer. */
 function appliesInYear(
   entry: Entry,
   year: SimulationYear,
@@ -1579,7 +1586,9 @@ function appliesInYear(
   household: Household,
   startYear: SimulationYear,
 ): boolean {
-  if (entry.direction === 'Income' && year > personLastYear(owner)) return false
+  const horizonApplies =
+    entry.direction === 'Income' && endpointOwner(entry.period, 'to', owner, household).id === owner.id
+  if (horizonApplies && year > personLastYear(owner)) return false
   const { from, to } = periodBounds(entry.period, owner, household)
   return withinPeriod(from, to, year) && matchesRecurrence(entry.recurrence, year, from, to, startYear)
 }
