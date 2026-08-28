@@ -324,6 +324,17 @@ function navigatorButton(name: string | RegExp) {
   return within(navigatorspalte).getByRole('button', { name })
 }
 
+/** Navnene i den sammenlagte Overførsel-kasse, i den rækkefølge de står på
+    skærmen — Transfer og det beholdningskildede bidrag i én liste, jf.
+    ADR-0049. */
+function overfoerslerRowNames(): string[] {
+  const groups = [...document.querySelectorAll<HTMLElement>('.nav-gruppe')]
+  const group = groups.find((section) =>
+    section.querySelector('h3')?.textContent?.includes('Overførsler'),
+  )!
+  return [...group.querySelectorAll('.nav-rk .navn')].map((navn) => navn.textContent ?? '')
+}
+
 /** En plan, hvis allerførste år rører alle otte bånd: løn og en fast
     udgift, en ratepension der udbetaler, en livrente der omsættes med det
     samme, et lønkildet bidrag, og en overførsel i hver retning med bufferen
@@ -2753,6 +2764,36 @@ describe('fladen', () => {
     // endnu.
     expect(navigatorButton(/Overførsel 1/)).toBeTruthy()
     expect(screen.queryByText(/kan ikke simuleres/i)).toBeNull()
+  })
+
+  it('lander en ny Overførsel nederst i den synligt samlede liste, selv når et beholdningskildet bidrag allerede findes', async () => {
+    // Kernefejlen i #83: den nye figur blev tidligere tilføjet nederst i sit
+    // eget array (plan.transfers), som i den gamle to-blokke-visning stod
+    // over den beholdningskildede blok — så den "sprang" op over et bidrag,
+    // der allerede stod i skuffen, i stedet for at lande nederst i det,
+    // brugeren opfatter som listen.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={{
+          ...aPlanWithPensionBetweenFreeHoldings(),
+          contributions: [
+            aHoldingContribution({
+              id: 'bidrag',
+              name: 'Bidraget',
+              source: 'free-assets',
+              to: 'ratepension',
+              amountInRealKroner: 10_000,
+              position: 0,
+            }),
+          ],
+        }}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: '+ Overførsel' }))
+
+    expect(overfoerslerRowNames()).toEqual(['Bidraget', 'Overførsel 2'])
   })
 
   it('viser "+ Overførsel", når husstanden har en ordning at betale et beholdningskildet bidrag til', () => {

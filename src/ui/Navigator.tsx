@@ -14,7 +14,6 @@ import {
   moveEntry,
   moveHolding,
   movePerson,
-  moveTransfer,
 } from './planEdits'
 import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
@@ -395,39 +394,32 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
     {
       // Sammenlagt af Transfer og det beholdningskildede bidrag: skuffen
       // kender kun kilden, og en beholdningskildet indbetaling er, hvad
-      // brugeren allerede kalder en overførsel, jf. ADR-0047. De to blokke
-      // uden overskrift holder deres egen rækkefølge for sig — hver figurs
-      // plads er en prioritet blandt sine egne, jf. ADR-0019, og intet en
-      // beholdningskildet linje og en Transfer-linje kan dele.
+      // brugeren allerede kalder en overførsel, jf. ADR-0047. Én blok, hvis
+      // rækker er de to arrays samlet og sorteret på `position` — den fælles
+      // plads, der siger hvor en figur hører hjemme i den ene liste,
+      // brugeren ser, jf. ADR-0049. Trækket er ikke med endnu: listen kan
+      // ikke omsorteres herfra, jf. issue #84.
       id: 'overfoersler',
       title: 'Overførsler',
       count: String(plan.transfers.length + holdingSourced.length),
       summary: '',
       blocks: [
         {
-          id: 'overfoersler-transfer',
-          rows: plan.transfers.map((transfer) => ({
-            id: transfer.id,
-            name: transfer.name,
-            value: kroner(transfer.amountInRealKroner),
-            target: { kind: 'transfer', id: transfer.id },
-          })),
-          onMove: (id, to) => onChange(moveTransfer(plan, id, to)),
-        },
-        {
-          id: 'overfoersler-contribution',
-          rows: holdingSourced.map((contribution) => ({
-            id: contribution.id,
-            name: contribution.name,
-            value: kroner(contribution.amountInRealKroner),
-            // Målet siges at være 'transfer', selv om figuren står i
-            // plan.contributions: Target-kindet følger sektionen i skuffen og
-            // ikke motorens array, jf. ADR-0047. Ellers ville en markering
-            // miste sit fluebeen i navigatoren, når "Til" krydser grænsen og
-            // reklassificerer figuren, uden at `selected` selv opdateres.
-            target: { kind: 'transfer', id: contribution.id },
-          })),
-          onMove: (id, to) => onChange(moveContribution(plan, id, to)),
+          id: 'overfoersler',
+          rows: [...plan.transfers, ...holdingSourced]
+            .sort((a, b) => a.position - b.position)
+            .map((figure) => ({
+              id: figure.id,
+              name: figure.name,
+              value: kroner(figure.amountInRealKroner),
+              // Målet siges at være 'transfer', selv når figuren står i
+              // plan.contributions: Target-kindet følger sektionen i skuffen
+              // og ikke motorens array, jf. ADR-0047. Ellers ville en
+              // markering miste sit fluebeen i navigatoren, når "Til"
+              // krydser grænsen og reklassificerer figuren, uden at
+              // `selected` selv opdateres.
+              target: { kind: 'transfer', id: figure.id },
+            })),
         },
       ],
       // En overførsel flytter penge fra en beholdning — til frie midler

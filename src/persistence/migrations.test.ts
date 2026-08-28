@@ -724,3 +724,47 @@ describe('v14 → v15: pensionsaftalen får et gebyr og en forsikringspræmie', 
     expect(runMigrations(v14, 14, 15, migrations)).toEqual(v14)
   })
 })
+
+describe('v15 → v16: overførslen og det beholdningskildede bidrag bærer en fælles position', () => {
+  it('tildeler position i den nuværende visningsorden: alle overførsler, så alle beholdningskildede bidrag', () => {
+    // Ingen af de to arrays kan i forvejen udtrykke, hvor en overførsel hører
+    // hjemme mellem to bidrag i den sammenlagte liste. Migrationen udleder
+    // derfor position af, hvad brugeren allerede ser i dag — Transfer-blokken
+    // først, så den beholdningskildede blok — så en migreret plan ser
+    // visuelt uændret ud.
+    const v15 = {
+      transfers: [
+        { id: 'transfer-1', from: 'a', to: 'b' },
+        { id: 'transfer-2', from: 'a', to: 'c' },
+      ],
+      contributions: [
+        { id: 'holding-1', kind: 'HoldingSourced', source: 'a', to: 'd' },
+        { id: 'entry-1', kind: 'EntrySourced', source: 'løn', to: 'd' },
+        { id: 'holding-2', kind: 'HoldingSourced', source: 'a', to: 'e' },
+      ],
+    }
+
+    const v16 = runMigrations(v15, 15, 16, migrations) as {
+      transfers: Array<{ id: string; position: number }>
+      contributions: Array<{ id: string; kind: string; position?: number }>
+    }
+
+    expect(v16.transfers.map((transfer) => [transfer.id, transfer.position])).toEqual([
+      ['transfer-1', 0],
+      ['transfer-2', 1],
+    ])
+    expect(
+      v16.contributions.map((contribution) => [contribution.id, contribution.position]),
+    ).toEqual([
+      ['holding-1', 2],
+      ['entry-1', undefined],
+      ['holding-2', 3],
+    ])
+  })
+
+  it('lader en plan uden overførsler eller bidrag stå med to tomme lister', () => {
+    const v16 = runMigrations({ name: 'Plan' }, 15, 16, migrations)
+
+    expect(v16).toEqual({ name: 'Plan', transfers: [], contributions: [] })
+  })
+})

@@ -6,7 +6,7 @@ import { repairPlan } from './repairPlan'
 /** Skemaversionen data gemmes under, både i localStorage og i en eksporteret
     fil — kæden i migrations.ts løfter en gemt plan fra sin egen version og
     frem til denne, jf. issue #15. */
-export const CURRENT_SCHEMA_VERSION = 15
+export const CURRENT_SCHEMA_VERSION = 16
 
 export type ParseResult =
   | {

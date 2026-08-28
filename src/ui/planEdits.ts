@@ -721,6 +721,10 @@ export function withTransferOrContributionEnd(
     timing: figure.timing,
     period: figure.period,
     recurrence: figure.recurrence,
+    // Pladsen i den sammenlagte liste er ikke et spørgsmål, en
+    // grænsekrydsning stiller — den bevares uændret, som `id` allerede gør,
+    // jf. ADR-0049.
+    position: figure.position,
   }
 
   if (!wasTransfer && !becomesTransfer) {
@@ -794,6 +798,20 @@ function allTransferOrContributionIds(plan: Plan): Set<string> {
     ...plan.transfers.map((transfer) => transfer.id),
     ...plan.contributions.map((contribution) => contribution.id),
   ])
+}
+
+/** Pladsen en frisk Overførsel eller et frisk beholdningskildet bidrag skal
+    have for at lande nederst i den sammenlagte liste — én mere end den
+    højeste, der allerede findes blandt begge, jf. ADR-0049. Er listen tom,
+    er nul den nederste plads, der findes. */
+function nextTransferOrContributionPosition(plan: Plan): number {
+  const positions = [
+    ...plan.transfers.map((transfer) => transfer.position),
+    ...plan.contributions
+      .filter((contribution) => contribution.kind === 'HoldingSourced')
+      .map((contribution) => contribution.position),
+  ]
+  return positions.length === 0 ? 0 : Math.max(...positions) + 1
 }
 
 function freshTransferId(plan: Plan): string {
@@ -929,6 +947,7 @@ export function addTransferOrContribution(plan: Plan): Plan {
     plan.contributions.filter((contribution) => contribution.kind === 'HoldingSourced').length +
     1
   const name = `Overførsel ${number}`
+  const position = nextTransferOrContributionPosition(plan)
 
   if (pair.kind === 'Transfer') {
     const fresh: Transfer = {
@@ -940,6 +959,7 @@ export function addTransferOrContribution(plan: Plan): Plan {
       timing: 'Even',
       period: { anchor: 'CalendarYear' },
       recurrence: { kind: 'Annual' },
+      position,
     }
     return { ...plan, transfers: [...plan.transfers, openDoorFor(plan, fresh).transfer] }
   }
@@ -954,6 +974,7 @@ export function addTransferOrContribution(plan: Plan): Plan {
     timing: 'Even',
     period: { anchor: 'CalendarYear' },
     recurrence: { kind: 'Annual' },
+    position,
   }
   return { ...plan, contributions: [...plan.contributions, fresh] }
 }

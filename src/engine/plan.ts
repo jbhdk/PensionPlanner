@@ -393,6 +393,12 @@ export type Transfer = {
   timing: Timing
   period: Period
   recurrence: Recurrence
+  /** Pladsen i den sammenlagte Overførsel-liste i skuffen, delt med det
+      beholdningskildede `Contribution`, jf. ADR-0049. Et strukturelt felt som
+      `id` og ikke et begreb i CONTEXT.md-forstand — hverken `plan.transfers`
+      eller `plan.contributions` kan alene udtrykke, hvor en overførsel hører
+      hjemme mellem to bidrag på skærmen. */
+  position: number
 }
 
 /** Beløbsangivelsen på et bidrag, der måles af en lønpost: enten en procent
@@ -452,6 +458,10 @@ export type Contribution =
       timing: Timing
       period: Period
       recurrence: Recurrence
+      /** Samme felt og samme betydning som `Transfer.position`, jf.
+          ADR-0049. Det lønkildede medlem har ikke feltet: det hører ikke til
+          den sammenlagte Overførsel-liste. */
+      position: number
     })
 
 /** Den beholdningskildede form alene — den ene af de to, der bærer sin egen

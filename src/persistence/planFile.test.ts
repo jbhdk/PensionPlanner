@@ -173,9 +173,10 @@ describe('planFile', () => {
     // indbetalingen fik hver sit navn, og v12 → v13, hvor
     // oprettelsestidspunktet blev til en tastet pensionsudbetalingsalder,
     // jf. ADR-0032, v13 → v14, hvor lønpostens beløb holdt op med at være
-    // brutto, jf. ADR-0040, og v14 → v15, hvor pensionsaftalen fik sit gebyr
-    // og sin forsikringspræmie, jf. ADR-0042.
-    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(15)
+    // brutto, jf. ADR-0040, v14 → v15, hvor pensionsaftalen fik sit gebyr
+    // og sin forsikringspræmie, jf. ADR-0042, og v15 → v16, hvor overførslen
+    // og det beholdningskildede bidrag fik en fælles position, jf. ADR-0049.
+    expect(JSON.parse(exportPlan(plan)).schemaVersion).toBe(16)
   })
 
   it('bærer en lønpost med sin pensionsaftale hele vejen rundt', () => {

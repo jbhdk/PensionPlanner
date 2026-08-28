@@ -464,6 +464,40 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    // v15 → v16, jf. issue #83: overførslen og det beholdningskildede bidrag
+    // bærer nu en fælles `position` — ingen af de to arrays alene kan
+    // udtrykke, hvor en overførsel hører hjemme mellem to bidrag i den
+    // sammenlagte liste, skuffen viser dem i, jf. ADR-0047.
+    //
+    // Der er intet at gætte: positionen udledes af den rækkefølge, brugeren
+    // allerede ser i dag — alle overførsler i deres nuværende
+    // `plan.transfers`-rækkefølge, derefter alle beholdningskildede bidrag i
+    // deres nuværende relative rækkefølge i `plan.contributions` — så en
+    // migreret plan ser visuelt uændret ud. Det lønkildede bidrag er ikke en
+    // del af sammenlægningen og får ikke feltet.
+    from: 15,
+    migrate: (data) => {
+      const plan = data as {
+        transfers?: Array<Record<string, unknown>>
+        contributions?: Array<Record<string, unknown>>
+        [key: string]: unknown
+      }
+      const transfers = plan.transfers ?? []
+      const contributions = plan.contributions ?? []
+      let next = 0
+
+      return {
+        ...plan,
+        transfers: transfers.map((transfer) => ({ ...transfer, position: next++ })),
+        contributions: contributions.map((contribution) =>
+          contribution.kind === 'HoldingSourced'
+            ? { ...contribution, position: next++ }
+            : contribution,
+        ),
+      }
+    },
+  },
 ]
 
 /** Den skemaversion, hvor lønpostens beløb skiftede betydning, jf. ADR-0040.

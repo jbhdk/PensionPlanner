@@ -607,6 +607,57 @@ describe('addTransferOrContribution', () => {
     expect(second.transfers[1]!.name).toBe('Overførsel 2')
   })
 
+  it('giver den nye figur den højeste position blandt begge arrays, plus 1', () => {
+    // Kernefejlen i #83: et beholdningskildet bidrag kan bære en højere
+    // position end alt i plan.transfers, selv om det ligger i sit eget,
+    // kortere array — den nye figur skal lande efter den højeste position i
+    // den sammenlagte liste, ikke efter transfer-arrayets egen længde.
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'anden-frie',
+          name: 'Andre frie midler',
+          variant: 'SavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+        {
+          id: 'ratepension',
+          name: 'Ratepension',
+          variant: 'InstalmentPension',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+      transfers: [
+        aTransfer({
+          id: 'foerst',
+          from: 'free-assets',
+          to: 'anden-frie',
+          amountInRealKroner: 1,
+          position: 0,
+        }),
+      ],
+      contributions: [
+        aHoldingContribution({
+          id: 'sidst',
+          source: 'free-assets',
+          to: 'ratepension',
+          amountInRealKroner: 1,
+          position: 5,
+        }),
+      ],
+    })
+
+    const result = addTransferOrContribution(plan)
+
+    expect(result.transfers).toHaveLength(2)
+    expect(result.transfers[1]).toMatchObject({ position: 6 })
+  })
+
   it('lader planen stå, når intet lovligt par findes', () => {
     const plan = aPlan()
 
@@ -661,9 +712,31 @@ describe('withTransferOrContributionEnd', () => {
         timing: 'Even',
         period: { anchor: 'CalendarYear' },
         recurrence: { kind: 'Annual' },
+        position: 0,
       },
     ])
     expect(clamp).toBeNull()
+  })
+
+  it('bevarer en ikke-standard position uændret, når "Til" bliver en ordning', () => {
+    // Grænsekrydsningen må ikke flytte figuren i den sammenlagte liste — dens
+    // plads bevares uændret, ligesom `id` allerede gør det.
+    const plan = {
+      ...aPlanWithTransferAndScheme(),
+      transfers: [
+        aTransfer({
+          id: 'flytning',
+          from: 'free-assets',
+          to: 'anden-frie',
+          amountInRealKroner: 12_000,
+          position: 7,
+        }),
+      ],
+    }
+
+    const { plan: result } = withTransferOrContributionEnd(plan, 'flytning', 'to', 'ratepension')
+
+    expect(result.contributions[0]).toMatchObject({ position: 7 })
   })
 
   it('flytter figuren fra plan.contributions til plan.transfers, når "Til" bliver frie midler', () => {
@@ -711,6 +784,7 @@ describe('withTransferOrContributionEnd', () => {
         timing: 'Even',
         period: { anchor: 'CalendarYear' },
         recurrence: { kind: 'Annual' },
+        position: 0,
       },
     ])
   })

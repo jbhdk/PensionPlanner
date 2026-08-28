@@ -270,6 +270,7 @@ export function aTransfer(options: {
   timing?: Timing
   period?: Period
   recurrence?: Recurrence
+  position?: number
 }): Transfer {
   return {
     id: options.id ?? 'transfer',
@@ -280,6 +281,7 @@ export function aTransfer(options: {
     timing: options.timing ?? 'Even',
     period: options.period ?? wholeHorizon,
     recurrence: options.recurrence ?? annually,
+    position: options.position ?? 0,
   }
 }
 
@@ -363,6 +365,7 @@ export function aHoldingContribution(options: {
   timing?: Timing
   period?: Period
   recurrence?: Recurrence
+  position?: number
 }): Contribution {
   return {
     id: options.id ?? 'contribution',
@@ -374,6 +377,7 @@ export function aHoldingContribution(options: {
     timing: options.timing ?? 'Even',
     period: options.period ?? wholeHorizon,
     recurrence: options.recurrence ?? annually,
+    position: options.position ?? 0,
   }
 }
 
