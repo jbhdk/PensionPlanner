@@ -11,6 +11,7 @@ import { isLifeAnnuity, newLifeAnnuity } from '../engine/lifeAnnuity'
 import type { LifeAnnuityHolding } from '../engine/lifeAnnuity'
 import { periodBounds } from '../engine/age'
 import { boundValue, minimumPayoutYears, periodEndpointBounds } from '../engine/validatePlan'
+import { repairFollowedPersonRemoval } from '../persistence/repairPlan'
 import { clampBy } from './fields'
 import type { Clamp } from './fields'
 import type {
@@ -119,27 +120,30 @@ export function addPerson(plan: Plan): Plan {
     motoren støde på en peger, der ikke rammer noget, jf. ADR-0013. Var personens beholdning bufferen, arver den
     første tilbageværende beholdning rollen, så planen forbliver regnbar. */
 export function removePerson(plan: Plan, id: string): Plan {
-  const persons = plan.household.persons.filter((person) => person.id !== id)
-  const buffer = inheritedBuffer(plan, persons)
+  // Fastfryses før filtreringen: bagefter findes personens fødselsår og
+  // erhvervsophørsalder ikke længere at slå op, jf. #86.
+  const frozen = repairFollowedPersonRemoval(plan, id)
+  const persons = frozen.household.persons.filter((person) => person.id !== id)
+  const buffer = inheritedBuffer(frozen, persons)
 
   const gone = new Set(
-    (plan.household.persons.find((person) => person.id === id)?.holdings ?? []).map(
+    (frozen.household.persons.find((person) => person.id === id)?.holdings ?? []).map(
       (holding) => holding.id,
     ),
   )
   const goneEntries = new Set(
-    plan.entries.filter((entry) => entry.owner === id).map((entry) => entry.id),
+    frozen.entries.filter((entry) => entry.owner === id).map((entry) => entry.id),
   )
 
   return {
-    ...plan,
+    ...frozen,
     buffer,
     household: { persons },
-    entries: plan.entries.filter((entry) => entry.owner !== id),
-    transfers: plan.transfers.filter(
+    entries: frozen.entries.filter((entry) => entry.owner !== id),
+    transfers: frozen.transfers.filter(
       (transfer) => !gone.has(transfer.from) && !gone.has(transfer.to),
     ),
-    contributions: plan.contributions.filter(
+    contributions: frozen.contributions.filter(
       (contribution) =>
         !gone.has(contribution.to) && !goneEntries.has(contribution.source),
     ),

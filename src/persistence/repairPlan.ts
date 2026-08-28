@@ -177,3 +177,61 @@ function danishNumber(value: number): string {
   return String(value).replace('.', ',')
 }
 
+/** Fastfryser en anden figurs "Følger erhvervsophør" til et fast alderstal,
+    når den fulgte person er ved at blive fjernet. Kaldes af `removePerson`,
+    på planen som den endnu står — før personen selv forsvinder fra
+    husstanden. Bagefter er oplysningen tabt: `periodBounds` kan ikke længere
+    slå hendes fødselsår og erhvervsophørsalder op, og referencen ville
+    hænge i luften uden at kunne repareres, jf. #86.
+
+    Kun "følger"-formen rammes — et fast alderstal, der selv navngiver
+    personen (`{ person, age }`, jf. ADR-0051), er ikke en autopilot, der kan
+    fastfryses på samme måde, og efterlades til `validatePlan`s afvisning.
+
+    Tallet fastfryses til den alder, figurens egen `periodOwner` (den
+    strukturelt udledte ejer) ville have haft i det kalenderår, endepunktet
+    rammer nu — ikke til en reference, der fremover følger `periodOwner`. Det
+    ville genindføre netop den autopilot, ADR-0050 lukkede. */
+export function repairFollowedPersonRemoval(plan: Plan, removedId: string): Plan {
+  const frozen = <T extends PeriodicFigure>(figure: T): T => {
+    let stepped = figure
+    for (const endpoint of ['from', 'to'] as const) {
+      stepped = frozenEndpoint(plan, stepped, endpoint, removedId) ?? stepped
+    }
+    return stepped
+  }
+
+  return {
+    ...plan,
+    entries: plan.entries.map(frozen),
+    transfers: plan.transfers.map(frozen),
+    contributions: plan.contributions.map((contribution) =>
+      contribution.kind === 'HoldingSourced' ? frozen(contribution) : contribution,
+    ),
+  }
+}
+
+/** Det ene endepunkt fastfrosset — eller intet, hvis det ikke følger den
+    person, der fjernes. */
+function frozenEndpoint<T extends PeriodicFigure>(
+  plan: Plan,
+  figure: T,
+  endpoint: 'from' | 'to',
+  removedId: string,
+): T | undefined {
+  const period = figure.period
+  if (period.anchor !== 'PersonAge') return undefined
+  const bound = period[endpoint]
+  if (typeof bound !== 'object' || 'age' in bound || bound.person !== removedId) return undefined
+
+  const owner = periodOwner(plan, figure)
+  if (owner === undefined) return undefined
+  const year = periodBounds(period, owner, plan.household)[endpoint]
+  if (year === undefined) return undefined
+
+  return {
+    ...figure,
+    period: { ...period, [endpoint]: year - owner.birthYear } as Period,
+  }
+}
+

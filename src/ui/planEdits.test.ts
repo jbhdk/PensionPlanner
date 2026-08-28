@@ -163,6 +163,75 @@ describe('removePerson', () => {
     expect(result.transfers).toEqual([])
     expect(validatePlan(result)).toBeUndefined()
   })
+
+  it('erstatter en anden figurs "følger erhvervsophør" med et fast alderstal, når den fulgte person fjernes', () => {
+    // Jesper ejer posten, men dens slutpunkt følger Marias erhvervsophør —
+    // muligt siden #85. Fjernes Maria, hænger referencen i luften, hvis den
+    // ikke fastfryses, mens hendes fødselsår og erhvervsophørsalder endnu
+    // findes at slå op, jf. #86. Maria er født 1975 med erhvervsophør 65; som
+    // "Til" tæller erhvervsophørsåret ikke selv med, jf. ADR-0031, så året er
+    // 2039. Jesper er født 1973, og 2039 er hans alder 66.
+    const plan = aTwoPersonPlan()
+    const withFollowingEntry: Plan = {
+      ...plan,
+      entries: [
+        anExpense({
+          amountInRealKroner: 100_000,
+          owner: 'jesper',
+          period: { anchor: 'PersonAge', to: { person: 'maria' } },
+        }),
+      ],
+    }
+
+    const result = removePerson(withFollowingEntry, 'maria')
+
+    expect(result.entries[0]!.period).toEqual({ anchor: 'PersonAge', to: 66 })
+    expect(validatePlan(result)).toBeUndefined()
+  })
+
+  it('fastfryser "Fra" i erhvervsophørsårets egen rolle, hvor året selv tæller med, jf. ADR-0031', () => {
+    // Som "Fra" tæller erhvervsophørsåret selv med, i modsætning til "Til" i
+    // testen ovenfor. Marias erhvervsophør er 65, født 1975, så året er 2040
+    // — og Jesper, født 1973, er 67 det år.
+    const plan = aTwoPersonPlan()
+    const withFollowingEntry: Plan = {
+      ...plan,
+      entries: [
+        anExpense({
+          amountInRealKroner: 100_000,
+          owner: 'jesper',
+          period: { anchor: 'PersonAge', from: { person: 'maria' }, to: 80 },
+        }),
+      ],
+    }
+
+    const result = removePerson(withFollowingEntry, 'maria')
+
+    expect(result.entries[0]!.period).toEqual({ anchor: 'PersonAge', from: 67, to: 80 })
+    expect(validatePlan(result)).toBeUndefined()
+  })
+
+  it('lader et endepunkt, der følger en tilbageværende person, stå urørt', () => {
+    // Posten ejes af Maria, og dens slutpunkt følger hendes eget
+    // erhvervsophør — en reference til den, der bliver, ikke den, der
+    // fjernes. Fjernes Jesper, er der intet at fastfryse.
+    const plan = aTwoPersonPlan()
+    const withFollowingEntry: Plan = {
+      ...plan,
+      entries: [
+        anExpense({
+          amountInRealKroner: 100_000,
+          owner: 'maria',
+          period: { anchor: 'PersonAge', to: { person: 'maria' } },
+        }),
+      ],
+    }
+
+    const result = removePerson(withFollowingEntry, 'jesper')
+
+    expect(result.entries[0]!.period).toEqual({ anchor: 'PersonAge', to: { person: 'maria' } })
+    expect(validatePlan(result)).toBeUndefined()
+  })
 })
 
 describe('addEntry', () => {
