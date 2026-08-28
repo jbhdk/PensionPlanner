@@ -585,7 +585,7 @@ function openDoorFor(plan: Plan, transfer: Transfer): { transfer: Transfer; clam
   // et tal. Et åbent `from` betyder planens start, ganske som i
   // `transferEnds`.
   const asYear = (from: Period['from']) =>
-    periodBounds({ ...transfer.period, from } as Period, owner).from ?? plan.startYear
+    periodBounds({ ...transfer.period, from } as Period, owner, plan.household).from ?? plan.startYear
   if (asYear(transfer.period.from) >= asYear(floor)) return { transfer, clamp: null }
 
   return {
@@ -595,11 +595,17 @@ function openDoorFor(plan: Plan, transfer: Transfer): { transfer: Transfer; clam
 }
 
 /** Klemmer den sammenlagte Overførsel-figurs forankring tilbage til
-    kalenderår, når "Fra" er frie midler og "Fra"/"Til" har fået hver sin
-    ejer — det er dér, og kun dér, at "Til" reelt afgør, hvis alder
-    forankringen betyder: bliver figuren ved med at være en overførsel,
-    måles den på afgiverens ejer; bliver den et bidrag, måles den på
-    destinationens, jf. ADR-0028. En ejerforskel gør spørgsmålet tvetydigt.
+    kalenderår, når "Fra" er frie midler, "Fra"/"Til" har fået hver sin ejer,
+    og mindst ét af de satte endepunkter er et fast alderstal — det er dér,
+    og kun dér, at "Til" reelt afgør, hvis alder forankringen betyder: bliver
+    figuren ved med at være en overførsel, måles den på afgiverens ejer;
+    bliver den et bidrag, måles den på destinationens, jf. ADR-0028. Et fast
+    alderstal uden en fælles ejer er derfor tvetydigt.
+
+    Er begge satte endepunkter enten åbne eller en eksplicit navngiven
+    "følger", er der intet tvetydigt at klemme — hvert endepunkt siger selv,
+    hvem det måler på, uafhængigt af "Fra"/"Til", jf. ADR-0050.
+
     Er "Fra" en låst ordning (en Udbetaling), er destinationen altid frie
     midler, svaret altid afgiverens ejer, og guarden rører aldrig figuren,
     jf. ADR-0047 og #82. */
@@ -617,7 +623,11 @@ export function guardTransferOrContributionAnchor(
 
   const fromOwner = findHoldingOwner(plan, fromId)
   const toOwner = findHoldingOwner(plan, figure.to)
-  if (!fromOwner || !toOwner || fromOwner.id === toOwner.id) return { plan, clamp: null }
+  const hasFixedAge =
+    typeof figure.period.from === 'number' || typeof figure.period.to === 'number'
+  if (!fromOwner || !toOwner || fromOwner.id === toOwner.id || !hasFixedAge) {
+    return { plan, clamp: null }
+  }
 
   const period: Period = { anchor: 'CalendarYear' }
   const guardedPlan = isContribution

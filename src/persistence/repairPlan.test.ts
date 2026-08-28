@@ -66,7 +66,7 @@ describe('repairPlan', () => {
     // at afvise, og alternativet var fejlskærmen — netop den, trinnet findes
     // for at undgå. Beskeden gør til gengæld ændringen synlig: overførslen
     // følger ikke længere erhvervsophøret.
-    const repaired = repairPlan(withTransferFrom({ anchor: 'PersonAge', from: 'WorkEndAge' }))
+    const repaired = repairPlan(withTransferFrom({ anchor: 'PersonAge', from: { person: 'jesper' } }))
 
     expect(repaired.plan.transfers[0]!.period).toEqual({ anchor: 'PersonAge', from: 67 })
     expect(repaired.repairs).toEqual([

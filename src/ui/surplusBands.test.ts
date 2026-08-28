@@ -242,7 +242,10 @@ function aTransferPlan(transfers: Plan['transfers']): Plan {
       }),
     ],
     entries: [
-      aSalary({ amountInRealKroner: 600_000, period: { anchor: 'PersonAge', to: 'WorkEndAge' } }),
+      aSalary({
+        amountInRealKroner: 600_000,
+        period: { anchor: 'PersonAge', to: { person: 'jesper' } },
+      }),
       anExpense({ amountInRealKroner: 250_000 }),
     ],
     transfers,
@@ -255,7 +258,10 @@ function anAtpPlan(withAtp: boolean): Plan {
     horizon: 78,
     balance: 3_000_000,
     entries: [
-      aSalary({ amountInRealKroner: 600_000, period: { anchor: 'PersonAge', to: 'WorkEndAge' } }),
+      aSalary({
+        amountInRealKroner: 600_000,
+        period: { anchor: 'PersonAge', to: { person: 'jesper' } },
+      }),
       anExpense({ amountInRealKroner: 300_000 }),
       ...(withAtp
         ? [aPensionIncome({ amountInRealKroner: 30_000, period: { anchor: 'PersonAge', from: 70 } })]

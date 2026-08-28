@@ -1,6 +1,7 @@
 import type { ChangeEvent, ReactNode } from 'react'
 import { useId, useRef, useState } from 'react'
-import type { AgeBound } from '../engine/plan'
+import { workEndBoundAge } from '../engine/age'
+import type { AgeBound, Person, PersonAgeBound } from '../engine/plan'
 import { boundReason, boundValue } from '../engine/validatePlan'
 import type { Bound, Bounds } from '../engine/validatePlan'
 import { fieldHelp, type FieldHelpKey } from './fieldHelp'
@@ -455,6 +456,137 @@ export function AgeBoundField({
           </label>
         </span>
       </div>
+    </>
+  )
+}
+
+/** Et periodeendepunkt for en aldersforankret post: en fast alder, tomt,
+    eller afkrydset, en henvisning til en navngiven persons erhvervsophør, jf.
+    `PersonAgeBound`. Samme opbygning som `AgeBoundField`, som bruger
+    `AgeBound` til `PayoutSchedule.start` — de to felter deler visning, ikke
+    type, ganske som ADR-0050 lader de to bundne typer dele form og ikke navn.
+
+    Fluebenet får sin egen personvælger, når husstanden har to personer: uden
+    et valg ville "Til" på en Overførsel eller postens ejer stiltiende afgøre,
+    hvem der følges, netop den tvetydighed ADR-0050 fjerner. */
+export function PersonAgeBoundField({
+  label,
+  help,
+  value,
+  owner,
+  persons,
+  role,
+  bounds,
+  clamp,
+  onClamp,
+  onChange,
+}: {
+  label: string
+  help: FieldHelpKey
+  value: PersonAgeBound | undefined
+  /** Personen, et fast alderstal måles fra — uændret af tilvalget nedenfor,
+      jf. ADR-0050: kun "følger"-værdien kan navngive en anden. */
+  owner: Person
+  /** Husstandens personer, til vælgeren. Vælgeren vises kun, når der er mere
+      end én — er der kun `owner`, er der intet valg at tilbyde. */
+  persons: Person[]
+  /** Endepunktets rolle, til at oversætte den valgte persons erhvervsophør
+      til den rette alder — se `workEndBoundAge`. */
+  role: 'from' | 'to'
+  bounds?: Bounds
+  clamp?: Clamp | null
+  onClamp?: (clamp: Clamp | null) => void
+  onChange: (value: PersonAgeBound | undefined) => void
+}) {
+  const follows = typeof value === 'object'
+  const followedId = follows ? value.person : owner.id
+  const followed = persons.find((person) => person.id === followedId) ?? owner
+
+  const tal = useNumberText<PersonAgeBound | undefined>(
+    value,
+    (bound) => (typeof bound === 'object' ? formatNumber(followed.workEndAge) : formatOptional(bound)),
+    (text) => {
+      const parsed = parseOptional(text)
+      return parsed === undefined ? emptyFallsBackTo(bounds) : clampTo(parsed, bounds)
+    },
+    (next, text) => {
+      onClamp?.(clampedBy(parseOptional(text), bounds, help))
+      onChange(next)
+    },
+  )
+
+  // Forsøger at følge personen — enten den forudfyldte ejer ved fluebenets
+  // første krydsning, eller den nyvalgte ved et skift i vælgeren. Samme
+  // klemning begge veje: alderen, valget svarer til i feltets egen rolle,
+  // skal ligge inden for grænserne, ellers afvises redigeringen, og
+  // fluebenet eller vælgeren springer tilbage af sig selv, jf. ADR-0045.
+  function attemptFollow(personId: string) {
+    const chosen = persons.find((person) => person.id === personId) ?? owner
+    const refused = clampedBy(workEndBoundAge(chosen, role), bounds, help)
+    onClamp?.(refused)
+    if (refused === null) onChange({ person: personId })
+  }
+
+  return (
+    <>
+      <Field label={label} help={help} unit="år" clamp={clamp}>
+        {(id) => (
+          <input
+            id={id}
+            type="text"
+            inputMode="decimal"
+            className="tal"
+            readOnly={follows}
+            {...tal}
+            value={follows ? formatNumber(followed.workEndAge) : tal.value}
+          />
+        )}
+      </Field>
+      <div className="felt felt--tilvalg">
+        <span className="vaerdi">
+          <label title={fieldHelp['Period.followsWorkEnd']}>
+            <input
+              type="checkbox"
+              checked={follows}
+              onChange={(event) => {
+                if (!event.target.checked) {
+                  onClamp?.(null)
+                  onChange(undefined)
+                  return
+                }
+                attemptFollow(owner.id)
+              }}
+            />{' '}
+            Følger erhvervsophør
+          </label>
+        </span>
+      </div>
+      {/* Egen linje og ikke samme `.vaerdi`, som fluebenets: den er klemt fast
+          på 186px for at flugte med tallet ovenfor, og de to labels sammen
+          brød ud i flere linjer i den bredde, jf. issue #85. */}
+      {follows && persons.length > 1 && (
+        <div className="felt felt--tilvalg felt--personvaelger">
+          <span className="vaerdi">
+            <label title={fieldHelp['Period.followsWorkEndOf']}>
+              for{' '}
+              <select
+                aria-label="Følger erhvervsophør for"
+                value={followed.name}
+                onChange={(event) => {
+                  const chosen = persons.find((person) => person.name === event.target.value)
+                  if (chosen) attemptFollow(chosen.id)
+                }}
+              >
+                {persons.map((person) => (
+                  <option key={person.id} value={person.name}>
+                    {person.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </span>
+        </div>
+      )}
     </>
   )
 }

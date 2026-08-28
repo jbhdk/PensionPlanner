@@ -1,4 +1,4 @@
-import type { AgeBound, Household, Period, Person, SimulationYear } from './plan'
+import type { Household, Period, Person, PersonAgeBound, SimulationYear } from './plan'
 
 /** Det kalenderår en person når en alder. Formlen er
     `birthYear + floor(age + (birthMonth − 1) / 12)`: den lægger fødselsdagens
@@ -37,17 +37,19 @@ export function householdLastYear(household: Household): SimulationYear {
 }
 
 /** Periodens to endepunkter oversat til kalenderår. Ved `PersonAge` følger et
-    endepunkt sat til `'WorkEndAge'` `owner.workEndAge`, så perioden flytter
-    sig, når erhvervsophørsalderen ændres, uden at posten selv redigeres.
+    endepunkt sat til en navngiven person dennes `workEndAge`, jf.
+    `PersonAgeBound` og ADR-0050 — uafhængigt af `owner`, som kun bruges til et
+    fast alderstal. Personen slås op i `household` og ikke i et enkelt
+    `Person`, for hun er ikke nødvendigvis `owner`.
 
-    `'WorkEndAge'` løses forskelligt som `from` og som `to`: erhvervsophørsåret
-    er det første år uden arbejde, aldrig det sidste med. Som `from` regnes
-    året med — en udbetalingsplan, der følger erhvervsophør, betaler sin
-    første rate det år. Som `to` regnes året *ikke* med — en løn eller en
-    overførsel, der følger erhvervsophør, falder sidste gang året før. Uden
-    skellet ville samme år bære en fuld årsløn og en fuld pensionsrate på én
-    gang. En fast alder eller et kalenderår er brugerens eget tal og læses
-    ens i begge roller.
+    Et endepunkt, der følger nogen, løses forskelligt som `from` og som `to`:
+    erhvervsophørsåret er det første år uden arbejde, aldrig det sidste med.
+    Som `from` regnes året med — en udbetalingsplan, der følger erhvervsophør,
+    betaler sin første rate det år. Som `to` regnes året *ikke* med — en løn
+    eller en overførsel, der følger erhvervsophør, falder sidste gang året
+    før. Uden skellet ville samme år bære en fuld årsløn og en fuld
+    pensionsrate på én gang. En fast alder eller et kalenderår er brugerens
+    eget tal og læses ens i begge roller.
 
     Et udeladt endepunkt bliver ved med at være udeladt — det betyder "fra
     planens start" henholdsvis "til horisontens slut" og er ikke et årstal,
@@ -63,24 +65,28 @@ export function householdLastYear(household: Household): SimulationYear {
 export function periodBounds(
   period: Period,
   owner: Person,
+  household: Household,
 ): { from?: SimulationYear; to?: SimulationYear } {
   if (period.anchor === 'CalendarYear') {
     return { from: period.from, to: period.to }
   }
   return {
-    from: resolveAgeBound(period.from, owner, 'from'),
-    to: resolveAgeBound(period.to, owner, 'to'),
+    from: resolvePersonAgeBound(period.from, owner, household, 'from'),
+    to: resolvePersonAgeBound(period.to, owner, household, 'to'),
   }
 }
 
-function resolveAgeBound(
-  bound: AgeBound | undefined,
+function resolvePersonAgeBound(
+  bound: PersonAgeBound | undefined,
   owner: Person,
+  household: Household,
   role: 'from' | 'to',
 ): SimulationYear | undefined {
   if (bound === undefined) return undefined
-  if (bound !== 'WorkEndAge') return yearAtAge(owner, bound)
-  return yearAtAge(owner, workEndBoundAge(owner, role))
+  if (typeof bound === 'number') return yearAtAge(owner, bound)
+  const followed = household.persons.find((person) => person.id === bound.person)
+  if (followed === undefined) return undefined
+  return yearAtAge(followed, workEndBoundAge(followed, role))
 }
 
 /** Den alder, et endepunkt sat til erhvervsophør svarer til i sin rolle:

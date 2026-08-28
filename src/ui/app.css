@@ -724,6 +724,14 @@ table.aar th,
   width: 186px;
 }
 
+/* Personvælgeren under fluebenet bærer et navn, brugeren selv har valgt, og
+   låst til de samme 186px ville klippe et navn, der er længere end "Person
+   1" — se `PersonAgeBoundField`. */
+.felt--personvaelger .vaerdi {
+  width: auto;
+  max-width: 100%;
+}
+
 .felt--tilvalg label {
   display: flex;
   align-items: center;

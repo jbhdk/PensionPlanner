@@ -32,7 +32,6 @@ import type {
 import { latestRateYear } from '../engine/rates/rates'
 import { conversionFactor, isLifeAnnuity } from '../engine/lifeAnnuity'
 import type { LifeAnnuityHolding } from '../engine/lifeAnnuity'
-import { workEndBoundAge } from '../engine/age'
 import { payoutYear } from '../engine/payoutAge'
 import {
   boundValue,
@@ -62,6 +61,7 @@ import { entryNote, entryPeriodLabel } from './entryNote'
 import type { Clamp } from './fields'
 import {
   AgeBoundField,
+  PersonAgeBoundField,
   CheckboxField,
   Hint,
   LockedField,
@@ -1003,6 +1003,7 @@ function IncomeFields({
       <PeriodSection
         value={entry}
         owner={owner}
+        persons={plan.household.persons}
         startYear={plan.startYear}
         bounds={endpointBounds(plan, entry)}
         clamp={clamp}
@@ -1054,6 +1055,7 @@ function ExpenseFields({
       <PeriodSection
         value={entry}
         owner={owner}
+        persons={plan.household.persons}
         startYear={plan.startYear}
         bounds={endpointBounds(plan, entry)}
         clamp={clamp}
@@ -1440,6 +1442,7 @@ function endpointBounds(plan: Plan, figure: PeriodicFigure): { from: Bounds; to:
 function PeriodSection({
   value,
   owner,
+  persons,
   startYear,
   bounds,
   clamp,
@@ -1448,8 +1451,11 @@ function PeriodSection({
   children,
 }: {
   value: Periodic
-  /** Personen, et aldersendepunkt måles fra. */
+  /** Personen, et fast aldersendepunkt måles fra. */
   owner: Person
+  /** Husstandens personer, til "Følger erhvervsophør"s personvælger — se
+      `PersonAgeBoundField`. */
+  persons: Person[]
   /** Året et `Én gang`-felt falder tilbage på, når intet endepunkt er sat. */
   startYear: number
   /** De to endepunkters grænser, slået op af den figur, perioden hænger på —
@@ -1516,10 +1522,12 @@ function PeriodSection({
             onChange={(from) => change({ period: { anchor: 'CalendarYear', from } })}
           />
         ) : (
-          <AgeBoundField
+          <PersonAgeBoundField
             label="Alder"
             help="Period.once"
-            workEndAge={owner.workEndAge}
+            owner={owner}
+            persons={persons}
+            role="from"
             value={period.from ?? period.to}
             onChange={(from) => change({ period: { anchor: 'PersonAge', from } })}
           />
@@ -1549,21 +1557,24 @@ function PeriodSection({
         </>
       ) : (
         <>
-          <AgeBoundField
+          <PersonAgeBoundField
             label="Fra (alder)"
             help="Period.from"
-            workEndAge={owner.workEndAge}
+            owner={owner}
+            persons={persons}
+            role="from"
             value={period.from}
             bounds={bounds?.from}
             clamp={clamp}
             onClamp={onClamp}
             onChange={(from) => change({ period: { ...period, from } })}
           />
-          <AgeBoundField
+          <PersonAgeBoundField
             label="Til (alder)"
             help="Period.to"
-            workEndAge={owner.workEndAge}
-            followsWorkEndAt={workEndBoundAge(owner, 'to')}
+            owner={owner}
+            persons={persons}
+            role="to"
             value={period.to}
             bounds={bounds?.to}
             clamp={clamp}
@@ -1980,6 +1991,7 @@ function TransferFields({
       <PeriodSection
         value={figure}
         owner={anchorOwner}
+        persons={plan.household.persons}
         startYear={plan.startYear}
         bounds={endpointBounds(plan, figure)}
         clamp={clamp}

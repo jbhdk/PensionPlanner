@@ -8,6 +8,7 @@ import {
   aSalary,
   aTransfer,
   anExpense,
+  withSecondPerson,
 } from '../engine/testing/planFixture'
 import { App } from './App'
 import { fieldHelp } from './fieldHelp'
@@ -104,7 +105,7 @@ function anAgeAnchoredOnce(): Entry {
     owner: 'jesper',
     direction: 'Expense',
     timing: 6,
-    period: { anchor: 'PersonAge', from: 'WorkEndAge' },
+    period: { anchor: 'PersonAge', from: { person: 'jesper' } },
     recurrence: { kind: 'Once' },
   }
 }
@@ -193,10 +194,12 @@ describe('feltforklaringerne', () => {
     const user = userEvent.setup()
     render(
       <App
-        initialPlan={aPlan({
-          holdings: [aFreeHolding()],
-          entries: [anAgeAnchoredOnce(), anAgeAnchoredSpan()],
-        })}
+        initialPlan={withSecondPerson(
+          aPlan({
+            holdings: [aFreeHolding()],
+            entries: [anAgeAnchoredOnce(), anAgeAnchoredSpan()],
+          }),
+        )}
       />,
     )
 
@@ -216,6 +219,14 @@ describe('feltforklaringerne', () => {
       .getByLabelText('Følger erhvervsophør')
       .closest('label') as HTMLElement
     expect(tilvalg.title).toBe(fieldHelp['Period.followsWorkEnd'])
+
+    // Personvælgeren har sin egen tekst, forskellig fra fluebenets — den
+    // handler om hvem, ikke om hvornår. `anAgeAnchoredOnce` følger allerede
+    // erhvervsophøret, og husstanden har nu to personer, så vælgeren står der.
+    const vaelger = screen
+      .getByLabelText('Følger erhvervsophør for')
+      .closest('label') as HTMLElement
+    expect(vaelger.title).toBe(fieldHelp['Period.followsWorkEndOf'])
   })
 
   it('giver hver kolonneoverskrift i årstabellen en forklaring', async () => {

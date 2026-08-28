@@ -194,6 +194,9 @@ export const fieldHelp = {
   'Period.followsWorkEnd':
     'Binder endepunktet til det år, personen holder op med at arbejde, i stedet for til en fast alder. Flyttes erhvervsophøret senere, flytter beløbet sig med, uden at posten skal rettes.',
 
+  'Period.followsWorkEndOf':
+    'Hvem det er, der holder op med at arbejde, når endepunktet er sat til at følge det — kun noget at vælge i en husstand med to personer. Skiftes valget til den anden, flytter beløbet sig med hendes stoptidspunkt i stedet, uanset hvem posten eller overførslen ellers måles på.',
+
   Timing:
     'Hvornår på året pengene falder. Det afgør, hvor længe de når at forrente sig, inden året er omme — et beløb i januar tæller et helt års afkast med, et i december næsten intet.',
 

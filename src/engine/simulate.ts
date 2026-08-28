@@ -17,6 +17,7 @@ import type {
   Entry,
   Holding,
   HoldingVariant,
+  Household,
   Nominal,
   HoldingId,
   EntryId,
@@ -1507,7 +1508,7 @@ function sumOf(entries: ActiveEntry[], direction: Entry['direction']): Nominal {
     Postens eget årstal er lønnen alene og står i `EntryYear`. */
 function entriesInYear(plan: Plan, year: SimulationYear): ActiveEntry[] {
   return plan.entries
-    .filter((entry) => appliesInYear(entry, year, ownerOf(plan, entry), plan.startYear))
+    .filter((entry) => appliesInYear(entry, year, ownerOf(plan, entry), plan.household, plan.startYear))
     .map((entry) => {
       const own = entry.amountInRealKroner * entryProjection(entry, plan, year)
       const agreement = pensionAgreementOf(entry)
@@ -1571,9 +1572,15 @@ function entryProjection(entry: Entry, plan: Plan, year: SimulationYear): number
     over et eksplicit sat slutpunkt — jf. ADR-0030. En udgiftspost er
     husstandens og ikke personens og har intet loft ud over sin egen periode,
     selvom den måtte være aldersforankret til netop denne ejer. */
-function appliesInYear(entry: Entry, year: SimulationYear, owner: Person, startYear: SimulationYear): boolean {
+function appliesInYear(
+  entry: Entry,
+  year: SimulationYear,
+  owner: Person,
+  household: Household,
+  startYear: SimulationYear,
+): boolean {
   if (entry.direction === 'Income' && year > personLastYear(owner)) return false
-  const { from, to } = periodBounds(entry.period, owner)
+  const { from, to } = periodBounds(entry.period, owner, household)
   return withinPeriod(from, to, year) && matchesRecurrence(entry.recurrence, year, from, to, startYear)
 }
 
@@ -1879,7 +1886,7 @@ function holdingSourcedInYear(
   year: SimulationYear,
 ): ActiveContribution[] {
   const owner = ownerOfHolding(plan, contribution.to)
-  const { from, to } = periodBounds(contribution.period, owner)
+  const { from, to } = periodBounds(contribution.period, owner, plan.household)
   if (!withinPeriod(from, to, year)) return []
   if (!matchesRecurrence(contribution.recurrence, year, from, to, plan.startYear)) return []
 
@@ -1944,7 +1951,8 @@ function transfersInYear(
 ): ActiveTransfer[] {
   const remaining = new Map(opening)
   return plan.transfers.flatMap((transfer) => {
-    if (!transferAppliesInYear(transfer, year, ownerOfHolding(plan, transfer.from), plan.startYear)) return []
+    if (!transferAppliesInYear(transfer, year, ownerOfHolding(plan, transfer.from), plan.household, plan.startYear))
+      return []
 
     const from = holdingById(plan, transfer.from)
     const requested = transfer.amountInRealKroner * transferProjection(plan, year)
@@ -1972,9 +1980,10 @@ function transferAppliesInYear(
   transfer: Transfer,
   year: SimulationYear,
   owner: Person,
+  household: Household,
   startYear: SimulationYear,
 ): boolean {
-  const { from, to } = periodBounds(transfer.period, owner)
+  const { from, to } = periodBounds(transfer.period, owner, household)
   return withinPeriod(from, to, year) && matchesRecurrence(transfer.recurrence, year, from, to, startYear)
 }
 

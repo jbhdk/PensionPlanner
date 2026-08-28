@@ -451,7 +451,7 @@ export function aPlanWithEveryBufferFlow(): Plan {
     entries: [
       aSalary({
         amountInRealKroner: 800_000,
-        period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+        period: { anchor: 'PersonAge', to: { person: 'jesper' } },
       }),
       // ATP er en post og ingen ydelse, jf. ADR-0023.
       aPensionIncome({ amountInRealKroner: 30_000, period: { anchor: 'PersonAge', from: 70 } }),

@@ -855,7 +855,7 @@ describe('withTransferOrContributionEnd', () => {
           from: 'free-assets',
           to: 'anden-frie',
           amountInRealKroner: 12_000,
-          period: { anchor: 'PersonAge' },
+          period: { anchor: 'PersonAge', from: 65 },
         }),
       ],
     }
@@ -871,7 +871,32 @@ describe('withTransferOrContributionEnd', () => {
 })
 
 describe('guardTransferOrContributionAnchor', () => {
-  it('klemmer en aldersforankret Overførsel tilbage til kalenderår, når "Fra" og "Til" har hver sin ejer', () => {
+  it('klemmer en aldersforankret Overførsel tilbage til kalenderår, når "Fra" og "Til" har hver sin ejer og et endepunkt er et fast alderstal', () => {
+    const plan = {
+      ...aTwoPersonPlan(),
+      transfers: [
+        aTransfer({
+          id: 'flytning',
+          from: 'free-assets',
+          to: 'marias-konto',
+          amountInRealKroner: 12_000,
+          period: { anchor: 'PersonAge', from: 65 },
+        }),
+      ],
+    }
+
+    const { plan: result, clamp } = guardTransferOrContributionAnchor(plan, 'flytning')
+
+    expect(result.transfers[0]!.period).toEqual({ anchor: 'CalendarYear' })
+    expect(clamp).toEqual({
+      field: 'Period.anchor',
+      message: '"Fra" og "Til" tilhører hver sin ejer, så en aldersforankring er tvetydig.',
+    })
+  })
+
+  it('rører ikke en aldersforankret Overførsel med hver sin ejer, når ingen af endepunkterne er et fast alderstal, jf. ADR-0050', () => {
+    // Åbent, eller en eksplicit navngiven "følger", er begge utvetydige
+    // uanset "Fra"/"Til" — kun et fast alderstal har brug for en fælles ejer.
     const plan = {
       ...aTwoPersonPlan(),
       transfers: [
@@ -887,11 +912,28 @@ describe('guardTransferOrContributionAnchor', () => {
 
     const { plan: result, clamp } = guardTransferOrContributionAnchor(plan, 'flytning')
 
-    expect(result.transfers[0]!.period).toEqual({ anchor: 'CalendarYear' })
-    expect(clamp).toEqual({
-      field: 'Period.anchor',
-      message: '"Fra" og "Til" tilhører hver sin ejer, så en aldersforankring er tvetydig.',
-    })
+    expect(result).toBe(plan)
+    expect(clamp).toBeNull()
+  })
+
+  it('rører ikke en aldersforankret Overførsel med hver sin ejer, når det ene endepunkt eksplicit følger en navngiven person', () => {
+    const plan = {
+      ...aTwoPersonPlan(),
+      transfers: [
+        aTransfer({
+          id: 'flytning',
+          from: 'free-assets',
+          to: 'marias-konto',
+          amountInRealKroner: 12_000,
+          period: { anchor: 'PersonAge', from: { person: 'maria' } },
+        }),
+      ],
+    }
+
+    const { plan: result, clamp } = guardTransferOrContributionAnchor(plan, 'flytning')
+
+    expect(result).toBe(plan)
+    expect(clamp).toBeNull()
   })
 
   it('rører ikke en aldersforankret Overførsel, når "Fra" og "Til" har samme ejer', () => {

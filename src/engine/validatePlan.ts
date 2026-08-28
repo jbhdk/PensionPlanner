@@ -65,6 +65,7 @@ export function validatePlan(plan: Plan): string | undefined {
     transferEnds(plan) ??
     contributionEnds(plan) ??
     entryOwners(plan) ??
+    followedPersonsExist(plan) ??
     oneOfEachUniqueVariant(plan) ??
     entrySourcedDestination(plan) ??
     pensionAgreements(plan) ??
@@ -168,7 +169,7 @@ function reversedPeriods(plan: Plan): string | undefined {
     // post uden en ejer, en overførsel uden en afgiver og en indbetaling uden
     // en destination.
     const owner = periodOwner(plan, figure)!
-    const { from, to } = periodBounds(figure.period, owner)
+    const { from, to } = periodBounds(figure.period, owner, plan.household)
     if (from === undefined || to === undefined || to >= from) continue
     return (
       `${figureSubject(figure)} løber fra ${from} til ${to}. ` +
@@ -666,7 +667,9 @@ export function periodEndpointBounds(
     value: inEndpointUnit(figure.period, endpoint, bound.value, owner),
     reason: bound.reason,
   })
-  const opposite = periodBounds(figure.period, owner)[endpoint === 'from' ? 'to' : 'from']
+  const opposite = periodBounds(figure.period, owner, plan.household)[
+    endpoint === 'from' ? 'to' : 'from'
+  ]
   // Døren måler kun startåret: en overførsel må ikke *hente* fra ordningen,
   // før den må udbetales, og et slutår henter ingenting.
   const door = endpoint === 'from' ? payoutDoor(plan, figure) : undefined
@@ -819,7 +822,7 @@ function isTransfer(figure: PeriodicFigure): figure is Transfer {
     `from` og ikke med som `to`. En besked, der blot meldte årstallet, ville
     lade brugeren gætte, hvor det kom fra. */
 function cannotEndBeforeReason(figure: PeriodicFigure, from: SimulationYear): string {
-  if (figure.period.anchor === 'PersonAge' && figure.period.from === 'WorkEndAge') {
+  if (figure.period.anchor === 'PersonAge' && typeof figure.period.from === 'object') {
     return (
       `Perioden begynder ved erhvervsophøret i ${from}. Erhvervsophørsåret er det ` +
       `første år uden arbejde og tæller ikke med som slutår.`
@@ -1046,7 +1049,7 @@ function transferEnds(plan: Plan): string | undefined {
       )
     }
     const owner = ownerOf.get(transfer.from)!
-    const start = periodBounds(transfer.period, owner).from ?? plan.startYear
+    const start = periodBounds(transfer.period, owner, plan.household).from ?? plan.startYear
     if (!transferAllowedFrom(from, owner, start)) {
       // Reglen har afgjort, at en af de to betingelser svigtede; her udledes
       // alene hvilken. Er varianten ikke personlig indkomst på vejen ud, og
@@ -1074,6 +1077,30 @@ function entryOwners(plan: Plan): string | undefined {
   for (const entry of plan.entries) {
     if (!ids.has(entry.owner)) {
       return `Posten ${entry.name} tilhører en person, der ikke findes.`
+    }
+  }
+  return undefined
+}
+
+/** Et `PersonAge`-forankret periodeendepunkt, der eksplicit navngiver, hvis
+    erhvervsophør det følger, skal navngive nogen, der findes — samme peger,
+    samme afvisning, som `entryOwners`, jf. ADR-0013.
+
+    Fjernes den navngivne person fra husstanden, mens et endepunkt følger
+    hende, bliver planen ugyldig i stedet for at falde tilbage på et andet
+    svar. `repairPlan` retter den ikke: reparation af netop dét er en
+    separat skive, jf. ADR-0050. */
+function followedPersonsExist(plan: Plan): string | undefined {
+  const ids = new Set(plan.household.persons.map((person) => person.id))
+  for (const figure of periodicFigures(plan)) {
+    const period = figure.period
+    if (period.anchor !== 'PersonAge') continue
+    for (const endpoint of ['from', 'to'] as const) {
+      const bound = period[endpoint]
+      if (typeof bound !== 'object') continue
+      if (!ids.has(bound.person)) {
+        return `${figureSubject(figure)} følger erhvervsophøret for en person, der ikke findes.`
+      }
     }
   }
   return undefined

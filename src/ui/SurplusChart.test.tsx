@@ -64,7 +64,7 @@ function aPlanThatTurnsNegative(): Plan {
     entries: [
       aSalary({
         amountInRealKroner: 800_000,
-        period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+        period: { anchor: 'PersonAge', to: { person: 'jesper' } },
       }),
       anExpense({ amountInRealKroner: 500_000 }),
     ],

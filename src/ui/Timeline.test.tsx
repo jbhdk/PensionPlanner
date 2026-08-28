@@ -382,7 +382,7 @@ describe('Timeline', () => {
       entries: [
         aSalary({
           amountInRealKroner: 600_000,
-          period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+          period: { anchor: 'PersonAge', to: { person: 'jesper' } },
         }),
       ],
     })
@@ -523,7 +523,7 @@ describe('Timeline', () => {
       entries: [
         aSalary({
           amountInRealKroner: 600_000,
-          period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+          period: { anchor: 'PersonAge', to: { person: 'jesper' } },
         }),
       ],
     })
@@ -646,7 +646,7 @@ describe('Timeline', () => {
       entries: [
         aSalary({
           amountInRealKroner: 600_000,
-          period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+          period: { anchor: 'PersonAge', to: { person: 'jesper' } },
         }),
       ],
     })

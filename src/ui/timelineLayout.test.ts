@@ -124,7 +124,10 @@ describe('tidslinjens lag', () => {
   it('markerer et endepunkt bundet til erhvervsophør som låst og opløser det til rette kalenderår', () => {
     const plan = aPlan({
       entries: [
-        aSalary({ amountInRealKroner: 600_000, period: { anchor: 'PersonAge', to: 'WorkEndAge' } }),
+        aSalary({
+          amountInRealKroner: 600_000,
+          period: { anchor: 'PersonAge', to: { person: 'jesper' } },
+        }),
       ],
     })
 
@@ -172,7 +175,7 @@ describe('tidslinjens lag', () => {
           from: 'aktiedepot',
           to: 'free-assets',
           amountInRealKroner: 50_000,
-          period: { anchor: 'PersonAge', from: 'WorkEndAge' },
+          period: { anchor: 'PersonAge', from: { person: 'anne' } },
         }),
       ],
       contributions: [
@@ -181,7 +184,7 @@ describe('tidslinjens lag', () => {
           source: 'aktiedepot',
           to: 'free-assets',
           amountInRealKroner: 10_000,
-          period: { anchor: 'PersonAge', from: 'WorkEndAge' },
+          period: { anchor: 'PersonAge', from: { person: 'jesper' } },
         }),
       ],
       household: {

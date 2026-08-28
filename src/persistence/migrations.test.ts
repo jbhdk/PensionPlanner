@@ -768,3 +768,77 @@ describe('v15 → v16: overførslen og det beholdningskildede bidrag bærer en f
     expect(v16).toEqual({ name: 'Plan', transfers: [], contributions: [] })
   })
 })
+
+describe('v16 → v17: "følger erhvervsophør" navngiver eksplicit, hvem den følger', () => {
+  it('skriver den ejer, periodOwner ville have udledt: postens egen, afgiverens, destinationens', () => {
+    // Tre figurer, tre udledningsregler: en post følger sin egen ejer, en
+    // overførsel følger afgiverbeholdningens, og et beholdningskildet bidrag
+    // følger destinationens, jf. ADR-0028. Migrationen skriver netop den
+    // ejer ind, så adfærden er uændret efter migrationen.
+    const v16 = {
+      household: {
+        persons: [
+          { id: 'jesper', holdings: [{ id: 'free-assets' }, { id: 'ordning' }] },
+          { id: 'maria', holdings: [{ id: 'marias-opsparing' }] },
+        ],
+      },
+      entries: [
+        { id: 'løn', owner: 'jesper', period: { anchor: 'PersonAge', to: 'WorkEndAge' } },
+      ],
+      transfers: [
+        {
+          id: 'transfer-1',
+          from: 'marias-opsparing',
+          to: 'free-assets',
+          period: { anchor: 'PersonAge', from: 'WorkEndAge' },
+        },
+      ],
+      contributions: [
+        {
+          id: 'bidrag-1',
+          kind: 'HoldingSourced',
+          source: 'free-assets',
+          to: 'ordning',
+          period: { anchor: 'PersonAge', from: 'WorkEndAge', to: 65 },
+        },
+      ],
+    }
+
+    const v17 = runMigrations(v16, 16, 17, migrations) as {
+      entries: Array<{ period: unknown }>
+      transfers: Array<{ period: unknown }>
+      contributions: Array<{ period: unknown }>
+    }
+
+    expect(v17.entries[0]!.period).toEqual({ anchor: 'PersonAge', to: { person: 'jesper' } })
+    expect(v17.transfers[0]!.period).toEqual({ anchor: 'PersonAge', from: { person: 'maria' } })
+    expect(v17.contributions[0]!.period).toEqual({
+      anchor: 'PersonAge',
+      from: { person: 'jesper' },
+      to: 65,
+    })
+  })
+
+  it('lader et fast alderstal, et åbent endepunkt og en kalenderårsperiode stå urørt', () => {
+    const v16 = {
+      household: { persons: [{ id: 'jesper', holdings: [{ id: 'free-assets' }] }] },
+      entries: [
+        { id: 'alder', owner: 'jesper', period: { anchor: 'PersonAge', from: 60 } },
+        { id: 'aar', owner: 'jesper', period: { anchor: 'CalendarYear', from: 2030 } },
+      ],
+    }
+
+    const v17 = runMigrations(v16, 16, 17, migrations) as {
+      entries: Array<{ id: string; period: unknown }>
+    }
+
+    expect(v17.entries[0]!.period).toEqual({ anchor: 'PersonAge', from: 60 })
+    expect(v17.entries[1]!.period).toEqual({ anchor: 'CalendarYear', from: 2030 })
+  })
+
+  it('lader en plan uden nogen af delene stå urørt', () => {
+    const v17 = runMigrations({ name: 'Plan' }, 16, 17, migrations)
+
+    expect(v17).toEqual({ name: 'Plan', entries: [], transfers: [], contributions: [] })
+  })
+})

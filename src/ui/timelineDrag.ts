@@ -19,7 +19,7 @@ import { clampBy } from './fields'
 import type { Clamp } from './fields'
 import type { FieldHelpKey } from './fieldHelp'
 import { isLifeAnnuity } from '../engine/lifeAnnuity'
-import type { AgeBound, PayoutScheduleHolding, Period, Person, Plan } from '../engine/plan'
+import type { AgeBound, PayoutScheduleHolding, Period, PersonAgeBound, Person, Plan } from '../engine/plan'
 import type { TimelineItem } from './timelineLayout'
 
 /** Hvilken del af en tidslinjeboks der trækkes: et af de to endepunkter, hele
@@ -199,11 +199,14 @@ export function applyTimelineDrag(
 }
 
 /** Forskyder et frit endepunkts rå værdi med `deltaYears` — et kalenderår
-    eller en fast alder, aldrig `'WorkEndAge'`, for så var endepunktet låst og
-    ville ikke have et håndtag at trække i. En hel-tals aldersforskydning
-    giver samme kalenderårsforskydning, uanset ejerens fødselsmåned: se
-    `yearAtAge` i `engine/age.ts`. */
-function shiftBound<T extends number | AgeBound | undefined>(bound: T, deltaYears: number): T {
+    eller en fast alder, aldrig en henvisning til en (navngiven) følger, for så
+    var endepunktet låst og ville ikke have et håndtag at trække i. En
+    hel-tals aldersforskydning giver samme kalenderårsforskydning, uanset
+    ejerens fødselsmåned: se `yearAtAge` i `engine/age.ts`. */
+function shiftBound<T extends number | AgeBound | PersonAgeBound | undefined>(
+  bound: T,
+  deltaYears: number,
+): T {
   return typeof bound === 'number' ? ((bound + deltaYears) as T) : bound
 }
 

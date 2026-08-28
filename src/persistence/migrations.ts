@@ -498,6 +498,68 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    // v16 → v17, jf. issue #85 og ADR-0050: et `PersonAge`-forankret
+    // periodeendepunkt sat til `'WorkEndAge'` navngiver nu eksplicit, hvis
+    // erhvervsophør det følger, i stedet for stiltiende at følge figurens
+    // udledte ejer. Migrationen skriver den ejer, `periodOwner` ville have
+    // udledt på migrationstidspunktet: postens egen for en post, afgiverens
+    // for en overførsel, destinationens for et beholdningskildet bidrag —
+    // adfærden er dermed uændret, kun eksplicit.
+    from: 16,
+    migrate: (data) => {
+      const plan = data as {
+        household?: { persons?: Array<{ id?: unknown; holdings?: Array<{ id?: unknown }> }> }
+        entries?: Array<Record<string, unknown>>
+        transfers?: Array<Record<string, unknown>>
+        contributions?: Array<Record<string, unknown>>
+        [key: string]: unknown
+      }
+
+      const holdingOwner = new Map<string, string>()
+      for (const person of plan.household?.persons ?? []) {
+        if (typeof person.id !== 'string') continue
+        for (const holding of person.holdings ?? []) {
+          if (typeof holding.id === 'string') holdingOwner.set(holding.id, person.id)
+        }
+      }
+
+      const migrateBound = (bound: unknown, owner: string | undefined) =>
+        bound === 'WorkEndAge' && owner !== undefined ? { person: owner } : bound
+
+      const migratePeriod = (period: unknown, owner: string | undefined): unknown => {
+        const p = period as { anchor?: unknown; from?: unknown; to?: unknown } | undefined
+        if (!p || p.anchor !== 'PersonAge') return period
+        return { ...p, from: migrateBound(p.from, owner), to: migrateBound(p.to, owner) }
+      }
+
+      return {
+        ...plan,
+        entries: (plan.entries ?? []).map((entry) => ({
+          ...entry,
+          period: migratePeriod(entry.period, typeof entry.owner === 'string' ? entry.owner : undefined),
+        })),
+        transfers: (plan.transfers ?? []).map((transfer) => ({
+          ...transfer,
+          period: migratePeriod(
+            transfer.period,
+            typeof transfer.from === 'string' ? holdingOwner.get(transfer.from) : undefined,
+          ),
+        })),
+        contributions: (plan.contributions ?? []).map((contribution) =>
+          contribution.kind === 'HoldingSourced'
+            ? {
+                ...contribution,
+                period: migratePeriod(
+                  contribution.period,
+                  typeof contribution.to === 'string' ? holdingOwner.get(contribution.to) : undefined,
+                ),
+              }
+            : contribution,
+        ),
+      }
+    },
+  },
 ]
 
 /** Den skemaversion, hvor lønpostens beløb skiftede betydning, jf. ADR-0040.

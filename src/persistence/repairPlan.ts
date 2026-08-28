@@ -117,7 +117,7 @@ function standingYear(
   endpoint: 'from' | 'to',
   owner: Person,
 ): SimulationYear | undefined {
-  const resolved = periodBounds(period, owner)[endpoint]
+  const resolved = periodBounds(period, owner, plan.household)[endpoint]
   if (resolved !== undefined) return resolved
   return endpoint === 'from' ? plan.startYear : undefined
 }
@@ -153,7 +153,7 @@ function repairSentence(
     følger forankringen: man begynder *i* et år og *ved* en alder. */
 function stoodAt(period: Period, endpoint: 'from' | 'to'): string {
   const standing = period[endpoint]
-  if (standing === 'WorkEndAge') return 'fulgte erhvervsophøret'
+  if (typeof standing === 'object') return 'fulgte erhvervsophøret'
   const verb = endpoint === 'from' ? 'begyndte' : 'sluttede'
   // Et udeladt endepunkt er ikke et tal, men det, brugeren så i skuffen: et
   // tomt felt, der betyder "fra planens start" henholdsvis "til horisontens

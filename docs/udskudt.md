@@ -140,6 +140,16 @@ Asymmetrien er værd at bemærke, for den går kun den ene vej: pensionstillægg
 
 **Hvad der skal bygges, når det tages op:** Et fast alderstal skal kunne bære samme eksplicitte personreference, som "Følger erhvervsophør" nu gør — enten ved at `PersonAgeBound` breder sig til at dække begge, eller endepunktet får sit eget personfelt ved siden af tallet. Rører `periodOwner`, `periodBounds` og `periodEndpointBounds` i `validatePlan.ts`, og bør samtidig afgøre, om generaliseringen skal nå `Entry`, som allerede har fået `PersonAgeBound` via den sammenlagte `PeriodSection`, men uden nogen strukturel tvetydighed at løse for sin egen del. Mindst fire ADR'er bygger på den nuværende "ejeren udledes af strukturen"-antagelse for faste alderstal ([ADR-0016](./adr/0016-indbetalingen-kendes-paa-sin-destination.md), [ADR-0022](./adr/0022-den-skattefri-ordning-toemmes-af-en-overfoersel-ikke-af-en-udbetalingsplan.md), [ADR-0028](./adr/0028-det-beholdningskildede-bidrag-maa-krydse-ejerskellet.md), [ADR-0031](./adr/0031-erhvervsophoersaaret-taeller-med-som-from-og-ikke-med-som-to.md)) og skal genlæses, hvis feltet tilføjes.
 
+## Reparation af en hængende "følger erhvervsophør"-reference
+
+**Status:** Udskudt fra [ADR-0050](./adr/0050-foelger-erhvervsophoer-peger-paa-en-navngiven-person-ikke-periodens-udledte-ejer.md). Fjernes den person, et `PersonAge`-endepunkt eksplicit følger, mens en anden figur peger på hende, bliver planen ugyldig — `validatePlan` afviser den hængende reference, ganske som enhver anden peger, der ikke rammer, jf. ADR-0013. `repairPlan` retter den ikke.
+
+**Hvorfor det betyder noget:** `removePerson` rydder allerede referencer, den strukturelt ejer — personens egne poster, hendes beholdningers overførsler og indbetalinger — men et endepunkt, der blot *følger* hendes erhvervsophør fra en helt anden figur, er ikke en af dem, og forbliver med et id, der ikke længere findes.
+
+**Prisen ved at lade den ligge:** Lav i praksis. Scenariet kræver, at en person aktivt vælges som "følger" af en figur, der ikke er hendes egen — netop det, ADR-0050 først gjorde muligt — og derefter fjernes fra husstanden. Rammes det, viser fejlskærmen planen som ugyldig i stedet for at styrte; brugeren retter selv endepunktet i skuffen.
+
+**Hvad der skal bygges, når det tages op:** Et skridt i `repairPlan`, der — som beskrevet i ADR-0050's konsekvenser — erstatter en hængende `{ person }`-reference med det årstal, endepunktet stod på lige før personen forsvandt, fastlåst som et almindeligt tal. Kræver adgang til planen, som den så ud før fjernelsen — `removePerson` kender den, `repairPlan` gør ikke i dag.
+
 ## PensionsInfo-import
 
 **Status:** Afvist, ikke udskudt. Undersøgt og lukket.

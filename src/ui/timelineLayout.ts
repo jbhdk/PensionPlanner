@@ -1,6 +1,15 @@
 import { householdLastYear, periodBounds, personLastYear } from '../engine/age'
 import { payoutStartYear } from '../engine/payoutAge'
-import type { AgeBound, Period, Person, PersonId, Plan, Recurrence, SimulationYear } from '../engine/plan'
+import type {
+  AgeBound,
+  Household,
+  Period,
+  Person,
+  PersonId,
+  Plan,
+  Recurrence,
+  SimulationYear,
+} from '../engine/plan'
 import { CATEGORICAL_PALETTE, holdingColor, orderedHoldings } from './palette'
 import type { Target } from './selection'
 
@@ -72,12 +81,19 @@ const CATEGORY_COLOR: Record<PeriodGroupName, string> = {
     kommer fra `periodBounds`, som allerede kender `WorkEndAge`s forskellige
     rolle som `from` og som `to`, jf. ADR-0031 — den regel gentages ikke her.
     Låsning afgøres af den urørte grænse, fordi `periodBounds` selv oversætter
-    `'WorkEndAge'` til et rent årstal og dermed sletter den information. */
-function resolvePeriodEndpoint(period: Period, key: 'from' | 'to', owner: Person): TimelineEndpoint {
-  const year = periodBounds(period, owner)[key]
+    endepunktet til et rent årstal og dermed sletter den information. Et
+    `PersonAgeBound`, der følger nogen, er et objekt uanset hvem — hvilken
+    person, der følges, ændrer intet ved, om håndtaget er låst. */
+function resolvePeriodEndpoint(
+  period: Period,
+  key: 'from' | 'to',
+  owner: Person,
+  household: Household,
+): TimelineEndpoint {
+  const year = periodBounds(period, owner, household)[key]
   if (year === undefined) return { kind: 'Open' }
   const raw = period.anchor === 'PersonAge' ? period[key] : undefined
-  return raw === 'WorkEndAge' ? { kind: 'Locked', year } : { kind: 'Free', year }
+  return typeof raw === 'object' ? { kind: 'Locked', year } : { kind: 'Free', year }
 }
 
 /** En udbetalingsplans eller livrentes startpunkt. `start` er et
@@ -109,15 +125,16 @@ function periodItem(
   period: Period,
   recurrence: Recurrence,
   owner: Person,
+  household: Household,
   openStart: SimulationYear,
   openEnd: SimulationYear,
 ): TimelineItem {
   const shared = { ...base, color: CATEGORY_COLOR[base.group], row: 0 }
   if (recurrence.kind === 'Once') {
-    return { ...shared, point: true, at: resolvePeriodEndpoint(period, 'from', owner) }
+    return { ...shared, point: true, at: resolvePeriodEndpoint(period, 'from', owner, household) }
   }
-  const from = resolvePeriodEndpoint(period, 'from', owner)
-  const to = resolvePeriodEndpoint(period, 'to', owner)
+  const from = resolvePeriodEndpoint(period, 'from', owner, household)
+  const to = resolvePeriodEndpoint(period, 'to', owner, household)
   return {
     ...shared,
     point: false,
@@ -173,6 +190,7 @@ function buildItems(
         entry.period,
         entry.recurrence,
         personById.get(entry.owner)!,
+        plan.household,
         openStart,
         openEnd,
       ),
@@ -196,6 +214,7 @@ function buildItems(
           contribution.period,
           contribution.recurrence,
           owner,
+          plan.household,
           openStart,
           openEnd,
         )
@@ -213,6 +232,7 @@ function buildItems(
         transfer.period,
         transfer.recurrence,
         owner,
+        plan.household,
         openStart,
         openEnd,
       )

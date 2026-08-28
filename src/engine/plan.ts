@@ -203,12 +203,20 @@ export type Anchor = 'CalendarYear' | 'PersonAge'
     erhvervsophørsalderen ændres, uden at posten selv redigeres. */
 export type AgeBound = number | 'WorkEndAge'
 
+/** Et tidspunkt for en `PersonAge`-forankret periodes endepunkt: enten en
+    fast alder, målt på periodens udledte ejer, eller en eksplicit henvisning
+    til en navngiven persons erhvervsophør — uafhængig af, hvem perioden
+    ellers udledes at tilhøre, jf. ADR-0050. Deler form med `AgeBound`, men
+    ikke navn: `PayoutSchedule.start` bruger fortsat den, for en beholdning
+    har præcis én ejer, og der er intet valg at tilbyde dér. */
+export type PersonAgeBound = number | { person: PersonId }
+
 /** Postens periode. Et udeladt endepunkt betyder "fra planens start"
     henholdsvis "til horisontens slut" — sådan skrives en post, der løber
     hele forløbet. Formen på `from`/`to` følger `anchor`. */
 export type Period =
   | { anchor: 'CalendarYear'; from?: SimulationYear; to?: SimulationYear }
-  | { anchor: 'PersonAge'; from?: AgeBound; to?: AgeBound }
+  | { anchor: 'PersonAge'; from?: PersonAgeBound; to?: PersonAgeBound }
 
 /** Hvor ofte en post falder inden for sin periode. `n` findes kun ved
     `EveryNYears`, så det ikke kan sættes ved et valg, der ikke bruger det. */

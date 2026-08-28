@@ -423,7 +423,7 @@ describe('simulate', () => {
     const entries = [
       aSalary({
         amountInRealKroner: 600_000,
-        period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+        period: { anchor: 'PersonAge', to: { person: 'jesper' } },
       }),
     ]
     const stopperTidligt = aPlan({
@@ -2353,7 +2353,7 @@ describe('indbetalinger', () => {
       entries: [
         aSalary({
           amountInRealKroner: 600_000,
-          period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+          period: { anchor: 'PersonAge', to: { person: 'jesper' } },
         }),
       ],
       contributions: [
@@ -3121,7 +3121,7 @@ describe('indbetalinger', () => {
               source: 'free-assets',
               to: 'aldersopsparing',
               amountInRealKroner: 50_000,
-              period: { anchor: 'PersonAge', from: 'WorkEndAge' },
+              period: { anchor: 'PersonAge', from: { person: 'jesper' } },
               recurrence: { kind: 'Once' },
             }),
           ],
@@ -4102,7 +4102,7 @@ describe('pensionsaftalen', () => {
       entries: [
         aSalary({
           amountInRealKroner: 600_000,
-          period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+          period: { anchor: 'PersonAge', to: { person: 'jesper' } },
           pensionAgreement: {
             employerContribution: { percentageOfEntry: 0.12 },
             employeeContribution: { amountInRealKroner: 0 },
@@ -5341,7 +5341,11 @@ describe('den omvendte periode', () => {
       entries: [
         anExpense({
           amountInRealKroner: 100_000,
-          period: { anchor: 'PersonAge', from: 'WorkEndAge', to: 'WorkEndAge' },
+          period: {
+            anchor: 'PersonAge',
+            from: { person: 'jesper' },
+            to: { person: 'jesper' },
+          },
         }),
       ],
     })
@@ -5581,7 +5585,7 @@ describe('overførsel ud af en skattefri ordning', () => {
             from: 'aldersopsparing',
             to: 'free-assets',
             amountInRealKroner: 50_000,
-            period: { anchor: 'PersonAge', from: 'WorkEndAge' },
+            period: { anchor: 'PersonAge', from: { person: 'jesper' } },
           }),
         ],
       })
@@ -6006,7 +6010,7 @@ describe('livrentens omsætning', () => {
             entries: [
               aSalary({
                 amountInRealKroner: 600_000,
-                period: { anchor: 'PersonAge', to: 'WorkEndAge' },
+                period: { anchor: 'PersonAge', to: { person: 'jesper' } },
               }),
             ],
             contributions: [
@@ -6750,5 +6754,44 @@ describe('bufferens jævne strømme', () => {
 
     expect(holding(year!, 'ordning').weightedFlow).toBeCloseTo((50_000 * 0.92) / 2, 6)
     expect(holding(year!, 'free-assets').weightedFlow).toBeCloseTo(0, 6)
+  })
+})
+
+describe('personvalgt "følger erhvervsophør"', () => {
+  it('følger den navngivne persons erhvervsophør og ikke postens egen ejer', () => {
+    // Jespers eget erhvervsophør (58) ville sætte slutåret til 2030 — langt
+    // før Marias (60), som giver 2034, jf. ADR-0031. Falder prøven her, har
+    // periodBounds ikke fået den navngivne person med.
+    const plan = withSecondPerson(
+      aPlan({
+        entries: [
+          anExpense({
+            amountInRealKroner: 60_000,
+            period: { anchor: 'PersonAge', to: { person: 'maria' } },
+          }),
+        ],
+      }),
+    )
+
+    const years = simulateChecked(plan)
+    expect(years.find((y) => y.year === 2034)!.expenses).toBeCloseTo(60_000, 6)
+    expect(years.find((y) => y.year === 2035)!.expenses).toBeCloseTo(0, 6)
+  })
+
+  it('afviser et endepunkt, der følger en person, der ikke findes', () => {
+    // Samme slags peger som `Entry.owner`, jf. `entryOwners` — en person, der
+    // ikke findes, er ingen at følge erhvervsophøret for.
+    const plan = aPlan({
+      entries: [
+        anExpense({
+          amountInRealKroner: 60_000,
+          period: { anchor: 'PersonAge', to: { person: 'findes-ikke' } },
+        }),
+      ],
+    })
+
+    expect(() => simulate(plan)).toThrow(
+      /Posten Faste udgifter følger erhvervsophøret for en person, der ikke findes/i,
+    )
   })
 })

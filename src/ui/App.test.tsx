@@ -11,6 +11,7 @@ import {
   aSalary,
   aTransfer,
   anExpense,
+  withSecondPerson,
 } from '../engine/testing/planFixture'
 import * as examplePlanModule from '../persistence/examplePlan'
 import { exampleName, loadExamplePlan } from '../persistence/examplePlan'
@@ -1500,6 +1501,53 @@ describe('fladen', () => {
 
     await user.click(tilvalg())
     expect(fra().value).toBe('')
+  })
+
+  it('viser en personvælger ved siden af "Følger erhvervsophør" i en to-personers husstand, forudfyldt med den udledte ejer', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={withSecondPerson(
+          aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] }),
+        )}
+      />,
+    )
+
+    await user.click(navigatorButton(/Faste udgifter/))
+    await user.selectOptions(screen.getByLabelText(/Forankring/), 'Alder')
+
+    const fra = () => screen.getByLabelText(/Fra \(alder\)/) as HTMLInputElement
+    const tilvalg = () => screen.getAllByRole('checkbox', { name: /erhvervsophør/i })[0]!
+
+    // Ingen vælger, før fluebenet er sat — der er intet at vælge mellem endnu.
+    expect(screen.queryByLabelText('Følger erhvervsophør for')).toBeNull()
+
+    await user.click(tilvalg())
+
+    // Posten tilhører Jesper, som fluebenet forudfylder vælgeren med.
+    expect(fra().value).toBe('58')
+    const person = () => screen.getByLabelText('Følger erhvervsophør for') as HTMLSelectElement
+    expect(person().value).toBe('Jesper')
+
+    await user.selectOptions(person(), 'Maria')
+
+    expect(fra().value).toBe('60')
+  })
+
+  it('skjuler personvælgeren i en énpersons husstand, hvor der intet er at vælge', async () => {
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={aPlan({ entries: [anExpense({ amountInRealKroner: 40_000 })] })}
+      />,
+    )
+
+    await user.click(navigatorButton(/Faste udgifter/))
+    await user.selectOptions(screen.getByLabelText(/Forankring/), 'Alder')
+
+    await user.click(screen.getAllByRole('checkbox', { name: /erhvervsophør/i })[0]!)
+
+    expect(screen.queryByLabelText('Følger erhvervsophør for')).toBeNull()
   })
 
   it('tilføjer person nummer to via husstandsgruppen', async () => {
@@ -5291,7 +5339,7 @@ describe('fladen', () => {
       // forklare, hvorfor erhvervsophørsåret ikke tæller med som slutår.
       const user = userEvent.setup()
       render(
-        <App initialPlan={aPlanWithExpense({ anchor: 'PersonAge', from: 'WorkEndAge', to: 65 })} />,
+        <App initialPlan={aPlanWithExpense({ anchor: 'PersonAge', from: { person: 'jesper' }, to: 65 })} />,
       )
 
       await user.click(navigatorButton(/Faste udgifter/))
