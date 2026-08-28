@@ -1241,3 +1241,47 @@ export function moveContribution(plan: Plan, id: string, to: number): Plan {
 export function moveTransfer(plan: Plan, id: string, to: number): Plan {
   return { ...plan, transfers: movedById(plan.transfers, id, to) }
 }
+
+/** Flytter en Overførsel eller et beholdningskildet bidrag til en vilkårlig
+    plads i den sammenlagte, position-sorterede liste, jf. ADR-0049 og issue
+    #84 — trækket i navigatorens 'Overførsler'-blok, der nu går på tværs af de
+    to typer.
+
+    Den fælles liste flyttes først med `movedById`, og hele den nye
+    rækkefølge får sin `position` nummereret forfra. Derefter fysisk: de
+    beholdningskildede bidrags indbyrdes plads i `plan.contributions`
+    omsorteres med samme "kun blandt egen slags"-teknik som `moveContribution`
+    — de lønkildede bidrags plads og rækkefølge ligger fast — og hele
+    `plan.transfers` erstattes af sin nye orden, fordi arrayet kun rummer
+    Transfer og derfor ingen slots at bevare. Det er derfor motorens
+    loft-prioritet, som læser `plan.contributions`s rå array-rækkefølge, jf.
+    `shortenToHeadroom` og ADR-0019, følger trækket uden at `simulate.ts`
+    rører sig. */
+export function moveTransferOrContribution(plan: Plan, id: string, to: number): Plan {
+  if (!findTransferOrContribution(plan, id)) return plan
+
+  const holdingSourced = plan.contributions.filter(
+    (contribution): contribution is HoldingSourcedContribution =>
+      contribution.kind === 'HoldingSourced',
+  )
+  const merged = [...plan.transfers, ...holdingSourced].sort((a, b) => a.position - b.position)
+  const reordered = movedById(merged, id, to).map((figure, index) => ({
+    ...figure,
+    position: index,
+  }))
+
+  const transfers = reordered.filter((figure): figure is Transfer => !('kind' in figure))
+  const newHoldingSourced = reordered.filter(
+    (figure): figure is HoldingSourcedContribution => 'kind' in figure,
+  )
+
+  const slots = plan.contributions.flatMap((contribution, index) =>
+    contribution.kind === 'HoldingSourced' ? [index] : [],
+  )
+  const contributions = [...plan.contributions]
+  slots.forEach((slot, index) => {
+    contributions[slot] = newHoldingSourced[index]!
+  })
+
+  return { ...plan, transfers, contributions }
+}

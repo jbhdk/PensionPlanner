@@ -14,6 +14,7 @@ import {
   moveEntry,
   moveHolding,
   movePerson,
+  moveTransferOrContribution,
 } from './planEdits'
 import type { Selection, Target } from './selection'
 import { sameSelection } from './selection'
@@ -397,8 +398,8 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
       // brugeren allerede kalder en overførsel, jf. ADR-0047. Én blok, hvis
       // rækker er de to arrays samlet og sorteret på `position` — den fælles
       // plads, der siger hvor en figur hører hjemme i den ene liste,
-      // brugeren ser, jf. ADR-0049. Trækket er ikke med endnu: listen kan
-      // ikke omsorteres herfra, jf. issue #84.
+      // brugeren ser, jf. ADR-0049. Trækket går på tværs af de to typer,
+      // fordi det er én blok med ét onMove, jf. issue #84.
       id: 'overfoersler',
       title: 'Overførsler',
       count: String(plan.transfers.length + holdingSourced.length),
@@ -420,6 +421,7 @@ function groupsOf(plan: Plan, period: string, onChange: (plan: Plan) => void): G
               // `selected` selv opdateres.
               target: { kind: 'transfer', id: figure.id },
             })),
+          onMove: (id, to) => onChange(moveTransferOrContribution(plan, id, to)),
         },
       ],
       // En overførsel flytter penge fra en beholdning — til frie midler

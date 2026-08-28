@@ -5987,6 +5987,49 @@ describe('rækkefølgen flyttes i navigatoren', () => {
     expect(navigatorButton(/Først/).querySelector('.greb svg')).toBeTruthy()
   })
 
+  it('trækker en overførsel forbi et beholdningskildet bidrag i den samlede Overførsler-boks, og omvendt', () => {
+    // Én blok, én onMove, jf. issue #84 — trækket krydser grænsen mellem
+    // Transfer og det beholdningskildede bidrag, uden at være begrænset til
+    // egen type.
+    const plan = aPlan({
+      holdings: [
+        aFreeHolding('anden-beholdning', 'Anden beholdning'),
+        aPensionHolding('ratepension', 'Ratepension'),
+      ],
+      transfers: [
+        aTransfer({
+          id: 'overfoersel',
+          name: 'Overførslen',
+          from: 'free-assets',
+          to: 'anden-beholdning',
+          amountInRealKroner: 10_000,
+          position: 0,
+        }),
+      ],
+      contributions: [
+        aHoldingContribution({
+          id: 'bidrag',
+          name: 'Bidraget',
+          source: 'free-assets',
+          to: 'ratepension',
+          amountInRealKroner: 5_000,
+          position: 1,
+        }),
+      ],
+    })
+    render(<App initialPlan={plan} />)
+    expect(overfoerslerRowNames()).toEqual(['Overførslen', 'Bidraget'])
+
+    dragOnto(navigatorButton(/Bidraget/), navigatorButton(/Overførslen/))
+
+    expect(overfoerslerRowNames()).toEqual(['Bidraget', 'Overførslen'])
+
+    // Og den anden vej: overførslen tilbage foran bidraget.
+    dragOnto(navigatorButton(/Overførslen/), navigatorButton(/Bidraget/))
+
+    expect(overfoerslerRowNames()).toEqual(['Overførslen', 'Bidraget'])
+  })
+
   it('husker rækkefølgen i det gemte og i en eksporteret fil', async () => {
     // Rækkefølgen er arrayets, og der er intet felt at gemme den i. Det er
     // netop derfor den skal prøves: knækkede den, ville den knække tavst.

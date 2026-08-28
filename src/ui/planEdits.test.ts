@@ -9,6 +9,7 @@ import {
 } from '../engine/testing/planFixture'
 import type { Entry, PensionAgreement, Plan } from '../engine/plan'
 import { validatePlan } from '../engine/validatePlan'
+import { simulateChecked } from '../engine/testing/simulateChecked'
 import { defaultPlan } from './defaultPlan'
 import {
   addContribution,
@@ -24,6 +25,7 @@ import {
   moveHolding,
   movePerson,
   moveTransfer,
+  moveTransferOrContribution,
   removeEntry,
   removeHolding,
   removePensionAgreement,
@@ -1188,6 +1190,208 @@ describe('rækkefølgen i planen', () => {
     expect(movePerson(plan, 'maria', 0).household.persons.map((person) => person.id)).toEqual([
       'maria',
       'jesper',
+    ])
+  })
+})
+
+describe('den sammenlagte Overførsel-liste (issue #84)', () => {
+  /** To beholdningskildede bidrag og en overførsel, spredt i den fælles
+      rækkefølge, plus et lønkildet bidrag til samme ordning — det hører ikke
+      til den sammenlagte liste, jf. ADR-0047, og skal stå urørt af trækket. */
+  function mergedList(): Plan {
+    return aPlan({
+      holdings: [
+        {
+          id: 'aldersopsparing',
+          name: 'Aldersopsparing',
+          variant: 'OldAgeSavings',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+        {
+          id: 'anden',
+          name: 'Anden beholdning',
+          variant: 'SavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+      entries: [aSalary({ amountInRealKroner: 600_000 })],
+      contributions: [
+        aContribution({
+          id: 'loen',
+          name: 'Løn',
+          source: 'salary',
+          to: 'aldersopsparing',
+          percentageOfEntry: 0.05,
+        }),
+        aHoldingContribution({
+          id: 'a',
+          name: 'A',
+          source: 'free-assets',
+          to: 'aldersopsparing',
+          amountInRealKroner: 1_000,
+          position: 0,
+        }),
+        aHoldingContribution({
+          id: 'b',
+          name: 'B',
+          source: 'free-assets',
+          to: 'aldersopsparing',
+          amountInRealKroner: 2_000,
+          position: 1,
+        }),
+      ],
+      transfers: [
+        aTransfer({
+          id: 't',
+          name: 'T',
+          from: 'free-assets',
+          to: 'anden',
+          amountInRealKroner: 3_000,
+          position: 2,
+        }),
+      ],
+    })
+  }
+
+  /** Positionen af en figur i den fælles liste, uanset om den lige nu er en
+      Transfer eller et beholdningskildet bidrag. */
+  function positionOf(plan: Plan, id: string): number | undefined {
+    const contribution = plan.contributions.find((c) => c.id === id)
+    if (contribution?.kind === 'HoldingSourced') return contribution.position
+    return plan.transfers.find((t) => t.id === id)?.position
+  }
+
+  it('flytter et beholdningskildet bidrag i den fælles liste, renummererer position på hele listen, og lader det lønkildede bidrag stå urørt', () => {
+    const plan = mergedList()
+
+    const flyttet = moveTransferOrContribution(plan, 'b', 0)
+
+    // Den fælles rækkefølge er nu b, a, t.
+    expect(positionOf(flyttet, 'b')).toBe(0)
+    expect(positionOf(flyttet, 'a')).toBe(1)
+    expect(positionOf(flyttet, 't')).toBe(2)
+
+    // De beholdningskildede bidrags fysiske plads i plan.contributions er
+    // omsorteret; det lønkildede bidrags plads er urørt.
+    expect(flyttet.contributions.map((c) => c.id)).toEqual(['loen', 'b', 'a'])
+  })
+
+  it('flytter en overførsel forbi et beholdningskildet bidrag og holder plan.transfers i sync med den nye rækkefølge', () => {
+    // To overførsler med et beholdningskildet bidrag imellem: t1, c, t2.
+    const plan = aPlan({
+      holdings: [
+        {
+          id: 'aldersopsparing',
+          name: 'Aldersopsparing',
+          variant: 'OldAgeSavings',
+          payoutAge: 67,
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+        {
+          id: 'anden',
+          name: 'Anden beholdning',
+          variant: 'SavingsAccount',
+          balance: 0,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+      contributions: [
+        aHoldingContribution({
+          id: 'c',
+          name: 'C',
+          source: 'free-assets',
+          to: 'aldersopsparing',
+          amountInRealKroner: 1_000,
+          position: 1,
+        }),
+      ],
+      transfers: [
+        aTransfer({
+          id: 't1',
+          name: 'T1',
+          from: 'free-assets',
+          to: 'anden',
+          amountInRealKroner: 2_000,
+          position: 0,
+        }),
+        aTransfer({
+          id: 't2',
+          name: 'T2',
+          from: 'free-assets',
+          to: 'anden',
+          amountInRealKroner: 3_000,
+          position: 2,
+        }),
+      ],
+    })
+
+    const flyttet = moveTransferOrContribution(plan, 't2', 0)
+
+    // Den fælles rækkefølge er nu t2, t1, c.
+    expect(positionOf(flyttet, 't2')).toBe(0)
+    expect(positionOf(flyttet, 't1')).toBe(1)
+    expect(positionOf(flyttet, 'c')).toBe(2)
+    expect(flyttet.transfers.map((t) => t.id)).toEqual(['t2', 't1'])
+  })
+
+  it('ombytter, hvem af to beholdningskildede bidrag der får sit fulde beløb under et fælles loft, når trækket ombytter deres rækkefølge', () => {
+    // Aktiesparekontoens loft er 174.200 kr. i 2026, og kontoen står med
+    // 134.200, så der er 40.000 kr. tilbage. To indskud på 30.000 hver beder
+    // tilsammen om mere: den, der står først i planens rækkefølge, får sit
+    // fulde beløb, jf. ADR-0019 — motoren læser den rå array-rækkefølge, og
+    // rører sig ikke i denne test.
+    const plan = aPlan({
+      balance: 1_000_000,
+      holdings: [
+        {
+          id: 'aktiesparekonto',
+          name: 'Aktiesparekonto',
+          variant: 'ShareSavingsAccount',
+          balance: 134_200,
+          grossReturn: 0,
+          annualCostRate: 0,
+        },
+      ],
+      contributions: [
+        aHoldingContribution({
+          id: 'foerst',
+          name: 'Først',
+          source: 'free-assets',
+          to: 'aktiesparekonto',
+          amountInRealKroner: 30_000,
+          position: 0,
+        }),
+        aHoldingContribution({
+          id: 'dernaest',
+          name: 'Dernæst',
+          source: 'free-assets',
+          to: 'aktiesparekonto',
+          amountInRealKroner: 30_000,
+          position: 1,
+        }),
+      ],
+    })
+
+    const foer = simulateChecked(plan)[0]!
+    expect(foer.contributions).toEqual([
+      { contribution: 'foerst', fromSource: 30_000, intoHolding: 30_000 },
+      { contribution: 'dernaest', fromSource: 10_000, intoHolding: 10_000 },
+    ])
+
+    const flyttet = moveTransferOrContribution(plan, 'dernaest', 0)
+    const efter = simulateChecked(flyttet)[0]!
+
+    expect(efter.contributions).toEqual([
+      { contribution: 'dernaest', fromSource: 30_000, intoHolding: 30_000 },
+      { contribution: 'foerst', fromSource: 10_000, intoHolding: 10_000 },
     ])
   })
 })
