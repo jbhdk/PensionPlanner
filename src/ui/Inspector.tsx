@@ -24,6 +24,7 @@ import type {
   PayoutScheduleHolding,
   PensionSchemeHolding,
   Period,
+  PersonAgeBound,
   Person,
   Plan,
   Recurrence,
@@ -1006,6 +1007,7 @@ function IncomeFields({
         persons={plan.household.persons}
         startYear={plan.startYear}
         bounds={endpointBounds(plan, entry)}
+        boundsForCandidate={endpointBoundsForCandidate(plan, entry)}
         clamp={clamp}
         onClamp={onClamp}
         onChange={(next) => onChange(withEntry(plan, entry.id, (e) => ({ ...e, ...next })))}
@@ -1058,6 +1060,7 @@ function ExpenseFields({
         persons={plan.household.persons}
         startYear={plan.startYear}
         bounds={endpointBounds(plan, entry)}
+        boundsForCandidate={endpointBoundsForCandidate(plan, entry)}
         clamp={clamp}
         onClamp={onClamp}
         onChange={(next) => onChange(withEntry(plan, entry.id, (e) => ({ ...e, ...next })))}
@@ -1439,12 +1442,26 @@ function endpointBounds(plan: Plan, figure: PeriodicFigure): { from: Bounds; to:
   }
 }
 
+/** Et endepunkts grænser, som om et navnevalg der endnu ikke er truffet,
+    allerede stod der — til `PersonAgeBoundField`s personvælger, jf.
+    `periodEndpointBounds`s `candidate`. `endpointBounds` ovenfor svarer kun
+    for figurens *nuværende* endepunkt og kan derfor ikke bruges til at
+    afgøre, om et skift til en anden navngiven person holder — to personer
+    med forskelligt fødselsår deler ikke én aldersskala. */
+function endpointBoundsForCandidate(
+  plan: Plan,
+  figure: PeriodicFigure,
+): (endpoint: 'from' | 'to', candidate: PersonAgeBound) => Bounds {
+  return (endpoint, candidate) => periodEndpointBounds(plan, figure, endpoint, candidate)
+}
+
 function PeriodSection({
   value,
   owner,
   persons,
   startYear,
   bounds,
+  boundsForCandidate,
   clamp,
   onClamp,
   onChange,
@@ -1462,6 +1479,9 @@ function PeriodSection({
       afsnittet regner dem ikke selv, for reglerne er figurens og ikke
       periodens. Udeladt betyder frie endepunkter. Se `Bounds`. */
   bounds?: { from?: Bounds; to?: Bounds }
+  /** Samme grænser, men for et navnevalg der endnu ikke er truffet — til
+      `PersonAgeBoundField`s personvælger. Se `endpointBoundsForCandidate`. */
+  boundsForCandidate?: (endpoint: 'from' | 'to', candidate: PersonAgeBound) => Bounds
   clamp?: Clamp | null
   onClamp?: (clamp: Clamp | null) => void
   onChange: (next: Periodic) => void
@@ -1565,6 +1585,9 @@ function PeriodSection({
             role="from"
             value={period.from}
             bounds={bounds?.from}
+            boundsForCandidate={
+              boundsForCandidate && ((candidate) => boundsForCandidate('from', candidate))
+            }
             clamp={clamp}
             onClamp={onClamp}
             onChange={(from) => change({ period: { ...period, from } })}
@@ -1577,6 +1600,9 @@ function PeriodSection({
             role="to"
             value={period.to}
             bounds={bounds?.to}
+            boundsForCandidate={
+              boundsForCandidate && ((candidate) => boundsForCandidate('to', candidate))
+            }
             clamp={clamp}
             onClamp={onClamp}
             onChange={(to) => change({ period: { ...period, to } })}
@@ -1994,6 +2020,7 @@ function TransferFields({
         persons={plan.household.persons}
         startYear={plan.startYear}
         bounds={endpointBounds(plan, figure)}
+        boundsForCandidate={endpointBoundsForCandidate(plan, figure)}
         clamp={clamp}
         onClamp={onClamp}
         onChange={(next) => {

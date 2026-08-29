@@ -22,6 +22,7 @@ import type {
   HoldingSourcedContribution,
   PensionSchemeHolding,
   Period,
+  PersonAgeBound,
   Person,
   Plan,
   SimulationYear,
@@ -660,17 +661,28 @@ export function periodEndpointBounds(
   plan: Plan,
   figure: PeriodicFigure,
   endpoint: 'from' | 'to',
+  // Det endepunktet *ville* stå på, hvis en igangværende redigering gik
+  // igennem — brugt til at spørge, om et navnevalg, der endnu ikke er
+  // truffet, holder. Udeladt betyder "spørg om endepunktets nuværende,
+  // virkelige værdi", som før denne parameter fandtes. Uden den ville
+  // fladen klemme et kandidatvalg mod grænser regnet i den *forrige* navngivne
+  // persons enhed — se `PersonAgeBoundField.attemptFollow`.
+  candidate?: PersonAgeBound,
 ): Bounds {
   const owner = periodOwner(plan, figure)
   if (owner === undefined) return {}
+  const period: Period =
+    candidate === undefined || figure.period.anchor !== 'PersonAge'
+      ? figure.period
+      : { ...figure.period, [endpoint]: candidate }
   // Det er dette endepunkts *egen* eventuelle navngivning, der afgør hvem
   // dets vægge måles på — ikke figurens strukturelle ejer. Et fast alderstal,
   // der eksplicit navngiver en anden, skal klemmes mod hendes fødselsår og
   // hendes plads i husstandens sidste år, ikke mod ejerens, jf. ADR-0051.
-  const boundOwner = endpointOwner(figure.period, endpoint, owner, plan.household)
+  const boundOwner = endpointOwner(period, endpoint, owner, plan.household)
 
   const unit = (bound: YearBound): Bound => ({
-    value: inEndpointUnit(figure.period, endpoint, bound.value, boundOwner),
+    value: inEndpointUnit(period, endpoint, bound.value, boundOwner),
     reason: bound.reason,
   })
   const opposite = periodBounds(figure.period, owner, plan.household)[

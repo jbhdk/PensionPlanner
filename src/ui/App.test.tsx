@@ -1534,6 +1534,100 @@ describe('fladen', () => {
     expect(fra().value).toBe('60')
   })
 
+  it('lader "Til" skifte til en anden persons erhvervsophør, selv når fødselsårene ligger langt fra hinanden', async () => {
+    // "Fra" er et fast alderstal (65), Jespers egen — erhvervsophøret i
+    // 2030. Fluebenet på "Til" forudfylder først Jesper (69, jf. ADR-0050),
+    // hvad det altid gør, og det holder her, fordi hans egen periode har år
+    // nok i sig. Skiftes vælgeren til Maria (født 1975, ophør ved 60)
+    // derefter, ligger hendes erhvervsophør i 2034 — efter Jespers 2030, så
+    // valget bør gå igennem.
+    //
+    // Før rettelsen blev Marias alder i "Til"s rolle (59, jf. ADR-0031's
+    // to-skel) klemt mod en nedre grænse, der stadig stod i *Jespers* enhed
+    // (65, samme tal som hans egen periode), fordi grænsen ikke blev regnet
+    // om for det nye navn — og valget blev afvist, selv om hendes
+    // erhvervsophør reelt lå fire år efter Jespers.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={withSecondPerson(
+          aPlan({
+            birthYear: 1965,
+            birthMonth: 1,
+            workEndAge: 70,
+            entries: [
+              anExpense({
+                amountInRealKroner: 40_000,
+                period: { anchor: 'PersonAge', from: 65 },
+              }),
+            ],
+          }),
+        )}
+      />,
+    )
+
+    await user.click(navigatorButton(/Faste udgifter/))
+
+    const til = () => screen.getByLabelText(/Til \(alder\)/) as HTMLInputElement
+    const tilFlueben = () =>
+      screen.getAllByLabelText('Følger erhvervsophør')[1] as HTMLInputElement
+    await user.click(tilFlueben())
+
+    // Jespers eget erhvervsophør er et gyldigt slutpunkt her — fluebenet
+    // holder ved sit første forsøg, og personvælgeren dukker op.
+    expect(tilFlueben().checked).toBe(true)
+    expect(til().value).toBe('70')
+    expect(document.querySelector('.klemning')).toBeNull()
+
+    const person = () => screen.getByLabelText('Følger erhvervsophør for') as HTMLSelectElement
+    await user.selectOptions(person(), 'Maria')
+
+    expect(tilFlueben().checked).toBe(true)
+    expect(til().value).toBe('60')
+    expect(document.querySelector('.klemning')).toBeNull()
+  })
+
+  it('lader fluebenet falde tilbage på den anden person, når "Fra" allerede følger ejerens eget erhvervsophør', async () => {
+    // "Fra" følger allerede Jesper. Krydser man "Til" (som ADR-0050 lægger
+    // op til), forudfylder fluebenet ejeren selv først — men Jespers eget
+    // erhvervsophør som "Til" ville falde ét år før hans eget som "Fra", jf.
+    // ADR-0031, og er derfor aldrig et gyldigt svar her. Før rettelsen
+    // sprang fluebenet dengang bare tilbage, uden at personvælgeren nogen
+    // sinde nåede at vise sig — der var ingen vej til at navngive Maria i
+    // stedet, selv om hendes erhvervsophør (2034) reelt ligger efter
+    // Jespers (2031). Fluebenet skal i stedet falde tilbage på hende med
+    // det samme.
+    const user = userEvent.setup()
+    render(
+      <App
+        initialPlan={withSecondPerson(
+          aPlan({
+            entries: [
+              anExpense({
+                amountInRealKroner: 40_000,
+                period: { anchor: 'PersonAge', from: { person: 'jesper' } },
+              }),
+            ],
+          }),
+        )}
+      />,
+    )
+
+    await user.click(navigatorButton(/Faste udgifter/))
+
+    const til = () => screen.getByLabelText(/Til \(alder\)/) as HTMLInputElement
+    const tilFlueben = () =>
+      screen.getAllByLabelText('Følger erhvervsophør')[1] as HTMLInputElement
+    await user.click(tilFlueben())
+
+    expect(tilFlueben().checked).toBe(true)
+    expect(til().value).toBe('60')
+    expect(document.querySelector('.klemning')).toBeNull()
+
+    const person = () => screen.getAllByLabelText('Følger erhvervsophør for')[1] as HTMLSelectElement
+    expect(person().value).toBe('Maria')
+  })
+
   it('skjuler personvælgeren i en énpersons husstand, hvor der intet er at vælge', async () => {
     const user = userEvent.setup()
     render(

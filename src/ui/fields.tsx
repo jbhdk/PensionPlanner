@@ -480,6 +480,7 @@ export function PersonAgeBoundField({
   persons,
   role,
   bounds,
+  boundsForCandidate,
   clamp,
   onClamp,
   onChange,
@@ -497,6 +498,14 @@ export function PersonAgeBoundField({
       til den rette alder — se `workEndBoundAge`. */
   role: 'from' | 'to'
   bounds?: Bounds
+  /** Grænserne, som om et navnevalg der endnu ikke er truffet, allerede stod
+      der — spurgt i motoren og ikke udledt her, jf. `periodEndpointBounds`.
+      `bounds` er kun i den *nuværende* navngivnes enhed og kan ikke selv
+      svare, når personvælgeren skifter til en anden: to personer med
+      forskelligt fødselsår deler ikke én aldersskala. Udeladt falder tilbage
+      på `bounds`, hvilket kun er rigtigt, når der ikke er noget valg at
+      skifte til. */
+  boundsForCandidate?: (candidate: PersonAgeBound) => Bounds
   clamp?: Clamp | null
   onClamp?: (clamp: Clamp | null) => void
   onChange: (value: PersonAgeBound | undefined) => void
@@ -544,9 +553,32 @@ export function PersonAgeBoundField({
   // fluebenet eller vælgeren springer tilbage af sig selv, jf. ADR-0045.
   function attemptFollow(personId: string) {
     const chosen = persons.find((person) => person.id === personId) ?? owner
-    const refused = clampedBy(workEndBoundAge(chosen, role), bounds, help)
+    const candidateBounds = boundsForCandidate?.({ person: personId }) ?? bounds
+    const refused = clampedBy(workEndBoundAge(chosen, role), candidateBounds, help)
     onClamp?.(refused)
     if (refused === null) onChange({ person: personId })
+  }
+
+  // Fluebenets egen forudfyldning: ejeren selv, som ADR-0050 lægger op til —
+  // men falder til den første anden person i husstanden, ejerens eget svar
+  // ikke holder. Det modsatte endepunkt følger ofte allerede ejerens eget
+  // erhvervsophør, og med kun ét års rolleforskel mellem `from` og `to`, jf.
+  // ADR-0031, kan de to aldrig begge stå på samme person — uden faldet ville
+  // fluebenet være ubrugeligt netop dér, selv om en anden navngiven person i
+  // husstanden er et fuldt gyldigt svar. Ingen af husstanden holder, meldes
+  // ejerens egen afvisning, som hidtil.
+  function attemptFollowAny() {
+    const others = persons.filter((person) => person.id !== owner.id)
+    for (const candidate of [owner, ...others]) {
+      const candidateBounds = boundsForCandidate?.({ person: candidate.id }) ?? bounds
+      const refused = clampedBy(workEndBoundAge(candidate, role), candidateBounds, help)
+      if (refused === null) {
+        onClamp?.(null)
+        onChange({ person: candidate.id })
+        return
+      }
+    }
+    attemptFollow(owner.id)
   }
 
   // Forsøger at navngive, hvem et fast alderstal måles på — tallet selv
@@ -555,7 +587,8 @@ export function PersonAgeBoundField({
   // `owner`, falder værdien tilbage til det bare tal, jf. ADR-0051. */
   function attemptFixedPerson(personId: string) {
     if (fixedAge === undefined) return
-    const refused = clampedBy(fixedAge, bounds, help)
+    const candidateBounds = boundsForCandidate?.({ person: personId, age: fixedAge }) ?? bounds
+    const refused = clampedBy(fixedAge, candidateBounds, help)
     onClamp?.(refused)
     if (refused !== null) return
     onChange(personId === owner.id ? fixedAge : { person: personId, age: fixedAge })
@@ -588,7 +621,7 @@ export function PersonAgeBoundField({
                   onChange(undefined)
                   return
                 }
-                attemptFollow(owner.id)
+                attemptFollowAny()
               }}
             />{' '}
             Følger erhvervsophør
