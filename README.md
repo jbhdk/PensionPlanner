@@ -2,6 +2,8 @@
 
 Et personligt værktøj til at fremskrive din husstands økonomi år for år gennem hele pensionen, med danske skatte- og pensionsregler indregnet. Løn, opsparing, pensionsordninger, folkepension og skat samlet i én tidslinje, så du kan se, hvordan valg som hvornår du stopper med at arbejde, og hvornår de enkelte ordninger begynder at blive udbetalt, slår igennem på formuen — år for år, hele vejen igennem.
 
+Prøv den <a href="https://jbhdk.github.io/PensionPlanner/">her</a>
+
 <img width="1780" height="1009" alt="image" src="https://github.com/user-attachments/assets/8bb3ebf2-0dd7-4c8f-97df-e1bdbcd6113b" />
 
 ## Sådan starter du
